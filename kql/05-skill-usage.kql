@@ -1,0 +1,6 @@
+union isfuzzy=true AppTraces, AppDependencies
+| where TimeGenerated > ago(14d)
+| where Message has "github.copilot.skill.invoked" or tostring(Properties) has "github.copilot.skill"
+| extend skill=tostring(Properties["github.copilot.skill.name"]), skill_path=tostring(Properties["github.copilot.skill.path"]), plugin=tostring(Properties["github.copilot.skill.plugin_name"]), plugin_version=tostring(Properties["github.copilot.skill.plugin_version"])
+| summarize invocations=count() by skill, skill_path, plugin, plugin_version
+| order by invocations desc

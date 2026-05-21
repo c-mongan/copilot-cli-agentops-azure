@@ -1,0 +1,12 @@
+services:
+  otelcol:
+    image: otel/opentelemetry-collector-contrib:latest
+    restart: unless-stopped
+    command: ["--config=/etc/otelcol/config.yaml"]
+    ports:
+      - "127.0.0.1:4318:4318"
+      - "127.0.0.1:4317:4317"
+    environment:
+      APPLICATIONINSIGHTS_CONNECTION_STRING: ${APPLICATIONINSIGHTS_CONNECTION_STRING:-}
+    volumes:
+      - ./otelcol.azuremonitor.yaml:/etc/otelcol/config.yaml:ro

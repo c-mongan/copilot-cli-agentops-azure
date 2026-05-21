@@ -1,0 +1,3 @@
+search "github-copilot"
+| summarize rows=count() by $table
+| order by rows desc

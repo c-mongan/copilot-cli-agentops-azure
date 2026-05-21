@@ -1,0 +1,12 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "# Copilot CLI AgentOps\n\nImport this workbook and wire queries to your Application Insights or Log Analytics workspace."
+      }
+    }
+  ],
+  "fallbackResourceIds": []
+}

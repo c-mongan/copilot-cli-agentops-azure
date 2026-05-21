@@ -1,0 +1,12 @@
+name: copilot-cli-agentops-azure
+metadata:
+  template: copilot-cli-agentops-azure@0.1.0
+infra:
+  provider: bicep
+  path: infra/bicep
+hooks:
+  postprovision:
+    shell: sh
+    run: ./scripts/grafana-import-dashboard.sh
+    continueOnError: false
+    interactive: false

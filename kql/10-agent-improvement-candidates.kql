@@ -1,0 +1,21 @@
+let failures =
+AppDependencies
+| where TimeGenerated > ago(14d)
+| where Properties has "github.copilot" and Properties has "github-copilot-cli"
+| extend operation=tostring(Properties["gen_ai.operation.name"]), conversation=tostring(Properties["gen_ai.conversation.id"]), tool=tostring(Properties["gen_ai.tool.name"]), error=tostring(Properties["error.type"])
+| where operation == "execute_tool"
+| where Success == false or isnotempty(error)
+| summarize failed_tools=make_set(tool), failure_count=count() by conversation;
+let roots =
+AppDependencies
+| where TimeGenerated > ago(14d)
+| where Properties has "github.copilot" and Properties has "github-copilot-cli"
+| extend operation=tostring(Properties["gen_ai.operation.name"])
+| where operation == "invoke_agent"
+| extend conversation=tostring(Properties["gen_ai.conversation.id"]), agent_name=tostring(Properties["gen_ai.agent.name"]), model=tostring(Properties["gen_ai.request.model"]), turns=toint(Properties["github.copilot.turn_count"]), files_modified=toint(Properties["github.copilot.files_modified_count"])
+| project TimeGenerated, conversation, agent_name, model, DurationMs, turns, files_modified, Success;
+roots
+| join kind=leftouter failures on conversation
+| where failure_count >= 2 or turns >= 10 or DurationMs > 30000
+| project TimeGenerated, conversation, agent_name, model, DurationMs, turns, files_modified, failure_count, failed_tools
+| order by failure_count desc, turns desc

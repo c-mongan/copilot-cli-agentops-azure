@@ -1,0 +1,15 @@
+AppDependencies
+| where TimeGenerated > ago(24h)
+| where Properties has "github.copilot" and Properties has "github-copilot-cli"
+| extend operation = tostring(Properties["gen_ai.operation.name"])
+| where operation in ("invoke_agent", "chat", "execute_tool")
+| project TimeGenerated, operation, Name, DurationMs, Success, ResultCode,
+    agent_id=tostring(Properties["gen_ai.agent.id"]),
+    agent_name=tostring(Properties["gen_ai.agent.name"]),
+    model=tostring(Properties["gen_ai.request.model"]),
+    conversation=tostring(Properties["gen_ai.conversation.id"]),
+    tool=tostring(Properties["gen_ai.tool.name"]),
+    error=tostring(Properties["error.type"]),
+    repo_hash=tostring(Properties["agentops.repo.hash"])
+| order by TimeGenerated desc
+| take 100
