@@ -4,8 +4,9 @@ set -euo pipefail
 export COPILOT_OTEL_ENABLED="${COPILOT_OTEL_ENABLED:-true}"
 export COPILOT_OTEL_EXPORTER_TYPE="${COPILOT_OTEL_EXPORTER_TYPE:-otlp-http}"
 export OTEL_EXPORTER_OTLP_ENDPOINT="${OTEL_EXPORTER_OTLP_ENDPOINT:-http://127.0.0.1:4318}"
-export OTEL_SERVICE_NAME="${OTEL_SERVICE_NAME:-github-copilot}"
+export OTEL_SERVICE_NAME="${OTEL_SERVICE_NAME:-github-copilot-cli}"
 export OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT="${OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT:-false}"
+export COPILOT_OTEL_SOURCE_NAME="${COPILOT_OTEL_SOURCE_NAME:-github.copilot}"
 
 repo_url="$(git remote get-url origin 2>/dev/null || echo unknown)"
 repo_hash="$(printf '%s' "$repo_url" | shasum -a 256 | awk '{print $1}')"
@@ -15,7 +16,12 @@ agentops_version="${AGENTOPS_PACK_VERSION:-0.1.0}"
 profile="${AGENTOPS_PROFILE:-safe-default}"
 experiment="${AGENTOPS_EXPERIMENT:-baseline}"
 
-export OTEL_RESOURCE_ATTRIBUTES="service.namespace=copilot-agentops,agent.runtime=github-copilot-cli,agentops.profile=${profile},agentops.experiment=${experiment},agentops.pack.version=${agentops_version},agentops.repo.hash=${repo_hash},git.branch=${branch},git.commit=${commit}"
+agentops_resource_attributes="service.namespace=copilot-agentops,service.name=github-copilot-cli,agent.framework=github-copilot,agent.runtime=github-copilot-cli,agentops.profile=${profile},agentops.experiment=${experiment},agentops.pack.version=${agentops_version},agentops.repo.hash=${repo_hash},git.branch=${branch},git.commit=${commit}"
+if [[ -n "${OTEL_RESOURCE_ATTRIBUTES:-}" ]]; then
+	export OTEL_RESOURCE_ATTRIBUTES="${agentops_resource_attributes},${OTEL_RESOURCE_ATTRIBUTES}"
+else
+	export OTEL_RESOURCE_ATTRIBUTES="${agentops_resource_attributes}"
+fi
 
 copilot_bin="${COPILOT_CLI_BIN:-copilot}"
 exec "$copilot_bin" "$@"

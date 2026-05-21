@@ -1,8 +1,9 @@
 export COPILOT_OTEL_ENABLED=true
 export COPILOT_OTEL_EXPORTER_TYPE=otlp-http
 export OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318
-export OTEL_SERVICE_NAME=github-copilot
+export OTEL_SERVICE_NAME=github-copilot-cli
 export OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=false
+export COPILOT_OTEL_SOURCE_NAME=github.copilot
 export AGENTOPS_PROFILE=safe-default
 export AGENTOPS_EXPERIMENT=baseline
 export AGENTOPS_PACK_VERSION=0.1.0

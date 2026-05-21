@@ -19,7 +19,7 @@ Azure deployment status:
 - Managed Grafana user access and data-source RBAC are configured.
 - Application Insights synthetic ingestion smoke test passed.
 - Collector-backed real Copilot CLI telemetry ingestion passed through `copilot-observe`.
-- Grafana dashboard with real run, token, AIU, latency, model, and failure panels is imported at `https://graf-copilotagentops-de-a4czh7g5aueyf4e0.neu.grafana.azure.com/d/copilot-agentops/copilot-cli-agentops`.
+- Grafana dashboard with real run, token, AIU, latency, model, failure, content-capture, compaction/truncation, policy-block, and session-lifecycle panels is imported at `https://graf-copilotagentops-de-a4czh7g5aueyf4e0.neu.grafana.azure.com/d/copilot-agentops/copilot-cli-agentops`.
 - Proposal-only Azure Monitor scheduled query rules are deployed disabled.
 
 ## Local Collector Smoke Test
@@ -122,6 +122,8 @@ copilot-agentops --help
 ```
 
 The shim checks whether the Azure Monitor collector is already running. If it is not, it retrieves the Application Insights connection string at runtime, starts the collector, and then launches Copilot CLI through `copilot-observe` with content capture disabled.
+
+The wrapper preserves user-supplied OpenTelemetry settings where possible. It sets safe defaults for `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_SERVICE_NAME`, `COPILOT_OTEL_SOURCE_NAME`, and `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT`, then prepends AgentOps metadata to existing `OTEL_RESOURCE_ATTRIBUTES` instead of replacing them.
 
 To bind this to the normal `copilot` command, install the shadow shim:
 

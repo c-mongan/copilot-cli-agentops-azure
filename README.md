@@ -9,6 +9,7 @@ Status: v0.2 deployed and verified in Azure.
 - Copilot CLI OpenTelemetry ingestion through a localhost collector.
 - Azure Monitor, Application Insights, Log Analytics, and Azure Managed Grafana infrastructure.
 - Managed Grafana dashboard import after `azd provision` through the `azure.yaml` post-provision hook.
+- Grafana panels for run volume, model/tool usage, token/cost behavior, failures, content-capture signals, compaction/truncation, policy blocks, and session lifecycle events.
 - KQL query pack aligned to the verified `AppDependencies` / `Properties` workspace schema.
 - Proposal-only Azure Monitor scheduled query alerts, deployed disabled until thresholds are tuned.
 - Read-only Azure MCP and Grafana MCP investigation patterns.
@@ -21,6 +22,7 @@ Status: v0.2 deployed and verified in Azure.
 - Content capture is off.
 - Collector binds to `127.0.0.1`.
 - Repo URL is hashed before export.
+- Existing OpenTelemetry resource attributes are preserved and merged with AgentOps metadata.
 - MCP samples are read-only.
 - Agents propose patches; they do not auto-apply changes.
 
