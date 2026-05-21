@@ -1,0 +1,12 @@
+node_modules/
+dist/
+coverage/
+.env
+.env.*
+!.env.sample
+*.log
+.DS_Store
+.azure/*
+!.azure/deployment-plan.md
+collector/*.local.out
+copilot-otel*.jsonl

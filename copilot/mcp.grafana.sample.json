@@ -1,0 +1,11 @@
+{
+  "servers": {
+    "agent-grafana": {
+      "type": "http",
+      "url": "https://<grafana-endpoint>/api/azure-mcp",
+      "headers": {
+        "Authorization": "Bearer ${AZURE_GRAFANA_MCP_TOKEN}"
+      }
+    }
+  }
+}

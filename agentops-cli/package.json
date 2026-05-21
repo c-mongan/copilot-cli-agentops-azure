@@ -1,0 +1,17 @@
+{
+  "name": "@agentops/cli",
+  "version": "0.1.0",
+  "description": "Local utilities for Copilot CLI AgentOps for Azure.",
+  "bin": {
+    "agentops": "src/index.js"
+  },
+  "scripts": {
+    "test": "node --test",
+    "doctor": "node src/index.js doctor --local-only",
+    "scan": "node src/index.js scan"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT"
+}
