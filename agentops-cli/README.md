@@ -13,6 +13,7 @@ node src/index.js validate-azure
 node src/index.js link session <conversation>
 node src/index.js link trace <operationId>
 node src/index.js fields --last 7d
+node src/index.js context --last 7d
 ```
 
 `validate-azure` is intentionally a handoff reminder in v0.1. Run Azure validation before any deployment.
@@ -20,3 +21,5 @@ node src/index.js fields --last 7d
 `link` prints a Grafana URL plus the raw Azure Log Analytics KQL for a session or trace.
 
 `fields` prints a field-catalog KQL query that discovers observed `Properties` keys and example values from recent Copilot CLI spans.
+
+`context` prints a context-pressure KQL query that ranks sessions with large inputs, low output yield, weak cache leverage, or high estimated cost.

@@ -1,0 +1,124 @@
+// Context pressure and token efficiency for Copilot CLI AgentOps.
+// Finds sessions with large inputs, low output yield, weak cache leverage, or high estimated cost.
+let lookback = 14d;
+let base =
+AppDependencies
+| where TimeGenerated > ago(lookback)
+| where Properties has "github.copilot" and Properties has "github-copilot-cli"
+| extend
+    conversation = coalesce(
+        tostring(Properties["gen_ai.conversation.id"]),
+        strcat(
+            tostring(Properties["gen_ai.agent.id"]),
+            "_",
+            tostring(Properties["github.copilot.turn_count"]),
+            "_",
+            format_datetime(bin(TimeGenerated, 1h), "yyyyMMdd_HHmm")
+        )
+    ),
+    operation = tostring(Properties["gen_ai.operation.name"]),
+    model = tostring(Properties["gen_ai.request.model"]),
+    agent = tostring(Properties["gen_ai.agent.name"]),
+    tool = tostring(Properties["gen_ai.tool.name"]),
+    repo = tostring(Properties["agentops.repo.hash"]),
+    error = tostring(Properties["error.type"]),
+    input_tokens = todouble(Properties["gen_ai.usage.input_tokens"]),
+    output_tokens = todouble(Properties["gen_ai.usage.output_tokens"]),
+    cache_read_tokens = todouble(Properties["gen_ai.usage.cache_read.input_tokens"]),
+    cache_write_tokens = todouble(Properties["gen_ai.usage.cache_creation.input_tokens"]),
+    credits = todouble(Properties["github.copilot.cost"]),
+    aiu = todouble(Properties["github.copilot.aiu"]);
+let sessions =
+base
+| summarize
+    started = min(TimeGenerated),
+    ended = max(TimeGenerated),
+    spans = count(),
+    runs = countif(operation == "invoke_agent"),
+    failures = countif(Success == false or isnotempty(error)),
+    input_tokens = sum(input_tokens),
+    output_tokens = sum(output_tokens),
+    cache_read_tokens = sum(cache_read_tokens),
+    cache_write_tokens = sum(cache_write_tokens),
+    credits = sum(credits),
+    aiu = sum(aiu),
+    p95_duration_ms = percentile(DurationMs, 95),
+    models = make_set(model, 5),
+    agents = make_set(agent, 5),
+    tools = make_set_if(tool, isnotempty(tool), 10),
+    repos = make_set_if(repo, isnotempty(repo), 3),
+    errors = make_set_if(error, isnotempty(error), 10)
+  by conversation;
+sessions
+| extend
+    fresh_input_tokens = iff(input_tokens - cache_read_tokens - cache_write_tokens < 0, 0.0, input_tokens - cache_read_tokens - cache_write_tokens),
+    output_yield_pct = iff(input_tokens > 0, round(100.0 * output_tokens / input_tokens, 3), 0.0),
+    cache_leverage_pct = iff(input_tokens > 0, round(100.0 * cache_read_tokens / input_tokens, 1), 0.0),
+    cache_write_pct = iff(input_tokens > 0, round(100.0 * cache_write_tokens / input_tokens, 1), 0.0),
+    est_usd = round(credits * 0.01, 4),
+    duration_sec = round(datetime_diff("millisecond", ended, started) / 1000.0, 2)
+| extend
+    pressure = case(
+        input_tokens >= 100000 and output_yield_pct < 0.1, "severe_low_yield",
+        input_tokens >= 100000, "severe_context",
+        input_tokens >= 30000 and output_yield_pct < 0.1, "high_low_yield",
+        input_tokens >= 30000, "high_context",
+        fresh_input_tokens >= 30000 and cache_leverage_pct < 10, "low_cache_leverage",
+        est_usd >= 1.0, "expensive",
+        "ok"
+    )
+| where pressure != "ok"
+| project
+    started,
+    conversation,
+    pressure,
+    input_tokens,
+    output_tokens,
+    output_yield_pct,
+    cache_read_tokens,
+    cache_write_tokens,
+    fresh_input_tokens,
+    cache_leverage_pct,
+    cache_write_pct,
+    credits,
+    est_usd,
+    aiu,
+    duration_sec,
+    p95_duration_ms,
+    runs,
+    spans,
+    failures,
+    models,
+    agents,
+    repos,
+    tools,
+    errors
+| order by input_tokens desc, est_usd desc
+| take 100;
+
+// Aggregate context-pressure contributors by model, agent, and repo.
+sessions
+| extend
+    fresh_input_tokens = iff(input_tokens - cache_read_tokens - cache_write_tokens < 0, 0.0, input_tokens - cache_read_tokens - cache_write_tokens),
+    output_yield_pct = iff(input_tokens > 0, round(100.0 * output_tokens / input_tokens, 3), 0.0),
+    cache_leverage_pct = iff(input_tokens > 0, round(100.0 * cache_read_tokens / input_tokens, 1), 0.0),
+    est_usd = round(credits * 0.01, 4),
+    model = tostring(models[0]),
+    agent = tostring(agents[0]),
+    repo = tostring(repos[0])
+| summarize
+    sessions = count(),
+    high_context_sessions = countif(input_tokens >= 30000),
+    low_yield_sessions = countif(input_tokens >= 30000 and output_yield_pct < 0.1),
+    input_tokens = sum(input_tokens),
+    output_tokens = sum(output_tokens),
+    fresh_input_tokens = sum(fresh_input_tokens),
+    cache_read_tokens = sum(cache_read_tokens),
+    est_usd = sum(est_usd),
+    p95_duration_ms = percentile(p95_duration_ms, 95)
+  by model, agent, repo
+| extend
+    output_yield_pct = iff(input_tokens > 0, round(100.0 * output_tokens / input_tokens, 3), 0.0),
+    cache_leverage_pct = iff(input_tokens > 0, round(100.0 * cache_read_tokens / input_tokens, 1), 0.0)
+| order by input_tokens desc, est_usd desc
+| take 50;

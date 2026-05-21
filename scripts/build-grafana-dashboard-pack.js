@@ -228,6 +228,18 @@ function workflowRiskQuery() {
   return `${sessionBaseWhere()} | extend InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), Credits=todouble(Properties['github.copilot.cost']) | summarize HasInvoke=countif(operation == 'invoke_agent') > 0, HasTool=countif(operation == 'execute_tool' or isnotempty(tool)) > 0, ToolFailures=countif((operation == 'execute_tool' or isnotempty(tool)) and (Success == false or isnotempty(error))), Failures=countif(Success == false or isnotempty(error)), InputTokens=sum(InputTokens), Credits=sum(Credits), P95DurationMs=percentile(DurationMs, 95) by Session=conversation | extend Risk=case(Failures > 0, 'failed', ToolFailures > 0, 'tool_failed', Credits * 0.01 >= 1.0, 'expensive', P95DurationMs >= 30000, 'slow', InputTokens >= 30000, 'high_context', HasTool, 'used_tools', HasInvoke, 'invoked', 'other') | summarize Sessions=count() by Risk | order by Sessions desc`;
 }
 
+function contextPressureSessionsQuery(limit = 100) {
+  return `${sessionBaseWhere()} | extend InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), OutputTokens=todouble(Properties['gen_ai.usage.output_tokens']), CacheRead=todouble(Properties['gen_ai.usage.cache_read.input_tokens']), CacheWrite=todouble(Properties['gen_ai.usage.cache_creation.input_tokens']), Credits=todouble(Properties['github.copilot.cost']), AIU=todouble(Properties['github.copilot.aiu']) | summarize Started=min(TimeGenerated), Ended=max(TimeGenerated), Spans=count(), Runs=countif(operation == 'invoke_agent'), Failures=countif(Success == false or isnotempty(error)), InputTokens=sum(InputTokens), OutputTokens=sum(OutputTokens), CacheRead=sum(CacheRead), CacheWrite=sum(CacheWrite), Credits=sum(Credits), AIU=sum(AIU), P95DurationMs=percentile(DurationMs, 95), Models=make_set(model, 5), Agents=make_set(agent, 5), Repos=make_set_if(repo, isnotempty(repo), 3), Tools=make_set_if(tool, isnotempty(tool), 10), Errors=make_set_if(error, isnotempty(error), 10) by Session=conversation | extend FreshInput=iff(InputTokens - CacheRead - CacheWrite < 0, 0.0, InputTokens - CacheRead - CacheWrite), OutputYieldPct=iff(InputTokens > 0, round(100.0 * OutputTokens / InputTokens, 3), 0.0), CacheLeveragePct=iff(InputTokens > 0, round(100.0 * CacheRead / InputTokens, 1), 0.0), CacheWritePct=iff(InputTokens > 0, round(100.0 * CacheWrite / InputTokens, 1), 0.0), EstUsd=round(Credits * 0.01, 4), DurationSec=round(datetime_diff('millisecond', Ended, Started) / 1000.0, 2) | extend Pressure=case(InputTokens >= 100000 and OutputYieldPct < 0.1, 'severe_low_yield', InputTokens >= 100000, 'severe_context', InputTokens >= 30000 and OutputYieldPct < 0.1, 'high_low_yield', InputTokens >= 30000, 'high_context', FreshInput >= 30000 and CacheLeveragePct < 10, 'low_cache_leverage', EstUsd >= 1.0, 'expensive', 'ok') | where Pressure != 'ok' | project Started, Session, Pressure, InputTokens, OutputTokens, OutputYieldPct, CacheRead, CacheWrite, FreshInput, CacheLeveragePct, CacheWritePct, Credits, EstUsd, AIU, DurationSec, P95DurationMs, Runs, Spans, Failures, Models, Agents, Repos, Tools, Errors | order by InputTokens desc, EstUsd desc | take ${limit}`;
+}
+
+function contextPressureContributorsQuery() {
+  return `${sessionBaseWhere()} | extend InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), OutputTokens=todouble(Properties['gen_ai.usage.output_tokens']), CacheRead=todouble(Properties['gen_ai.usage.cache_read.input_tokens']), CacheWrite=todouble(Properties['gen_ai.usage.cache_creation.input_tokens']), Credits=todouble(Properties['github.copilot.cost']) | summarize Sessions=dcount(conversation), HighContextSessions=dcountif(conversation, InputTokens >= 30000), LowYieldSpans=countif(InputTokens >= 30000 and OutputTokens / InputTokens < 0.001), InputTokens=sum(InputTokens), OutputTokens=sum(OutputTokens), CacheRead=sum(CacheRead), CacheWrite=sum(CacheWrite), FreshInput=sum(iff(InputTokens - CacheRead - CacheWrite < 0, 0.0, InputTokens - CacheRead - CacheWrite)), EstUsd=sum(Credits) * 0.01, P95DurationMs=percentile(DurationMs, 95), Failures=countif(Success == false or isnotempty(error)) by model, agent, repo | extend OutputYieldPct=iff(InputTokens > 0, round(100.0 * OutputTokens / InputTokens, 3), 0.0), CacheLeveragePct=iff(InputTokens > 0, round(100.0 * CacheRead / InputTokens, 1), 0.0) | order by InputTokens desc, EstUsd desc | take 50`;
+}
+
+function contextPressureTrendQuery() {
+  return `${sessionBaseWhere()} | extend InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), OutputTokens=todouble(Properties['gen_ai.usage.output_tokens']), CacheRead=todouble(Properties['gen_ai.usage.cache_read.input_tokens']), CacheWrite=todouble(Properties['gen_ai.usage.cache_creation.input_tokens']) | summarize InputTokens=sum(InputTokens), OutputTokens=sum(OutputTokens), CacheRead=sum(CacheRead), CacheWrite=sum(CacheWrite) by bin(TimeGenerated, $__interval) | order by TimeGenerated asc`;
+}
+
 function sessionFilterPipe() {
   return `| where ('$conversation' == '$__all' or conversation == '$conversation')`;
 }
@@ -332,6 +344,22 @@ function qualityDashboard() {
     tablePanel(21, 'Model cost and latency', 12, 12, 12, 10, `${sessionBaseWhere()} | where operation == 'invoke_agent' | extend InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), OutputTokens=todouble(Properties['gen_ai.usage.output_tokens']), Credits=todouble(Properties['github.copilot.cost']) | summarize Runs=count(), Sessions=dcount(conversation), InputTokens=sum(InputTokens), OutputTokens=sum(OutputTokens), EstUsd=sum(Credits) * 0.01, P95DurationMs=percentile(DurationMs, 95), Failures=countif(Success == false or isnotempty(error)) by model | order by EstUsd desc`, [byNameUnit('EstUsd', 'currencyUSD', 4), byNameUnit('P95DurationMs', 'ms', 2)]),
     tablePanel(30, 'Repo repeated-failure candidates', 0, 22, 24, 9, `${sessionBaseWhere()} | summarize Sessions=dcount(conversation), Spans=count(), Failures=countif(Success == false or isnotempty(error)), EstUsd=sum(todouble(Properties['github.copilot.cost'])) * 0.01, P95DurationMs=percentile(DurationMs, 95), TopErrors=make_set(error, 5) by repo | where isnotempty(repo) | extend FailurePct=round(100.0 * Failures / Spans, 1) | order by Failures desc, EstUsd desc | take 50`, [byNameUnit('EstUsd', 'currencyUSD', 4), byNameUnit('P95DurationMs', 'ms', 2), byNameUnit('FailurePct', 'percent', 1)]),
     tablePanel(40, 'Workflow funnel risks', 0, 31, 24, 8, workflowRiskQuery()),
+    tablePanel(41, 'Context pressure sessions', 0, 39, 24, 10, contextPressureSessionsQuery(100), [
+      byNameLink('Session', 'Open session detail', '/d/agentops-session-detail?var-conversation=${__data.fields.Session}'),
+      byNameUnit('OutputYieldPct', 'percent', 3),
+      byNameUnit('CacheLeveragePct', 'percent', 1),
+      byNameUnit('CacheWritePct', 'percent', 1),
+      byNameUnit('EstUsd', 'currencyUSD', 4),
+      byNameUnit('DurationSec', 's', 2),
+      byNameUnit('P95DurationMs', 'ms', 2),
+    ]),
+    tablePanel(42, 'Context pressure contributors', 0, 49, 12, 9, contextPressureContributorsQuery(), [
+      byNameUnit('OutputYieldPct', 'percent', 3),
+      byNameUnit('CacheLeveragePct', 'percent', 1),
+      byNameUnit('EstUsd', 'currencyUSD', 4),
+      byNameUnit('P95DurationMs', 'ms', 2),
+    ]),
+    timeseriesPanel(43, 'Input, output, and cache tokens', 12, 49, 12, 9, contextPressureTrendQuery()),
   ];
   return baseDashboard('agentops-quality', 'AgentOps Quality', panels, false);
 }

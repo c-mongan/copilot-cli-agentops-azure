@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const test = require('node:test');
 
-const { buildLink, doctor, fieldCatalogQuery, importJsonl, parseFrontmatter, scan } = require('../src/index.js');
+const { buildLink, contextPressureQuery, doctor, fieldCatalogQuery, importJsonl, parseFrontmatter, scan } = require('../src/index.js');
 
 const root = path.resolve(__dirname, '..', '..');
 
@@ -52,4 +52,12 @@ test('field catalog query discovers Properties keys', () => {
   assert.match(query, /ago\(14d\)/);
   assert.match(query, /bag_keys\(Properties\)/);
   assert.match(query, /example_values/);
+});
+
+test('context pressure query ranks inefficient sessions', () => {
+  const query = contextPressureQuery('3d');
+  assert.match(query, /ago\(3d\)/);
+  assert.match(query, /OutputYieldPct/);
+  assert.match(query, /CacheLeveragePct/);
+  assert.match(query, /high_context/);
 });

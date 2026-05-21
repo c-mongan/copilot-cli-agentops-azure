@@ -142,6 +142,7 @@ Generate deep links and field-discovery KQL for investigations:
 node agentops-cli/src/index.js link session <conversation>
 node agentops-cli/src/index.js link trace <operationId>
 node agentops-cli/src/index.js fields --last 7d
+node agentops-cli/src/index.js context --last 7d
 ```
 
 If you run deployments outside `azd`, import the dashboard pack manually:

@@ -8,7 +8,7 @@ const path = require('node:path');
 const root = path.resolve(__dirname, '..', '..');
 
 function usage() {
-  return `agentops <command>\n\nCommands:\n  doctor [--local-only]\n  scan [--json]\n  import-jsonl <file>\n  validate-collector [endpoint]\n  validate-azure\n  link session <conversation>\n  link trace <operationId>\n  fields [--last <duration>]\n`;
+  return `agentops <command>\n\nCommands:\n  doctor [--local-only]\n  scan [--json]\n  import-jsonl <file>\n  validate-collector [endpoint]\n  validate-azure\n  link session <conversation>\n  link trace <operationId>\n  fields [--last <duration>]\n  context [--last <duration>]\n`;
 }
 
 const workspaceId = '81513958-e9aa-4a35-aeab-953e1d26e797';
@@ -31,6 +31,10 @@ function traceQuery(operationId, last = '24h') {
 
 function fieldCatalogQuery(last = '7d') {
   return `AppDependencies\n| where TimeGenerated > ago(${last})\n| where ${baseFilter}\n| extend fields = bag_keys(Properties)\n| mv-expand field = fields to typeof(string)\n| extend value = tostring(Properties[field])\n| summarize observed=count(), example_values=make_set_if(value, isnotempty(value), 5) by field\n| order by observed desc, field asc`;
+}
+
+function contextPressureQuery(last = '7d') {
+  return `AppDependencies\n| where TimeGenerated > ago(${last})\n| where ${baseFilter}\n| extend conversation=${sessionKey}, operation=tostring(Properties["gen_ai.operation.name"]), model=tostring(Properties["gen_ai.request.model"]), agent=tostring(Properties["gen_ai.agent.name"]), tool=tostring(Properties["gen_ai.tool.name"]), repo=tostring(Properties["agentops.repo.hash"]), error=tostring(Properties["error.type"]), InputTokens=todouble(Properties["gen_ai.usage.input_tokens"]), OutputTokens=todouble(Properties["gen_ai.usage.output_tokens"]), CacheRead=todouble(Properties["gen_ai.usage.cache_read.input_tokens"]), CacheWrite=todouble(Properties["gen_ai.usage.cache_creation.input_tokens"]), Credits=todouble(Properties["github.copilot.cost"]), AIU=todouble(Properties["github.copilot.aiu"])\n| summarize Started=min(TimeGenerated), Ended=max(TimeGenerated), Spans=count(), Runs=countif(operation == "invoke_agent"), Failures=countif(Success == false or isnotempty(error)), InputTokens=sum(InputTokens), OutputTokens=sum(OutputTokens), CacheRead=sum(CacheRead), CacheWrite=sum(CacheWrite), Credits=sum(Credits), AIU=sum(AIU), P95DurationMs=percentile(DurationMs, 95), Models=make_set(model, 5), Agents=make_set(agent, 5), Repos=make_set_if(repo, isnotempty(repo), 3), Tools=make_set_if(tool, isnotempty(tool), 10), Errors=make_set_if(error, isnotempty(error), 10) by Session=conversation\n| extend FreshInput=iff(InputTokens - CacheRead - CacheWrite < 0, 0.0, InputTokens - CacheRead - CacheWrite), OutputYieldPct=iff(InputTokens > 0, round(100.0 * OutputTokens / InputTokens, 3), 0.0), CacheLeveragePct=iff(InputTokens > 0, round(100.0 * CacheRead / InputTokens, 1), 0.0), EstUsd=round(Credits * 0.01, 4), DurationSec=round(datetime_diff("millisecond", Ended, Started) / 1000.0, 2)\n| extend Pressure=case(InputTokens >= 100000 and OutputYieldPct < 0.1, "severe_low_yield", InputTokens >= 100000, "severe_context", InputTokens >= 30000 and OutputYieldPct < 0.1, "high_low_yield", InputTokens >= 30000, "high_context", FreshInput >= 30000 and CacheLeveragePct < 10, "low_cache_leverage", EstUsd >= 1.0, "expensive", "ok")\n| where Pressure != "ok"\n| project Started, Session, Pressure, InputTokens, OutputTokens, OutputYieldPct, CacheRead, CacheWrite, FreshInput, CacheLeveragePct, Credits, EstUsd, AIU, DurationSec, P95DurationMs, Runs, Spans, Failures, Models, Agents, Repos, Tools, Errors\n| order by InputTokens desc, EstUsd desc\n| take 100`;
 }
 
 function buildLink(kind, id, options = {}) {
@@ -254,6 +258,12 @@ async function main(argv) {
     return;
   }
 
+  if (command === 'context') {
+    const last = parseLastArg(args, '7d');
+    process.stdout.write(JSON.stringify({ workspace_id: workspaceId, query: contextPressureQuery(last) }, null, 2) + '\n');
+    return;
+  }
+
   throw new Error(`Unknown command: ${command}`);
 }
 
@@ -266,6 +276,7 @@ if (require.main === module) {
 
 module.exports = {
   buildLink,
+  contextPressureQuery,
   doctor,
   fieldCatalogQuery,
   importJsonl,
