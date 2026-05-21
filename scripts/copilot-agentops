@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd "${script_dir}/.." && pwd)"
+compose_file="${repo_root}/collector/docker-compose.azuremonitor.yaml"
+
+collector_running=false
+if command -v docker >/dev/null 2>&1; then
+  if docker compose -f "${compose_file}" ps --status running --services 2>/dev/null | grep -qx 'otelcol'; then
+    collector_running=true
+  fi
+fi
+
+if [[ "${collector_running}" != true ]]; then
+  "${repo_root}/scripts/collector-azuremonitor-up.sh" >/dev/null
+fi
+
+if [[ -z "${COPILOT_CLI_BIN:-}" ]]; then
+  if ! command -v copilot >/dev/null 2>&1; then
+    echo "ERROR: copilot CLI was not found on PATH." >&2
+    exit 127
+  fi
+fi
+
+exec "${repo_root}/copilot/copilot-observe" "$@"
