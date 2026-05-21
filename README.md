@@ -2,14 +2,15 @@
 
 Secure Azure-native observability and self-improvement loop for GitHub Copilot CLI.
 
-Status: v0.2 deployed and verified in Azure.
+Status: v0.3 dashboard pack in progress on top of the verified Azure deployment.
 
 ## What It Gives You
 
 - Copilot CLI OpenTelemetry ingestion through a localhost collector.
 - Azure Monitor, Application Insights, Log Analytics, and Azure Managed Grafana infrastructure.
-- Managed Grafana dashboard import after `azd provision` through the `azure.yaml` post-provision hook.
-- Grafana panels for run volume, model/tool usage, token/cost behavior, failures, content-capture signals, compaction/truncation, policy blocks, and session lifecycle events.
+- Managed Grafana dashboard pack import after `azd provision` through the `azure.yaml` post-provision hook.
+- Grafana overview plus linked Sessions, Session Detail, Traces / Spans, Runtime Events, and Quality dashboards.
+- Grafana panels for session risk, run volume, model/tool usage, token/cost behavior, failures, content-capture signals, compaction/truncation, policy blocks, and session lifecycle events.
 - KQL query pack aligned to the verified `AppDependencies` / `Properties` workspace schema.
 - Proposal-only Azure Monitor scheduled query alerts, deployed disabled until thresholds are tuned.
 - Read-only Azure MCP and Grafana MCP investigation patterns.
@@ -86,7 +87,7 @@ docker compose -f collector/docker-compose.azuremonitor.yaml down
 
 PowerShell uses the same Docker Compose stop command.
 
-Open the deployed dashboard:
+Open the deployed overview dashboard:
 
 ```text
 https://graf-copilotagentops-de-a4czh7g5aueyf4e0.neu.grafana.azure.com/d/copilot-agentops/copilot-cli-agentops
@@ -120,7 +121,22 @@ hooks:
     run: ./scripts/grafana-import-dashboard.sh
 ```
 
-The hook uses the Bicep `GRAFANA_NAME` output and imports `grafana/agentops-dashboard.json` into Managed Grafana after provisioning. If you run deployments outside `azd`, import the dashboard manually:
+The hook uses the Bicep `GRAFANA_NAME` output and imports the overview plus linked dashboard pack into Managed Grafana after provisioning:
+
+- `grafana/agentops-dashboard.json`
+- `grafana/agentops-sessions.json`
+- `grafana/agentops-session-detail.json`
+- `grafana/agentops-traces-spans.json`
+- `grafana/agentops-runtime-events.json`
+- `grafana/agentops-quality.json`
+
+Regenerate the dashboard pack after query or layout changes:
+
+```bash
+node scripts/build-grafana-dashboard-pack.js
+```
+
+If you run deployments outside `azd`, import the dashboard pack manually:
 
 ```bash
 AZURE_RESOURCE_GROUP=rg-copilot-agentops-dev \
@@ -148,9 +164,18 @@ for name in \
 done
 ```
 
+To import a single dashboard during development, pass `DASHBOARD_JSON`:
+
+```bash
+AZURE_RESOURCE_GROUP=rg-copilot-agentops-dev \
+GRAFANA_NAME=graf-copilotagentops-de \
+DASHBOARD_JSON=grafana/agentops-sessions.json \
+./scripts/grafana-import-dashboard.sh
+```
+
 ## Current Scope
 
-This slice proves the secure telemetry loop end to end and provides operational dashboards, KQL, and disabled proposal-only alerts. It does not deploy the optional actioner Function by default, and it does not auto-apply remediation.
+This slice proves the secure telemetry loop end to end and provides operational dashboards, KQL, and disabled proposal-only alerts. The v0.3 dashboard pack focuses on Datadog-style exploration inside Grafana: sessions first, then drilldown into spans, runtime events, and quality signals. It does not deploy the optional actioner Function by default, and it does not auto-apply remediation.
 
 See [.azure/deployment-plan.md](.azure/deployment-plan.md) for the implementation and deployment plan.
 

@@ -1,19 +1,18 @@
 #!/usr/bin/env bash
-# Imports / updates the Copilot CLI AgentOps dashboard in Azure Managed Grafana.
-# Source of truth: grafana/agentops-dashboard.json
+# Imports / updates the Copilot CLI AgentOps dashboards in Azure Managed Grafana.
+# Source of truth: grafana/agentops-dashboard.json and grafana/agentops-*.json
 #
 # Required env (auto-resolved from azd env when run as an azd hook):
 #   AZURE_RESOURCE_GROUP   e.g. rg-copilot-agentops-dev
 #   GRAFANA_NAME           e.g. graf-copilotagentops-...
 # Optional:
 #   GRAFANA_FOLDER         folder title (default: "AgentOps")
-#   DASHBOARD_JSON         path to dashboard JSON (default: repo grafana/agentops-dashboard.json)
+#   DASHBOARD_JSON         path to one dashboard JSON (default: import the full dashboard pack)
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-DASHBOARD_JSON="${DASHBOARD_JSON:-${REPO_ROOT}/grafana/agentops-dashboard.json}"
 GRAFANA_FOLDER="${GRAFANA_FOLDER:-AgentOps}"
 
 # Pull from azd env if not set explicitly
@@ -38,22 +37,47 @@ if [[ -z "${GRAFANA_NAME}" ]]; then
   exit 2
 fi
 
-if [[ ! -f "${DASHBOARD_JSON}" ]]; then
-  echo "ERROR: dashboard JSON not found at ${DASHBOARD_JSON}" >&2
-  exit 2
+if [[ -n "${DASHBOARD_JSON:-}" ]]; then
+  if [[ ! -f "${DASHBOARD_JSON}" ]]; then
+    echo "ERROR: dashboard JSON not found at ${DASHBOARD_JSON}" >&2
+    exit 2
+  fi
+  DASHBOARD_FILES=("${DASHBOARD_JSON}")
+else
+  DASHBOARD_FILES=(
+    "${REPO_ROOT}/grafana/agentops-dashboard.json"
+    "${REPO_ROOT}/grafana/agentops-sessions.json"
+    "${REPO_ROOT}/grafana/agentops-session-detail.json"
+    "${REPO_ROOT}/grafana/agentops-traces-spans.json"
+    "${REPO_ROOT}/grafana/agentops-runtime-events.json"
+    "${REPO_ROOT}/grafana/agentops-quality.json"
+  )
 fi
+
+for dashboard_file in "${DASHBOARD_FILES[@]}"; do
+  if [[ ! -f "${dashboard_file}" ]]; then
+    echo "ERROR: dashboard JSON not found at ${dashboard_file}" >&2
+    exit 2
+  fi
+done
 
 if ! az extension show -n amg >/dev/null 2>&1; then
   echo "Installing 'amg' Azure CLI extension..." >&2
   az extension add -n amg --only-show-errors >/dev/null
 fi
 
-echo "Importing dashboard '${DASHBOARD_JSON##*/}' into Grafana '${GRAFANA_NAME}' (folder: ${GRAFANA_FOLDER})..."
+# Ensure folder exists (idempotent)
+az grafana folder show -n "${GRAFANA_NAME}" --folder "${GRAFANA_FOLDER}" >/dev/null 2>&1 \
+  || az grafana folder create -n "${GRAFANA_NAME}" --title "${GRAFANA_FOLDER}" --only-show-errors >/dev/null
 
-# Build the definition payload Grafana expects: {"dashboard": {...}, "overwrite": true}
-TMP_DEF="$(mktemp -t agentops-dash.XXXXXX.json)"
-trap 'rm -f "${TMP_DEF}"' EXIT
-python3 - "${DASHBOARD_JSON}" "${TMP_DEF}" <<'PY'
+URL="$(az grafana show -n "${GRAFANA_NAME}" -g "${AZURE_RESOURCE_GROUP}" --query 'properties.endpoint' -o tsv)"
+
+for dashboard_file in "${DASHBOARD_FILES[@]}"; do
+  echo "Importing dashboard '${dashboard_file##*/}' into Grafana '${GRAFANA_NAME}' (folder: ${GRAFANA_FOLDER})..."
+
+  # Build the definition payload Grafana expects: {"dashboard": {...}, "overwrite": true}
+  TMP_DEF="$(mktemp -t agentops-dash.XXXXXX.json)"
+  python3 - "${dashboard_file}" "${TMP_DEF}" <<'PY'
 import json, sys
 src, dst = sys.argv[1], sys.argv[2]
 with open(src) as f:
@@ -65,18 +89,15 @@ with open(dst, "w") as f:
     json.dump(payload, f)
 PY
 
-# Ensure folder exists (idempotent)
-az grafana folder show -n "${GRAFANA_NAME}" --folder "${GRAFANA_FOLDER}" >/dev/null 2>&1 \
-  || az grafana folder create -n "${GRAFANA_NAME}" --title "${GRAFANA_FOLDER}" --only-show-errors >/dev/null
+  # Upsert dashboard (create if missing, update otherwise; overwrite:true handles both)
+  az grafana dashboard create \
+    -n "${GRAFANA_NAME}" \
+    --folder "${GRAFANA_FOLDER}" \
+    --definition "@${TMP_DEF}" \
+    --overwrite true \
+    --only-show-errors >/dev/null
 
-# Upsert dashboard (create if missing, update otherwise — overwrite:true handles both)
-az grafana dashboard create \
-  -n "${GRAFANA_NAME}" \
-  --folder "${GRAFANA_FOLDER}" \
-  --definition "@${TMP_DEF}" \
-  --overwrite true \
-  --only-show-errors >/dev/null
-
-URL="$(az grafana show -n "${GRAFANA_NAME}" -g "${AZURE_RESOURCE_GROUP}" --query 'properties.endpoint' -o tsv)"
-DASH_UID="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["uid"])' "${DASHBOARD_JSON}")"
-echo "✓ Dashboard imported: ${URL}/d/${DASH_UID}"
+  rm -f "${TMP_DEF}"
+  DASH_UID="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["uid"])' "${dashboard_file}")"
+  echo "✓ Dashboard imported: ${URL}/d/${DASH_UID}"
+done

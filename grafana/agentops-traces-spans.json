@@ -1,0 +1,571 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [
+    {
+      "title": "Overview",
+      "url": "/d/copilot-agentops",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
+      "title": "Sessions",
+      "url": "/d/agentops-sessions",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
+      "title": "Traces / Spans",
+      "url": "/d/agentops-traces-spans",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
+      "title": "Runtime Events",
+      "url": "/d/agentops-runtime-events",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
+      "title": "Quality",
+      "url": "/d/agentops-quality",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
+      "title": "Azure Portal - Log Analytics",
+      "url": "https://portal.azure.com/#@/resource/subscriptions/0222a208-955a-45fd-b6d8-ca4704421bf0/resourceGroups/rg-copilot-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-copilot-agentops-dev/logs",
+      "type": "link",
+      "icon": "external link",
+      "targetBlank": true
+    }
+  ],
+  "liveNow": false,
+  "panels": [
+    {
+      "id": 1,
+      "type": "text",
+      "gridPos": {
+        "h": 2,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "## Traces / Spans\nRaw span inspection for Copilot CLI operations. Use filters for model, operation, tool, repo, and session."
+      }
+    },
+    {
+      "id": 10,
+      "type": "table",
+      "title": "Trace / span explorer",
+      "gridPos": {
+        "h": 14,
+        "w": 24,
+        "x": 0,
+        "y": 2
+      },
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "azure-monitor-oob"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Session"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open session detail",
+                    "url": "/d/agentops-session-detail?var-conversation=${__data.fields.Session}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "DurationMs"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "ms"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "Azure Log Analytics",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor-oob"
+          },
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/0222a208-955a-45fd-b6d8-ca4704421bf0/resourceGroups/rg-copilot-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-copilot-agentops-dev"
+            ],
+            "resultFormat": "table",
+            "query": "AppDependencies | where $__timeFilter(TimeGenerated) | where Properties has 'github.copilot' and Properties has 'github-copilot-cli' | extend operation=tostring(Properties['gen_ai.operation.name']), conversation=coalesce(tostring(Properties['gen_ai.conversation.id']), strcat(tostring(Properties['gen_ai.agent.id']), '_', tostring(Properties['github.copilot.turn_count']), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm'))), agent=tostring(Properties['gen_ai.agent.name']), model=tostring(Properties['gen_ai.request.model']), tool=tostring(Properties['gen_ai.tool.name']), repo=tostring(Properties['agentops.repo.hash']), error=tostring(Properties['error.type']) | where ('$model' == '$__all' or model in (${model:singlequote})) | where ('$operation' == '$__all' or operation in (${operation:singlequote})) | where ('$agent' == '$__all' or agent in (${agent:singlequote})) | where ('$repo' == '$__all' or repo in (${repo:singlequote})) | where ('$tool' == '$__all' or tool in (${tool:singlequote})) | where ('$conversation' == '$__all' or conversation == '$conversation') | project TimeGenerated, Session=conversation, OperationId, ParentId, Id, operation, Name, agent, model, tool, repo, DurationMs, Success, ResultCode, error | order by TimeGenerated desc | take 500"
+          }
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "type": "timeseries",
+      "title": "Span count by operation",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "azure-monitor-oob"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "Azure Log Analytics",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor-oob"
+          },
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/0222a208-955a-45fd-b6d8-ca4704421bf0/resourceGroups/rg-copilot-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-copilot-agentops-dev"
+            ],
+            "resultFormat": "time_series",
+            "query": "AppDependencies | where $__timeFilter(TimeGenerated) | where Properties has 'github.copilot' and Properties has 'github-copilot-cli' | extend operation=tostring(Properties['gen_ai.operation.name']), conversation=coalesce(tostring(Properties['gen_ai.conversation.id']), strcat(tostring(Properties['gen_ai.agent.id']), '_', tostring(Properties['github.copilot.turn_count']), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm'))), agent=tostring(Properties['gen_ai.agent.name']), model=tostring(Properties['gen_ai.request.model']), tool=tostring(Properties['gen_ai.tool.name']), repo=tostring(Properties['agentops.repo.hash']), error=tostring(Properties['error.type']) | where ('$model' == '$__all' or model in (${model:singlequote})) | where ('$operation' == '$__all' or operation in (${operation:singlequote})) | where ('$agent' == '$__all' or agent in (${agent:singlequote})) | where ('$repo' == '$__all' or repo in (${repo:singlequote})) | where ('$tool' == '$__all' or tool in (${tool:singlequote})) | where ('$conversation' == '$__all' or conversation == '$conversation') | summarize Spans=count() by bin(TimeGenerated, $__interval), operation | order by TimeGenerated asc"
+          }
+        }
+      ]
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "Latency percentiles",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "azure-monitor-oob"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "Azure Log Analytics",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor-oob"
+          },
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/0222a208-955a-45fd-b6d8-ca4704421bf0/resourceGroups/rg-copilot-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-copilot-agentops-dev"
+            ],
+            "resultFormat": "time_series",
+            "query": "AppDependencies | where $__timeFilter(TimeGenerated) | where Properties has 'github.copilot' and Properties has 'github-copilot-cli' | extend operation=tostring(Properties['gen_ai.operation.name']), conversation=coalesce(tostring(Properties['gen_ai.conversation.id']), strcat(tostring(Properties['gen_ai.agent.id']), '_', tostring(Properties['github.copilot.turn_count']), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm'))), agent=tostring(Properties['gen_ai.agent.name']), model=tostring(Properties['gen_ai.request.model']), tool=tostring(Properties['gen_ai.tool.name']), repo=tostring(Properties['agentops.repo.hash']), error=tostring(Properties['error.type']) | where ('$model' == '$__all' or model in (${model:singlequote})) | where ('$operation' == '$__all' or operation in (${operation:singlequote})) | where ('$agent' == '$__all' or agent in (${agent:singlequote})) | where ('$repo' == '$__all' or repo in (${repo:singlequote})) | where ('$tool' == '$__all' or tool in (${tool:singlequote})) | where ('$conversation' == '$__all' or conversation == '$conversation') | summarize P50=percentile(DurationMs, 50), P95=percentile(DurationMs, 95), P99=percentile(DurationMs, 99) by bin(TimeGenerated, $__interval) | order by TimeGenerated asc"
+          }
+        }
+      ]
+    },
+    {
+      "id": 30,
+      "type": "table",
+      "title": "Errors by operation",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 24
+      },
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "azure-monitor-oob"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "P95DurationMs"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "ms"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "Azure Log Analytics",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor-oob"
+          },
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/0222a208-955a-45fd-b6d8-ca4704421bf0/resourceGroups/rg-copilot-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-copilot-agentops-dev"
+            ],
+            "resultFormat": "table",
+            "query": "AppDependencies | where $__timeFilter(TimeGenerated) | where Properties has 'github.copilot' and Properties has 'github-copilot-cli' | extend operation=tostring(Properties['gen_ai.operation.name']), conversation=coalesce(tostring(Properties['gen_ai.conversation.id']), strcat(tostring(Properties['gen_ai.agent.id']), '_', tostring(Properties['github.copilot.turn_count']), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm'))), agent=tostring(Properties['gen_ai.agent.name']), model=tostring(Properties['gen_ai.request.model']), tool=tostring(Properties['gen_ai.tool.name']), repo=tostring(Properties['agentops.repo.hash']), error=tostring(Properties['error.type']) | where ('$model' == '$__all' or model in (${model:singlequote})) | where ('$operation' == '$__all' or operation in (${operation:singlequote})) | where ('$agent' == '$__all' or agent in (${agent:singlequote})) | where ('$repo' == '$__all' or repo in (${repo:singlequote})) | where ('$tool' == '$__all' or tool in (${tool:singlequote})) | where ('$conversation' == '$__all' or conversation == '$conversation') | where Success == false or isnotempty(error) | summarize Failures=count(), P95DurationMs=percentile(DurationMs, 95), ResultCodes=make_set(ResultCode, 5) by operation, error, model, tool | order by Failures desc"
+          }
+        }
+      ]
+    }
+  ],
+  "refresh": "1m",
+  "schemaVersion": 39,
+  "tags": [
+    "agentops",
+    "copilot-cli",
+    "llm-observability"
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "workspaceResource",
+        "type": "constant",
+        "query": "/subscriptions/0222a208-955a-45fd-b6d8-ca4704421bf0/resourceGroups/rg-copilot-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-copilot-agentops-dev",
+        "current": {
+          "selected": false,
+          "text": "/subscriptions/0222a208-955a-45fd-b6d8-ca4704421bf0/resourceGroups/rg-copilot-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-copilot-agentops-dev",
+          "value": "/subscriptions/0222a208-955a-45fd-b6d8-ca4704421bf0/resourceGroups/rg-copilot-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-copilot-agentops-dev"
+        },
+        "hide": 2
+      },
+      {
+        "name": "conversation",
+        "label": "Session",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-azure-monitor-datasource",
+          "uid": "azure-monitor-oob"
+        },
+        "queryType": "Azure Log Analytics",
+        "query": {
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/0222a208-955a-45fd-b6d8-ca4704421bf0/resourceGroups/rg-copilot-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-copilot-agentops-dev"
+            ],
+            "query": "AppDependencies | where TimeGenerated > ago(7d) | where Properties has 'github.copilot' and Properties has 'github-copilot-cli' | extend conversation=coalesce(tostring(Properties['gen_ai.conversation.id']), strcat(tostring(Properties['gen_ai.agent.id']), '_', tostring(Properties['github.copilot.turn_count']), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm'))) | where isnotempty(conversation) | distinct conversation | order by conversation desc"
+          }
+        },
+        "refresh": 2,
+        "includeAll": true,
+        "multi": false,
+        "current": {
+          "selected": false,
+          "text": "All",
+          "value": "$__all"
+        }
+      },
+      {
+        "name": "model",
+        "label": "Model",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-azure-monitor-datasource",
+          "uid": "azure-monitor-oob"
+        },
+        "queryType": "Azure Log Analytics",
+        "query": {
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/0222a208-955a-45fd-b6d8-ca4704421bf0/resourceGroups/rg-copilot-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-copilot-agentops-dev"
+            ],
+            "query": "AppDependencies | where TimeGenerated > ago(14d) | where Properties has 'github.copilot' and Properties has 'github-copilot-cli' | extend model=tostring(Properties['gen_ai.request.model']) | where isnotempty(model) | distinct model | order by model asc"
+          }
+        },
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "current": {
+          "selected": false,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        }
+      },
+      {
+        "name": "operation",
+        "label": "Operation",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-azure-monitor-datasource",
+          "uid": "azure-monitor-oob"
+        },
+        "queryType": "Azure Log Analytics",
+        "query": {
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/0222a208-955a-45fd-b6d8-ca4704421bf0/resourceGroups/rg-copilot-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-copilot-agentops-dev"
+            ],
+            "query": "AppDependencies | where TimeGenerated > ago(14d) | where Properties has 'github.copilot' and Properties has 'github-copilot-cli' | extend operation=tostring(Properties['gen_ai.operation.name']) | where isnotempty(operation) | distinct operation | order by operation asc"
+          }
+        },
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "current": {
+          "selected": false,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        }
+      },
+      {
+        "name": "agent",
+        "label": "Agent",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-azure-monitor-datasource",
+          "uid": "azure-monitor-oob"
+        },
+        "queryType": "Azure Log Analytics",
+        "query": {
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/0222a208-955a-45fd-b6d8-ca4704421bf0/resourceGroups/rg-copilot-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-copilot-agentops-dev"
+            ],
+            "query": "AppDependencies | where TimeGenerated > ago(14d) | where Properties has 'github.copilot' and Properties has 'github-copilot-cli' | extend agent=tostring(Properties['gen_ai.agent.name']) | where isnotempty(agent) | distinct agent | order by agent asc"
+          }
+        },
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "current": {
+          "selected": false,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        }
+      },
+      {
+        "name": "repo",
+        "label": "Repo",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-azure-monitor-datasource",
+          "uid": "azure-monitor-oob"
+        },
+        "queryType": "Azure Log Analytics",
+        "query": {
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/0222a208-955a-45fd-b6d8-ca4704421bf0/resourceGroups/rg-copilot-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-copilot-agentops-dev"
+            ],
+            "query": "AppDependencies | where TimeGenerated > ago(14d) | where Properties has 'github.copilot' and Properties has 'github-copilot-cli' | extend repo=tostring(Properties['agentops.repo.hash']) | where isnotempty(repo) | distinct repo | order by repo asc"
+          }
+        },
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "current": {
+          "selected": false,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        }
+      },
+      {
+        "name": "tool",
+        "label": "Tool",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-azure-monitor-datasource",
+          "uid": "azure-monitor-oob"
+        },
+        "queryType": "Azure Log Analytics",
+        "query": {
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/0222a208-955a-45fd-b6d8-ca4704421bf0/resourceGroups/rg-copilot-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-copilot-agentops-dev"
+            ],
+            "query": "AppDependencies | where TimeGenerated > ago(14d) | where Properties has 'github.copilot' and Properties has 'github-copilot-cli' | extend tool=tostring(Properties['gen_ai.tool.name']) | where isnotempty(tool) | distinct tool | order by tool asc"
+          }
+        },
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "current": {
+          "selected": false,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        }
+      },
+      {
+        "name": "risk",
+        "label": "Risk",
+        "type": "custom",
+        "query": "all,failed,expensive,slow,policy,content",
+        "current": {
+          "selected": true,
+          "text": "all",
+          "value": "all"
+        }
+      }
+    ]
+  },
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "AgentOps Traces / Spans",
+  "uid": "agentops-traces-spans",
+  "version": 1,
+  "weekStart": ""
+}
