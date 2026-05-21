@@ -361,8 +361,13 @@
                 "value": [
                   {
                     "title": "Open traces dashboard",
-                    "url": "/d/agentops-traces-spans?var-conversation=$conversation",
+                    "url": "/d/agentops-traces-spans?var-conversation=$conversation&var-model=${model}&var-agent=${agent}&var-repo=${repo}&var-tool=${tool}",
                     "targetBlank": false
+                  },
+                  {
+                    "title": "Open Azure Log Analytics",
+                    "url": "https://portal.azure.com/#@/resource/subscriptions/0222a208-955a-45fd-b6d8-ca4704421bf0/resourceGroups/rg-copilot-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-copilot-agentops-dev/logs",
+                    "targetBlank": true
                   }
                 ]
               }

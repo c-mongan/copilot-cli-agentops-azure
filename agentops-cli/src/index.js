@@ -8,7 +8,63 @@ const path = require('node:path');
 const root = path.resolve(__dirname, '..', '..');
 
 function usage() {
-  return `agentops <command>\n\nCommands:\n  doctor [--local-only]\n  scan [--json]\n  import-jsonl <file>\n  validate-collector [endpoint]\n  validate-azure\n`;
+  return `agentops <command>\n\nCommands:\n  doctor [--local-only]\n  scan [--json]\n  import-jsonl <file>\n  validate-collector [endpoint]\n  validate-azure\n  link session <conversation>\n  link trace <operationId>\n  fields [--last <duration>]\n`;
+}
+
+const workspaceId = '81513958-e9aa-4a35-aeab-953e1d26e797';
+const grafanaBaseUrl = 'https://graf-copilotagentops-de-a4czh7g5aueyf4e0.neu.grafana.azure.com';
+const portalLogsUrl = 'https://portal.azure.com/#@/resource/subscriptions/0222a208-955a-45fd-b6d8-ca4704421bf0/resourceGroups/rg-copilot-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-copilot-agentops-dev/logs';
+const baseFilter = 'Properties has "github.copilot" and Properties has "github-copilot-cli"';
+const sessionKey = 'coalesce(tostring(Properties["gen_ai.conversation.id"]), strcat(tostring(Properties["gen_ai.agent.id"]), "_", tostring(Properties["github.copilot.turn_count"]), "_", format_datetime(bin(TimeGenerated, 1h), "yyyyMMdd_HHmm")))';
+
+function encodeGrafanaValue(value) {
+  return encodeURIComponent(value);
+}
+
+function sessionQuery(conversation, last = '24h') {
+  return `AppDependencies\n| where TimeGenerated > ago(${last})\n| where ${baseFilter}\n| extend conversation=${sessionKey}, operation=tostring(Properties["gen_ai.operation.name"]), model=tostring(Properties["gen_ai.request.model"]), tool=tostring(Properties["gen_ai.tool.name"]), error=tostring(Properties["error.type"])\n| where conversation == "${conversation.replace(/"/g, '\\"')}"\n| project TimeGenerated, OperationId, ParentId, Id, Name, operation, model, tool, DurationMs, Success, ResultCode, error, Properties\n| order by TimeGenerated asc`;
+}
+
+function traceQuery(operationId, last = '24h') {
+  return `AppDependencies\n| where TimeGenerated > ago(${last})\n| where ${baseFilter}\n| where OperationId == "${operationId.replace(/"/g, '\\"')}"\n| extend conversation=${sessionKey}, operation=tostring(Properties["gen_ai.operation.name"]), model=tostring(Properties["gen_ai.request.model"]), tool=tostring(Properties["gen_ai.tool.name"]), error=tostring(Properties["error.type"])\n| project TimeGenerated, conversation, OperationId, ParentId, Id, Name, operation, model, tool, DurationMs, Success, ResultCode, error, Properties\n| order by TimeGenerated asc`;
+}
+
+function fieldCatalogQuery(last = '7d') {
+  return `AppDependencies\n| where TimeGenerated > ago(${last})\n| where ${baseFilter}\n| extend fields = bag_keys(Properties)\n| mv-expand field = fields to typeof(string)\n| extend value = tostring(Properties[field])\n| summarize observed=count(), example_values=make_set_if(value, isnotempty(value), 5) by field\n| order by observed desc, field asc`;
+}
+
+function buildLink(kind, id, options = {}) {
+  const last = options.last || '24h';
+  if (kind === 'session') {
+    return {
+      kind,
+      conversation: id,
+      grafana_url: `${grafanaBaseUrl}/d/agentops-session-detail?var-conversation=${encodeGrafanaValue(id)}`,
+      azure_portal_url: portalLogsUrl,
+      workspace_id: workspaceId,
+      query: sessionQuery(id, last)
+    };
+  }
+
+  if (kind === 'trace') {
+    return {
+      kind,
+      operation_id: id,
+      grafana_url: `${grafanaBaseUrl}/d/agentops-traces-spans?var-conversation=$__all`,
+      azure_portal_url: portalLogsUrl,
+      workspace_id: workspaceId,
+      query: traceQuery(id, last)
+    };
+  }
+
+  throw new Error(`Unknown link kind: ${kind}`);
+}
+
+function parseLastArg(args, fallback = '7d') {
+  const index = args.indexOf('--last');
+  if (index === -1) return fallback;
+  if (!args[index + 1]) throw new Error('--last requires a duration, for example 7d or 24h');
+  return args[index + 1];
 }
 
 function walk(dir, predicate, results = []) {
@@ -184,6 +240,20 @@ async function main(argv) {
     return;
   }
 
+  if (command === 'link') {
+    const [kind, id, ...linkArgs] = args;
+    if (!kind || !id) throw new Error('link requires a kind and id, for example: link session <conversation>');
+    const last = parseLastArg(linkArgs, '24h');
+    process.stdout.write(JSON.stringify(buildLink(kind, id, { last }), null, 2) + '\n');
+    return;
+  }
+
+  if (command === 'fields') {
+    const last = parseLastArg(args, '7d');
+    process.stdout.write(JSON.stringify({ workspace_id: workspaceId, query: fieldCatalogQuery(last) }, null, 2) + '\n');
+    return;
+  }
+
   throw new Error(`Unknown command: ${command}`);
 }
 
@@ -195,9 +265,13 @@ if (require.main === module) {
 }
 
 module.exports = {
+  buildLink,
   doctor,
+  fieldCatalogQuery,
   importJsonl,
   parseFrontmatter,
   scan,
+  sessionQuery,
+  traceQuery,
   validateCollector
 };

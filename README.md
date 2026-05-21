@@ -2,7 +2,7 @@
 
 Secure Azure-native observability and self-improvement loop for GitHub Copilot CLI.
 
-Status: v0.3 dashboard pack in progress on top of the verified Azure deployment.
+Status: v0.3 dashboard pack validated on top of the verified Azure deployment.
 
 ## What It Gives You
 
@@ -136,6 +136,14 @@ Regenerate the dashboard pack after query or layout changes:
 node scripts/build-grafana-dashboard-pack.js
 ```
 
+Generate deep links and field-discovery KQL for investigations:
+
+```bash
+node agentops-cli/src/index.js link session <conversation>
+node agentops-cli/src/index.js link trace <operationId>
+node agentops-cli/src/index.js fields --last 7d
+```
+
 If you run deployments outside `azd`, import the dashboard pack manually:
 
 ```bash
@@ -178,6 +186,8 @@ DASHBOARD_JSON=grafana/agentops-sessions.json \
 This slice proves the secure telemetry loop end to end and provides operational dashboards, KQL, and disabled proposal-only alerts. The v0.3 dashboard pack focuses on Datadog-style exploration inside Grafana: sessions first, then drilldown into spans, runtime events, and quality signals. It does not deploy the optional actioner Function by default, and it does not auto-apply remediation.
 
 See [.azure/deployment-plan.md](.azure/deployment-plan.md) for the implementation and deployment plan.
+
+See [docs/grafana-llm-observability-ui.md](docs/grafana-llm-observability-ui.md) and [docs/observability-product-patterns-roadmap.md](docs/observability-product-patterns-roadmap.md) for the dashboard UX direction and observability product roadmap.
 
 ## Testing And Next Steps
 

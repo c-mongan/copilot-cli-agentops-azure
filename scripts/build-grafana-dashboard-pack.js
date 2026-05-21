@@ -196,10 +196,17 @@ function timeseriesPanel(id, title, x, y, w, h, query, unit = 'short') {
   };
 }
 
-function byNameLink(fieldName, title, url) {
+function byNameLink(fieldName, title, url, targetBlank = false) {
   return {
     matcher: { id: 'byName', options: fieldName },
-    properties: [{ id: 'links', value: [{ title, url, targetBlank: false }] }],
+    properties: [{ id: 'links', value: [{ title, url, targetBlank }] }],
+  };
+}
+
+function byNameLinks(fieldName, links) {
+  return {
+    matcher: { id: 'byName', options: fieldName },
+    properties: [{ id: 'links', value: links }],
   };
 }
 
@@ -215,6 +222,10 @@ function sessionBaseWhere() {
 
 function sessionsQuery(limit = 100) {
   return `${sessionBaseWhere()} | extend InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), OutputTokens=todouble(Properties['gen_ai.usage.output_tokens']), CacheRead=todouble(Properties['gen_ai.usage.cache_read.input_tokens']), CacheWrite=todouble(Properties['gen_ai.usage.cache_creation.input_tokens']), Credits=todouble(Properties['github.copilot.cost']), AIU=todouble(Properties['github.copilot.aiu']) | summarize Started=min(TimeGenerated), Ended=max(TimeGenerated), DurationMs=max(DurationMs), Spans=count(), Runs=countif(operation == 'invoke_agent'), ToolCalls=countif(operation == 'execute_tool'), Failures=countif(Success == false or isnotempty(error)), InputTokens=sum(InputTokens), OutputTokens=sum(OutputTokens), CacheRead=sum(CacheRead), CacheWrite=sum(CacheWrite), AICredits=sum(Credits), AIU=sum(AIU), Models=make_set(model, 5), Agents=make_set(agent, 5), Repos=make_set(repo, 3), Operations=make_set(operation, 8) by Session=conversation | extend EstUsd=round(AICredits * 0.01, 4), DurationSec=round(DurationMs / 1000.0, 2), SuccessPct=round(100.0 * (Spans - Failures) / Spans, 1) | extend Risk=case(Failures > 0, 'failed', EstUsd >= 1.0, 'expensive', DurationMs >= 30000, 'slow', 'ok') | where '$risk' == 'all' or Risk == '$risk' | project Started, Ended, Session, Risk, DurationSec, SuccessPct, Spans, Runs, ToolCalls, Failures, Models, Agents, Repos, InputTokens, OutputTokens, CacheRead, CacheWrite, AICredits, EstUsd, AIU, Operations | order by Started desc | take ${limit}`;
+}
+
+function workflowRiskQuery() {
+  return `${sessionBaseWhere()} | extend InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), Credits=todouble(Properties['github.copilot.cost']) | summarize HasInvoke=countif(operation == 'invoke_agent') > 0, HasTool=countif(operation == 'execute_tool' or isnotempty(tool)) > 0, ToolFailures=countif((operation == 'execute_tool' or isnotempty(tool)) and (Success == false or isnotempty(error))), Failures=countif(Success == false or isnotempty(error)), InputTokens=sum(InputTokens), Credits=sum(Credits), P95DurationMs=percentile(DurationMs, 95) by Session=conversation | extend Risk=case(Failures > 0, 'failed', ToolFailures > 0, 'tool_failed', Credits * 0.01 >= 1.0, 'expensive', P95DurationMs >= 30000, 'slow', InputTokens >= 30000, 'high_context', HasTool, 'used_tools', HasInvoke, 'invoked', 'other') | summarize Sessions=count() by Risk | order by Sessions desc`;
 }
 
 function sessionFilterPipe() {
@@ -233,7 +244,11 @@ function sessionsDashboard() {
     statPanel(4, 'AI Credits', 12, 3, `${sessionBaseWhere()} | extend Credits=todouble(Properties['github.copilot.cost']) | summarize Credits=sum(Credits) by bin(TimeGenerated, $__interval) | order by TimeGenerated asc`, 'short', 'yellow'),
     statPanel(5, 'P95 Duration', 18, 3, `${sessionBaseWhere()} | where operation == 'invoke_agent' | summarize P95=percentile(DurationMs, 95) by bin(TimeGenerated, $__interval) | order by TimeGenerated asc`, 'ms', 'green'),
     tablePanel(10, 'Session Explorer', 0, 7, 24, 14, sessionsQuery(200), [
-      byNameLink('Session', 'Open session detail', '/d/agentops-session-detail?var-conversation=${__data.fields.Session}'),
+      byNameLinks('Session', [
+        { title: 'Open session detail', url: '/d/agentops-session-detail?var-conversation=${__data.fields.Session}&var-model=${model}&var-agent=${agent}&var-repo=${repo}&var-tool=${tool}', targetBlank: false },
+        { title: 'Open traces / spans', url: '/d/agentops-traces-spans?var-conversation=${__data.fields.Session}&var-model=${model}&var-agent=${agent}&var-repo=${repo}&var-tool=${tool}', targetBlank: false },
+        { title: 'Open runtime events', url: '/d/agentops-runtime-events?var-conversation=${__data.fields.Session}&var-model=${model}&var-agent=${agent}&var-repo=${repo}&var-tool=${tool}', targetBlank: false },
+      ]),
       byNameUnit('DurationSec', 's', 2),
       byNameUnit('SuccessPct', 'percent', 1),
       byNameUnit('EstUsd', 'currencyUSD', 4),
@@ -253,7 +268,10 @@ function sessionDetailDashboard() {
     statPanel(4, 'Tokens', 12, 2, `${sessionBaseWhere()} ${sessionFilterPipe()} | extend Tokens=coalesce(todouble(Properties['gen_ai.usage.input_tokens']), 0.0) + coalesce(todouble(Properties['gen_ai.usage.output_tokens']), 0.0) | summarize Tokens=sum(Tokens) by bin(TimeGenerated, $__interval) | order by TimeGenerated asc`, 'short', 'green'),
     statPanel(5, 'Est. USD', 18, 2, `${sessionBaseWhere()} ${sessionFilterPipe()} | extend Credits=todouble(Properties['github.copilot.cost']) | summarize EstUsd=sum(Credits) * 0.01 by bin(TimeGenerated, $__interval) | order by TimeGenerated asc`, 'currencyUSD', 'yellow'),
     tablePanel(10, 'Trace / span timeline', 0, 6, 24, 11, `${sessionBaseWhere()} ${sessionFilterPipe()} | project TimeGenerated, OperationId, ParentId, Id, operation, Name, agent, model, tool, repo, DurationMs, Success, ResultCode, error, Properties | order by TimeGenerated asc`, [
-      byNameLink('OperationId', 'Open traces dashboard', '/d/agentops-traces-spans?var-conversation=$conversation'),
+      byNameLinks('OperationId', [
+        { title: 'Open traces dashboard', url: '/d/agentops-traces-spans?var-conversation=$conversation&var-model=${model}&var-agent=${agent}&var-repo=${repo}&var-tool=${tool}', targetBlank: false },
+        { title: 'Open Azure Log Analytics', url: portalLogsUrl, targetBlank: true },
+      ]),
       byNameUnit('DurationMs', 'ms', 2),
     ]),
     timeseriesPanel(20, 'Span duration by operation', 0, 17, 12, 8, `${sessionBaseWhere()} ${sessionFilterPipe()} | summarize DurationMs=avg(DurationMs) by bin(TimeGenerated, $__interval), operation | order by TimeGenerated asc`, 'ms'),
@@ -267,7 +285,11 @@ function tracesDashboard() {
   const panels = [
     textPanel(1, 0, 0, 24, 2, '## Traces / Spans\nRaw span inspection for Copilot CLI operations. Use filters for model, operation, tool, repo, and session.'),
     tablePanel(10, 'Trace / span explorer', 0, 2, 24, 14, `${sessionBaseWhere()} ${sessionFilterPipe()} | project TimeGenerated, Session=conversation, OperationId, ParentId, Id, operation, Name, agent, model, tool, repo, DurationMs, Success, ResultCode, error | order by TimeGenerated desc | take 500`, [
-      byNameLink('Session', 'Open session detail', '/d/agentops-session-detail?var-conversation=${__data.fields.Session}'),
+      byNameLinks('Session', [
+        { title: 'Open session detail', url: '/d/agentops-session-detail?var-conversation=${__data.fields.Session}&var-model=${model}&var-agent=${agent}&var-repo=${repo}&var-tool=${tool}', targetBlank: false },
+        { title: 'Open runtime events', url: '/d/agentops-runtime-events?var-conversation=${__data.fields.Session}&var-model=${model}&var-agent=${agent}&var-repo=${repo}&var-tool=${tool}', targetBlank: false },
+      ]),
+      byNameLink('OperationId', 'Open Azure Log Analytics', portalLogsUrl, true),
       byNameUnit('DurationMs', 'ms', 2),
     ]),
     timeseriesPanel(20, 'Span count by operation', 0, 16, 12, 8, `${sessionBaseWhere()} ${sessionFilterPipe()} | summarize Spans=count() by bin(TimeGenerated, $__interval), operation | order by TimeGenerated asc`),
@@ -285,7 +307,10 @@ function runtimeEventsDashboard() {
     statPanel(4, 'Policy Blocks', 12, 2, `${runtimeBaseWhere()} | where tostring(Properties) has 'preToolUse' or tostring(Properties) has 'AgentOps preToolUse policy' or Message has 'AgentOps preToolUse policy' | summarize Blocks=count() by bin(TimeGenerated, $__interval) | order by TimeGenerated asc`, 'short', 'red'),
     statPanel(5, 'Hook / Skill Events', 18, 2, `${runtimeBaseWhere()} | where tostring(Properties) has 'github.copilot.hook' or tostring(Properties) has 'github.copilot.skill' | summarize Events=count() by bin(TimeGenerated, $__interval) | order by TimeGenerated asc`, 'short', 'blue'),
     tablePanel(10, 'Runtime event stream', 0, 6, 24, 14, `${runtimeBaseWhere()} ${sessionFilterPipe()} | where tostring(Properties) has 'github.copilot.session' or tostring(Properties) has 'github.copilot.skill' or tostring(Properties) has 'github.copilot.hook' or tostring(Properties) has 'github.copilot.tokens_removed' or tostring(Properties) has 'preToolUse' or isnotempty(error) | extend event=coalesce(tostring(Properties['event.name']), tostring(Properties['github.copilot.event.name']), Name), skill=tostring(Properties['github.copilot.skill.name']), hook=tostring(Properties['github.copilot.hook.name']), tokens_removed=toint(Properties['github.copilot.tokens_removed']), policy=iff(tostring(Properties) has 'preToolUse' or Message has 'AgentOps preToolUse policy', 'policy', '') | project TimeGenerated, Session=conversation, event, policy, operation, agent, model, tool, skill, hook, tokens_removed, error, Message | order by TimeGenerated desc | take 500`, [
-      byNameLink('Session', 'Open session detail', '/d/agentops-session-detail?var-conversation=${__data.fields.Session}'),
+      byNameLinks('Session', [
+        { title: 'Open session detail', url: '/d/agentops-session-detail?var-conversation=${__data.fields.Session}&var-model=${model}&var-agent=${agent}&var-repo=${repo}&var-tool=${tool}', targetBlank: false },
+        { title: 'Open traces / spans', url: '/d/agentops-traces-spans?var-conversation=${__data.fields.Session}&var-model=${model}&var-agent=${agent}&var-repo=${repo}&var-tool=${tool}', targetBlank: false },
+      ]),
       byNameUnit('tokens_removed', 'short'),
     ]),
   ];
@@ -306,6 +331,7 @@ function qualityDashboard() {
     tablePanel(20, 'Tool failure candidates', 0, 12, 12, 10, `${sessionBaseWhere()} | where operation == 'execute_tool' or isnotempty(tool) | summarize Calls=count(), Failures=countif(Success == false or isnotempty(error)), P95DurationMs=percentile(DurationMs, 95), Sessions=dcount(conversation) by tool, error | extend FailurePct=round(100.0 * Failures / Calls, 1) | where Calls >= 1 | order by FailurePct desc, Failures desc | take 50`, [byNameUnit('FailurePct', 'percent', 1), byNameUnit('P95DurationMs', 'ms', 2)]),
     tablePanel(21, 'Model cost and latency', 12, 12, 12, 10, `${sessionBaseWhere()} | where operation == 'invoke_agent' | extend InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), OutputTokens=todouble(Properties['gen_ai.usage.output_tokens']), Credits=todouble(Properties['github.copilot.cost']) | summarize Runs=count(), Sessions=dcount(conversation), InputTokens=sum(InputTokens), OutputTokens=sum(OutputTokens), EstUsd=sum(Credits) * 0.01, P95DurationMs=percentile(DurationMs, 95), Failures=countif(Success == false or isnotempty(error)) by model | order by EstUsd desc`, [byNameUnit('EstUsd', 'currencyUSD', 4), byNameUnit('P95DurationMs', 'ms', 2)]),
     tablePanel(30, 'Repo repeated-failure candidates', 0, 22, 24, 9, `${sessionBaseWhere()} | summarize Sessions=dcount(conversation), Spans=count(), Failures=countif(Success == false or isnotempty(error)), EstUsd=sum(todouble(Properties['github.copilot.cost'])) * 0.01, P95DurationMs=percentile(DurationMs, 95), TopErrors=make_set(error, 5) by repo | where isnotempty(repo) | extend FailurePct=round(100.0 * Failures / Spans, 1) | order by Failures desc, EstUsd desc | take 50`, [byNameUnit('EstUsd', 'currencyUSD', 4), byNameUnit('P95DurationMs', 'ms', 2), byNameUnit('FailurePct', 'percent', 1)]),
+    tablePanel(40, 'Workflow funnel risks', 0, 31, 24, 8, workflowRiskQuery()),
   ];
   return baseDashboard('agentops-quality', 'AgentOps Quality', panels, false);
 }

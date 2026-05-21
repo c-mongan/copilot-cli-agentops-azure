@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const test = require('node:test');
 
-const { doctor, importJsonl, parseFrontmatter, scan } = require('../src/index.js');
+const { buildLink, doctor, fieldCatalogQuery, importJsonl, parseFrontmatter, scan } = require('../src/index.js');
 
 const root = path.resolve(__dirname, '..', '..');
 
@@ -29,4 +29,27 @@ test('frontmatter parser extracts simple fields', () => {
   const data = parseFrontmatter(path.join(root, 'plugin', 'agents', 'telemetry-investigator.agent.md'));
   assert.equal(data.name, 'telemetry-investigator');
   assert.match(data.description, /Investigates GitHub Copilot CLI telemetry/);
+});
+
+test('link session builds Grafana URL and KQL', () => {
+  const result = buildLink('session', 'abc-123', { last: '2h' });
+  assert.equal(result.kind, 'session');
+  assert.match(result.grafana_url, /agentops-session-detail/);
+  assert.match(result.grafana_url, /var-conversation=abc-123/);
+  assert.match(result.query, /ago\(2h\)/);
+  assert.match(result.query, /conversation == "abc-123"/);
+});
+
+test('link trace builds OperationId query', () => {
+  const result = buildLink('trace', 'op-456');
+  assert.equal(result.kind, 'trace');
+  assert.match(result.grafana_url, /agentops-traces-spans/);
+  assert.match(result.query, /OperationId == "op-456"/);
+});
+
+test('field catalog query discovers Properties keys', () => {
+  const query = fieldCatalogQuery('14d');
+  assert.match(query, /ago\(14d\)/);
+  assert.match(query, /bag_keys\(Properties\)/);
+  assert.match(query, /example_values/);
 });

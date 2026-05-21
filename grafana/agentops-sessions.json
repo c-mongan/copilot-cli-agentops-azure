@@ -361,7 +361,17 @@
                 "value": [
                   {
                     "title": "Open session detail",
-                    "url": "/d/agentops-session-detail?var-conversation=${__data.fields.Session}",
+                    "url": "/d/agentops-session-detail?var-conversation=${__data.fields.Session}&var-model=${model}&var-agent=${agent}&var-repo=${repo}&var-tool=${tool}",
+                    "targetBlank": false
+                  },
+                  {
+                    "title": "Open traces / spans",
+                    "url": "/d/agentops-traces-spans?var-conversation=${__data.fields.Session}&var-model=${model}&var-agent=${agent}&var-repo=${repo}&var-tool=${tool}",
+                    "targetBlank": false
+                  },
+                  {
+                    "title": "Open runtime events",
+                    "url": "/d/agentops-runtime-events?var-conversation=${__data.fields.Session}&var-model=${model}&var-agent=${agent}&var-repo=${repo}&var-tool=${tool}",
                     "targetBlank": false
                   }
                 ]

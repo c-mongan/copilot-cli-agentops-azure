@@ -105,8 +105,31 @@
                 "value": [
                   {
                     "title": "Open session detail",
-                    "url": "/d/agentops-session-detail?var-conversation=${__data.fields.Session}",
+                    "url": "/d/agentops-session-detail?var-conversation=${__data.fields.Session}&var-model=${model}&var-agent=${agent}&var-repo=${repo}&var-tool=${tool}",
                     "targetBlank": false
+                  },
+                  {
+                    "title": "Open runtime events",
+                    "url": "/d/agentops-runtime-events?var-conversation=${__data.fields.Session}&var-model=${model}&var-agent=${agent}&var-repo=${repo}&var-tool=${tool}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "OperationId"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Azure Log Analytics",
+                    "url": "https://portal.azure.com/#@/resource/subscriptions/0222a208-955a-45fd-b6d8-ca4704421bf0/resourceGroups/rg-copilot-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-copilot-agentops-dev/logs",
+                    "targetBlank": true
                   }
                 ]
               }
