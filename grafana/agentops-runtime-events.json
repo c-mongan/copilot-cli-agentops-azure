@@ -22,6 +22,13 @@
       "targetBlank": false
     },
     {
+      "title": "Session Detail",
+      "url": "/d/agentops-session-detail",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
       "title": "Traces / Spans",
       "url": "/d/agentops-traces-spans",
       "type": "link",
@@ -45,6 +52,20 @@
     {
       "title": "Safety & Policy",
       "url": "/d/agentops-safety-policy",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
+      "title": "Permission Friction",
+      "url": "/d/agentops-permission-friction",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
+      "title": "Alert Tuning",
+      "url": "/d/agentops-alert-tuning",
       "type": "link",
       "icon": "dashboard",
       "targetBlank": false
@@ -481,7 +502,7 @@
             "resources": [
               "/subscriptions/0222a208-955a-45fd-b6d8-ca4704421bf0/resourceGroups/rg-copilot-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-copilot-agentops-dev"
             ],
-            "query": "AppDependencies | where TimeGenerated > ago(7d) | where Properties has 'github.copilot' and Properties has 'github-copilot-cli' | extend conversation=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(tostring(Properties['gen_ai.agent.id']), '_', tostring(Properties['github.copilot.turn_count']), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm'))) | where isnotempty(conversation) | distinct conversation | order by conversation desc"
+            "query": "AppDependencies | where TimeGenerated > ago(7d) | where Properties has 'github.copilot' and Properties has 'github-copilot-cli' | extend direct_session=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), ''), fallback_session=strcat(tostring(Properties['gen_ai.agent.id']), '_', tostring(Properties['github.copilot.turn_count']), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm')) | join kind=leftouter (AppDependencies | where TimeGenerated > ago(7d) | where Properties has 'github.copilot' and Properties has 'github-copilot-cli' | extend direct_session=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), '') | where isnotempty(direct_session) | summarize operation_session=take_any(direct_session) by OperationId) on OperationId | extend conversation=iff(isnotempty(operation_session), operation_session, iff(isnotempty(direct_session), direct_session, fallback_session)) | where isnotempty(conversation) | distinct conversation | order by conversation desc"
           }
         },
         "refresh": 2,

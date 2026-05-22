@@ -22,6 +22,13 @@
       "targetBlank": false
     },
     {
+      "title": "Session Detail",
+      "url": "/d/agentops-session-detail",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
       "title": "Traces / Spans",
       "url": "/d/agentops-traces-spans",
       "type": "link",
@@ -45,6 +52,20 @@
     {
       "title": "Safety & Policy",
       "url": "/d/agentops-safety-policy",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
+      "title": "Permission Friction",
+      "url": "/d/agentops-permission-friction",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
+      "title": "Alert Tuning",
+      "url": "/d/agentops-alert-tuning",
       "type": "link",
       "icon": "dashboard",
       "targetBlank": false

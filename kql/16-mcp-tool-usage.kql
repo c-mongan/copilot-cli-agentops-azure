@@ -1,7 +1,7 @@
 // MCP and tool usage view for Copilot CLI AgentOps.
 // Copilot reports all tool invocations as execute_tool spans. Built-in tools are
-// classified from the documented CLI tool list; everything else is treated as
-// likely MCP or extension-provided until validated against real field samples.
+// classified from the documented CLI tool list. MCP tools are inferred from the
+// documented namespaced forms: mcp__<server>__<tool> and <server>/<tool>.
 let lookback = 7d;
 let builtin_tools = dynamic([
     "bash", "powershell", "list_bash", "list_powershell", "read_bash", "read_powershell",
@@ -24,21 +24,56 @@ let session_id = (props:dynamic, timestamp:datetime) {
         )
     )
 };
+let raw_spans =
 AppDependencies
 | where TimeGenerated > ago(lookback)
 | where Properties has "github.copilot" and Properties has "github-copilot-cli"
 | extend
-    session = session_id(Properties, TimeGenerated),
+    direct_session = case(
+        isnotempty(tostring(Properties["gen_ai.conversation.id"])),
+        tostring(Properties["gen_ai.conversation.id"]),
+        isnotempty(tostring(Properties["github.copilot.interaction_id"])),
+        tostring(Properties["github.copilot.interaction_id"]),
+        ""
+    ),
+    fallback_session = session_id(Properties, TimeGenerated),
     operation = tostring(Properties["gen_ai.operation.name"]),
     tool = tostring(Properties["gen_ai.tool.name"]),
+    configured_servers = tostring(Properties["agentops.mcp.config.servers"]),
+    configured_files = tostring(Properties["agentops.mcp.config.files"]),
+    disabled_servers = tostring(Properties["agentops.mcp.disabled.servers"]),
+    github_tools = tostring(Properties["agentops.mcp.github.tools"]),
+    github_toolsets = tostring(Properties["agentops.mcp.github.toolsets"]),
     model = coalesce(tostring(Properties["agentops.cli.model"]), tostring(Properties["gen_ai.request.model"])),
     mode = tostring(Properties["agentops.cli.mode"]),
     repo = tostring(Properties["agentops.repo.hash"]),
-    error = tostring(Properties["error.type"])
+    error = tostring(Properties["error.type"]);
+let operation_sessions =
+raw_spans
+| where isnotempty(direct_session)
+| summarize operation_session = take_any(direct_session) by OperationId;
+raw_spans
+| join kind=leftouter operation_sessions on OperationId
+| extend session = iff(isnotempty(operation_session), operation_session, iff(isnotempty(direct_session), direct_session, fallback_session))
 | where operation == "execute_tool" or isnotempty(tool)
+| extend
+    single_configured_server = iff(isnotempty(configured_servers) and configured_servers !contains "|", configured_servers, "")
+| extend
+    mcp_server = case(
+        tool startswith "mcp__", extract(@"^mcp__(.+?)__", 1, tool),
+        tool contains "/", tostring(split(tool, "/")[0]),
+        isnotempty(tool) and isnotempty(single_configured_server) and tool !in (builtin_tools), single_configured_server,
+        ""
+    ),
+    mcp_tool = case(
+        tool startswith "mcp__", extract(@"^mcp__.+?__(.+)$", 1, tool),
+        tool contains "/", tostring(split(tool, "/")[1]),
+        tool
+    )
 | extend
     tool_family = case(
         tool in (builtin_tools), "builtin",
+        isnotempty(mcp_server), "mcp",
         tool has "-", "likely_mcp_or_extension",
         isnotempty(tool), "custom_or_unknown",
         "unknown"
@@ -55,7 +90,12 @@ AppDependencies
     models = make_set_if(model, isnotempty(model), 5),
     modes = make_set_if(mode, isnotempty(mode), 5),
     repos = make_set_if(repo, isnotempty(repo), 5),
+    configured_mcp_servers = make_set_if(configured_servers, isnotempty(configured_servers), 10),
+    configured_mcp_files = make_set_if(configured_files, isnotempty(configured_files), 10),
+    disabled_mcp_servers = make_set_if(disabled_servers, isnotempty(disabled_servers), 10),
+    selected_github_mcp_tools = make_set_if(github_tools, isnotempty(github_tools), 10),
+    selected_github_mcp_toolsets = make_set_if(github_toolsets, isnotempty(github_toolsets), 10),
     errors = make_set_if(error, isnotempty(error), 10)
-    by tool_family, tool
+    by tool_family, mcp_server, mcp_tool, tool
 | extend failure_pct = round(100.0 * failures / calls, 1)
-| order by tool_family asc, failures desc, calls desc
+| order by tool_family asc, mcp_server asc, failures desc, calls desc

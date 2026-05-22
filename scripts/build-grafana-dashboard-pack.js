@@ -14,6 +14,8 @@ const workspaceResource = '/subscriptions/0222a208-955a-45fd-b6d8-ca4704421bf0/r
 const portalLogsUrl = 'https://portal.azure.com/#@/resource/subscriptions/0222a208-955a-45fd-b6d8-ca4704421bf0/resourceGroups/rg-copilot-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-copilot-agentops-dev/logs';
 const baseFilter = "Properties has 'github.copilot' and Properties has 'github-copilot-cli'";
 const sessionKey = "case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(tostring(Properties['gen_ai.agent.id']), '_', tostring(Properties['github.copilot.turn_count']), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm')))";
+const directSessionKey = "case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), '')";
+const fallbackSessionKey = "strcat(tostring(Properties['gen_ai.agent.id']), '_', tostring(Properties['github.copilot.turn_count']), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm'))";
 
 function target(query, resultFormat = 'table') {
   return [{
@@ -83,7 +85,7 @@ function sharedVariables(includeConversation = true) {
   ];
 
   if (includeConversation) {
-    variables.splice(1, 0, queryVariable('conversation', 'Session', `AppDependencies | where TimeGenerated > ago(7d) | where ${baseFilter} | extend conversation=${sessionKey} | where isnotempty(conversation) | distinct conversation | order by conversation desc`, false));
+    variables.splice(1, 0, queryVariable('conversation', 'Session', `${sessionizedDependenciesBase('TimeGenerated > ago(7d)')} | where isnotempty(conversation) | distinct conversation | order by conversation desc`, false));
   }
 
   return { list: variables };
@@ -93,10 +95,13 @@ function dashboardLinks() {
   return [
     { title: 'Overview', url: '/d/copilot-agentops', type: 'link', icon: 'dashboard', targetBlank: false },
     { title: 'Sessions', url: '/d/agentops-sessions', type: 'link', icon: 'dashboard', targetBlank: false },
+    { title: 'Session Detail', url: '/d/agentops-session-detail', type: 'link', icon: 'dashboard', targetBlank: false },
     { title: 'Traces / Spans', url: '/d/agentops-traces-spans', type: 'link', icon: 'dashboard', targetBlank: false },
     { title: 'Tools & MCP', url: '/d/agentops-tools-mcp', type: 'link', icon: 'dashboard', targetBlank: false },
     { title: 'Runtime Events', url: '/d/agentops-runtime-events', type: 'link', icon: 'dashboard', targetBlank: false },
     { title: 'Safety & Policy', url: '/d/agentops-safety-policy', type: 'link', icon: 'dashboard', targetBlank: false },
+    { title: 'Permission Friction', url: '/d/agentops-permission-friction', type: 'link', icon: 'dashboard', targetBlank: false },
+    { title: 'Alert Tuning', url: '/d/agentops-alert-tuning', type: 'link', icon: 'dashboard', targetBlank: false },
     { title: 'Quality', url: '/d/agentops-quality', type: 'link', icon: 'dashboard', targetBlank: false },
     { title: 'Experiments', url: '/d/agentops-experiments', type: 'link', icon: 'dashboard', targetBlank: false },
     { title: 'Data Quality', url: '/d/agentops-data-quality', type: 'link', icon: 'dashboard', targetBlank: false },
@@ -221,7 +226,11 @@ function byNameUnit(fieldName, unit, decimals) {
 }
 
 function sessionBaseWhere() {
-  return `AppDependencies | where $__timeFilter(TimeGenerated) | where ${baseFilter} | extend operation=tostring(Properties['gen_ai.operation.name']), conversation=${sessionKey}, agent=tostring(Properties['gen_ai.agent.name']), model=tostring(Properties['gen_ai.request.model']), tool=tostring(Properties['gen_ai.tool.name']), repo=tostring(Properties['agentops.repo.hash']), error=tostring(Properties['error.type']) | where ('$model' == '$__all' or model in (${'${model:singlequote}'})) | where ('$operation' == '$__all' or operation in (${'${operation:singlequote}'})) | where ('$agent' == '$__all' or agent in (${'${agent:singlequote}'})) | where ('$repo' == '$__all' or repo in (${'${repo:singlequote}'})) | where ('$tool' == '$__all' or tool in (${'${tool:singlequote}'}))`;
+  return `${sessionizedDependenciesBase('$__timeFilter(TimeGenerated)')} | extend operation=tostring(Properties['gen_ai.operation.name']), agent=tostring(Properties['gen_ai.agent.name']), model=tostring(Properties['gen_ai.request.model']), tool=tostring(Properties['gen_ai.tool.name']), repo=tostring(Properties['agentops.repo.hash']), error=tostring(Properties['error.type']) | where ('$model' == '$__all' or model in (${'${model:singlequote}'})) | where ('$operation' == '$__all' or operation in (${'${operation:singlequote}'})) | where ('$agent' == '$__all' or agent in (${'${agent:singlequote}'})) | where ('$repo' == '$__all' or repo in (${'${repo:singlequote}'})) | where ('$tool' == '$__all' or tool in (${'${tool:singlequote}'}))`;
+}
+
+function sessionizedDependenciesBase(timePredicate) {
+  return `AppDependencies | where ${timePredicate} | where ${baseFilter} | extend direct_session=${directSessionKey}, fallback_session=${fallbackSessionKey} | join kind=leftouter (AppDependencies | where ${timePredicate} | where ${baseFilter} | extend direct_session=${directSessionKey} | where isnotempty(direct_session) | summarize operation_session=take_any(direct_session) by OperationId) on OperationId | extend conversation=iff(isnotempty(operation_session), operation_session, iff(isnotempty(direct_session), direct_session, fallback_session))`;
 }
 
 function usageFields() {
@@ -388,8 +397,65 @@ function safetyPolicyDashboard() {
     tablePanel(10, 'Governance session review', 0, 6, 24, 17, kqlFileQuery('15-policy-governance.kql'), [
       byNameLink('session', 'Open session detail', '/d/agentops-session-detail?var-conversation=${__data.fields.session}'),
     ]),
+    tablePanel(20, 'Permission friction candidates', 0, 23, 24, 9, permissionFrictionSessionsQuery(), [
+      byNameLink('Session', 'Open session detail', '/d/agentops-session-detail?var-conversation=${__data.fields.Session}'),
+      byNameUnit('FrictionScore', 'short', 0),
+      byNameUnit('DurationSec', 's', 2),
+      byNameUnit('P95DurationMs', 'ms', 2),
+    ]),
   ];
   return baseDashboard('agentops-safety-policy', 'AgentOps Safety & Policy', panels, false);
+}
+
+function permissionFrictionBaseWhere() {
+  return `union isfuzzy=true AppDependencies, AppTraces | where $__timeFilter(TimeGenerated) | where tostring(Properties) has 'github.copilot' or Message has 'github.copilot' or Message has 'AgentOps' | extend conversation=${sessionKey}, operation=tostring(Properties['gen_ai.operation.name']), tool=tostring(Properties['gen_ai.tool.name']), agent=tostring(Properties['gen_ai.agent.name']), model=tostring(Properties['gen_ai.request.model']), repo=tostring(Properties['agentops.repo.hash']), error=tostring(Properties['error.type']), allow_all=tostring(Properties['agentops.cli.allow_all']) == 'true', allow_all_tools=tostring(Properties['agentops.cli.allow_all_tools']) == 'true', allow_all_paths=tostring(Properties['agentops.cli.allow_all_paths']) == 'true', allow_all_urls=tostring(Properties['agentops.cli.allow_all_urls']) == 'true', allow_tool_count=toint(Properties['agentops.cli.allow_tool.count']), allow_url_count=toint(Properties['agentops.cli.allow_url.count']), deny_tool_count=toint(Properties['agentops.cli.deny_tool.count']), deny_url_count=toint(Properties['agentops.cli.deny_url.count']), available_tool_count=toint(Properties['agentops.cli.available_tools.count']), excluded_tool_count=toint(Properties['agentops.cli.excluded_tools.count']), disabled_mcp_server_count=toint(Properties['agentops.cli.disabled_mcp_server.count']), extra_mcp_config_count=toint(Properties['agentops.cli.additional_mcp_config.count']), configured_mcp_servers=tostring(Properties['agentops.mcp.config.servers']), disabled_mcp_servers=tostring(Properties['agentops.mcp.disabled.servers']) | extend is_tool=operation == 'execute_tool' or isnotempty(tool), is_policy_block=tostring(Properties) has 'preToolUse' or tostring(Properties) has 'permissionDecision' or tostring(Properties) has 'AgentOps preToolUse policy' or Message has 'AgentOps preToolUse policy' or Message has 'permission', is_retry_hint=Message has 'Recovery hint' or tostring(Properties) has 'Recovery hint'`;
+}
+
+function permissionFrictionSessionsQuery(limit = 100) {
+  return `${permissionFrictionBaseWhere()} | summarize Started=min(TimeGenerated), Ended=max(TimeGenerated), Spans=count(), ToolCalls=countif(is_tool), ToolFailures=countif(is_tool and (Success == false or tostring(Success) =~ 'false' or isnotempty(error))), PolicyBlocks=countif(is_policy_block), RetryHints=countif(is_retry_hint), AllowAll=max(toint(allow_all)), AllowAllTools=max(toint(allow_all_tools)), AllowAllPaths=max(toint(allow_all_paths)), AllowAllUrls=max(toint(allow_all_urls)), MaxAllowTools=max(allow_tool_count), MaxAllowUrls=max(allow_url_count), MaxDenyTools=max(deny_tool_count), MaxDenyUrls=max(deny_url_count), MaxAvailableTools=max(available_tool_count), MaxExcludedTools=max(excluded_tool_count), MaxDisabledMcp=max(disabled_mcp_server_count), MaxExtraMcpConfigs=max(extra_mcp_config_count), P95DurationMs=percentile(DurationMs, 95), Tools=make_set_if(tool, isnotempty(tool), 10), Agents=make_set_if(agent, isnotempty(agent), 5), Models=make_set_if(model, isnotempty(model), 5), Repos=make_set_if(repo, isnotempty(repo), 3), ConfiguredMcpServers=make_set_if(configured_mcp_servers, isnotempty(configured_mcp_servers), 10), DisabledMcpServerNames=make_set_if(disabled_mcp_servers, isnotempty(disabled_mcp_servers), 10), Errors=make_set_if(error, isnotempty(error), 10) by Session=conversation | extend AllowAll=coalesce(AllowAll, 0), AllowAllTools=coalesce(AllowAllTools, 0), AllowAllPaths=coalesce(AllowAllPaths, 0), AllowAllUrls=coalesce(AllowAllUrls, 0), MaxAllowTools=coalesce(MaxAllowTools, 0), MaxAllowUrls=coalesce(MaxAllowUrls, 0), MaxDenyTools=coalesce(MaxDenyTools, 0), MaxDenyUrls=coalesce(MaxDenyUrls, 0), MaxAvailableTools=coalesce(MaxAvailableTools, 0), MaxExcludedTools=coalesce(MaxExcludedTools, 0), MaxDisabledMcp=coalesce(MaxDisabledMcp, 0), MaxExtraMcpConfigs=coalesce(MaxExtraMcpConfigs, 0) | extend DurationSec=round(datetime_diff('millisecond', Ended, Started) / 1000.0, 2), FrictionScore=PolicyBlocks * 5 + ToolFailures * 3 + RetryHints * 2 + AllowAll * 2 + MaxDenyTools + MaxDenyUrls + MaxExcludedTools + MaxDisabledMcp, Posture=case(PolicyBlocks > 0, 'blocked', ToolFailures > 0, 'tool_failed', RetryHints > 0, 'retry_hint', AllowAll > 0, 'allow_all', AllowAllTools > 0 or AllowAllPaths > 0 or AllowAllUrls > 0, 'permissive_scope', MaxDenyTools > 0 or MaxDenyUrls > 0 or MaxExcludedTools > 0 or MaxDisabledMcp > 0, 'restricted', 'ok') | where Posture != 'ok' | project Started, Session, Posture, FrictionScore, DurationSec, Spans, ToolCalls, ToolFailures, PolicyBlocks, RetryHints, AllowAll, AllowAllTools, AllowAllPaths, AllowAllUrls, MaxAllowTools, MaxAllowUrls, MaxDenyTools, MaxDenyUrls, MaxAvailableTools, MaxExcludedTools, MaxDisabledMcp, MaxExtraMcpConfigs, P95DurationMs, Tools, Agents, Models, Repos, ConfiguredMcpServers, DisabledMcpServerNames, Errors | order by FrictionScore desc, Started desc | take ${limit}`;
+}
+
+function permissionFrictionDashboard() {
+  const panels = [
+    textPanel(1, 0, 0, 24, 2, '## Permission Friction\nPermission posture, policy blocks, retry hints, broad allow modes, and tool failures that slow or risk Copilot CLI sessions.'),
+    statPanel(2, 'Policy Blocks', 0, 2, `${permissionFrictionBaseWhere()} | where is_policy_block | summarize Blocks=count() by bin(TimeGenerated, $__interval) | order by TimeGenerated asc`, 'short', 'red'),
+    statPanel(3, 'Tool Failures', 6, 2, `${permissionFrictionBaseWhere()} | where is_tool | summarize Failures=countif(Success == false or tostring(Success) =~ 'false' or isnotempty(error)) by bin(TimeGenerated, $__interval) | order by TimeGenerated asc`, 'short', 'red'),
+    statPanel(4, 'Retry Hints', 12, 2, `${permissionFrictionBaseWhere()} | where is_retry_hint | summarize Hints=count() by bin(TimeGenerated, $__interval) | order by TimeGenerated asc`, 'short', 'yellow'),
+    statPanel(5, 'Allow All Sessions', 18, 2, `${permissionFrictionBaseWhere()} | summarize AllowAll=max(toint(allow_all)) by conversation, TimeGenerated=bin(TimeGenerated, $__interval) | summarize Sessions=sum(AllowAll) by TimeGenerated | order by TimeGenerated asc`, 'short', 'red'),
+    tablePanel(10, 'Friction sessions', 0, 6, 24, 15, permissionFrictionSessionsQuery(200), [
+      byNameLink('Session', 'Open session detail', '/d/agentops-session-detail?var-conversation=${__data.fields.Session}'),
+      byNameUnit('FrictionScore', 'short', 0),
+      byNameUnit('DurationSec', 's', 2),
+      byNameUnit('P95DurationMs', 'ms', 2),
+    ]),
+    timeseriesPanel(20, 'Friction by posture', 0, 21, 12, 8, `${permissionFrictionBaseWhere()} | summarize ToolFailures=countif(is_tool and (Success == false or tostring(Success) =~ 'false' or isnotempty(error))), PolicyBlocks=countif(is_policy_block), RetryHints=countif(is_retry_hint), AllowAll=max(toint(allow_all)), AllowAllTools=max(toint(allow_all_tools)), AllowAllPaths=max(toint(allow_all_paths)), AllowAllUrls=max(toint(allow_all_urls)), MaxDenyTools=max(deny_tool_count), MaxDenyUrls=max(deny_url_count), MaxExcludedTools=max(excluded_tool_count), MaxDisabledMcp=max(disabled_mcp_server_count) by TimeGenerated=bin(TimeGenerated, $__interval), conversation | extend AllowAll=coalesce(AllowAll, 0), AllowAllTools=coalesce(AllowAllTools, 0), AllowAllPaths=coalesce(AllowAllPaths, 0), AllowAllUrls=coalesce(AllowAllUrls, 0), MaxDenyTools=coalesce(MaxDenyTools, 0), MaxDenyUrls=coalesce(MaxDenyUrls, 0), MaxExcludedTools=coalesce(MaxExcludedTools, 0), MaxDisabledMcp=coalesce(MaxDisabledMcp, 0) | extend Posture=case(PolicyBlocks > 0, 'blocked', ToolFailures > 0, 'tool_failed', RetryHints > 0, 'retry_hint', AllowAll > 0, 'allow_all', AllowAllTools > 0 or AllowAllPaths > 0 or AllowAllUrls > 0, 'permissive_scope', MaxDenyTools > 0 or MaxDenyUrls > 0 or MaxExcludedTools > 0 or MaxDisabledMcp > 0, 'restricted', 'ok') | where Posture != 'ok' | summarize Sessions=dcount(conversation) by TimeGenerated, Posture | order by TimeGenerated asc`),
+    tablePanel(21, 'Tools behind friction', 12, 21, 12, 8, `${permissionFrictionBaseWhere()} | where is_tool or is_policy_block or is_retry_hint | summarize Calls=countif(is_tool), Failures=countif(is_tool and (Success == false or tostring(Success) =~ 'false' or isnotempty(error))), PolicyBlocks=countif(is_policy_block), RetryHints=countif(is_retry_hint), Sessions=dcount(conversation), P95DurationMs=percentile(DurationMs, 95) by tool, error | extend FailurePct=iff(Calls > 0, round(100.0 * Failures / Calls, 1), 0.0), FrictionScore=PolicyBlocks * 5 + Failures * 3 + RetryHints * 2 | order by FrictionScore desc, Failures desc | take 50`, [
+      byNameUnit('FailurePct', 'percent', 1),
+      byNameUnit('P95DurationMs', 'ms', 2),
+    ]),
+  ];
+  return baseDashboard('agentops-permission-friction', 'AgentOps Permission Friction', panels, false);
+}
+
+function alertRecommendationDashboardQuery() {
+  return `let hourly = ${sessionBaseWhere()} | extend AIU=todouble(Properties['github.copilot.aiu']), Credits=todouble(Properties['github.copilot.cost']) | summarize Spans=count(), Failures=countif(Success == false or tostring(Success) =~ 'false' or isnotempty(error)), ToolFailures=countif((operation == 'execute_tool' or isnotempty(tool)) and (Success == false or tostring(Success) =~ 'false' or isnotempty(error))), AIU=sum(AIU), Credits=sum(Credits) by conversation, TimeGenerated=bin(TimeGenerated, 1h); let content = union isfuzzy=true AppDependencies, AppTraces | where $__timeFilter(TimeGenerated) | where tostring(Properties) has_any ('gen_ai.input.messages', 'gen_ai.output.messages', 'gen_ai.prompt', 'gen_ai.completion', 'github.copilot.message') | summarize ContentCaptureSignals=count() by bin(TimeGenerated, 1h); let session_rollup = hourly | summarize Hours=count(), P50Aiu=percentile(AIU, 50), P95Aiu=percentile(AIU, 95), P99Aiu=percentile(AIU, 99), MaxAiu=max(AIU), P95Failures=percentile(Failures, 95), MaxFailures=max(Failures), P95ToolFailures=percentile(ToolFailures, 95), MaxToolFailures=max(ToolFailures), P95Credits=percentile(Credits, 95), MaxCredits=max(Credits); let content_rollup = content | summarize ContentCaptureHours=countif(ContentCaptureSignals > 0), MaxContentCaptureSignals=max(ContentCaptureSignals); union (session_rollup | extend SuggestedThreshold=case(P99Aiu * 1.25 > P95Aiu * 2, P99Aiu * 1.25, P95Aiu * 2) | project Rule='high-aiu', CurrentThreshold=50000000000.0, SuggestedThreshold, P50=P50Aiu, P95=P95Aiu, P99=P99Aiu, MaxObserved=MaxAiu, SupportingHours=Hours, Rollout='Keep disabled until clean history exists.'), (session_rollup | extend SuggestedThreshold=case(P95Failures > 1, P95Failures, 1.0) | project Rule='failed-spans', CurrentThreshold=0.0, SuggestedThreshold, P50=real(null), P95=P95Failures, P99=real(null), MaxObserved=MaxFailures, SupportingHours=Hours, Rollout='Review false positives before action groups.'), (content_rollup | project Rule='content-capture', CurrentThreshold=0.0, SuggestedThreshold=0.0, P50=real(null), P95=real(null), P99=real(null), MaxObserved=coalesce(MaxContentCaptureSignals, 0), SupportingHours=ContentCaptureHours, Rollout='Keep strict; investigate immediately if nonzero.')`;
+}
+
+function alertTuningDashboard() {
+  const panels = [
+    textPanel(1, 0, 0, 24, 2, '## Alert Tuning\nProposal-only threshold evidence for disabled Azure Monitor rules. Keep action groups off until thresholds are validated against real history.'),
+    tablePanel(10, 'Threshold recommendations', 0, 2, 24, 12, alertRecommendationDashboardQuery(), [
+      byNameUnit('CurrentThreshold', 'short', 2),
+      byNameUnit('SuggestedThreshold', 'short', 2),
+      byNameUnit('P50', 'short', 2),
+      byNameUnit('P95', 'short', 2),
+      byNameUnit('P99', 'short', 2),
+      byNameUnit('MaxObserved', 'short', 2),
+    ]),
+    timeseriesPanel(20, 'Hourly failures', 0, 14, 12, 8, `${sessionBaseWhere()} | summarize Failures=countif(Success == false or tostring(Success) =~ 'false' or isnotempty(error)), ToolFailures=countif((operation == 'execute_tool' or isnotempty(tool)) and (Success == false or tostring(Success) =~ 'false' or isnotempty(error))) by TimeGenerated=bin(TimeGenerated, 1h) | order by TimeGenerated asc`),
+    timeseriesPanel(21, 'Hourly AIU', 12, 14, 12, 8, `${sessionBaseWhere()} | extend AIU=todouble(Properties['github.copilot.aiu']) | summarize AIU=sum(AIU) by TimeGenerated=bin(TimeGenerated, 1h) | order by TimeGenerated asc`),
+  ];
+  return baseDashboard('agentops-alert-tuning', 'AgentOps Alert Tuning', panels, false);
 }
 
 function qualityDashboard() {
@@ -508,6 +574,8 @@ const dashboards = {
   'agentops-tools-mcp.json': toolsMcpDashboard(),
   'agentops-runtime-events.json': runtimeEventsDashboard(),
   'agentops-safety-policy.json': safetyPolicyDashboard(),
+  'agentops-permission-friction.json': permissionFrictionDashboard(),
+  'agentops-alert-tuning.json': alertTuningDashboard(),
   'agentops-quality.json': qualityDashboard(),
   'agentops-experiments.json': experimentsDashboard(),
   'agentops-data-quality.json': dataQualityDashboard(),

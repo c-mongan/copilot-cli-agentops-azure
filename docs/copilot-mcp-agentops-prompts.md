@@ -12,6 +12,7 @@ Use Azure MCP with only the Azure Monitor namespace and read-only mode:
 {
   "mcpServers": {
     "azure-mcp": {
+      "tools": ["*"],
       "type": "stdio",
       "command": "npx",
       "args": ["-y", "@azure/mcp@latest", "server", "start", "--read-only", "--namespace", "monitor"]
@@ -36,6 +37,7 @@ Use the sample in `copilot/mcp.grafana.sample.json`:
 {
   "mcpServers": {
     "agent-grafana": {
+      "tools": ["*"],
       "type": "http",
       "url": "https://<grafana-endpoint>/api/azure-mcp",
       "headers": {
@@ -53,7 +55,7 @@ Replace `<grafana-endpoint>` before using the sample. Set `AZURE_GRAFANA_MCP_TOK
 Pass the Azure Monitor sample file to Copilot CLI as additional MCP config, or merge the `mcpServers` entry into the MCP config you already use:
 
 ```bash
-copilot --additional-mcp-config @copilot/mcp.azure-monitor.sample.json
+copilot --additional-mcp-config @copilot/mcp.azure-monitor.sample.json --allow-tool='azure-mcp'
 ```
 
 Add `@copilot/mcp.grafana.sample.json` only after replacing the placeholder Grafana endpoint and setting `AZURE_GRAFANA_MCP_TOKEN`.
@@ -74,6 +76,45 @@ Every AgentOps recommendation must include:
 Recommendations must not require prompt, response, tool argument, tool result, secret, or file-content capture. Agents propose changes by default; they do not auto-remediate.
 
 ## Prompt Templates
+
+### Local AgentOps CLI Triage
+
+```text
+Use the agentops-live-triage skill.
+
+Tell me what happened in the latest Copilot CLI session, why it mattered, and where to look next.
+Prefer local AgentOps CLI commands first:
+`node agentops-cli/src/index.js live --last 2h`,
+`node agentops-cli/src/index.js replay latest --last 24h`,
+`node agentops-cli/src/index.js primitives --last 7d`, and
+`node agentops-cli/src/index.js recommend latest --last 24h`.
+
+Return the session id, ordered timeline, failures, policy/context/cost signals, and one evidence-backed next action.
+Do not request prompt/content capture.
+```
+
+### Trace Agent/Subagent Flow
+
+```text
+Use the agentops-flow-lineage skill.
+
+Trace the latest custom-agent or subagent flow in the last <time-range>.
+Use `node agentops-cli/src/index.js lineage --last <time-range>` and reconstruct parent-child spans from OperationId, Id, and ParentId where available.
+
+Show agent, subagent, LLM, built-in tool, MCP tool, skill, hook, context, and error events.
+Call out missing parent-child metadata separately from observed behavior.
+```
+
+### MCP Tool Triage
+
+```text
+Use the agentops-mcp-tool-triage skill.
+
+Show which MCP servers and tools were involved over <time-range>, whether they failed or caused permission friction, and whether the MCP scope is too broad.
+Use `node agentops-cli/src/index.js mcp --last <time-range>`, `permission-friction`, and `lineage`.
+
+Treat `mcp__<server>__<tool>` and `<server>/<tool>` attribution as exact. Treat single-configured-server attribution as inferred.
+```
 
 ### Investigate Latest Session
 

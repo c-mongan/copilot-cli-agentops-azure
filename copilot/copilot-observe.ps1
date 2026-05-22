@@ -25,13 +25,18 @@ $cliAgent = ""
 $cliEffort = ""
 $cliStream = ""
 $allowAll = "false"
+$allowAllTools = "false"
+$allowAllPaths = "false"
+$allowAllUrls = "false"
 $acpEnabled = "false"
 $cwdChanged = "false"
 $sessionIdProvided = "false"
 $shareEnabled = "false"
 $shareGistEnabled = "false"
 $allowToolCount = 0
+$allowUrlCount = 0
 $denyToolCount = 0
+$denyUrlCount = 0
 $availableToolCount = 0
 $excludedToolCount = 0
 $secretEnvCount = 0
@@ -41,6 +46,44 @@ $additionalMcpConfigCount = 0
 $disabledMcpServerCount = 0
 $githubMcpToolCount = 0
 $githubMcpToolsetCount = 0
+$additionalMcpConfigNames = @()
+$additionalMcpConfigServers = @()
+$disabledMcpServers = @()
+$githubMcpTools = @()
+$githubMcpToolsets = @()
+
+function Safe-AttrValue($value) {
+	return ([string]$value) -replace "[,=`r`n`t ]", "_"
+}
+
+function Add-UniqueValue([ref]$values, $value) {
+	if (-not $value) { return }
+	$safe = Safe-AttrValue $value
+	if ($values.Value -notcontains $safe) {
+		$values.Value += $safe
+	}
+}
+
+function Join-AttrValues($values) {
+	return ($values -join "|")
+}
+
+function Track-McpConfig($rawPath) {
+	if (-not $rawPath) { return }
+	$configPath = ([string]$rawPath).TrimStart("@")
+	Add-UniqueValue ([ref]$additionalMcpConfigNames) ([System.IO.Path]::GetFileName($configPath))
+	if (-not (Test-Path $configPath)) { return }
+	try {
+		$config = Get-Content -Raw -Path $configPath | ConvertFrom-Json
+		if ($config.mcpServers) {
+			$config.mcpServers.PSObject.Properties.Name | ForEach-Object {
+				Add-UniqueValue ([ref]$additionalMcpConfigServers) $_
+			}
+		}
+	} catch {
+		return
+	}
+}
 
 function Has-NextValue($values, $index) {
 	return ($index + 1 -lt $values.Count) -and (-not $values[$index + 1].StartsWith("-"))
@@ -60,12 +103,14 @@ for ($i = 0; $i -lt $args.Count; $i++) {
 		"^--share=" { $shareEnabled = "true"; continue }
 		"^--attachment=" { $attachmentCount++; continue }
 		"^--plugin-dir=" { $pluginDirCount++; continue }
-		"^--additional-mcp-config=" { $additionalMcpConfigCount++; continue }
-		"^--disable-mcp-server=" { $disabledMcpServerCount++; continue }
-		"^--add-github-mcp-tool=" { $githubMcpToolCount++; continue }
-		"^--add-github-mcp-toolset=" { $githubMcpToolsetCount++; continue }
-		"^--allow-tool=|^--allow-url=" { $allowToolCount++; continue }
-		"^--deny-tool=|^--deny-url=" { $denyToolCount++; continue }
+		"^--additional-mcp-config=(.+)$" { $additionalMcpConfigCount++; Track-McpConfig $Matches[1]; continue }
+		"^--disable-mcp-server=(.+)$" { $disabledMcpServerCount++; Add-UniqueValue ([ref]$disabledMcpServers) $Matches[1]; continue }
+		"^--add-github-mcp-tool=(.+)$" { $githubMcpToolCount++; Add-UniqueValue ([ref]$githubMcpTools) $Matches[1]; continue }
+		"^--add-github-mcp-toolset=(.+)$" { $githubMcpToolsetCount++; Add-UniqueValue ([ref]$githubMcpToolsets) $Matches[1]; continue }
+		"^--allow-tool=" { $allowToolCount++; continue }
+		"^--allow-url=" { $allowUrlCount++; continue }
+		"^--deny-tool=" { $denyToolCount++; continue }
+		"^--deny-url=" { $denyUrlCount++; continue }
 		"^--available-tools=" { $availableToolCount++; continue }
 		"^--excluded-tools=" { $excludedToolCount++; continue }
 		"^--secret-env-vars=" { $secretEnvCount++; continue }
@@ -90,28 +135,28 @@ for ($i = 0; $i -lt $args.Count; $i++) {
 		"--share-gist" { $shareGistEnabled = "true" }
 		"--attachment" { $attachmentCount++; if (Has-NextValue $args $i) { $i++ } }
 		"--plugin-dir" { $pluginDirCount++; if (Has-NextValue $args $i) { $i++ } }
-		"--additional-mcp-config" { $additionalMcpConfigCount++; if (Has-NextValue $args $i) { $i++ } }
-		"--disable-mcp-server" { $disabledMcpServerCount++; if (Has-NextValue $args $i) { $i++ } }
-		"--add-github-mcp-tool" { $githubMcpToolCount++; if (Has-NextValue $args $i) { $i++ } }
-		"--add-github-mcp-toolset" { $githubMcpToolsetCount++; if (Has-NextValue $args $i) { $i++ } }
+		"--additional-mcp-config" { $additionalMcpConfigCount++; if (Has-NextValue $args $i) { Track-McpConfig $args[$i + 1]; $i++ } }
+		"--disable-mcp-server" { $disabledMcpServerCount++; if (Has-NextValue $args $i) { Add-UniqueValue ([ref]$disabledMcpServers) $args[$i + 1]; $i++ } }
+		"--add-github-mcp-tool" { $githubMcpToolCount++; if (Has-NextValue $args $i) { Add-UniqueValue ([ref]$githubMcpTools) $args[$i + 1]; $i++ } }
+		"--add-github-mcp-toolset" { $githubMcpToolsetCount++; if (Has-NextValue $args $i) { Add-UniqueValue ([ref]$githubMcpToolsets) $args[$i + 1]; $i++ } }
 		"--enable-all-github-mcp-tools" { $githubMcpToolCount++ }
 		"--disable-builtin-mcps" { $disabledMcpServerCount++ }
-		"--allow-all" { $allowAll = "true" }
-		"--yolo" { $allowAll = "true" }
-		"--allow-all-tools" { $allowAll = "true" }
-		"--allow-all-paths" { $allowAll = "true" }
-		"--allow-all-urls" { $allowAll = "true" }
+		"--allow-all" { $allowAll = "true"; $allowAllTools = "true"; $allowAllPaths = "true"; $allowAllUrls = "true" }
+		"--yolo" { $allowAll = "true"; $allowAllTools = "true"; $allowAllPaths = "true"; $allowAllUrls = "true" }
+		"--allow-all-tools" { $allowAllTools = "true" }
+		"--allow-all-paths" { $allowAllPaths = "true" }
+		"--allow-all-urls" { $allowAllUrls = "true" }
 		"--allow-tool" { $allowToolCount++; if (Has-NextValue $args $i) { $i++ } }
-		"--allow-url" { $allowToolCount++; if (Has-NextValue $args $i) { $i++ } }
+		"--allow-url" { $allowUrlCount++; if (Has-NextValue $args $i) { $i++ } }
 		"--deny-tool" { $denyToolCount++; if (Has-NextValue $args $i) { $i++ } }
-		"--deny-url" { $denyToolCount++; if (Has-NextValue $args $i) { $i++ } }
+		"--deny-url" { $denyUrlCount++; if (Has-NextValue $args $i) { $i++ } }
 		"--available-tools" { $availableToolCount++; if (Has-NextValue $args $i) { $i++ } }
 		"--excluded-tools" { $excludedToolCount++; if (Has-NextValue $args $i) { $i++ } }
 		"--secret-env-vars" { $secretEnvCount++; if (Has-NextValue $args $i) { $i++ } }
 	}
 }
 
-$agentopsResourceAttributes = "service.namespace=copilot-agentops,service.name=github-copilot-cli,agent.framework=github-copilot,agent.runtime=github-copilot-cli,agentops.profile=$profile,agentops.experiment=$experiment,agentops.pack.version=$version,agentops.repo.hash=$repoHash,git.branch=$branch,git.commit=$commit,agentops.cli.mode=$cliMode,agentops.cli.remote=$cliRemote,agentops.cli.output_format=$cliOutputFormat,agentops.cli.allow_all=$allowAll,agentops.cli.acp=$acpEnabled,agentops.cli.cwd_changed=$cwdChanged,agentops.cli.session_id_provided=$sessionIdProvided,agentops.cli.share=$shareEnabled,agentops.cli.share_gist=$shareGistEnabled,agentops.cli.allow_tool.count=$allowToolCount,agentops.cli.deny_tool.count=$denyToolCount,agentops.cli.available_tools.count=$availableToolCount,agentops.cli.excluded_tools.count=$excludedToolCount,agentops.cli.secret_env_vars.count=$secretEnvCount,agentops.cli.attachment.count=$attachmentCount,agentops.cli.plugin_dir.count=$pluginDirCount,agentops.cli.additional_mcp_config.count=$additionalMcpConfigCount,agentops.cli.disabled_mcp_server.count=$disabledMcpServerCount,agentops.cli.github_mcp_tool.count=$githubMcpToolCount,agentops.cli.github_mcp_toolset.count=$githubMcpToolsetCount"
+$agentopsResourceAttributes = "service.namespace=copilot-agentops,service.name=github-copilot-cli,agent.framework=github-copilot,agent.runtime=github-copilot-cli,agentops.profile=$profile,agentops.experiment=$experiment,agentops.pack.version=$version,agentops.repo.hash=$repoHash,git.branch=$branch,git.commit=$commit,agentops.cli.mode=$cliMode,agentops.cli.remote=$cliRemote,agentops.cli.output_format=$cliOutputFormat,agentops.cli.allow_all=$allowAll,agentops.cli.allow_all_tools=$allowAllTools,agentops.cli.allow_all_paths=$allowAllPaths,agentops.cli.allow_all_urls=$allowAllUrls,agentops.cli.acp=$acpEnabled,agentops.cli.cwd_changed=$cwdChanged,agentops.cli.session_id_provided=$sessionIdProvided,agentops.cli.share=$shareEnabled,agentops.cli.share_gist=$shareGistEnabled,agentops.cli.allow_tool.count=$allowToolCount,agentops.cli.allow_url.count=$allowUrlCount,agentops.cli.deny_tool.count=$denyToolCount,agentops.cli.deny_url.count=$denyUrlCount,agentops.cli.available_tools.count=$availableToolCount,agentops.cli.excluded_tools.count=$excludedToolCount,agentops.cli.secret_env_vars.count=$secretEnvCount,agentops.cli.attachment.count=$attachmentCount,agentops.cli.plugin_dir.count=$pluginDirCount,agentops.cli.additional_mcp_config.count=$additionalMcpConfigCount,agentops.cli.disabled_mcp_server.count=$disabledMcpServerCount,agentops.cli.github_mcp_tool.count=$githubMcpToolCount,agentops.cli.github_mcp_toolset.count=$githubMcpToolsetCount"
 if ($cliModel) {
 	$agentopsResourceAttributes = "$agentopsResourceAttributes,agentops.cli.model=$cliModel"
 }
@@ -123,6 +168,21 @@ if ($cliEffort) {
 }
 if ($cliStream) {
 	$agentopsResourceAttributes = "$agentopsResourceAttributes,agentops.cli.stream=$cliStream"
+}
+if ($additionalMcpConfigNames.Count -gt 0) {
+	$agentopsResourceAttributes = "$agentopsResourceAttributes,agentops.mcp.config.files=$(Join-AttrValues $additionalMcpConfigNames)"
+}
+if ($additionalMcpConfigServers.Count -gt 0) {
+	$agentopsResourceAttributes = "$agentopsResourceAttributes,agentops.mcp.config.servers=$(Join-AttrValues $additionalMcpConfigServers)"
+}
+if ($disabledMcpServers.Count -gt 0) {
+	$agentopsResourceAttributes = "$agentopsResourceAttributes,agentops.mcp.disabled.servers=$(Join-AttrValues $disabledMcpServers)"
+}
+if ($githubMcpTools.Count -gt 0) {
+	$agentopsResourceAttributes = "$agentopsResourceAttributes,agentops.mcp.github.tools=$(Join-AttrValues $githubMcpTools)"
+}
+if ($githubMcpToolsets.Count -gt 0) {
+	$agentopsResourceAttributes = "$agentopsResourceAttributes,agentops.mcp.github.toolsets=$(Join-AttrValues $githubMcpToolsets)"
 }
 if ($env:OTEL_RESOURCE_ATTRIBUTES) {
 	$env:OTEL_RESOURCE_ATTRIBUTES = "$agentopsResourceAttributes,$env:OTEL_RESOURCE_ATTRIBUTES"

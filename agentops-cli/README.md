@@ -7,6 +7,7 @@ Small local utility for the Copilot CLI AgentOps for Azure scaffold.
 ```bash
 node src/index.js doctor --local-only
 node src/index.js scan
+node src/index.js primitives --last 7d
 node src/index.js import-jsonl ../tests/sample-otel/tool-failure.jsonl
 node src/index.js validate-collector
 node src/index.js validate-azure
@@ -14,6 +15,13 @@ node src/index.js link session <conversation>
 node src/index.js link trace <operationId>
 node src/index.js fields --last 7d
 node src/index.js context --last 7d
+node src/index.js live --last 2h
+node src/index.js replay latest --last 7d
+node src/index.js recommend latest --last 7d
+node src/index.js permission-friction --last 7d
+node src/index.js lineage --last 24h
+node src/index.js alert recommend --last 14d
+node src/index.js saved-view add latest-risk --session <conversation>
 ```
 
 `validate-azure` is intentionally a handoff reminder in v0.1. Run Azure validation before any deployment.
@@ -23,3 +31,17 @@ node src/index.js context --last 7d
 `fields` prints a field-catalog KQL query that discovers observed `Properties` keys and example values from recent Copilot CLI spans.
 
 `context` prints a context-pressure KQL query that ranks sessions with large inputs, low output yield, weak cache leverage, or high estimated cost.
+
+`live` and `replay` print a compact privacy-safe session timeline without prompt, response, tool argument, or file-content capture.
+
+`recommend latest` converts the latest-session classification into the AgentOps recommendation contract: evidence, observed pattern, proposed files, expected metric movement, validation, and rollback.
+
+`permission-friction` prints KQL for policy blocks, broad allow modes, retry hints, tool failures, and restricted tool/MCP posture.
+
+`lineage` prints KQL for reconstructing custom-agent, subagent, LLM, tool, MCP tool, skill, hook, context, and error flow using span parent-child ids when available.
+
+`primitives` inventories configured Copilot primitives locally and includes a runtime KQL coverage query. Use `--root <path>` to scan another customization repo.
+
+`alert recommend` prints proposal-only alert threshold guidance for the disabled Azure Monitor rules.
+
+`saved-view` stores repeat investigations in `~/.agentops/views.json` by default, or at the path set by `AGENTOPS_VIEWS_PATH` when defined.

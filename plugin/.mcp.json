@@ -1,6 +1,9 @@
 {
   "mcpServers": {
     "azure-mcp": {
+      "tools": [
+        "*"
+      ],
       "type": "stdio",
       "command": "npx",
       "args": [

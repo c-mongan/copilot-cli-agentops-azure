@@ -1,6 +1,6 @@
 # Grafana LLM Observability UI Plan
 
-This project can get close to a Datadog/Lapdog-style LLM Observability experience in Grafana, but it should be designed as an operator workflow rather than a single metrics dashboard.
+This project can deliver a session-first LLM observability experience in Grafana, but it should be designed as an operator workflow rather than a single metrics dashboard.
 
 ## Target Experience
 
@@ -113,7 +113,7 @@ Build a Grafana app plugin using Grafana Scenes. This gives a real product surfa
 
 Pros:
 
-- Closest to Datadog/Lapdog UX.
+- Closest to a purpose-built observability product UX.
 - Can create a session explorer with proper master/detail navigation.
 - Can hide Grafana dashboard mechanics from the user.
 

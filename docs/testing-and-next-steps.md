@@ -163,6 +163,61 @@ az monitor log-analytics query \
   --analytics-query "AppDependencies | where TimeGenerated > ago(2h) | where Properties has 'github.copilot' and Properties has 'github-copilot-cli' | summarize Spans=count(), Runs=countif(tostring(Properties['gen_ai.operation.name']) == 'invoke_agent'), InputTokens=sum(todouble(Properties['gen_ai.usage.input_tokens'])), OutputTokens=sum(todouble(Properties['gen_ai.usage.output_tokens'])), AIU=sum(todouble(Properties['github.copilot.aiu'])), Cost=sum(todouble(Properties['github.copilot.cost'])), P95DurationMs=percentile(DurationMs, 95)"
 ```
 
+## Local Live And Replay Checks
+
+Use the live and replay commands when you want immediate local session visibility without prompt, response, tool argument, or file-content capture:
+
+```bash
+node agentops-cli/src/index.js live --last 2h
+node agentops-cli/src/index.js replay latest --last 2h
+node agentops-cli/src/index.js lineage --last 24h
+node agentops-cli/src/index.js primitives --last 7d
+node agentops-cli/src/index.js recommend latest --last 2h
+```
+
+Use the fixture path when Azure telemetry is unavailable:
+
+```bash
+node agentops-cli/src/index.js live --file tests/sample-otel/tool-failure.jsonl
+node agentops-cli/src/index.js replay latest --file tests/sample-otel/tool-failure.jsonl
+node agentops-cli/src/index.js recommend latest --file tests/sample-otel/tool-failure.jsonl
+```
+
+Save repeat investigations locally:
+
+```bash
+node agentops-cli/src/index.js saved-view add latest-risk --session <conversation-id> --tag risk
+node agentops-cli/src/index.js saved-view list
+node agentops-cli/src/index.js saved-view open latest-risk
+```
+
+Saved views are stored outside the repo in `~/.agentops/views.json` unless `AGENTOPS_VIEWS_PATH` is set.
+
+## Permission Friction Checks
+
+Permission friction covers broad allow modes, policy blocks, denied or excluded tools, disabled MCP servers, tool failures, and recovery hints.
+
+```bash
+node agentops-cli/src/index.js permission-friction --last 7d
+node agentops-cli/src/index.js mcp --last 7d
+node agentops-cli/src/index.js lineage --last 24h
+node agentops-cli/src/index.js primitives --last 7d
+```
+
+The same signal is available in the Permission Friction Grafana dashboard after rebuilding and importing the dashboard pack:
+
+```bash
+node scripts/build-grafana-dashboard-pack.js
+```
+
+## Alert Recommendation Check
+
+Keep deployed scheduled query rules disabled until thresholds are tuned. Use the recommendation command to inspect historical p95/p99 AIU, failure, tool-failure, and content-capture evidence before changing alert thresholds:
+
+```bash
+node agentops-cli/src/index.js alert recommend --last 14d
+```
+
 ## Read-Only MCP Investigation Smoke Test
 
 Validate the MCP sample JSON before using it:
@@ -175,7 +230,7 @@ Use Azure MCP in read-only Azure Monitor scope:
 
 ```bash
 az login
-copilot --additional-mcp-config @copilot/mcp.azure-monitor.sample.json
+copilot --additional-mcp-config @copilot/mcp.azure-monitor.sample.json --allow-tool='azure-mcp'
 ```
 
 Use Azure Managed Grafana MCP only after setting a token outside the repo:
@@ -183,7 +238,7 @@ Use Azure Managed Grafana MCP only after setting a token outside the repo:
 ```bash
 sed -n '1,80p' copilot/mcp.grafana.sample.json
 export AZURE_GRAFANA_MCP_TOKEN="<set-outside-repo>"
-copilot --additional-mcp-config @copilot/mcp.grafana.sample.json
+copilot --additional-mcp-config @copilot/mcp.grafana.sample.json --allow-tool='agent-grafana'
 ```
 
 Before running that command, replace `<grafana-endpoint>` in the sample with your Azure Managed Grafana host.

@@ -25,6 +25,14 @@
         "timeoutSec": 5
       }
     ],
+    "subagentStop": [
+      {
+        "type": "command",
+        "bash": "node plugin/scripts/agent-stop-quality-gate.js",
+        "powershell": "node plugin/scripts/agent-stop-quality-gate.js",
+        "timeoutSec": 5
+      }
+    ],
     "notification": [
       {
         "type": "command",

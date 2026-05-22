@@ -1,6 +1,7 @@
 {
   "mcpServers": {
     "agent-grafana": {
+      "tools": ["*"],
       "type": "http",
       "url": "https://<grafana-endpoint>/api/azure-mcp",
       "headers": {

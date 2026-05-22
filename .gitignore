@@ -10,3 +10,4 @@ coverage/
 !.azure/deployment-plan.md
 collector/*.local.out
 copilot-otel*.jsonl
+.copilot-goals/

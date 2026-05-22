@@ -1,7 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+script_source="${BASH_SOURCE[0]}"
+while [[ -L "${script_source}" ]]; do
+  script_dir="$(cd "$(dirname "${script_source}")" && pwd)"
+  link_target="$(readlink "${script_source}")"
+  if [[ "${link_target}" == /* ]]; then
+    script_source="${link_target}"
+  else
+    script_source="${script_dir}/${link_target}"
+  fi
+done
+script_dir="$(cd "$(dirname "${script_source}")" && pwd)"
 repo_root="$(cd "${script_dir}/.." && pwd)"
 compose_file="${repo_root}/collector/docker-compose.azuremonitor.yaml"
 

@@ -47,6 +47,10 @@ AppDependencies
     disabled_mcp_server_count = toint(Properties["agentops.cli.disabled_mcp_server.count"]),
     github_mcp_tool_count = toint(Properties["agentops.cli.github_mcp_tool.count"]),
     github_mcp_toolset_count = toint(Properties["agentops.cli.github_mcp_toolset.count"]),
+    configured_mcp_server_names = tostring(Properties["agentops.mcp.config.servers"]),
+    disabled_mcp_server_names = tostring(Properties["agentops.mcp.disabled.servers"]),
+    github_mcp_tool_names = tostring(Properties["agentops.mcp.github.tools"]),
+    github_mcp_toolset_names = tostring(Properties["agentops.mcp.github.toolsets"]),
     content_capture = isnotempty(tostring(Properties["gen_ai.input.messages"]))
         or isnotempty(tostring(Properties["gen_ai.output.messages"]))
         or isnotempty(tostring(Properties["gen_ai.tool.call.arguments"]))
@@ -80,7 +84,11 @@ AppDependencies
     remote_states = make_set_if(remote, isnotempty(remote), 3),
     output_formats = make_set_if(output_format, isnotempty(output_format), 3),
     streams = make_set_if(stream, isnotempty(stream), 3),
-    reasoning_efforts = make_set_if(reasoning_effort, isnotempty(reasoning_effort), 5)
+    reasoning_efforts = make_set_if(reasoning_effort, isnotempty(reasoning_effort), 5),
+    configured_mcp_server_names = make_set_if(configured_mcp_server_names, isnotempty(configured_mcp_server_names), 10),
+    disabled_mcp_server_names = make_set_if(disabled_mcp_server_names, isnotempty(disabled_mcp_server_names), 10),
+    github_mcp_tool_names = make_set_if(github_mcp_tool_names, isnotempty(github_mcp_tool_names), 10),
+    github_mcp_toolset_names = make_set_if(github_mcp_toolset_names, isnotempty(github_mcp_toolset_names), 10)
     by session;
 let events =
 union isfuzzy=true AppTraces, AppDependencies
@@ -142,6 +150,10 @@ sessions
     disabled_mcp_servers,
     github_mcp_tools,
     github_mcp_toolsets,
+    configured_mcp_server_names,
+    disabled_mcp_server_names,
+    github_mcp_tool_names,
+    github_mcp_toolset_names,
     content_capture_signals,
     policy_blocks,
     hook_errors,

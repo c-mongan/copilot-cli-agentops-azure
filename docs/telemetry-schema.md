@@ -30,13 +30,18 @@ AgentOps shim fields:
 - `agentops.cli.reasoning_effort`
 - `agentops.cli.stream`
 - `agentops.cli.allow_all`
+- `agentops.cli.allow_all_tools`
+- `agentops.cli.allow_all_paths`
+- `agentops.cli.allow_all_urls`
 - `agentops.cli.acp`
 - `agentops.cli.cwd_changed`
 - `agentops.cli.session_id_provided`
 - `agentops.cli.share`
 - `agentops.cli.share_gist`
 - `agentops.cli.allow_tool.count`
+- `agentops.cli.allow_url.count`
 - `agentops.cli.deny_tool.count`
+- `agentops.cli.deny_url.count`
 - `agentops.cli.available_tools.count`
 - `agentops.cli.excluded_tools.count`
 - `agentops.cli.secret_env_vars.count`
@@ -46,8 +51,15 @@ AgentOps shim fields:
 - `agentops.cli.disabled_mcp_server.count`
 - `agentops.cli.github_mcp_tool.count`
 - `agentops.cli.github_mcp_toolset.count`
+- `agentops.mcp.config.files`
+- `agentops.mcp.config.servers`
+- `agentops.mcp.disabled.servers`
+- `agentops.mcp.github.tools`
+- `agentops.mcp.github.toolsets`
 
-The shim records only privacy-safe run dimensions and counts from Copilot CLI flags. It does not record prompt text, tool arguments, allow/deny pattern values, URLs, paths, attachment names, plugin directories, MCP config values, session IDs, or secret variable names.
+The shim records only privacy-safe run dimensions and counts from Copilot CLI flags. It does not record prompt text, tool arguments, allow/deny pattern values, URLs, paths, attachment names, plugin directories, session IDs, or secret variable names. For MCP lineage, it records MCP config basenames, configured server names, disabled server names, and explicitly selected GitHub MCP tool/toolset names when those values are provided by CLI flags or readable MCP config files.
+
+MCP tool server attribution is exact when tool names use documented namespaced forms such as `mcp__<server>__<tool>` or `<server>/<tool>`. It is inferred when a session has exactly one configured MCP server and a non-built-in tool span has no server prefix.
 
 ## Token Rollups
 
@@ -72,11 +84,15 @@ Validate these against real Copilot CLI OTel output before treating dashboards a
 ## Governance and MCP Queries
 
 - `kql/15-policy-governance.kql` summarizes content-capture signals, allow-all/yolo sessions, policy blocks, remote state, output format, mode, and secret redaction counts.
-- `kql/16-mcp-tool-usage.kql` summarizes tool calls and classifies documented built-in tools separately from likely MCP or extension-provided tools.
+- `kql/16-mcp-tool-usage.kql` summarizes tool calls, inferred MCP server/tool lineage, configured MCP posture, and documented built-in tools.
+- `kql/19-agent-flow-lineage.kql` reconstructs session flow across agent, subagent, LLM, built-in tool, MCP tool, skill, hook, context, and error events using span parent-child ids when present.
+- `kql/20-copilot-primitives-inventory.kql` shows runtime coverage for Copilot primitives and complements the local `agentops primitives` configuration scan.
 
 These queries are also available through:
 
 ```bash
 node agentops-cli/src/index.js policy --last 7d
 node agentops-cli/src/index.js mcp --last 7d
+node agentops-cli/src/index.js lineage --last 24h
+node agentops-cli/src/index.js primitives --last 7d
 ```

@@ -6,6 +6,8 @@ const test = require('node:test');
 
 const {
   agentopsStatusSummary,
+  alertRecommendationQuery,
+  alertRecommendations,
   benchmarkAzureTelemetryQuery,
   benchmarkReport,
   benchmarkRunBaseDir,
@@ -14,6 +16,7 @@ const {
   commandPlan,
   compareBenchmarkRuns,
   contextPressureQuery,
+  copilotPrimitivesInventory,
   doctor,
   explainLatest,
   fieldCatalogQuery,
@@ -25,16 +28,26 @@ const {
   latestSessionSummary,
   listBenchmarks,
   loadBenchmarkSummaries,
+  liveViewFromArgs,
   openLinksSummary,
   parseBenchmarkCompareArgs,
   parseBenchmarkReportArgs,
+  parseBenchmarkRunArgs,
   parseFrontmatter,
+  parseSavedViewArgs,
+  replayTimeline,
   renderExplanation,
   renderLatest,
+  renderLive,
   renderOpenLinks,
+  renderRecommendation,
+  renderReplay,
   renderStatus,
+  recommendationForExplanation,
   runBenchmarkSuite,
+  savedViewCommand,
   scan,
+  spanRowsFromSource,
   tokenRollupAuditQuery,
   validateKqlDuration,
   validateBenchmarkTask
@@ -48,6 +61,40 @@ test('scan finds plugin agents and skills', () => {
   assert.ok(result.agents.length >= 5);
   assert.ok(result.skills.length >= 4);
   assert.ok(result.mcp_servers.includes('azure-mcp'));
+});
+
+test('primitives inventory reports configured and runtime Copilot surfaces', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-primitives-'));
+  try {
+    fs.mkdirSync(path.join(tempDir, 'agents'), { recursive: true });
+    fs.writeFileSync(path.join(tempDir, 'agents', 'sample.agent.md'), '---\nname: sample\ndescription: sample agent\ntools: ["agent", "demo/*"]\n---\n');
+    fs.mkdirSync(path.join(tempDir, 'skills', 'sample'), { recursive: true });
+    fs.writeFileSync(path.join(tempDir, 'skills', 'sample', 'SKILL.md'), '---\nname: sample-skill\ndescription: sample skill\n---\n');
+    fs.mkdirSync(path.join(tempDir, 'hooks'), { recursive: true });
+    fs.writeFileSync(path.join(tempDir, 'hooks', 'hooks.json'), JSON.stringify({ version: 1, hooks: { preToolUse: [], subagentStop: [] } }));
+    fs.writeFileSync(path.join(tempDir, '.mcp.json'), JSON.stringify({ mcpServers: { demo: { type: 'stdio', command: 'demo' } } }));
+    fs.writeFileSync(path.join(tempDir, 'AGENTS.md'), '# Instructions\n');
+    fs.mkdirSync(path.join(tempDir, 'workflows'), { recursive: true });
+    fs.writeFileSync(path.join(tempDir, 'workflows', 'sample.md'), '---\nname: Sample Workflow\n---\n');
+    fs.writeFileSync(path.join(tempDir, 'plugin.json'), JSON.stringify({ name: 'sample-plugin', lspServers: { sample: { command: 'sample-lsp' } } }));
+
+    const result = copilotPrimitivesInventory(['--root', tempDir, '--last', '12h']);
+    const byName = Object.fromEntries(result.primitives.map(item => [item.primitive, item]));
+
+    assert.equal(result.last, '12h');
+    assert.match(result.observed_query, /let lookback = 12h;/);
+    assert.equal(byName.custom_agents.status, 'configured');
+    assert.equal(byName.skills.status, 'configured');
+    assert.equal(byName.hooks.status, 'configured');
+    assert.equal(byName.subagents.status, 'configured');
+    assert.equal(byName.mcp_servers.evidence.includes('demo'), true);
+    assert.equal(byName.instructions.status, 'configured');
+    assert.equal(byName.workflows_commands.status, 'configured');
+    assert.equal(byName.lsp_servers.status, 'configured');
+    assert.equal(byName.mcp_tools.status, 'observed_query');
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
 });
 
 test('doctor local checks pass', () => {
@@ -146,11 +193,13 @@ test('benchmark dry run plans fixture copy, Copilot args, labels, checks, and ti
   const plan = benchmarkRunPlan('starter', {
     variant: 'baseline',
     repeat: 2,
+    hypothesis: 'shorter-prompt',
     dryRun: true,
     runId: 'bench-test'
   });
 
   assert.equal(plan.runId, 'bench-test');
+  assert.equal(plan.hypothesis, 'shorter-prompt');
   assert.equal(plan.wouldMutateRepo, false);
   assert.equal(plan.wouldExecuteCopilot, false);
   assert.equal(plan.runs.length, 2);
@@ -159,11 +208,22 @@ test('benchmark dry run plans fixture copy, Copilot args, labels, checks, and ti
   assert.deepEqual(plan.runs[0].copilot.args, ['--allow-all']);
   assert.match(plan.runs[0].copilot.prompt, /notes\/hello\.txt/);
   assert.equal(plan.runs[0].otelLabels['agentops.benchmark.variant'], 'baseline');
+  assert.equal(plan.runs[0].otelLabels['agentops.hypothesis.id'], 'shorter-prompt');
   assert.equal(plan.runs[0].otelLabels['agentops.benchmark.task_id'], 'create-note');
   assert.equal(plan.runs[0].otelLabels['agentops.benchmark.task'], undefined);
   assert.deepEqual(plan.runs[0].successChecks.expectedFiles, ['notes/hello.txt']);
   assert.deepEqual(plan.runs[0].successChecks.forbiddenFiles, ['.env', 'secrets.txt']);
   assert.equal(plan.runs[0].timeoutSec, 30);
+});
+
+test('benchmark run args support hypothesis labels', () => {
+  assert.deepEqual(parseBenchmarkRunArgs(['starter', '--variant', 'candidate', '--repeat', '2', '--hypothesis', 'less-context']), {
+    suite: 'starter',
+    variant: 'candidate',
+    repeat: 2,
+    hypothesis: 'less-context',
+    dryRun: false
+  });
 });
 
 test('benchmark dry run generates isolated COPILOT_HOME paths', () => {
@@ -210,6 +270,7 @@ test('benchmark run executes Copilot in an isolated fixture copy and writes a su
     assert.equal(result.summaries[0].success, true);
     assert.deepEqual(result.summaries[0].changedFiles, ['notes/hello.txt']);
     assert.equal(result.report.recommendation.action, 'keep');
+    assert.equal(result.report.promotion.decision, 'promote');
     assert.equal(fs.existsSync(result.summariesPath), true);
     assert.ok(copilotCall.options.cwd.startsWith(benchmarkRunBaseDir));
     assert.match(copilotCall.options.env.OTEL_RESOURCE_ATTRIBUTES, /agentops\.benchmark\.task_id=create-note/);
@@ -457,7 +518,8 @@ test('link session builds Grafana URL and KQL', () => {
   assert.match(result.grafana_url, /agentops-session-detail/);
   assert.match(result.grafana_url, /var-conversation=abc-123/);
   assert.match(result.query, /ago\(2h\)/);
-  assert.match(result.query, /conversation == "abc-123"/);
+  assert.match(result.query, /selected_session = "abc-123"/);
+  assert.match(result.query, /linked_to_selected/);
   assert.match(result.query, /github\.copilot\.interaction_id/);
 });
 
@@ -482,6 +544,20 @@ test('latest summarizes a fixture session in plain language', () => {
 
 test('latest summarizes Azure query rows with Properties JSON strings', () => {
   const rows = [
+    {
+      TimeGenerated: '2026-05-21T11:59:59.000Z',
+      Name: 'invoke_agent',
+      Success: 'True',
+      ResultCode: '0',
+      Properties: JSON.stringify({
+        'gen_ai.operation.name': 'invoke_agent',
+        'gen_ai.conversation.id': 'live-conv',
+        'gen_ai.request.model': 'gpt-5.5',
+        'gen_ai.usage.input_tokens': '1000',
+        'gen_ai.usage.output_tokens': '40',
+        'github.copilot.cost': '2'
+      })
+    },
     {
       TimeGenerated: '2026-05-21T12:00:00.000Z',
       Name: 'chat',
@@ -578,8 +654,44 @@ test('latest Azure summary runs az query with a validated lookback', () => {
   assert.ok(capturedArgs.includes('--workspace'));
   assert.match(query, /ago\(2h\)/);
   assert.match(query, /latest_session/);
+  assert.match(query, /operation_sessions/);
+  assert.match(query, /direct_session/);
   assert.equal(summary.mode, 'azure');
   assert.equal(summary.session.id, 'live-conv');
+});
+
+test('latest groups tool spans by inferred Azure conversation column', () => {
+  const summary = latestSessionSummary({
+    source: 'azure',
+    rows: [
+      {
+        TimeGenerated: '2026-05-21T12:00:00.000Z',
+        conversation: 'live-conv',
+        Name: 'chat',
+        Success: 'True',
+        ResultCode: '0',
+        Properties: JSON.stringify({
+          'gen_ai.operation.name': 'chat',
+          'gen_ai.conversation.id': 'live-conv'
+        })
+      },
+      {
+        TimeGenerated: '2026-05-21T12:00:01.000Z',
+        conversation: 'live-conv',
+        Name: 'execute_tool azure-mcp-subscription_list',
+        Success: 'True',
+        ResultCode: '0',
+        Properties: JSON.stringify({
+          'gen_ai.operation.name': 'execute_tool',
+          'gen_ai.tool.name': 'azure-mcp-subscription_list'
+        })
+      }
+    ]
+  });
+
+  assert.equal(summary.session.id, 'live-conv');
+  assert.equal(summary.session.tool_calls, 1);
+  assert.deepEqual(summary.session.tools, ['azure-mcp-subscription_list']);
 });
 
 test('latest Azure summary reports empty live data clearly', () => {
@@ -621,6 +733,20 @@ test('explain latest classifies fixture sessions with simple labels', () => {
   assert.match(renderExplanation(successExplanation), /This session looks successful/);
 });
 
+test('recommendation contract turns latest failure into evidence-backed next actions', () => {
+  const failed = latestSessionSummary({ filePath: path.join(root, 'tests', 'sample-otel', 'tool-failure.jsonl') });
+  const recommendation = recommendationForExplanation(explainLatest(failed), { last: '7d' });
+  const output = renderRecommendation(recommendation);
+
+  assert.equal(recommendation.action, 'investigate');
+  assert.equal(recommendation.classification, 'failed_tool');
+  assert.ok(recommendation.proposed_files.includes('plugin/scripts/post-tool-failure-hints.js'));
+  assert.match(recommendation.evidence.query, /ago\(7d\)/);
+  assert.match(recommendation.evidence.query, /selected_session = "conv-tool-failure"/);
+  assert.match(output, /Expected metric movement/);
+  assert.match(output, /Rollback condition/);
+});
+
 test('open prints main Grafana and latest fixture session links', () => {
   const summary = latestSessionSummary({ filePath: path.join(root, 'tests', 'sample-otel', 'simple-success.jsonl') });
   const output = renderOpenLinks(openLinksSummary(summary));
@@ -629,6 +755,135 @@ test('open prints main Grafana and latest fixture session links', () => {
   assert.match(output, /copilot-cli-agentops/);
   assert.match(output, /Latest session:/);
   assert.match(output, /var-conversation=conv-success/);
+});
+
+test('replay renders a compact privacy-safe session timeline', () => {
+  const rows = [
+    {
+      TimeGenerated: '2026-05-22T12:00:00.000Z',
+      Name: 'invoke_agent',
+      Success: 'True',
+      Properties: JSON.stringify({
+        'gen_ai.operation.name': 'invoke_agent',
+        'gen_ai.conversation.id': 'conv-replay',
+        'gen_ai.agent.name': 'agent-optimizer',
+        'gen_ai.request.model': 'gpt-5.5'
+      })
+    },
+    {
+      TimeGenerated: '2026-05-22T12:00:02.000Z',
+      Name: 'execute_tool',
+      Success: 'False',
+      Properties: JSON.stringify({
+        'gen_ai.operation.name': 'execute_tool',
+        'gen_ai.tool.name': 'bash',
+        'error.type': 'command_failed'
+      })
+    },
+    {
+      TimeGenerated: '2026-05-22T12:00:03.000Z',
+      Name: 'policy',
+      Message: 'AgentOps preToolUse policy blocked command',
+      Success: 'True',
+      Properties: JSON.stringify({
+        'gen_ai.conversation.id': 'conv-replay'
+      })
+    }
+  ];
+
+  const timeline = replayTimeline(rows, { sessionId: 'latest', source: 'azure' });
+  const output = renderReplay(timeline);
+
+  assert.equal(timeline.session, 'conv-replay');
+  assert.equal(timeline.events.length, 3);
+  assert.match(output, /agent/);
+  assert.match(output, /tool/);
+  assert.match(output, /policy/);
+  assert.match(output, /command_failed/);
+});
+
+test('replay summary avoids double counting parent agent usage when chat usage exists', () => {
+  const rows = [
+    {
+      TimeGenerated: '2026-05-22T12:00:00.000Z',
+      Name: 'invoke_agent',
+      Success: 'True',
+      Properties: JSON.stringify({
+        'gen_ai.operation.name': 'invoke_agent',
+        'gen_ai.conversation.id': 'conv-usage',
+        'gen_ai.usage.input_tokens': '1000',
+        'gen_ai.usage.output_tokens': '40',
+        'github.copilot.cost': '2'
+      })
+    },
+    {
+      TimeGenerated: '2026-05-22T12:00:01.000Z',
+      Name: 'chat',
+      Success: 'True',
+      Properties: JSON.stringify({
+        'gen_ai.operation.name': 'chat',
+        'gen_ai.conversation.id': 'conv-usage',
+        'gen_ai.usage.input_tokens': '1000',
+        'gen_ai.usage.output_tokens': '40',
+        'github.copilot.cost': '2'
+      })
+    }
+  ];
+
+  const timeline = replayTimeline(rows, { sessionId: 'latest', source: 'azure' });
+
+  assert.equal(timeline.summary.input_tokens, 1000);
+  assert.equal(timeline.summary.output_tokens, 40);
+  assert.equal(timeline.summary.credits, 2);
+  assert.equal(timeline.summary.est_usd, 0.02);
+});
+
+test('live view can render from a local JSONL export', () => {
+  const view = liveViewFromArgs(['--file', path.join(root, 'tests', 'sample-otel', 'tool-failure.jsonl')]);
+  const output = renderLive(view);
+
+  assert.equal(view.ok, true);
+  assert.match(output, /AgentOps live/);
+  assert.match(output, /conv-tool-failure/);
+  assert.match(output, /shell/);
+});
+
+test('span source reads local JSONL without Azure access', () => {
+  const source = spanRowsFromSource(['--file', path.join(root, 'tests', 'sample-otel', 'simple-success.jsonl')]);
+
+  assert.equal(source.mode, 'local');
+  assert.equal(source.rows.length, 2);
+  assert.equal(source.error, null);
+});
+
+test('saved views add, list, show, and open durable investigations', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-views-test-'));
+  const viewsPath = path.join(tempDir, 'views.json');
+
+  try {
+    const addOptions = parseSavedViewArgs([
+      'add',
+      'cost-spike',
+      '--url',
+      'https://grafana.example/d/agentops-session-detail',
+      '--description',
+      'High-cost run',
+      '--tag',
+      'cost'
+    ]);
+    const added = savedViewCommand(addOptions, viewsPath);
+    const listed = savedViewCommand(parseSavedViewArgs(['list']), viewsPath);
+    const shown = savedViewCommand(parseSavedViewArgs(['show', 'cost-spike']), viewsPath);
+    const opened = savedViewCommand(parseSavedViewArgs(['open', 'cost-spike']), viewsPath);
+
+    assert.equal(added.saved.name, 'cost-spike');
+    assert.equal(listed.views.length, 1);
+    assert.deepEqual(shown.view.tags, ['cost']);
+    assert.equal(opened.url, 'https://grafana.example/d/agentops-session-detail');
+    assert.equal(fs.existsSync(viewsPath), true);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
 });
 
 test('field catalog query discovers Properties keys', () => {
@@ -695,4 +950,40 @@ test('policy and mcp KQL queries expose documented Copilot dimensions', () => {
   assert.match(mcp, /let lookback = 12h;/);
   assert.match(mcp, /likely_mcp_or_extension/);
   assert.match(mcp, /builtin_tools/);
+  assert.match(mcp, /agentops\.mcp\.config\.servers/);
+  assert.match(mcp, /mcp_server/);
+
+  const permission = kqlFileQuery('17-permission-friction.kql', '6h');
+  assert.match(permission, /let lookback = 6h;/);
+  assert.match(permission, /friction_score/);
+  assert.match(permission, /allow_all/);
+  assert.match(permission, /policy_blocks/);
+
+  const alerts = kqlFileQuery('18-alert-threshold-recommendations.kql', '21d');
+  assert.match(alerts, /let lookback = 21d;/);
+  assert.match(alerts, /suggested_threshold/);
+  assert.match(alerts, /content-capture/);
+
+  const lineage = kqlFileQuery('19-agent-flow-lineage.kql', '24h');
+  assert.match(lineage, /let lookback = 24h;/);
+  assert.match(lineage, /parent_node_id/);
+  assert.match(lineage, /mcp_server/);
+  assert.match(lineage, /subagent/);
+
+  const primitives = kqlFileQuery('20-copilot-primitives-inventory.kql', '3d');
+  assert.match(primitives, /let lookback = 3d;/);
+  assert.match(primitives, /custom_agents/);
+  assert.match(primitives, /workflows_commands/);
+  assert.match(primitives, /runtime_status/);
+});
+
+test('alert recommendations expose proposal-only threshold evidence', () => {
+  const recommendations = alertRecommendations('21d');
+
+  assert.equal(recommendations.mode, 'proposal-only');
+  assert.equal(recommendations.last, '21d');
+  assert.equal(recommendations.rules.length, 3);
+  assert.ok(recommendations.rules.some(rule => rule.name === 'content-capture' && rule.suggested_threshold === 0));
+  assert.match(recommendations.evidence_query, /let lookback = 21d;/);
+  assert.match(alertRecommendationQuery('7d'), /p99_aiu/);
 });

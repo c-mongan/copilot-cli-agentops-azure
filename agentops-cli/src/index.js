@@ -6,11 +6,16 @@ const fs = require('node:fs');
 const http = require('node:http');
 const os = require('node:os');
 const path = require('node:path');
+const { createAlerts } = require('./alerts');
+const { createPrimitives } = require('./primitives');
+const { createRecommendations } = require('./recommendations');
+const { createSavedViews } = require('./saved-views');
+const { createTelemetry } = require('./telemetry');
 
 const root = path.resolve(__dirname, '..', '..');
 
 function usage() {
-  return `agentops <command>\n\nCommands:\n  status\n  latest [--file <jsonl>] [--last <duration>]\n  explain latest [--file <jsonl>] [--last <duration>]\n  open [--file <jsonl>] [--last <duration>]\n  doctor [--local-only]\n  scan [--json]\n  import-jsonl <file>\n  validate-collector [endpoint]\n  validate-azure\n  enable-shadow\n  disable-shadow\n  uninstall\n  collector start|stop\n  link session <conversation>\n  link trace <operationId>\n  fields [--last <duration>]\n  context [--last <duration>]\n  token-rollup-audit [--last <duration>]\n  policy [--last <duration>]\n  mcp [--last <duration>]\n  benchmark list\n  benchmark run <suite> --variant <name> --repeat <n> [--dry-run]\n  benchmark report <run-id> [--azure] [--last <duration>]\n  benchmark compare <before-run-id> <after-run-id> [--azure] [--last <duration>]\n`;
+  return `agentops <command>\n\nCommands:\n  status\n  latest [--file <jsonl>] [--last <duration>]\n  live|tail [--file <jsonl>] [--last <duration>] [--follow] [--interval <seconds>]\n  replay <session|latest> [--file <jsonl>] [--last <duration>]\n  explain latest [--file <jsonl>] [--last <duration>]\n  recommend latest [--file <jsonl>] [--last <duration>]\n  open [--file <jsonl>] [--last <duration>]\n  doctor [--local-only]\n  scan [--json]\n  primitives [--last <duration>] [--root <path>]\n  import-jsonl <file>\n  validate-collector [endpoint]\n  validate-azure\n  enable-shadow\n  disable-shadow\n  uninstall\n  collector start|stop\n  saved-view add <name> --url <url> [--query-file <file>] [--description <text>] [--tag <tag>]\n  saved-view list|show|open <name>\n  link session <conversation>\n  link trace <operationId>\n  fields [--last <duration>]\n  context [--last <duration>]\n  token-rollup-audit [--last <duration>]\n  permission-friction [--last <duration>]\n  alert recommend [--last <duration>]\n  lineage [--last <duration>]\n  policy [--last <duration>]\n  mcp [--last <duration>]\n  benchmark list\n  benchmark run <suite> --variant <name> --repeat <n> [--hypothesis <id>] [--dry-run]\n  benchmark report <run-id> [--azure] [--last <duration>]\n  benchmark compare <before-run-id> <after-run-id> [--azure] [--last <duration>]\n`;
 }
 
 const workspaceId = '81513958-e9aa-4a35-aeab-953e1d26e797';
@@ -19,16 +24,20 @@ const mainGrafanaDashboardUrl = `${grafanaBaseUrl}/d/copilot-agentops/copilot-cl
 const portalLogsUrl = 'https://portal.azure.com/#@/resource/subscriptions/0222a208-955a-45fd-b6d8-ca4704421bf0/resourceGroups/rg-copilot-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-copilot-agentops-dev/logs';
 const baseFilter = 'Properties has "github.copilot" and Properties has "github-copilot-cli"';
 const sessionKey = 'case(isnotempty(tostring(Properties["gen_ai.conversation.id"])), tostring(Properties["gen_ai.conversation.id"]), isnotempty(tostring(Properties["github.copilot.interaction_id"])), tostring(Properties["github.copilot.interaction_id"]), strcat(tostring(Properties["gen_ai.agent.id"]), "_", tostring(Properties["github.copilot.turn_count"]), "_", format_datetime(bin(TimeGenerated, 1h), "yyyyMMdd_HHmm")))';
+const directSessionKey = 'case(isnotempty(tostring(Properties["gen_ai.conversation.id"])), tostring(Properties["gen_ai.conversation.id"]), isnotempty(tostring(Properties["github.copilot.interaction_id"])), tostring(Properties["github.copilot.interaction_id"]), "")';
+const fallbackSessionKey = 'strcat(tostring(Properties["gen_ai.agent.id"]), "_", tostring(Properties["github.copilot.turn_count"]), "_", format_datetime(bin(TimeGenerated, 1h), "yyyyMMdd_HHmm"))';
 const defaultInstallDir = process.env.AGENTOPS_BIN_DIR || path.join(process.env.HOME || process.env.USERPROFILE || '', '.local', 'bin');
 const benchmarksDir = path.join(root, 'benchmarks');
 const benchmarkRunBaseDir = path.join(os.tmpdir(), 'agentops-benchmark-runs');
+const savedViewsPath = process.env.AGENTOPS_VIEWS_PATH || path.join(os.homedir(), '.agentops', 'views.json');
 
 function encodeGrafanaValue(value) {
   return encodeURIComponent(value);
 }
 
 function sessionQuery(conversation, last = '24h') {
-  return `AppDependencies\n| where TimeGenerated > ago(${last})\n| where ${baseFilter}\n| extend conversation=${sessionKey}, operation=tostring(Properties["gen_ai.operation.name"]), model=tostring(Properties["gen_ai.request.model"]), tool=tostring(Properties["gen_ai.tool.name"]), error=tostring(Properties["error.type"])\n| where conversation == "${conversation.replace(/"/g, '\\"')}"\n| project TimeGenerated, OperationId, ParentId, Id, Name, operation, model, tool, DurationMs, Success, ResultCode, error, Properties\n| order by TimeGenerated asc`;
+  const escaped = conversation.replace(/"/g, '\\"');
+  return `let selected_session = "${escaped}";\nlet base = AppDependencies\n| where TimeGenerated > ago(${last})\n| where ${baseFilter}\n| extend direct_session=${directSessionKey}, fallback_session=${fallbackSessionKey};\nlet selected_operations = base\n| where direct_session == selected_session or fallback_session == selected_session\n| distinct OperationId;\nbase\n| extend linked_to_selected = OperationId in (selected_operations)\n| where direct_session == selected_session or fallback_session == selected_session or linked_to_selected\n| extend conversation=iff(linked_to_selected, selected_session, iff(isnotempty(direct_session), direct_session, fallback_session)), operation=tostring(Properties["gen_ai.operation.name"]), model=tostring(Properties["gen_ai.request.model"]), tool=tostring(Properties["gen_ai.tool.name"]), error=tostring(Properties["error.type"])\n| project TimeGenerated, conversation, OperationId, ParentId, Id, Name, operation, model, tool, DurationMs, Success, ResultCode, error, Properties\n| order by TimeGenerated asc`;
 }
 
 function traceQuery(operationId, last = '24h') {
@@ -474,9 +483,8 @@ function summarizeSession(sessionId, spans, source = 'local') {
   const tools = new Set();
   const models = new Set();
   const agents = new Set();
-  let inputTokens = 0;
-  let outputTokens = 0;
-  let credits = 0;
+  const allUsage = { inputTokens: 0, outputTokens: 0, credits: 0, count: 0 };
+  const chatUsage = { inputTokens: 0, outputTokens: 0, credits: 0, count: 0 };
   let toolCalls = 0;
   let failedTools = 0;
   let failures = 0;
@@ -510,9 +518,21 @@ function summarizeSession(sessionId, spans, source = 'local') {
     if (booleanAttribute(attrs, ['content.capture.enabled', 'OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT'])) contentCaptureWarning = true;
     if (attributeValue(attrs, ['gen_ai.prompt', 'gen_ai.completion', 'prompt', 'completion'])) contentCaptureWarning = true;
 
-    inputTokens += numberAttribute(attrs, ['gen_ai.usage.input_tokens', 'InputTokens', 'input_tokens']);
-    outputTokens += numberAttribute(attrs, ['gen_ai.usage.output_tokens', 'OutputTokens', 'output_tokens']);
-    credits += numberAttribute(attrs, ['github.copilot.cost', 'Credits', 'credits']);
+    const inputTokenValue = numberAttribute(attrs, ['gen_ai.usage.input_tokens', 'InputTokens', 'input_tokens']);
+    const outputTokenValue = numberAttribute(attrs, ['gen_ai.usage.output_tokens', 'OutputTokens', 'output_tokens']);
+    const creditValue = numberAttribute(attrs, ['github.copilot.cost', 'Credits', 'credits']);
+    if (inputTokenValue || outputTokenValue || creditValue) {
+      allUsage.inputTokens += inputTokenValue;
+      allUsage.outputTokens += outputTokenValue;
+      allUsage.credits += creditValue;
+      allUsage.count += 1;
+      if (operation === 'chat') {
+        chatUsage.inputTokens += inputTokenValue;
+        chatUsage.outputTokens += outputTokenValue;
+        chatUsage.credits += creditValue;
+        chatUsage.count += 1;
+      }
+    }
     tokensRemoved += numberAttribute(attrs, ['github.copilot.tokens_removed', 'tokens_removed']);
 
     if (time && !Number.isNaN(time.getTime())) {
@@ -520,6 +540,11 @@ function summarizeSession(sessionId, spans, source = 'local') {
       if (!earliestTime || time < earliestTime) earliestTime = time;
     }
   }
+
+  const primaryUsage = chatUsage.count > 0 ? chatUsage : allUsage;
+  const inputTokens = primaryUsage.inputTokens;
+  const outputTokens = primaryUsage.outputTokens;
+  const credits = primaryUsage.credits;
 
   const dataMissing = [];
   if (source === 'local') dataMissing.push('live Azure query');
@@ -556,11 +581,17 @@ function latestSessionAzureQuery(last = '7d') {
   return `let base = AppDependencies
 | where TimeGenerated > ago(${lookback})
 | where ${baseFilter}
-| extend conversation=${sessionKey};
-let latest_session = toscalar(base | summarize Ended=max(TimeGenerated) by conversation | top 1 by Ended desc | project conversation);
-base
+| extend direct_session=${directSessionKey}, fallback_session=${fallbackSessionKey};
+let operation_sessions = base
+| where isnotempty(direct_session)
+| summarize operation_session=take_any(direct_session) by OperationId;
+let enriched = base
+| join kind=leftouter operation_sessions on OperationId
+| extend conversation=iff(isnotempty(operation_session), operation_session, iff(isnotempty(direct_session), direct_session, fallback_session));
+let latest_session = toscalar(enriched | summarize Ended=max(TimeGenerated) by conversation | top 1 by Ended desc | project conversation);
+enriched
 | where conversation == latest_session
-| project TimeGenerated, Name, Success, ResultCode, DurationMs, OperationId, ParentId, Id, Properties
+| project TimeGenerated, conversation, Name, Success, ResultCode, DurationMs, OperationId, ParentId, Id, Properties
 | order by TimeGenerated asc`;
 }
 
@@ -807,6 +838,69 @@ function latestSummaryFromArgs(args, fallbackLast = '7d') {
   return latestAzureSessionSummary({ last: parseLastArg(args, fallbackLast) });
 }
 
+const {
+  alertRecommendationQuery,
+  alertRecommendations
+} = createAlerts({
+  workspaceId,
+  baseFilter,
+  sessionKey,
+  validateKqlDuration
+});
+
+const {
+  recommendationForExplanation,
+  renderRecommendation
+} = createRecommendations({
+  buildLink,
+  mainGrafanaDashboardUrl,
+  latestSessionAzureQuery
+});
+
+const {
+  copilotPrimitivesInventory
+} = createPrimitives({
+  root,
+  workspaceId,
+  kqlFileQuery,
+  validateKqlDuration,
+  optionValue
+});
+
+const {
+  liveViewFromArgs,
+  replayTimeline,
+  renderLive,
+  renderReplay,
+  sleep,
+  spanRowsFromSource
+} = createTelemetry({
+  optionValue,
+  parseLastArg,
+  readJsonlRows,
+  validateKqlDuration,
+  latestSessionAzureQuery,
+  runAzureLogAnalyticsQuery,
+  rowAttributes,
+  operationFromRow,
+  attributeValue,
+  numberAttribute,
+  isFailedRow,
+  sessionFromRow,
+  numberValue,
+  roundNumber
+});
+
+const {
+  parseSavedViewArgs,
+  readSavedViews,
+  savedViewCommand
+} = createSavedViews({
+  savedViewsPath,
+  readJson,
+  buildLink
+});
+
 function renderOpenLinks(links = openLinksSummary()) {
   const lines = [
     'Grafana links',
@@ -950,6 +1044,9 @@ function parseBenchmarkRunArgs(args) {
     } else if (arg === '--repeat') {
       options.repeat = Number(args[index + 1]);
       index += 1;
+    } else if (arg === '--hypothesis') {
+      options.hypothesis = args[index + 1];
+      index += 1;
     } else {
       throw new Error(`Unknown benchmark run option: ${arg}`);
     }
@@ -1028,6 +1125,7 @@ function benchmarkRunPlan(suiteId, options = {}) {
   const variant = options.variant;
   const repeat = options.repeat || 1;
   const dryRun = Boolean(options.dryRun);
+  const hypothesis = options.hypothesis || null;
 
   if (!variant) throw new Error('benchmark run requires --variant <name>');
   if (!Number.isInteger(repeat) || repeat <= 0) throw new Error('--repeat must be a positive integer');
@@ -1063,7 +1161,8 @@ function benchmarkRunPlan(suiteId, options = {}) {
           'agentops.benchmark.suite': suite.id,
           'agentops.benchmark.task_id': task.id,
           'agentops.benchmark.variant': variant,
-          'agentops.benchmark.repeat': String(repeatIndex)
+          'agentops.benchmark.repeat': String(repeatIndex),
+          ...(hypothesis ? { 'agentops.hypothesis.id': hypothesis } : {})
         },
         successChecks: {
           commands: task.successCommands,
@@ -1079,6 +1178,7 @@ function benchmarkRunPlan(suiteId, options = {}) {
     runId,
     suite: suite.id,
     variant,
+    hypothesis,
     repeat,
     dryRun,
     wouldMutateRepo: !dryRun,
@@ -1177,7 +1277,8 @@ function executeBenchmarkRun(plan, run, options = {}) {
     AGENTOPS_BENCHMARK_SUITE: plan.suite,
     AGENTOPS_BENCHMARK_TASK_ID: run.taskId,
     AGENTOPS_BENCHMARK_VARIANT: plan.variant,
-    AGENTOPS_BENCHMARK_REPEAT: String(run.repeat)
+    AGENTOPS_BENCHMARK_REPEAT: String(run.repeat),
+    ...(plan.hypothesis ? { AGENTOPS_HYPOTHESIS_ID: plan.hypothesis } : {})
   };
   env.OTEL_RESOURCE_ATTRIBUTES = mergeResourceAttributes(process.env.OTEL_RESOURCE_ATTRIBUTES, run.otelLabels);
 
@@ -1238,6 +1339,7 @@ function executeBenchmarkRun(plan, run, options = {}) {
     runId: plan.runId,
     suite: plan.suite,
     variant: plan.variant,
+    hypothesis: plan.hypothesis,
     taskId: run.taskId,
     taskTitle: run.taskTitle,
     repeat: run.repeat,
@@ -1293,6 +1395,7 @@ function benchmarkAzureTelemetryQuery(runId, last = '24h') {
     suite=tostring(Properties["agentops.benchmark.suite"]),
     task_id=tostring(Properties["agentops.benchmark.task_id"]),
     variant=tostring(Properties["agentops.benchmark.variant"]),
+    hypothesis=tostring(Properties["agentops.hypothesis.id"]),
     repeat_id=tostring(Properties["agentops.benchmark.repeat"]),
     conversation=tostring(Properties["gen_ai.conversation.id"]),
     operation=tostring(Properties["gen_ai.operation.name"]),
@@ -1330,7 +1433,7 @@ function benchmarkAzureTelemetryQuery(runId, last = '24h') {
     Tools=make_set_if(tool, isnotempty(tool), 10),
     Conversations=make_set_if(conversation, isnotempty(conversation), 5),
     Operations=make_set_if(operation, isnotempty(operation), 10)
-    by run_id, suite, task_id, variant, repeat_id
+    by run_id, suite, task_id, variant, hypothesis, repeat_id
 | extend InputTokens=iff(ChatSpans > 0, ChatInputTokens, AgentInputTokens),
     OutputTokens=iff(ChatSpans > 0, ChatOutputTokens, AgentOutputTokens),
     CacheRead=iff(ChatSpans > 0, ChatCacheRead, AgentCacheRead),
@@ -1362,6 +1465,7 @@ function normalizeBenchmarkTelemetryRow(row) {
     suite: row.suite || row.Suite || '',
     taskId: row.task_id || row.taskId || '',
     variant: row.variant || row.Variant || '',
+    hypothesis: row.hypothesis || row.Hypothesis || '',
     repeat: row.repeat_id || row.repeat || '',
     startedAt: row.Started || row.startedAt || null,
     endedAt: row.Ended || row.endedAt || null,
@@ -1448,6 +1552,7 @@ function enrichBenchmarkSummariesWithAzure(runId, summaries, options = {}) {
       startedAt: summary.startedAt || row.startedAt,
       endedAt: summary.endedAt || row.endedAt,
       toolFailures: Math.max(numberValue(summary.toolFailures), row.toolFailures),
+      hypothesis: summary.hypothesis || row.hypothesis || null,
       inputTokens: row.inputTokens,
       outputTokens: row.outputTokens,
       cacheReadTokens: row.cacheReadTokens,
@@ -1665,6 +1770,7 @@ function benchmarkReport(runId, summaries = null, options = {}) {
     runId,
     suites: [...new Set(scoredSummaries.map(summary => summary.suite).filter(Boolean))].sort(),
     variants: [...new Set(scoredSummaries.map(summary => summary.variant).filter(Boolean))].sort(),
+    hypotheses: [...new Set(scoredSummaries.map(summary => summary.hypothesis).filter(Boolean))].sort(),
     startedAt: scoredSummaries.map(summary => summary.startedAt).filter(Boolean).sort()[0] || null,
     taskCount: scoredSummaries.length,
     passed,
@@ -1685,6 +1791,7 @@ function benchmarkReport(runId, summaries = null, options = {}) {
     topFailureCategories: topFailureCategories(scoredSummaries),
     tasks: scoredSummaries.map(summary => ({
       taskId: summary.taskId,
+      hypothesis: summary.hypothesis || null,
       success: Boolean(summary.success),
       score: summary.score,
       safetyViolation: summary.safetyViolation,
@@ -1699,7 +1806,31 @@ function benchmarkReport(runId, summaries = null, options = {}) {
 
   if (azureTelemetry) report.azureTelemetry = azureTelemetry;
   report.recommendation = benchmarkRecommendation(report);
+  report.promotion = benchmarkPromotionSummary(report);
   return report;
+}
+
+function benchmarkPromotionSummary(report) {
+  const action = report.recommendation?.action || 'investigate';
+  const decision = action === 'keep' ? 'promote' : action;
+  return {
+    decision,
+    evidence: {
+      runId: report.runId,
+      passRatePct: report.passRatePct,
+      averageScore: report.averageScore,
+      toolFailures: report.toolFailures,
+      safetyViolationCount: report.safetyViolationCount,
+      totalTokens: report.totalTokens,
+      cost: report.cost
+    },
+    validation: report.azureTelemetry?.ok === false
+      ? 'local benchmark summary only; rerun with --azure when live telemetry is required'
+      : 'benchmark summary includes local checks' + (report.azureTelemetry ? ' and Azure telemetry' : ''),
+    rollback: decision === 'promote'
+      ? 'revert the agent, skill, hook, or MCP change if pass rate drops, safety violations appear, or token/cost increases beyond the accepted budget'
+      : 'do not promote until failures, safety signals, and cost deltas are explained'
+  };
 }
 
 function compareRecommendation(comparison) {
@@ -1805,6 +1936,20 @@ function compareBenchmarkRuns(beforeRunId, afterRunId, summaries = null, options
   }
 
   comparison.recommendation = compareRecommendation(comparison);
+  comparison.promotion = {
+    decision: comparison.recommendation.action === 'keep' ? 'promote' : comparison.recommendation.action,
+    evidence: {
+      beforeRunId,
+      afterRunId,
+      passRateDelta: comparison.passRateDelta,
+      averageScoreDelta: comparison.averageScoreDelta,
+      toolFailuresDelta: comparison.toolFailuresDelta,
+      tokenDelta: comparison.tokenDelta,
+      costDelta: comparison.costDelta,
+      safetyRegressionWarnings: comparison.safetyRegressionWarnings
+    },
+    rollback: 'revert the candidate if the benchmark or live telemetry later shows lower pass rate, new safety warnings, or unacceptable token/cost growth'
+  };
   return comparison;
 }
 
@@ -1826,10 +1971,55 @@ async function main(argv) {
     return;
   }
 
+  if (command === 'live' || command === 'tail') {
+    const intervalIndex = args.indexOf('--interval');
+    const intervalSec = intervalIndex === -1 ? 5 : Number(args[intervalIndex + 1]);
+    if (intervalIndex !== -1 && (!Number.isFinite(intervalSec) || intervalSec <= 0)) {
+      throw new Error('--interval must be a positive number of seconds');
+    }
+    const follow = args.includes('--follow');
+    do {
+      process.stdout.write(renderLive(liveViewFromArgs(args)));
+      if (!follow) return;
+      await sleep(intervalSec * 1000);
+    } while (follow);
+    return;
+  }
+
+  if (command === 'replay') {
+    const sessionId = args[0];
+    if (!sessionId) throw new Error('replay requires a session id or latest');
+    const replayArgs = args.slice(1);
+    let source;
+    if (sessionId === 'latest' || optionValue(replayArgs, ['--file', '--jsonl'])) {
+      source = spanRowsFromSource(replayArgs, '7d');
+    } else {
+      const last = validateKqlDuration(parseLastArg(replayArgs, '7d'));
+      const query = sessionQuery(sessionId, last);
+      const result = runAzureLogAnalyticsQuery(query);
+      source = { mode: 'azure', last, rows: result.ok ? result.rows : [], query, error: result.ok ? null : result.error };
+    }
+    if (source.error) {
+      process.stdout.write(`Session replay: ${sessionId}\n\nCould not read telemetry: ${source.error}\n`);
+      return;
+    }
+    process.stdout.write(renderReplay(replayTimeline(source.rows, { sessionId, source: source.mode })));
+    return;
+  }
+
   if (command === 'explain') {
     if (args[0] !== 'latest') throw new Error('explain currently supports: explain latest');
     const summary = latestSummaryFromArgs(args.slice(1));
     process.stdout.write(renderExplanation(explainLatest(summary)));
+    return;
+  }
+
+  if (command === 'recommend') {
+    if (args[0] !== 'latest') throw new Error('recommend currently supports: recommend latest');
+    const recommendArgs = args.slice(1);
+    const summary = latestSummaryFromArgs(recommendArgs);
+    const last = parseLastArg(recommendArgs, '7d');
+    process.stdout.write(renderRecommendation(recommendationForExplanation(explainLatest(summary), { last })));
     return;
   }
 
@@ -1841,6 +2031,11 @@ async function main(argv) {
 
   if (command === 'scan') {
     process.stdout.write(JSON.stringify(scan(), null, 2) + '\n');
+    return;
+  }
+
+  if (command === 'primitives') {
+    process.stdout.write(JSON.stringify(copilotPrimitivesInventory(args), null, 2) + '\n');
     return;
   }
 
@@ -1876,6 +2071,11 @@ async function main(argv) {
 
   if (command === 'collector') {
     runPlannedCommand(commandPlan(command, args));
+    return;
+  }
+
+  if (command === 'saved-view') {
+    process.stdout.write(JSON.stringify(savedViewCommand(parseSavedViewArgs(args)), null, 2) + '\n');
     return;
   }
 
@@ -1933,6 +2133,26 @@ async function main(argv) {
     return;
   }
 
+  if (command === 'permission-friction') {
+    const last = parseLastArg(args, '7d');
+    process.stdout.write(JSON.stringify({ workspace_id: workspaceId, query: kqlFileQuery('17-permission-friction.kql', last) }, null, 2) + '\n');
+    return;
+  }
+
+  if (command === 'alert') {
+    const [subcommand, ...alertArgs] = args;
+    if (subcommand !== 'recommend') throw new Error('alert currently supports: alert recommend');
+    const last = parseLastArg(alertArgs, '14d');
+    process.stdout.write(JSON.stringify(alertRecommendations(last), null, 2) + '\n');
+    return;
+  }
+
+  if (command === 'lineage') {
+    const last = parseLastArg(args, '24h');
+    process.stdout.write(JSON.stringify({ workspace_id: workspaceId, query: kqlFileQuery('19-agent-flow-lineage.kql', last) }, null, 2) + '\n');
+    return;
+  }
+
   if (command === 'policy') {
     const last = parseLastArg(args, '7d');
     process.stdout.write(JSON.stringify({ workspace_id: workspaceId, query: kqlFileQuery('15-policy-governance.kql', last) }, null, 2) + '\n');
@@ -1957,6 +2177,8 @@ if (require.main === module) {
 
 module.exports = {
   agentopsStatusSummary,
+  alertRecommendationQuery,
+  alertRecommendations,
   benchmarkAzureTelemetry,
   benchmarkAzureTelemetryQuery,
   benchmarkReport,
@@ -1966,6 +2188,7 @@ module.exports = {
   commandPlan,
   compareBenchmarkRuns,
   contextPressureQuery,
+  copilotPrimitivesInventory,
   doctor,
   explainLatest,
   fieldCatalogQuery,
@@ -1979,20 +2202,30 @@ module.exports = {
   listBenchmarks,
   loadBenchmarkSummaries,
   loadBenchmarkSuites,
+  liveViewFromArgs,
   openLinksSummary,
   parseBenchmarkCompareArgs,
   parseBenchmarkReportArgs,
   parseBenchmarkRunArgs,
   parseFrontmatter,
+  parseSavedViewArgs,
+  replayTimeline,
   renderExplanation,
   renderLatest,
+  renderLive,
   renderOpenLinks,
+  renderRecommendation,
+  renderReplay,
   renderStatus,
+  recommendationForExplanation,
   readJsonlRows,
+  readSavedViews,
   runAzureLogAnalyticsQuery,
   runBenchmarkSuite,
+  savedViewCommand,
   scan,
   sessionQuery,
+  spanRowsFromSource,
   tokenRollupAuditQuery,
   enrichBenchmarkSummariesWithAzure,
   traceQuery,

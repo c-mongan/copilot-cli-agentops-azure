@@ -1,0 +1,163 @@
+// Permission friction for Copilot CLI AgentOps.
+// Finds sessions where tool permissions, policy blocks, retries, or broad allow modes slowed or risked the workflow.
+let lookback = 14d;
+let base =
+union isfuzzy=true AppDependencies, AppTraces
+| where TimeGenerated > ago(lookback)
+| where tostring(Properties) has "github.copilot" or Message has "github.copilot" or Message has "AgentOps"
+| extend
+    conversation = case(
+        isnotempty(tostring(Properties["gen_ai.conversation.id"])),
+        tostring(Properties["gen_ai.conversation.id"]),
+        isnotempty(tostring(Properties["github.copilot.interaction_id"])),
+        tostring(Properties["github.copilot.interaction_id"]),
+        strcat(
+            tostring(Properties["gen_ai.agent.id"]),
+            "_",
+            tostring(Properties["github.copilot.turn_count"]),
+            "_",
+            format_datetime(bin(TimeGenerated, 1h), "yyyyMMdd_HHmm")
+        )
+    ),
+    operation = tostring(Properties["gen_ai.operation.name"]),
+    tool = tostring(Properties["gen_ai.tool.name"]),
+    agent = tostring(Properties["gen_ai.agent.name"]),
+    model = tostring(Properties["gen_ai.request.model"]),
+    repo = tostring(Properties["agentops.repo.hash"]),
+    error = tostring(Properties["error.type"]),
+    allow_all = tostring(Properties["agentops.cli.allow_all"]) == "true",
+    allow_all_tools = tostring(Properties["agentops.cli.allow_all_tools"]) == "true",
+    allow_all_paths = tostring(Properties["agentops.cli.allow_all_paths"]) == "true",
+    allow_all_urls = tostring(Properties["agentops.cli.allow_all_urls"]) == "true",
+    allow_tool_count = toint(Properties["agentops.cli.allow_tool.count"]),
+    allow_url_count = toint(Properties["agentops.cli.allow_url.count"]),
+    deny_tool_count = toint(Properties["agentops.cli.deny_tool.count"]),
+    deny_url_count = toint(Properties["agentops.cli.deny_url.count"]),
+    available_tool_count = toint(Properties["agentops.cli.available_tools.count"]),
+    excluded_tool_count = toint(Properties["agentops.cli.excluded_tools.count"]),
+    disabled_mcp_server_count = toint(Properties["agentops.cli.disabled_mcp_server.count"]),
+    extra_mcp_config_count = toint(Properties["agentops.cli.additional_mcp_config.count"]),
+    configured_mcp_servers = tostring(Properties["agentops.mcp.config.servers"]),
+    disabled_mcp_servers = tostring(Properties["agentops.mcp.disabled.servers"])
+| extend
+    is_tool = operation == "execute_tool" or isnotempty(tool),
+    is_policy_block = tostring(Properties) has "preToolUse"
+        or tostring(Properties) has "permissionDecision"
+        or tostring(Properties) has "AgentOps preToolUse policy"
+        or Message has "AgentOps preToolUse policy"
+        or Message has "permission",
+    is_retry_hint = Message has "Recovery hint" or tostring(Properties) has "Recovery hint";
+let sessions =
+base
+| summarize
+    started = min(TimeGenerated),
+    ended = max(TimeGenerated),
+    spans = count(),
+    tool_calls = countif(is_tool),
+    tool_failures = countif(is_tool and (Success == false or tostring(Success) =~ "false" or isnotempty(error))),
+    policy_blocks = countif(is_policy_block),
+    retry_hints = countif(is_retry_hint),
+    allow_all_seen = max(toint(allow_all)),
+    allow_all_tools_seen = max(toint(allow_all_tools)),
+    allow_all_paths_seen = max(toint(allow_all_paths)),
+    allow_all_urls_seen = max(toint(allow_all_urls)),
+    max_allow_tool_count = max(allow_tool_count),
+    max_allow_url_count = max(allow_url_count),
+    max_deny_tool_count = max(deny_tool_count),
+    max_deny_url_count = max(deny_url_count),
+    max_available_tool_count = max(available_tool_count),
+    max_excluded_tool_count = max(excluded_tool_count),
+    max_disabled_mcp_server_count = max(disabled_mcp_server_count),
+    max_extra_mcp_config_count = max(extra_mcp_config_count),
+    p95_duration_ms = percentile(DurationMs, 95),
+    tools = make_set_if(tool, isnotempty(tool), 10),
+    agents = make_set_if(agent, isnotempty(agent), 5),
+    models = make_set_if(model, isnotempty(model), 5),
+    repos = make_set_if(repo, isnotempty(repo), 3),
+    configured_mcp_servers = make_set_if(configured_mcp_servers, isnotempty(configured_mcp_servers), 10),
+    disabled_mcp_server_names = make_set_if(disabled_mcp_servers, isnotempty(disabled_mcp_servers), 10),
+    errors = make_set_if(error, isnotempty(error), 10)
+  by conversation
+| extend
+    allow_all_seen = coalesce(allow_all_seen, 0),
+    allow_all_tools_seen = coalesce(allow_all_tools_seen, 0),
+    allow_all_paths_seen = coalesce(allow_all_paths_seen, 0),
+    allow_all_urls_seen = coalesce(allow_all_urls_seen, 0),
+    max_allow_tool_count = coalesce(max_allow_tool_count, 0),
+    max_allow_url_count = coalesce(max_allow_url_count, 0),
+    max_deny_tool_count = coalesce(max_deny_tool_count, 0),
+    max_deny_url_count = coalesce(max_deny_url_count, 0),
+    max_available_tool_count = coalesce(max_available_tool_count, 0),
+    max_excluded_tool_count = coalesce(max_excluded_tool_count, 0),
+    max_disabled_mcp_server_count = coalesce(max_disabled_mcp_server_count, 0),
+    max_extra_mcp_config_count = coalesce(max_extra_mcp_config_count, 0),
+    duration_sec = round(datetime_diff("millisecond", ended, started) / 1000.0, 2)
+| extend
+    friction_score =
+      policy_blocks * 5
+      + tool_failures * 3
+      + retry_hints * 2
+      + allow_all_seen * 2
+      + max_deny_tool_count
+      + max_deny_url_count
+      + max_excluded_tool_count
+      + max_disabled_mcp_server_count,
+    posture = case(
+        policy_blocks > 0, "blocked",
+        tool_failures > 0, "tool_failed",
+        retry_hints > 0, "retry_hint",
+        allow_all_seen > 0, "allow_all",
+        allow_all_tools_seen > 0 or allow_all_paths_seen > 0 or allow_all_urls_seen > 0, "permissive_scope",
+        max_deny_tool_count > 0 or max_deny_url_count > 0 or max_excluded_tool_count > 0 or max_disabled_mcp_server_count > 0, "restricted",
+        "ok"
+    );
+sessions
+| where posture != "ok"
+| project
+    started,
+    conversation,
+    posture,
+    friction_score,
+    duration_sec,
+    spans,
+    tool_calls,
+    tool_failures,
+    policy_blocks,
+    retry_hints,
+    allow_all_seen,
+    allow_all_tools_seen,
+    allow_all_paths_seen,
+    allow_all_urls_seen,
+    max_allow_tool_count,
+    max_allow_url_count,
+    max_deny_tool_count,
+    max_deny_url_count,
+    max_available_tool_count,
+    max_excluded_tool_count,
+    max_disabled_mcp_server_count,
+    max_extra_mcp_config_count,
+    p95_duration_ms,
+    tools,
+    agents,
+    models,
+    repos,
+    configured_mcp_servers,
+    disabled_mcp_server_names,
+    errors
+| order by friction_score desc, started desc
+| take 100;
+sessions
+| summarize
+    sessions = count(),
+    blocked = countif(posture == "blocked"),
+    tool_failed = countif(posture == "tool_failed"),
+    retry_hint = countif(posture == "retry_hint"),
+    allow_all = countif(posture == "allow_all"),
+    permissive_scope = countif(posture == "permissive_scope"),
+    restricted = countif(posture == "restricted"),
+    avg_friction_score = round(avg(friction_score), 2),
+    p95_duration_ms = percentile(p95_duration_ms, 95)
+| extend
+    blocked_pct = round(100.0 * blocked / sessions, 1),
+    tool_failed_pct = round(100.0 * tool_failed / sessions, 1),
+    allow_all_pct = round(100.0 * allow_all / sessions, 1)

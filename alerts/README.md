@@ -18,3 +18,15 @@ Initial rules:
 - high AIU usage
 
 Enable rules only after thresholds are tuned against real workload history. No action groups are attached in v0.2.
+
+Use the proposal-only threshold recommender before changing `infra/bicep/alerts.bicep` or setting `enableAlerts=true`:
+
+```bash
+node agentops-cli/src/index.js alert recommend --last 14d
+```
+
+The same evidence is available in the generated `agentops-alert-tuning` Grafana dashboard after rebuilding the dashboard pack:
+
+```bash
+node scripts/build-grafana-dashboard-pack.js
+```

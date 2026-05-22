@@ -6,8 +6,8 @@ This project should stay Azure-native while borrowing product patterns from agen
 
 - Copilot CLI already has first-party OpenTelemetry support for traces and metrics. It can be enabled by setting `OTEL_EXPORTER_OTLP_ENDPOINT`, and it emits an agent span tree with `invoke_agent`, `chat`, and `execute_tool` operations.
 - Content capture is off by default in Copilot CLI and should stay off in this stack. The useful operational fields are metadata: model, session, tool, token, cost, AIU, latency, hooks, skill events, compaction, truncation, and errors.
-- The Datadog Lapdog PR adds a `lapdog copilot` command that starts a local collector and launches Copilot CLI with OTLP environment variables. The same pattern already exists here as `copilot-observe` and `copilot-agentops`.
-- The most important data-quality lesson from that PR is token rollup discipline: parent aggregate spans and child chat spans can both carry usage fields. Dashboards should count tokens once.
+- Local agent observability tools often pair a collector bootstrap command with a wrapped CLI launch that sets OTLP environment variables. The same pattern already exists here as `copilot-observe` and `copilot-agentops`.
+- The most important data-quality lesson from comparable tools is token rollup discipline: parent aggregate spans and child chat spans can both carry usage fields. Dashboards should count tokens once.
 - Agent-focused products emphasize sessions, live decisions, replay/debug, cost, token usage, model breakdown, and success rate. Those concepts map well to Azure Monitor tables plus Grafana drilldowns.
 - SigNoz reinforces the product shape: unified logs, traces, metrics, quick filtering, trace detail, dashboards, alerts, and OpenTelemetry portability. For this repo, that argues for better KQL/Grafana workflows before building a custom app.
 

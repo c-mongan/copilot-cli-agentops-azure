@@ -18,7 +18,7 @@ Use this if you run GitHub Copilot CLI and want a simple answer to:
 - Did a safety policy stop something risky?
 - Did a change make Copilot better or worse?
 
-You do not need to know OpenTelemetry, KQL, MCP, or Grafana to start. Those are just the plumbing underneath the beginner path.
+You do not need to know OpenTelemetry, KQL, MCP, or Grafana to start. Those are just the plumbing underneath the simple install path described below.
 
 ## 3. Install in the shortest safe path
 
@@ -90,8 +90,8 @@ Then choose **Last 2 hours** in Grafana and open the newest row in **Sessions**.
 Useful things to look for first:
 
 - **Success** tells you whether the run completed cleanly.
-- **Failures** points to failed spans or tools.
-- **Input tokens** helps reveal context pressure.
+- **Failures** point to failed spans or tools.
+- **Input tokens** help reveal context pressure.
 - **Policy** shows safety or permission friction.
 - **Tools** shows what Copilot tried to call.
 
@@ -100,6 +100,29 @@ Ask for the latest live run from Azure Monitor:
 ```bash
 node agentops-cli/src/index.js latest --last 7d
 node agentops-cli/src/index.js explain latest --last 7d
+node agentops-cli/src/index.js recommend latest --last 7d
+```
+
+Watch the current/latest run as a compact privacy-safe stream:
+
+```bash
+node agentops-cli/src/index.js live --last 2h
+node agentops-cli/src/index.js live --last 2h --follow --interval 10
+```
+
+Print a replay-style timeline for the latest or a specific session:
+
+```bash
+node agentops-cli/src/index.js replay latest --last 7d
+node agentops-cli/src/index.js replay <conversation-id> --last 24h
+node agentops-cli/src/index.js lineage --last 24h
+```
+
+Inventory Copilot primitives configured in this repo and covered by telemetry:
+
+```bash
+node agentops-cli/src/index.js primitives --last 7d
+node agentops-cli/src/index.js primitives --root /path/to/awesome-copilot --last 7d
 ```
 
 You can still use an offline JSONL export or fixture when you are testing locally:
@@ -107,6 +130,9 @@ You can still use an offline JSONL export or fixture when you are testing locall
 ```bash
 node agentops-cli/src/index.js latest --file tests/sample-otel/tool-failure.jsonl
 node agentops-cli/src/index.js explain latest --file tests/sample-otel/tool-failure.jsonl
+node agentops-cli/src/index.js recommend latest --file tests/sample-otel/tool-failure.jsonl
+node agentops-cli/src/index.js live --file tests/sample-otel/tool-failure.jsonl
+node agentops-cli/src/index.js replay latest --file tests/sample-otel/tool-failure.jsonl
 ```
 
 ## 5. Open the dashboard
@@ -126,7 +152,10 @@ The dashboard pack includes:
 - Tools & MCP
 - Runtime Events
 - Safety & Policy
+- Permission Friction
+- Alert Tuning
 - Quality
+- Experiments
 - Data Quality
 
 If you changed dashboard JSON and need to rebuild the local pack:
@@ -158,13 +187,13 @@ Start with a dry run. It plans the benchmark without changing the repo or execut
 
 ```bash
 node agentops-cli/src/index.js benchmark list
-node agentops-cli/src/index.js benchmark run starter --variant baseline --repeat 1 --dry-run
+node agentops-cli/src/index.js benchmark run starter --variant baseline --repeat 1 --hypothesis safer-tool-policy --dry-run
 ```
 
 Run the benchmark for real when you are ready. It copies the fixture to a temp workspace, gives Copilot an isolated `COPILOT_HOME`, writes a summary, and scores the result:
 
 ```bash
-node agentops-cli/src/index.js benchmark run starter --variant baseline --repeat 1
+node agentops-cli/src/index.js benchmark run starter --variant baseline --repeat 1 --hypothesis safer-tool-policy
 node agentops-cli/src/index.js benchmark report <run-id>
 ```
 
@@ -174,6 +203,8 @@ Add Azure enrichment when you want the report to use real telemetry from Log Ana
 node agentops-cli/src/index.js benchmark report <run-id> --azure --last 24h
 node agentops-cli/src/index.js benchmark compare <baseline-run-id> <variant-run-id> --azure --last 24h
 ```
+
+The report includes a promote, investigate, or reject recommendation with evidence, validation status, and rollback condition. Treat that as the benchmark gate before keeping agent, skill, hook, or MCP changes.
 
 For manual comparisons, label each run:
 
@@ -208,8 +239,14 @@ node agentops-cli/src/index.js link trace <operationId>
 node agentops-cli/src/index.js fields --last 7d
 node agentops-cli/src/index.js context --last 7d
 node agentops-cli/src/index.js token-rollup-audit --last 14d
+node agentops-cli/src/index.js primitives --last 7d
 node agentops-cli/src/index.js policy --last 7d
 node agentops-cli/src/index.js mcp --last 7d
+node agentops-cli/src/index.js lineage --last 24h
+node agentops-cli/src/index.js permission-friction --last 7d
+node agentops-cli/src/index.js alert recommend --last 14d
+node agentops-cli/src/index.js saved-view add latest-risk --session <conversation-id> --tag risk
+node agentops-cli/src/index.js saved-view list
 ```
 
 These commands print Grafana links or Azure Log Analytics queries. You can use them without learning KQL first, and an analyst can inspect the generated query when needed.
@@ -245,6 +282,8 @@ More detail:
 
 - **context pressure** = Copilot had too much to remember
 - **tool failure** = a tool Copilot tried did not work
+- **primitive inventory** = the support matrix for agents, subagents, skills, hooks, MCP, tools, instructions, plugins, workflows/commands, LSP, benchmarks, and runtime flags
+- **lineage** = the session flow across agents, subagents, LLM calls, tools, MCP tools, skills, hooks, context, and errors
 - **policy block** = a safety rule stopped something risky
 - **content capture** = recording prompts/code/tool arguments
 - **benchmark** = a repeatable task
