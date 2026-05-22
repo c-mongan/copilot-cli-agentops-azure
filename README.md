@@ -168,6 +168,13 @@ node agentops-cli/src/index.js benchmark run starter --variant baseline --repeat
 node agentops-cli/src/index.js benchmark report <run-id>
 ```
 
+Add Azure enrichment when you want the report to use real telemetry from Log Analytics:
+
+```bash
+node agentops-cli/src/index.js benchmark report <run-id> --azure --last 24h
+node agentops-cli/src/index.js benchmark compare <baseline-run-id> <variant-run-id> --azure --last 24h
+```
+
 For manual comparisons, label each run:
 
 ```bash

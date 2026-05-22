@@ -6,6 +6,7 @@ const test = require('node:test');
 
 const {
   agentopsStatusSummary,
+  benchmarkAzureTelemetryQuery,
   benchmarkReport,
   benchmarkRunBaseDir,
   benchmarkRunPlan,
@@ -25,6 +26,8 @@ const {
   listBenchmarks,
   loadBenchmarkSummaries,
   openLinksSummary,
+  parseBenchmarkCompareArgs,
+  parseBenchmarkReportArgs,
   parseFrontmatter,
   renderExplanation,
   renderLatest,
@@ -257,6 +260,125 @@ test('benchmark report scores a passing stored run', () => {
   assert.equal(report.averageScore, 100);
   assert.equal(report.recommendation.action, 'keep');
   assert.match(report.recommendation.message, /^keep:/);
+});
+
+test('benchmark report enriches stored summaries with Azure telemetry', () => {
+  const summaries = loadBenchmarkSummaries('pass-run', { summariesDir: benchmarkSummariesDir });
+  let capturedQuery = null;
+  const rows = [
+    {
+      run_id: 'pass-run',
+      suite: 'fixture-suite',
+      task_id: 'edit-small-file',
+      variant: 'baseline',
+      repeat_id: '',
+      Started: '2026-05-22T09:00:01.000Z',
+      Ended: '2026-05-22T09:00:08.000Z',
+      Spans: 4,
+      ToolCalls: 2,
+      ToolFailures: 1,
+      Failures: 1,
+      InputTokens: 10000,
+      OutputTokens: 500,
+      CacheRead: 2000,
+      CacheWrite: 1000,
+      Credits: 3,
+      AIU: 200000000,
+      Models: ['gpt-5.5'],
+      Tools: ['bash'],
+      Conversations: ['conv-a'],
+      Operations: ['chat', 'execute_tool']
+    },
+    {
+      run_id: 'pass-run',
+      suite: 'fixture-suite',
+      task_id: 'add-test',
+      variant: 'baseline',
+      repeat_id: '',
+      Started: '2026-05-22T09:02:01.000Z',
+      Ended: '2026-05-22T09:02:08.000Z',
+      Spans: 3,
+      ToolCalls: 0,
+      ToolFailures: 0,
+      Failures: 0,
+      InputTokens: 8000,
+      OutputTokens: 700,
+      CacheRead: 1000,
+      CacheWrite: 500,
+      Credits: 2,
+      AIU: 100000000,
+      Models: ['gpt-5.5'],
+      Tools: [],
+      Conversations: ['conv-b'],
+      Operations: ['chat']
+    }
+  ];
+  const report = benchmarkReport('pass-run', summaries, {
+    azure: true,
+    last: '2h',
+    spawnSync: (command, args) => {
+      assert.equal(command, 'az');
+      capturedQuery = args[args.indexOf('--analytics-query') + 1];
+      return { status: 0, stdout: JSON.stringify(rows), stderr: '' };
+    }
+  });
+
+  assert.match(capturedQuery, /ago\(2h\)/);
+  assert.match(capturedQuery, /run_id == "pass-run"/);
+  assert.equal(report.azureTelemetry.ok, true);
+  assert.equal(report.azureTelemetry.matchedTasks, 2);
+  assert.equal(report.azureTelemetry.matchedSpans, 7);
+  assert.equal(report.inputTokens, 18000);
+  assert.equal(report.outputTokens, 1200);
+  assert.equal(report.aiu, 0.3);
+  assert.equal(report.cost, 0.05);
+  assert.equal(report.toolFailures, 1);
+  assert.equal(report.recommendation.action, 'investigate');
+  assert.equal(report.tasks.every(task => task.telemetryMatched), true);
+  assert.equal(report.tasks.find(task => task.taskId === 'edit-small-file').azureSpans, 4);
+  assert.deepEqual(report.tasks.find(task => task.taskId === 'edit-small-file').models, ['gpt-5.5']);
+});
+
+test('benchmark report keeps local scores when Azure query fails', () => {
+  const summaries = loadBenchmarkSummaries('pass-run', { summariesDir: benchmarkSummariesDir });
+  const report = benchmarkReport('pass-run', summaries, {
+    azure: true,
+    last: '2h',
+    spawnSync: () => ({ status: 1, stdout: '', stderr: 'not logged in' })
+  });
+
+  assert.equal(report.azureTelemetry.ok, false);
+  assert.match(report.azureTelemetry.error, /not logged in/);
+  assert.equal(report.passRatePct, 100);
+  assert.equal(report.cost, 0.45);
+  assert.equal(report.recommendation.action, 'keep');
+});
+
+test('benchmark report args support optional Azure lookback', () => {
+  assert.deepEqual(parseBenchmarkReportArgs(['pass-run', '--azure', '--last', '2h']), {
+    runId: 'pass-run',
+    azure: true,
+    last: '2h'
+  });
+  assert.deepEqual(parseBenchmarkCompareArgs(['before-run', 'after-run', '--azure', '--last', '12h']), {
+    beforeRunId: 'before-run',
+    afterRunId: 'after-run',
+    azure: true,
+    last: '12h'
+  });
+  assert.throws(() => parseBenchmarkReportArgs(['pass-run', '--azure', '--last', 'forever']), /duration/);
+});
+
+test('benchmark Azure telemetry query filters by run id and lookback', () => {
+  const query = benchmarkAzureTelemetryQuery('bench-"quoted"', '12h');
+
+  assert.match(query, /ago\(12h\)/);
+  assert.match(query, /agentops\.benchmark\.run_id/);
+  assert.match(query, /run_id == "bench-\\"quoted\\""/);
+  assert.match(query, /ChatInputTokens=sumif/);
+  assert.match(query, /AgentInputTokens=maxif/);
+  assert.match(query, /InputTokens=iff\(ChatSpans > 0/);
+  assert.match(query, /make_set_if\(tool/);
 });
 
 test('benchmark report rejects a failing stored run', () => {

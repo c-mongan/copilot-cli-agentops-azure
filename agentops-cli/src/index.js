@@ -10,7 +10,7 @@ const path = require('node:path');
 const root = path.resolve(__dirname, '..', '..');
 
 function usage() {
-  return `agentops <command>\n\nCommands:\n  status\n  latest [--file <jsonl>] [--last <duration>]\n  explain latest [--file <jsonl>] [--last <duration>]\n  open [--file <jsonl>] [--last <duration>]\n  doctor [--local-only]\n  scan [--json]\n  import-jsonl <file>\n  validate-collector [endpoint]\n  validate-azure\n  enable-shadow\n  disable-shadow\n  uninstall\n  collector start|stop\n  link session <conversation>\n  link trace <operationId>\n  fields [--last <duration>]\n  context [--last <duration>]\n  token-rollup-audit [--last <duration>]\n  policy [--last <duration>]\n  mcp [--last <duration>]\n  benchmark list\n  benchmark run <suite> --variant <name> --repeat <n> [--dry-run]\n  benchmark report <run-id>\n  benchmark compare <before-run-id> <after-run-id>\n`;
+  return `agentops <command>\n\nCommands:\n  status\n  latest [--file <jsonl>] [--last <duration>]\n  explain latest [--file <jsonl>] [--last <duration>]\n  open [--file <jsonl>] [--last <duration>]\n  doctor [--local-only]\n  scan [--json]\n  import-jsonl <file>\n  validate-collector [endpoint]\n  validate-azure\n  enable-shadow\n  disable-shadow\n  uninstall\n  collector start|stop\n  link session <conversation>\n  link trace <operationId>\n  fields [--last <duration>]\n  context [--last <duration>]\n  token-rollup-audit [--last <duration>]\n  policy [--last <duration>]\n  mcp [--last <duration>]\n  benchmark list\n  benchmark run <suite> --variant <name> --repeat <n> [--dry-run]\n  benchmark report <run-id> [--azure] [--last <duration>]\n  benchmark compare <before-run-id> <after-run-id> [--azure] [--last <duration>]\n`;
 }
 
 const workspaceId = '81513958-e9aa-4a35-aeab-953e1d26e797';
@@ -91,6 +91,10 @@ function validateKqlDuration(value) {
     throw new Error('--last must be a duration like 30m, 24h, or 7d');
   }
   return value;
+}
+
+function escapeKqlString(value) {
+  return String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 }
 
 function commandPlan(command, args = [], platform = process.platform) {
@@ -959,6 +963,62 @@ function parseBenchmarkRunArgs(args) {
   return options;
 }
 
+function parseBenchmarkReportArgs(args) {
+  const runId = args[0];
+  if (!runId) throw new Error('benchmark report requires a run id');
+
+  const options = {
+    runId,
+    azure: false,
+    last: '24h'
+  };
+
+  for (let index = 1; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === '--azure') {
+      options.azure = true;
+    } else if (arg === '--last') {
+      if (!args[index + 1]) throw new Error('--last requires a duration, for example 7d or 24h');
+      options.last = args[index + 1];
+      index += 1;
+    } else {
+      throw new Error(`Unknown benchmark report option: ${arg}`);
+    }
+  }
+
+  if (options.azure) validateKqlDuration(options.last);
+  return options;
+}
+
+function parseBenchmarkCompareArgs(args) {
+  const beforeRunId = args[0];
+  const afterRunId = args[1];
+  if (!beforeRunId || !afterRunId) throw new Error('benchmark compare requires before and after run ids');
+
+  const options = {
+    beforeRunId,
+    afterRunId,
+    azure: false,
+    last: '24h'
+  };
+
+  for (let index = 2; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === '--azure') {
+      options.azure = true;
+    } else if (arg === '--last') {
+      if (!args[index + 1]) throw new Error('--last requires a duration, for example 7d or 24h');
+      options.last = args[index + 1];
+      index += 1;
+    } else {
+      throw new Error(`Unknown benchmark compare option: ${arg}`);
+    }
+  }
+
+  if (options.azure) validateKqlDuration(options.last);
+  return options;
+}
+
 function makeBenchmarkRunId(now = new Date()) {
   const stamp = now.toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
   return `bench-${stamp}-${crypto.randomBytes(4).toString('hex')}`;
@@ -1223,9 +1283,209 @@ function runBenchmarkSuite(suiteId, options = {}) {
   };
 }
 
+function benchmarkAzureTelemetryQuery(runId, last = '24h') {
+  const lookback = validateKqlDuration(last);
+  const escapedRunId = escapeKqlString(runId);
+  return `AppDependencies
+| where TimeGenerated > ago(${lookback})
+| where Properties has "${escapedRunId}"
+| extend run_id=tostring(Properties["agentops.benchmark.run_id"]),
+    suite=tostring(Properties["agentops.benchmark.suite"]),
+    task_id=tostring(Properties["agentops.benchmark.task_id"]),
+    variant=tostring(Properties["agentops.benchmark.variant"]),
+    repeat_id=tostring(Properties["agentops.benchmark.repeat"]),
+    conversation=tostring(Properties["gen_ai.conversation.id"]),
+    operation=tostring(Properties["gen_ai.operation.name"]),
+    model=tostring(Properties["gen_ai.request.model"]),
+    tool=tostring(Properties["gen_ai.tool.name"]),
+    error=tostring(Properties["error.type"]),
+    InputTokens=todouble(Properties["gen_ai.usage.input_tokens"]),
+    OutputTokens=todouble(Properties["gen_ai.usage.output_tokens"]),
+    CacheRead=todouble(Properties["gen_ai.usage.cache_read.input_tokens"]),
+    CacheWrite=todouble(Properties["gen_ai.usage.cache_creation.input_tokens"]),
+    Credits=todouble(Properties["github.copilot.cost"]),
+    AIU=todouble(Properties["github.copilot.aiu"])
+| where run_id == "${escapedRunId}"
+| summarize Started=min(TimeGenerated),
+    Ended=max(TimeGenerated),
+    Spans=count(),
+    ChatSpans=countif(operation == "chat"),
+    AgentSpans=countif(operation == "invoke_agent"),
+    ToolCalls=countif(operation == "execute_tool" or isnotempty(tool)),
+    ToolFailures=countif((operation == "execute_tool" or isnotempty(tool)) and (Success == false or tostring(Success) =~ "false" or isnotempty(error))),
+    Failures=countif(Success == false or tostring(Success) =~ "false" or isnotempty(error)),
+    ChatInputTokens=sumif(InputTokens, operation == "chat"),
+    ChatOutputTokens=sumif(OutputTokens, operation == "chat"),
+    ChatCacheRead=sumif(CacheRead, operation == "chat"),
+    ChatCacheWrite=sumif(CacheWrite, operation == "chat"),
+    ChatCredits=sumif(Credits, operation == "chat"),
+    ChatAIU=sumif(AIU, operation == "chat"),
+    AgentInputTokens=maxif(InputTokens, operation == "invoke_agent"),
+    AgentOutputTokens=maxif(OutputTokens, operation == "invoke_agent"),
+    AgentCacheRead=maxif(CacheRead, operation == "invoke_agent"),
+    AgentCacheWrite=maxif(CacheWrite, operation == "invoke_agent"),
+    AgentCredits=maxif(Credits, operation == "invoke_agent"),
+    AgentAIU=maxif(AIU, operation == "invoke_agent"),
+    Models=make_set_if(model, isnotempty(model), 5),
+    Tools=make_set_if(tool, isnotempty(tool), 10),
+    Conversations=make_set_if(conversation, isnotempty(conversation), 5),
+    Operations=make_set_if(operation, isnotempty(operation), 10)
+    by run_id, suite, task_id, variant, repeat_id
+| extend InputTokens=iff(ChatSpans > 0, ChatInputTokens, AgentInputTokens),
+    OutputTokens=iff(ChatSpans > 0, ChatOutputTokens, AgentOutputTokens),
+    CacheRead=iff(ChatSpans > 0, ChatCacheRead, AgentCacheRead),
+    CacheWrite=iff(ChatSpans > 0, ChatCacheWrite, AgentCacheWrite),
+    Credits=iff(ChatSpans > 0, ChatCredits, AgentCredits),
+    AIU=iff(ChatSpans > 0, ChatAIU, AgentAIU)
+| order by task_id asc, repeat_id asc`;
+}
+
+function arrayFromAzureValue(value) {
+  if (Array.isArray(value)) return value;
+  if (value === undefined || value === null || value === '') return [];
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) return parsed;
+    } catch {
+      return value.split(',').map(item => item.trim()).filter(Boolean);
+    }
+  }
+  return [];
+}
+
+function normalizeBenchmarkTelemetryRow(row) {
+  const credits = numberValue(row.Credits);
+  const aiuRaw = numberValue(row.AIU);
+  return {
+    runId: row.run_id || row.RunId || row.runId,
+    suite: row.suite || row.Suite || '',
+    taskId: row.task_id || row.taskId || '',
+    variant: row.variant || row.Variant || '',
+    repeat: row.repeat_id || row.repeat || '',
+    startedAt: row.Started || row.startedAt || null,
+    endedAt: row.Ended || row.endedAt || null,
+    spans: numberValue(row.Spans),
+    toolCalls: numberValue(row.ToolCalls),
+    toolFailures: numberValue(row.ToolFailures),
+    failures: numberValue(row.Failures),
+    inputTokens: numberValue(row.InputTokens),
+    outputTokens: numberValue(row.OutputTokens),
+    cacheReadTokens: numberValue(row.CacheRead),
+    cacheWriteTokens: numberValue(row.CacheWrite),
+    credits,
+    cost: roundNumber(credits * 0.01, 4),
+    aiu: normalizeAiuValue(aiuRaw),
+    aiuRaw,
+    models: arrayFromAzureValue(row.Models),
+    tools: arrayFromAzureValue(row.Tools),
+    conversations: arrayFromAzureValue(row.Conversations),
+    operations: arrayFromAzureValue(row.Operations)
+  };
+}
+
+function benchmarkTelemetryKey(taskId, repeat) {
+  return `${taskId || ''}::${repeat === undefined || repeat === null ? '' : String(repeat)}`;
+}
+
+function benchmarkAzureTelemetry(runId, options = {}) {
+  const last = validateKqlDuration(options.last || '24h');
+  const query = benchmarkAzureTelemetryQuery(runId, last);
+  const result = runAzureLogAnalyticsQuery(query, options);
+
+  if (!result.ok) {
+    return {
+      requested: true,
+      ok: false,
+      last,
+      query,
+      error: result.error,
+      rows: [],
+      matchedSpans: 0,
+      matchedTasks: 0
+    };
+  }
+
+  const rows = Array.isArray(result.rows) ? result.rows.map(normalizeBenchmarkTelemetryRow) : [];
+  return {
+    requested: true,
+    ok: rows.length > 0,
+    last,
+    query,
+    rows,
+    matchedSpans: rows.reduce((total, row) => total + row.spans, 0),
+    matchedTasks: rows.filter(row => row.taskId).length,
+    data_missing: rows.length > 0 ? [] : ['azure benchmark telemetry']
+  };
+}
+
+function enrichBenchmarkSummariesWithAzure(runId, summaries, options = {}) {
+  const telemetry = benchmarkAzureTelemetry(runId, options);
+  if (!telemetry.ok) return { summaries, azureTelemetry: telemetry };
+
+  const byTaskAndRepeat = new Map();
+  const byTask = new Map();
+  for (const row of telemetry.rows) {
+    byTaskAndRepeat.set(benchmarkTelemetryKey(row.taskId, row.repeat), row);
+    if (!byTask.has(row.taskId)) byTask.set(row.taskId, []);
+    byTask.get(row.taskId).push(row);
+  }
+
+  const enriched = summaries.map(summary => {
+    const repeat = summary.repeat === undefined || summary.repeat === null ? '' : summary.repeat;
+    const exact = byTaskAndRepeat.get(benchmarkTelemetryKey(summary.taskId, repeat));
+    const taskRows = byTask.get(summary.taskId) || [];
+    const row = exact || (taskRows.length === 1 ? taskRows[0] : null);
+    if (!row) return { ...summary, telemetryMatched: false };
+
+    return {
+      ...summary,
+      telemetryMatched: true,
+      telemetrySource: 'azure',
+      azureSpans: row.spans,
+      azureToolCalls: row.toolCalls,
+      azureFailures: row.failures,
+      startedAt: summary.startedAt || row.startedAt,
+      endedAt: summary.endedAt || row.endedAt,
+      toolFailures: Math.max(numberValue(summary.toolFailures), row.toolFailures),
+      inputTokens: row.inputTokens,
+      outputTokens: row.outputTokens,
+      cacheReadTokens: row.cacheReadTokens,
+      cacheWriteTokens: row.cacheWriteTokens,
+      credits: row.credits,
+      cost: row.cost,
+      aiu: row.aiu,
+      aiuRaw: row.aiuRaw,
+      models: row.models,
+      tools: row.tools,
+      conversations: row.conversations,
+      operations: row.operations,
+      errorCategory: summary.errorCategory || (row.toolFailures > 0 ? 'tool_failure' : null)
+    };
+  });
+
+  return {
+    summaries: enriched,
+    azureTelemetry: {
+      requested: true,
+      ok: true,
+      last: telemetry.last,
+      matchedSpans: telemetry.matchedSpans,
+      matchedTasks: enriched.filter(summary => summary.telemetryMatched).length,
+      unmatchedTasks: enriched.filter(summary => !summary.telemetryMatched).map(summary => summary.taskId),
+      query: telemetry.query
+    }
+  };
+}
+
 function numberValue(value, fallback = 0) {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
+}
+
+function normalizeAiuValue(value) {
+  const aiu = numberValue(value);
+  return Math.abs(aiu) >= 1000000 ? roundNumber(aiu / 1000000000, 3) : aiu;
 }
 
 function roundNumber(value, digits = 1) {
@@ -1375,15 +1635,26 @@ function loadBenchmarkSummaries(runId, options = {}) {
   return summaries.filter(summary => summary.runId === runId);
 }
 
-function benchmarkReport(runId, summaries = null) {
+function benchmarkReport(runId, summaries = null, options = {}) {
   if (!runId) throw new Error('benchmark report requires a run id');
-  const runSummaries = (summaries || loadBenchmarkSummaries(runId)).filter(summary => summary.runId === runId);
+  let runSummaries = (summaries || loadBenchmarkSummaries(runId)).filter(summary => summary.runId === runId);
+  let azureTelemetry = null;
+
   if (runSummaries.length === 0) {
-    return {
+    if (options.azure) azureTelemetry = benchmarkAzureTelemetry(runId, options);
+    const missingReport = {
       runId,
       ok: false,
       message: 'no benchmark summaries were found for this run'
     };
+    if (azureTelemetry) missingReport.azureTelemetry = azureTelemetry;
+    return missingReport;
+  }
+
+  if (options.azure) {
+    const enriched = enrichBenchmarkSummariesWithAzure(runId, runSummaries, options);
+    runSummaries = enriched.summaries;
+    azureTelemetry = enriched.azureTelemetry;
   }
 
   const scoredSummaries = runSummaries.map(scoreBenchmarkSummary);
@@ -1418,10 +1689,15 @@ function benchmarkReport(runId, summaries = null) {
       score: summary.score,
       safetyViolation: summary.safetyViolation,
       errorCategory: summary.errorCategory || null,
+      telemetryMatched: Boolean(summary.telemetryMatched),
+      azureSpans: numberValue(summary.azureSpans),
+      models: summary.models || [],
+      tools: summary.tools || [],
       penalties: summary.penalties
     }))
   };
 
+  if (azureTelemetry) report.azureTelemetry = azureTelemetry;
   report.recommendation = benchmarkRecommendation(report);
   return report;
 }
@@ -1451,17 +1727,17 @@ function compareRecommendation(comparison) {
   };
 }
 
-function compareBenchmarkRuns(beforeRunId, afterRunId, summaries = null) {
+function compareBenchmarkRuns(beforeRunId, afterRunId, summaries = null, options = {}) {
   if (!beforeRunId || !afterRunId) throw new Error('benchmark compare requires before and after run ids');
 
   const allSummaries = summaries || [
     ...loadBenchmarkSummaries(beforeRunId),
     ...loadBenchmarkSummaries(afterRunId)
   ];
-  const before = benchmarkReport(beforeRunId, allSummaries);
-  const after = benchmarkReport(afterRunId, allSummaries);
+  const before = benchmarkReport(beforeRunId, allSummaries, options);
+  const after = benchmarkReport(afterRunId, allSummaries, options);
   if (before.ok === false || after.ok === false) {
-    return {
+    const missingComparison = {
       ok: false,
       beforeRunId,
       afterRunId,
@@ -1470,6 +1746,13 @@ function compareBenchmarkRuns(beforeRunId, afterRunId, summaries = null) {
         after.ok === false ? `missing after run summaries for ${afterRunId}` : null
       ].filter(Boolean).join('; ')
     };
+    if (options.azure) {
+      missingComparison.azureTelemetry = {
+        before: before.azureTelemetry || null,
+        after: after.azureTelemetry || null
+      };
+    }
+    return missingComparison;
   }
   const safetyRegressionWarnings = [];
 
@@ -1513,6 +1796,13 @@ function compareBenchmarkRuns(beforeRunId, afterRunId, summaries = null) {
     safetyRegressionWarnings,
     topFailureCategories: after.topFailureCategories
   };
+
+  if (options.azure) {
+    comparison.azureTelemetry = {
+      before: before.azureTelemetry || null,
+      after: after.azureTelemetry || null
+    };
+  }
 
   comparison.recommendation = compareRecommendation(comparison);
   return comparison;
@@ -1603,12 +1893,14 @@ async function main(argv) {
     }
 
     if (subcommand === 'report') {
-      process.stdout.write(JSON.stringify(benchmarkReport(benchmarkArgs[0]), null, 2) + '\n');
+      const options = parseBenchmarkReportArgs(benchmarkArgs);
+      process.stdout.write(JSON.stringify(benchmarkReport(options.runId, null, options), null, 2) + '\n');
       return;
     }
 
     if (subcommand === 'compare') {
-      process.stdout.write(JSON.stringify(compareBenchmarkRuns(benchmarkArgs[0], benchmarkArgs[1]), null, 2) + '\n');
+      const options = parseBenchmarkCompareArgs(benchmarkArgs);
+      process.stdout.write(JSON.stringify(compareBenchmarkRuns(options.beforeRunId, options.afterRunId, null, options), null, 2) + '\n');
       return;
     }
 
@@ -1665,6 +1957,8 @@ if (require.main === module) {
 
 module.exports = {
   agentopsStatusSummary,
+  benchmarkAzureTelemetry,
+  benchmarkAzureTelemetryQuery,
   benchmarkReport,
   benchmarkRunBaseDir,
   benchmarkRunPlan,
@@ -1686,6 +1980,8 @@ module.exports = {
   loadBenchmarkSummaries,
   loadBenchmarkSuites,
   openLinksSummary,
+  parseBenchmarkCompareArgs,
+  parseBenchmarkReportArgs,
   parseBenchmarkRunArgs,
   parseFrontmatter,
   renderExplanation,
@@ -1698,6 +1994,7 @@ module.exports = {
   scan,
   sessionQuery,
   tokenRollupAuditQuery,
+  enrichBenchmarkSummariesWithAzure,
   traceQuery,
   validateKqlDuration,
   validateBenchmarkTask,

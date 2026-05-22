@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  agentops-cli:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run CLI tests
+        run: npm --prefix agentops-cli test
+
+      - name: Validate JSON assets
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+
+          const files = [
+            'plugin/.mcp.json',
+            'copilot/mcp.azure-monitor.sample.json',
+            'copilot/mcp.grafana.sample.json',
+            '.github/plugin/marketplace.json',
+            ...fs.readdirSync('grafana')
+              .filter(file => file.endsWith('.json'))
+              .map(file => path.join('grafana', file))
+          ];
+
+          for (const file of files) {
+            JSON.parse(fs.readFileSync(file, 'utf8'));
+          }
+
+          console.log(`validated ${files.length} JSON files`);
+          NODE
+
+      - name: AgentOps local doctor
+        run: node agentops-cli/src/index.js doctor --local-only
+
+      - name: AgentOps scan
+        run: node agentops-cli/src/index.js scan > /tmp/agentops-scan.json
