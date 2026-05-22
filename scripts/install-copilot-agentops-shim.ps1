@@ -8,13 +8,15 @@ $ErrorActionPreference = "Stop"
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = Split-Path -Parent $scriptDir
 $agentopsScript = Join-Path $repoRoot "scripts/copilot-agentops.ps1"
+$pwsh = Get-Command pwsh -ErrorAction SilentlyContinue
+$powershell = if ($pwsh) { $pwsh.Source } else { "powershell.exe" }
 
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 
 $agentopsCmd = Join-Path $InstallDir "copilot-agentops.cmd"
 @"
 @echo off
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$agentopsScript" %*
+"$powershell" -NoProfile -ExecutionPolicy Bypass -File "$agentopsScript" %*
 "@ | Set-Content -Path $agentopsCmd -Encoding ASCII
 
 if ($ShadowCopilot) {
@@ -35,7 +37,7 @@ if ($ShadowCopilot) {
   @"
 @echo off
 set "COPILOT_CLI_BIN=$($realCopilot.Source)"
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$agentopsScript" %*
+"$powershell" -NoProfile -ExecutionPolicy Bypass -File "$agentopsScript" %*
 "@ | Set-Content -Path $shadowCmd -Encoding ASCII
 }
 

@@ -1,0 +1,152 @@
+// Policy and governance posture for Copilot CLI AgentOps.
+// Uses privacy-safe AgentOps resource attributes from the shim plus documented
+// Copilot runtime events. No prompt, response, tool argument, or URL content is required.
+let lookback = 7d;
+let session_id = (props:dynamic, timestamp:datetime) {
+    case(
+        isnotempty(tostring(props["gen_ai.conversation.id"])),
+        tostring(props["gen_ai.conversation.id"]),
+        isnotempty(tostring(props["github.copilot.interaction_id"])),
+        tostring(props["github.copilot.interaction_id"]),
+        strcat(
+            tostring(props["gen_ai.agent.id"]),
+            "_",
+            tostring(props["github.copilot.turn_count"]),
+            "_",
+            format_datetime(bin(timestamp, 1h), "yyyyMMdd_HHmm")
+        )
+    )
+};
+let sessions =
+AppDependencies
+| where TimeGenerated > ago(lookback)
+| where Properties has "github.copilot" and Properties has "github-copilot-cli"
+| extend
+    session = session_id(Properties, TimeGenerated),
+    operation = tostring(Properties["gen_ai.operation.name"]),
+    model = coalesce(tostring(Properties["agentops.cli.model"]), tostring(Properties["gen_ai.request.model"])),
+    mode = tostring(Properties["agentops.cli.mode"]),
+    remote = tostring(Properties["agentops.cli.remote"]),
+    output_format = tostring(Properties["agentops.cli.output_format"]),
+    allow_all = tostring(Properties["agentops.cli.allow_all"]) == "true",
+    acp = tostring(Properties["agentops.cli.acp"]) == "true",
+    cwd_changed = tostring(Properties["agentops.cli.cwd_changed"]) == "true",
+    session_id_provided = tostring(Properties["agentops.cli.session_id_provided"]) == "true",
+    share = tostring(Properties["agentops.cli.share"]) == "true",
+    share_gist = tostring(Properties["agentops.cli.share_gist"]) == "true",
+    stream = tostring(Properties["agentops.cli.stream"]),
+    reasoning_effort = tostring(Properties["agentops.cli.reasoning_effort"]),
+    allow_count = toint(Properties["agentops.cli.allow_tool.count"]),
+    deny_count = toint(Properties["agentops.cli.deny_tool.count"]),
+    available_count = toint(Properties["agentops.cli.available_tools.count"]),
+    excluded_count = toint(Properties["agentops.cli.excluded_tools.count"]),
+    secret_env_count = toint(Properties["agentops.cli.secret_env_vars.count"]),
+    attachment_count = toint(Properties["agentops.cli.attachment.count"]),
+    plugin_dir_count = toint(Properties["agentops.cli.plugin_dir.count"]),
+    additional_mcp_config_count = toint(Properties["agentops.cli.additional_mcp_config.count"]),
+    disabled_mcp_server_count = toint(Properties["agentops.cli.disabled_mcp_server.count"]),
+    github_mcp_tool_count = toint(Properties["agentops.cli.github_mcp_tool.count"]),
+    github_mcp_toolset_count = toint(Properties["agentops.cli.github_mcp_toolset.count"]),
+    content_capture = isnotempty(tostring(Properties["gen_ai.input.messages"]))
+        or isnotempty(tostring(Properties["gen_ai.output.messages"]))
+        or isnotempty(tostring(Properties["gen_ai.tool.call.arguments"]))
+        or isnotempty(tostring(Properties["gen_ai.tool.call.result"])),
+    error = tostring(Properties["error.type"])
+| summarize
+    started = min(TimeGenerated),
+    ended = max(TimeGenerated),
+    spans = count(),
+    failures = countif(Success == false or isnotempty(error)),
+    allow_all = max(toint(allow_all)),
+    allow_rules = max(allow_count),
+    deny_rules = max(deny_count),
+    available_tool_filters = max(available_count),
+    excluded_tool_filters = max(excluded_count),
+    secret_env_redactions = max(secret_env_count),
+    attachments = max(attachment_count),
+    plugin_dirs = max(plugin_dir_count),
+    additional_mcp_configs = max(additional_mcp_config_count),
+    disabled_mcp_servers = max(disabled_mcp_server_count),
+    github_mcp_tools = max(github_mcp_tool_count),
+    github_mcp_toolsets = max(github_mcp_toolset_count),
+    acp_enabled = max(toint(acp)),
+    changed_working_directory = max(toint(cwd_changed)),
+    provided_session_id = max(toint(session_id_provided)),
+    shared_markdown = max(toint(share)),
+    shared_gist = max(toint(share_gist)),
+    content_capture_signals = countif(content_capture),
+    modes = make_set_if(mode, isnotempty(mode), 5),
+    models = make_set_if(model, isnotempty(model), 5),
+    remote_states = make_set_if(remote, isnotempty(remote), 3),
+    output_formats = make_set_if(output_format, isnotempty(output_format), 3),
+    streams = make_set_if(stream, isnotempty(stream), 3),
+    reasoning_efforts = make_set_if(reasoning_effort, isnotempty(reasoning_effort), 5)
+    by session;
+let events =
+union isfuzzy=true AppTraces, AppDependencies
+| where TimeGenerated > ago(lookback)
+| where tostring(Properties) has "github.copilot" or Message has "github.copilot"
+| extend
+    session = session_id(Properties, TimeGenerated),
+    event = coalesce(tostring(Properties["event.name"]), tostring(Properties["github.copilot.event.name"]), Name),
+    message = tostring(Message)
+| summarize
+    policy_blocks = countif(message has "AgentOps preToolUse policy" or event has "permission" or event has "policy"),
+    hook_errors = countif(event == "github.copilot.hook.error" or event has "hook.error"),
+    aborts = countif(event == "github.copilot.session.abort"),
+    exceptions = countif(event == "exception")
+    by session;
+sessions
+| join kind=leftouter events on session
+| extend
+    policy_blocks = coalesce(policy_blocks, 0),
+    hook_errors = coalesce(hook_errors, 0),
+    aborts = coalesce(aborts, 0),
+    exceptions = coalesce(exceptions, 0),
+    risk = case(
+        content_capture_signals > 0, "content_capture",
+        allow_all > 0, "allow_all",
+        shared_gist > 0, "shared_gist",
+        additional_mcp_configs > 0 or plugin_dirs > 0, "session_extension",
+        acp_enabled > 0, "acp_server",
+        policy_blocks > 0, "policy_blocked",
+        hook_errors > 0 or exceptions > 0, "policy_runtime_error",
+        deny_rules > 0 or excluded_tool_filters > 0, "restricted",
+        "normal"
+    )
+| project
+    started,
+    ended,
+    session,
+    risk,
+    modes,
+    models,
+    remote_states,
+    output_formats,
+    streams,
+    reasoning_efforts,
+    allow_all = allow_all > 0,
+    acp_enabled = acp_enabled > 0,
+    changed_working_directory = changed_working_directory > 0,
+    provided_session_id = provided_session_id > 0,
+    shared_markdown = shared_markdown > 0,
+    shared_gist = shared_gist > 0,
+    allow_rules,
+    deny_rules,
+    available_tool_filters,
+    excluded_tool_filters,
+    secret_env_redactions,
+    attachments,
+    plugin_dirs,
+    additional_mcp_configs,
+    disabled_mcp_servers,
+    github_mcp_tools,
+    github_mcp_toolsets,
+    content_capture_signals,
+    policy_blocks,
+    hook_errors,
+    aborts,
+    exceptions,
+    failures,
+    spans
+| order by started desc

@@ -13,7 +13,7 @@ const datasource = {
 const workspaceResource = '/subscriptions/0222a208-955a-45fd-b6d8-ca4704421bf0/resourceGroups/rg-copilot-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-copilot-agentops-dev';
 const portalLogsUrl = 'https://portal.azure.com/#@/resource/subscriptions/0222a208-955a-45fd-b6d8-ca4704421bf0/resourceGroups/rg-copilot-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-copilot-agentops-dev/logs';
 const baseFilter = "Properties has 'github.copilot' and Properties has 'github-copilot-cli'";
-const sessionKey = "coalesce(tostring(Properties['gen_ai.conversation.id']), strcat(tostring(Properties['gen_ai.agent.id']), '_', tostring(Properties['github.copilot.turn_count']), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm')))";
+const sessionKey = "case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(tostring(Properties['gen_ai.agent.id']), '_', tostring(Properties['github.copilot.turn_count']), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm')))";
 
 function target(query, resultFormat = 'table') {
   return [{
@@ -94,8 +94,12 @@ function dashboardLinks() {
     { title: 'Overview', url: '/d/copilot-agentops', type: 'link', icon: 'dashboard', targetBlank: false },
     { title: 'Sessions', url: '/d/agentops-sessions', type: 'link', icon: 'dashboard', targetBlank: false },
     { title: 'Traces / Spans', url: '/d/agentops-traces-spans', type: 'link', icon: 'dashboard', targetBlank: false },
+    { title: 'Tools & MCP', url: '/d/agentops-tools-mcp', type: 'link', icon: 'dashboard', targetBlank: false },
     { title: 'Runtime Events', url: '/d/agentops-runtime-events', type: 'link', icon: 'dashboard', targetBlank: false },
+    { title: 'Safety & Policy', url: '/d/agentops-safety-policy', type: 'link', icon: 'dashboard', targetBlank: false },
     { title: 'Quality', url: '/d/agentops-quality', type: 'link', icon: 'dashboard', targetBlank: false },
+    { title: 'Experiments', url: '/d/agentops-experiments', type: 'link', icon: 'dashboard', targetBlank: false },
+    { title: 'Data Quality', url: '/d/agentops-data-quality', type: 'link', icon: 'dashboard', targetBlank: false },
     { title: 'Azure Portal - Log Analytics', url: portalLogsUrl, type: 'link', icon: 'external link', targetBlank: true },
   ];
 }
@@ -220,24 +224,44 @@ function sessionBaseWhere() {
   return `AppDependencies | where $__timeFilter(TimeGenerated) | where ${baseFilter} | extend operation=tostring(Properties['gen_ai.operation.name']), conversation=${sessionKey}, agent=tostring(Properties['gen_ai.agent.name']), model=tostring(Properties['gen_ai.request.model']), tool=tostring(Properties['gen_ai.tool.name']), repo=tostring(Properties['agentops.repo.hash']), error=tostring(Properties['error.type']) | where ('$model' == '$__all' or model in (${'${model:singlequote}'})) | where ('$operation' == '$__all' or operation in (${'${operation:singlequote}'})) | where ('$agent' == '$__all' or agent in (${'${agent:singlequote}'})) | where ('$repo' == '$__all' or repo in (${'${repo:singlequote}'})) | where ('$tool' == '$__all' or tool in (${'${tool:singlequote}'}))`;
 }
 
+function usageFields() {
+  return `InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), OutputTokens=todouble(Properties['gen_ai.usage.output_tokens']), CacheRead=todouble(Properties['gen_ai.usage.cache_read.input_tokens']), CacheWrite=todouble(Properties['gen_ai.usage.cache_creation.input_tokens']), Credits=todouble(Properties['github.copilot.cost']), AIU=todouble(Properties['github.copilot.aiu'])`;
+}
+
+function sessionUsageRollup() {
+  return `ChatSpans=countif(operation == 'chat'), AgentSpans=countif(operation == 'invoke_agent'), ChatInputTokens=sumif(InputTokens, operation == 'chat'), ChatOutputTokens=sumif(OutputTokens, operation == 'chat'), ChatCacheRead=sumif(CacheRead, operation == 'chat'), ChatCacheWrite=sumif(CacheWrite, operation == 'chat'), ChatCredits=sumif(Credits, operation == 'chat'), ChatAIU=sumif(AIU, operation == 'chat'), AgentInputTokens=maxif(InputTokens, operation == 'invoke_agent'), AgentOutputTokens=maxif(OutputTokens, operation == 'invoke_agent'), AgentCacheRead=maxif(CacheRead, operation == 'invoke_agent'), AgentCacheWrite=maxif(CacheWrite, operation == 'invoke_agent'), AgentCredits=maxif(Credits, operation == 'invoke_agent'), AgentAIU=maxif(AIU, operation == 'invoke_agent')`;
+}
+
+function extendRecommendedUsage() {
+  return `InputTokens=iff(ChatSpans > 0, ChatInputTokens, AgentInputTokens), OutputTokens=iff(ChatSpans > 0, ChatOutputTokens, AgentOutputTokens), CacheRead=iff(ChatSpans > 0, ChatCacheRead, AgentCacheRead), CacheWrite=iff(ChatSpans > 0, ChatCacheWrite, AgentCacheWrite), AICredits=iff(ChatSpans > 0, ChatCredits, AgentCredits), AIU=iff(ChatSpans > 0, ChatAIU, AgentAIU)`;
+}
+
+function usageTrendQuery(extraFilter = '') {
+  return `${sessionBaseWhere()} ${extraFilter} | extend UsageBin=bin(TimeGenerated, $__interval), ${usageFields()} | summarize ${sessionUsageRollup()} by UsageBin, Session=conversation | extend ${extendRecommendedUsage()} | extend Tokens=coalesce(InputTokens, 0.0) + coalesce(OutputTokens, 0.0) | summarize Tokens=sum(Tokens), EstUsd=sum(AICredits) * 0.01, Credits=sum(AICredits), InputTokens=sum(InputTokens), OutputTokens=sum(OutputTokens), CacheRead=sum(CacheRead), CacheWrite=sum(CacheWrite) by TimeGenerated=UsageBin | order by TimeGenerated asc`;
+}
+
 function sessionsQuery(limit = 100) {
-  return `${sessionBaseWhere()} | extend InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), OutputTokens=todouble(Properties['gen_ai.usage.output_tokens']), CacheRead=todouble(Properties['gen_ai.usage.cache_read.input_tokens']), CacheWrite=todouble(Properties['gen_ai.usage.cache_creation.input_tokens']), Credits=todouble(Properties['github.copilot.cost']), AIU=todouble(Properties['github.copilot.aiu']) | summarize Started=min(TimeGenerated), Ended=max(TimeGenerated), DurationMs=max(DurationMs), Spans=count(), Runs=countif(operation == 'invoke_agent'), ToolCalls=countif(operation == 'execute_tool'), Failures=countif(Success == false or isnotempty(error)), InputTokens=sum(InputTokens), OutputTokens=sum(OutputTokens), CacheRead=sum(CacheRead), CacheWrite=sum(CacheWrite), AICredits=sum(Credits), AIU=sum(AIU), Models=make_set(model, 5), Agents=make_set(agent, 5), Repos=make_set(repo, 3), Operations=make_set(operation, 8) by Session=conversation | extend EstUsd=round(AICredits * 0.01, 4), DurationSec=round(DurationMs / 1000.0, 2), SuccessPct=round(100.0 * (Spans - Failures) / Spans, 1) | extend Risk=case(Failures > 0, 'failed', EstUsd >= 1.0, 'expensive', DurationMs >= 30000, 'slow', 'ok') | where '$risk' == 'all' or Risk == '$risk' | project Started, Ended, Session, Risk, DurationSec, SuccessPct, Spans, Runs, ToolCalls, Failures, Models, Agents, Repos, InputTokens, OutputTokens, CacheRead, CacheWrite, AICredits, EstUsd, AIU, Operations | order by Started desc | take ${limit}`;
+  return `${sessionBaseWhere()} | extend ${usageFields()} | summarize Started=min(TimeGenerated), Ended=max(TimeGenerated), DurationMs=max(DurationMs), Spans=count(), Runs=countif(operation == 'invoke_agent'), ToolCalls=countif(operation == 'execute_tool'), Failures=countif(Success == false or isnotempty(error)), ${sessionUsageRollup()}, Models=make_set(model, 5), Agents=make_set(agent, 5), Repos=make_set(repo, 3), Operations=make_set(operation, 8) by Session=conversation | extend ${extendRecommendedUsage()} | extend EstUsd=round(AICredits * 0.01, 4), DurationSec=round(DurationMs / 1000.0, 2), SuccessPct=round(100.0 * (Spans - Failures) / Spans, 1) | extend Risk=case(Failures > 0, 'failed', EstUsd >= 1.0, 'expensive', DurationMs >= 30000, 'slow', 'ok') | where '$risk' == 'all' or Risk == '$risk' | project Started, Ended, Session, Risk, DurationSec, SuccessPct, Spans, Runs, ToolCalls, Failures, Models, Agents, Repos, InputTokens, OutputTokens, CacheRead, CacheWrite, AICredits, EstUsd, AIU, Operations | order by Started desc | take ${limit}`;
 }
 
 function workflowRiskQuery() {
-  return `${sessionBaseWhere()} | extend InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), Credits=todouble(Properties['github.copilot.cost']) | summarize HasInvoke=countif(operation == 'invoke_agent') > 0, HasTool=countif(operation == 'execute_tool' or isnotempty(tool)) > 0, ToolFailures=countif((operation == 'execute_tool' or isnotempty(tool)) and (Success == false or isnotempty(error))), Failures=countif(Success == false or isnotempty(error)), InputTokens=sum(InputTokens), Credits=sum(Credits), P95DurationMs=percentile(DurationMs, 95) by Session=conversation | extend Risk=case(Failures > 0, 'failed', ToolFailures > 0, 'tool_failed', Credits * 0.01 >= 1.0, 'expensive', P95DurationMs >= 30000, 'slow', InputTokens >= 30000, 'high_context', HasTool, 'used_tools', HasInvoke, 'invoked', 'other') | summarize Sessions=count() by Risk | order by Sessions desc`;
+  return `${sessionBaseWhere()} | extend ${usageFields()} | summarize HasInvoke=countif(operation == 'invoke_agent') > 0, HasTool=countif(operation == 'execute_tool' or isnotempty(tool)) > 0, ToolFailures=countif((operation == 'execute_tool' or isnotempty(tool)) and (Success == false or isnotempty(error))), Failures=countif(Success == false or isnotempty(error)), ${sessionUsageRollup()}, P95DurationMs=percentile(DurationMs, 95) by Session=conversation | extend ${extendRecommendedUsage()} | extend Risk=case(Failures > 0, 'failed', ToolFailures > 0, 'tool_failed', AICredits * 0.01 >= 1.0, 'expensive', P95DurationMs >= 30000, 'slow', InputTokens >= 30000, 'high_context', HasTool, 'used_tools', HasInvoke, 'invoked', 'other') | summarize Sessions=count() by Risk | order by Sessions desc`;
 }
 
 function contextPressureSessionsQuery(limit = 100) {
-  return `${sessionBaseWhere()} | extend InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), OutputTokens=todouble(Properties['gen_ai.usage.output_tokens']), CacheRead=todouble(Properties['gen_ai.usage.cache_read.input_tokens']), CacheWrite=todouble(Properties['gen_ai.usage.cache_creation.input_tokens']), Credits=todouble(Properties['github.copilot.cost']), AIU=todouble(Properties['github.copilot.aiu']) | summarize Started=min(TimeGenerated), Ended=max(TimeGenerated), Spans=count(), Runs=countif(operation == 'invoke_agent'), Failures=countif(Success == false or isnotempty(error)), InputTokens=sum(InputTokens), OutputTokens=sum(OutputTokens), CacheRead=sum(CacheRead), CacheWrite=sum(CacheWrite), Credits=sum(Credits), AIU=sum(AIU), P95DurationMs=percentile(DurationMs, 95), Models=make_set(model, 5), Agents=make_set(agent, 5), Repos=make_set_if(repo, isnotempty(repo), 3), Tools=make_set_if(tool, isnotempty(tool), 10), Errors=make_set_if(error, isnotempty(error), 10) by Session=conversation | extend FreshInput=iff(InputTokens - CacheRead - CacheWrite < 0, 0.0, InputTokens - CacheRead - CacheWrite), OutputYieldPct=iff(InputTokens > 0, round(100.0 * OutputTokens / InputTokens, 3), 0.0), CacheLeveragePct=iff(InputTokens > 0, round(100.0 * CacheRead / InputTokens, 1), 0.0), CacheWritePct=iff(InputTokens > 0, round(100.0 * CacheWrite / InputTokens, 1), 0.0), EstUsd=round(Credits * 0.01, 4), DurationSec=round(datetime_diff('millisecond', Ended, Started) / 1000.0, 2) | extend Pressure=case(InputTokens >= 100000 and OutputYieldPct < 0.1, 'severe_low_yield', InputTokens >= 100000, 'severe_context', InputTokens >= 30000 and OutputYieldPct < 0.1, 'high_low_yield', InputTokens >= 30000, 'high_context', FreshInput >= 30000 and CacheLeveragePct < 10, 'low_cache_leverage', EstUsd >= 1.0, 'expensive', 'ok') | where Pressure != 'ok' | project Started, Session, Pressure, InputTokens, OutputTokens, OutputYieldPct, CacheRead, CacheWrite, FreshInput, CacheLeveragePct, CacheWritePct, Credits, EstUsd, AIU, DurationSec, P95DurationMs, Runs, Spans, Failures, Models, Agents, Repos, Tools, Errors | order by InputTokens desc, EstUsd desc | take ${limit}`;
+  return `${sessionBaseWhere()} | extend ${usageFields()} | summarize Started=min(TimeGenerated), Ended=max(TimeGenerated), Spans=count(), Runs=countif(operation == 'invoke_agent'), Failures=countif(Success == false or isnotempty(error)), ${sessionUsageRollup()}, P95DurationMs=percentile(DurationMs, 95), Models=make_set(model, 5), Agents=make_set(agent, 5), Repos=make_set_if(repo, isnotempty(repo), 3), Tools=make_set_if(tool, isnotempty(tool), 10), Errors=make_set_if(error, isnotempty(error), 10) by Session=conversation | extend ${extendRecommendedUsage()} | extend FreshInput=iff(InputTokens - CacheRead - CacheWrite < 0, 0.0, InputTokens - CacheRead - CacheWrite), OutputYieldPct=iff(InputTokens > 0, round(100.0 * OutputTokens / InputTokens, 3), 0.0), CacheLeveragePct=iff(InputTokens > 0, round(100.0 * CacheRead / InputTokens, 1), 0.0), CacheWritePct=iff(InputTokens > 0, round(100.0 * CacheWrite / InputTokens, 1), 0.0), EstUsd=round(AICredits * 0.01, 4), DurationSec=round(datetime_diff('millisecond', Ended, Started) / 1000.0, 2) | extend Pressure=case(InputTokens >= 100000 and OutputYieldPct < 0.1, 'severe_low_yield', InputTokens >= 100000, 'severe_context', InputTokens >= 30000 and OutputYieldPct < 0.1, 'high_low_yield', InputTokens >= 30000, 'high_context', FreshInput >= 30000 and CacheLeveragePct < 10, 'low_cache_leverage', EstUsd >= 1.0, 'expensive', 'ok') | where Pressure != 'ok' | project Started, Session, Pressure, InputTokens, OutputTokens, OutputYieldPct, CacheRead, CacheWrite, FreshInput, CacheLeveragePct, CacheWritePct, Credits=AICredits, EstUsd, AIU, DurationSec, P95DurationMs, Runs, Spans, Failures, Models, Agents, Repos, Tools, Errors | order by InputTokens desc, EstUsd desc | take ${limit}`;
 }
 
 function contextPressureContributorsQuery() {
-  return `${sessionBaseWhere()} | extend InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), OutputTokens=todouble(Properties['gen_ai.usage.output_tokens']), CacheRead=todouble(Properties['gen_ai.usage.cache_read.input_tokens']), CacheWrite=todouble(Properties['gen_ai.usage.cache_creation.input_tokens']), Credits=todouble(Properties['github.copilot.cost']) | summarize Sessions=dcount(conversation), HighContextSessions=dcountif(conversation, InputTokens >= 30000), LowYieldSpans=countif(InputTokens >= 30000 and OutputTokens / InputTokens < 0.001), InputTokens=sum(InputTokens), OutputTokens=sum(OutputTokens), CacheRead=sum(CacheRead), CacheWrite=sum(CacheWrite), FreshInput=sum(iff(InputTokens - CacheRead - CacheWrite < 0, 0.0, InputTokens - CacheRead - CacheWrite)), EstUsd=sum(Credits) * 0.01, P95DurationMs=percentile(DurationMs, 95), Failures=countif(Success == false or isnotempty(error)) by model, agent, repo | extend OutputYieldPct=iff(InputTokens > 0, round(100.0 * OutputTokens / InputTokens, 3), 0.0), CacheLeveragePct=iff(InputTokens > 0, round(100.0 * CacheRead / InputTokens, 1), 0.0) | order by InputTokens desc, EstUsd desc | take 50`;
+  return `${sessionBaseWhere()} | extend ${usageFields()} | summarize Sessions=dcount(conversation), Failures=countif(Success == false or isnotempty(error)), P95DurationMs=percentile(DurationMs, 95), ${sessionUsageRollup()} by Session=conversation, model, agent, repo | extend ${extendRecommendedUsage()} | extend FreshInput=iff(InputTokens - CacheRead - CacheWrite < 0, 0.0, InputTokens - CacheRead - CacheWrite), OutputYieldPct=iff(InputTokens > 0, OutputTokens / InputTokens, 0.0) | summarize Sessions=dcount(Session), HighContextSessions=dcountif(Session, InputTokens >= 30000), LowYieldSessions=dcountif(Session, InputTokens >= 30000 and OutputYieldPct < 0.001), InputTokens=sum(InputTokens), OutputTokens=sum(OutputTokens), CacheRead=sum(CacheRead), CacheWrite=sum(CacheWrite), FreshInput=sum(FreshInput), EstUsd=sum(AICredits) * 0.01, P95DurationMs=percentile(P95DurationMs, 95), Failures=sum(Failures) by model, agent, repo | extend OutputYieldPct=iff(InputTokens > 0, round(100.0 * OutputTokens / InputTokens, 3), 0.0), CacheLeveragePct=iff(InputTokens > 0, round(100.0 * CacheRead / InputTokens, 1), 0.0) | order by InputTokens desc, EstUsd desc | take 50`;
 }
 
 function contextPressureTrendQuery() {
-  return `${sessionBaseWhere()} | extend InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), OutputTokens=todouble(Properties['gen_ai.usage.output_tokens']), CacheRead=todouble(Properties['gen_ai.usage.cache_read.input_tokens']), CacheWrite=todouble(Properties['gen_ai.usage.cache_creation.input_tokens']) | summarize InputTokens=sum(InputTokens), OutputTokens=sum(OutputTokens), CacheRead=sum(CacheRead), CacheWrite=sum(CacheWrite) by bin(TimeGenerated, $__interval) | order by TimeGenerated asc`;
+  return usageTrendQuery();
+}
+
+function kqlFileQuery(fileName) {
+  return fs.readFileSync(path.join(repoRoot, 'kql', fileName), 'utf8');
 }
 
 function sessionFilterPipe() {
@@ -248,12 +272,18 @@ function runtimeBaseWhere() {
   return `union isfuzzy=true AppTraces, AppDependencies | where $__timeFilter(TimeGenerated) | where tostring(Properties) has 'github.copilot' or Message has 'github.copilot' | extend conversation=${sessionKey}, operation=tostring(Properties['gen_ai.operation.name']), agent=tostring(Properties['gen_ai.agent.name']), model=tostring(Properties['gen_ai.request.model']), tool=tostring(Properties['gen_ai.tool.name']), repo=tostring(Properties['agentops.repo.hash']), error=tostring(Properties['error.type'])`;
 }
 
+function sessionReplayQuery() {
+  const spanRows = `${sessionBaseWhere()} ${sessionFilterPipe()} | extend InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), OutputTokens=todouble(Properties['gen_ai.usage.output_tokens']), Credits=todouble(Properties['github.copilot.cost']), AIU=todouble(Properties['github.copilot.aiu']), EventType=case(operation == 'invoke_agent', 'agent', operation == 'chat', 'llm', operation == 'execute_tool' or isnotempty(tool), 'tool', 'span') | project TimeGenerated, EventType, Event=operation, Name, OperationId, SpanId=Id, ParentId, agent, model, tool, DurationMs, Success, error, InputTokens, OutputTokens, Credits, AIU, Detail=ResultCode`;
+  const eventRows = `${runtimeBaseWhere()} ${sessionFilterPipe()} | extend Event=coalesce(tostring(Properties['event.name']), tostring(Properties['github.copilot.event.name']), Name), EventType=case(Event has 'hook', 'hook', Event has 'skill', 'skill', Event has 'truncation' or Event has 'compaction', 'context', Event has 'shutdown' or Event has 'abort', 'lifecycle', Event == 'exception' or isnotempty(error), 'error', 'event'), tokens_removed=toint(Properties['github.copilot.tokens_removed']), messages_removed=toint(Properties['github.copilot.messages_removed']), hook=tostring(Properties['github.copilot.hook.type']), skill=tostring(Properties['github.copilot.skill.name']) | where EventType != 'event' or tostring(Properties) has 'github.copilot.session' or tostring(Properties) has 'github.copilot.hook' or tostring(Properties) has 'github.copilot.skill' | project TimeGenerated, EventType, Event, Name=coalesce(Event, Message), OperationId, SpanId=Id, ParentId, agent, model, tool=coalesce(tool, hook, skill), DurationMs=real(null), Success=iff(tostring(Properties['github.copilot.success']) == 'false' or isnotempty(error), false, true), error, InputTokens=real(null), OutputTokens=real(null), Credits=real(null), AIU=real(null), Detail=strcat('tokens_removed=', tostring(tokens_removed), ' messages_removed=', tostring(messages_removed))`;
+  return `union isfuzzy=true (${spanRows}), (${eventRows}) | order by TimeGenerated asc | take 500`;
+}
+
 function sessionsDashboard() {
   const panels = [
     textPanel(1, 0, 0, 24, 3, '## AgentOps Sessions\nSession-first LLM observability for Copilot CLI. Sort by risk, cost, failures, or duration; drill into a single session for spans, events, tools, and safety signals.'),
     statPanel(2, 'Sessions', 0, 3, `${sessionBaseWhere()} | summarize Sessions=dcount(conversation) by bin(TimeGenerated, $__interval) | order by TimeGenerated asc`),
     statPanel(3, 'Failures', 6, 3, `${sessionBaseWhere()} | summarize Failures=countif(Success == false or isnotempty(error)) by bin(TimeGenerated, $__interval) | order by TimeGenerated asc`, 'short', 'red'),
-    statPanel(4, 'AI Credits', 12, 3, `${sessionBaseWhere()} | extend Credits=todouble(Properties['github.copilot.cost']) | summarize Credits=sum(Credits) by bin(TimeGenerated, $__interval) | order by TimeGenerated asc`, 'short', 'yellow'),
+    statPanel(4, 'AI Credits', 12, 3, `${usageTrendQuery()} | project TimeGenerated, Credits`, 'short', 'yellow'),
     statPanel(5, 'P95 Duration', 18, 3, `${sessionBaseWhere()} | where operation == 'invoke_agent' | summarize P95=percentile(DurationMs, 95) by bin(TimeGenerated, $__interval) | order by TimeGenerated asc`, 'ms', 'green'),
     tablePanel(10, 'Session Explorer', 0, 7, 24, 14, sessionsQuery(200), [
       byNameLinks('Session', [
@@ -266,8 +296,8 @@ function sessionsDashboard() {
       byNameUnit('EstUsd', 'currencyUSD', 4),
       byNameUnit('AICredits', 'short', 2),
     ]),
-    timeseriesPanel(20, 'Sessions by risk', 0, 21, 12, 8, `${sessionBaseWhere()} | summarize Failures=countif(Success == false or isnotempty(error)), DurationMs=max(DurationMs), Credits=sum(todouble(Properties['github.copilot.cost'])) by bin(TimeGenerated, $__interval), conversation | extend Risk=case(Failures > 0, 'failed', Credits * 0.01 >= 1.0, 'expensive', DurationMs >= 30000, 'slow', 'ok') | summarize Sessions=dcount(conversation) by TimeGenerated, Risk | order by TimeGenerated asc`),
-    timeseriesPanel(21, 'Cost and tokens', 12, 21, 12, 8, `${sessionBaseWhere()} | extend Tokens=coalesce(todouble(Properties['gen_ai.usage.input_tokens']), 0.0) + coalesce(todouble(Properties['gen_ai.usage.output_tokens']), 0.0), Credits=todouble(Properties['github.copilot.cost']) | summarize Tokens=sum(Tokens), EstUsd=sum(Credits) * 0.01 by bin(TimeGenerated, $__interval) | order by TimeGenerated asc`),
+    timeseriesPanel(20, 'Sessions by risk', 0, 21, 12, 8, `${sessionBaseWhere()} | extend UsageBin=bin(TimeGenerated, $__interval), ${usageFields()} | summarize Failures=countif(Success == false or isnotempty(error)), DurationMs=max(DurationMs), ${sessionUsageRollup()} by UsageBin, conversation | extend ${extendRecommendedUsage()} | extend Risk=case(Failures > 0, 'failed', AICredits * 0.01 >= 1.0, 'expensive', DurationMs >= 30000, 'slow', 'ok') | summarize Sessions=dcount(conversation) by TimeGenerated=UsageBin, Risk | order by TimeGenerated asc`),
+    timeseriesPanel(21, 'Cost and tokens', 12, 21, 12, 8, usageTrendQuery()),
   ];
   return baseDashboard('agentops-sessions', 'AgentOps Sessions', panels, false);
 }
@@ -277,18 +307,18 @@ function sessionDetailDashboard() {
     textPanel(1, 0, 0, 24, 2, '## Session Detail\nSingle-session investigation: spans, tool waterfall, runtime events, token/cost breakdown, and safety signals.'),
     statPanel(2, 'Spans', 0, 2, `${sessionBaseWhere()} ${sessionFilterPipe()} | summarize Spans=count() by bin(TimeGenerated, $__interval) | order by TimeGenerated asc`),
     statPanel(3, 'Failures', 6, 2, `${sessionBaseWhere()} ${sessionFilterPipe()} | summarize Failures=countif(Success == false or isnotempty(error)) by bin(TimeGenerated, $__interval) | order by TimeGenerated asc`, 'short', 'red'),
-    statPanel(4, 'Tokens', 12, 2, `${sessionBaseWhere()} ${sessionFilterPipe()} | extend Tokens=coalesce(todouble(Properties['gen_ai.usage.input_tokens']), 0.0) + coalesce(todouble(Properties['gen_ai.usage.output_tokens']), 0.0) | summarize Tokens=sum(Tokens) by bin(TimeGenerated, $__interval) | order by TimeGenerated asc`, 'short', 'green'),
-    statPanel(5, 'Est. USD', 18, 2, `${sessionBaseWhere()} ${sessionFilterPipe()} | extend Credits=todouble(Properties['github.copilot.cost']) | summarize EstUsd=sum(Credits) * 0.01 by bin(TimeGenerated, $__interval) | order by TimeGenerated asc`, 'currencyUSD', 'yellow'),
-    tablePanel(10, 'Trace / span timeline', 0, 6, 24, 11, `${sessionBaseWhere()} ${sessionFilterPipe()} | project TimeGenerated, OperationId, ParentId, Id, operation, Name, agent, model, tool, repo, DurationMs, Success, ResultCode, error, Properties | order by TimeGenerated asc`, [
+    statPanel(4, 'Tokens', 12, 2, `${usageTrendQuery(sessionFilterPipe())} | project TimeGenerated, Tokens`, 'short', 'green'),
+    statPanel(5, 'Est. USD', 18, 2, `${usageTrendQuery(sessionFilterPipe())} | project TimeGenerated, EstUsd`, 'currencyUSD', 'yellow'),
+    tablePanel(10, 'Session replay timeline', 0, 6, 24, 13, sessionReplayQuery(), [
       byNameLinks('OperationId', [
         { title: 'Open traces dashboard', url: '/d/agentops-traces-spans?var-conversation=$conversation&var-model=${model}&var-agent=${agent}&var-repo=${repo}&var-tool=${tool}', targetBlank: false },
         { title: 'Open Azure Log Analytics', url: portalLogsUrl, targetBlank: true },
       ]),
       byNameUnit('DurationMs', 'ms', 2),
     ]),
-    timeseriesPanel(20, 'Span duration by operation', 0, 17, 12, 8, `${sessionBaseWhere()} ${sessionFilterPipe()} | summarize DurationMs=avg(DurationMs) by bin(TimeGenerated, $__interval), operation | order by TimeGenerated asc`, 'ms'),
-    tablePanel(21, 'Tool waterfall', 12, 17, 12, 8, `${sessionBaseWhere()} ${sessionFilterPipe()} | where operation == 'execute_tool' or isnotempty(tool) | project TimeGenerated, tool, Name, DurationMs, Success, ResultCode, error | order by TimeGenerated asc`, [byNameUnit('DurationMs', 'ms', 2)]),
-    tablePanel(30, 'Runtime events', 0, 25, 24, 9, `${runtimeBaseWhere()} ${sessionFilterPipe()} | where tostring(Properties) has 'github.copilot.session' or tostring(Properties) has 'github.copilot.skill' or tostring(Properties) has 'github.copilot.hook' or tostring(Properties) has 'github.copilot.tokens_removed' or isnotempty(error) | extend event=coalesce(tostring(Properties['event.name']), tostring(Properties['github.copilot.event.name']), Name), skill=tostring(Properties['github.copilot.skill.name']), hook=tostring(Properties['github.copilot.hook.name']), tokens_removed=toint(Properties['github.copilot.tokens_removed']) | project TimeGenerated, event, operation, agent, model, tool, skill, hook, tokens_removed, error, Message | order by TimeGenerated asc`, [byNameUnit('tokens_removed', 'short')]),
+    timeseriesPanel(20, 'Span duration by operation', 0, 19, 12, 8, `${sessionBaseWhere()} ${sessionFilterPipe()} | summarize DurationMs=avg(DurationMs) by bin(TimeGenerated, $__interval), operation | order by TimeGenerated asc`, 'ms'),
+    tablePanel(21, 'Tool waterfall', 12, 19, 12, 8, `${sessionBaseWhere()} ${sessionFilterPipe()} | where operation == 'execute_tool' or isnotempty(tool) | project TimeGenerated, tool, Name, DurationMs, Success, ResultCode, error | order by TimeGenerated asc`, [byNameUnit('DurationMs', 'ms', 2)]),
+    tablePanel(30, 'Runtime events', 0, 27, 24, 9, `${runtimeBaseWhere()} ${sessionFilterPipe()} | where tostring(Properties) has 'github.copilot.session' or tostring(Properties) has 'github.copilot.skill' or tostring(Properties) has 'github.copilot.hook' or tostring(Properties) has 'github.copilot.tokens_removed' or isnotempty(error) | extend event=coalesce(tostring(Properties['event.name']), tostring(Properties['github.copilot.event.name']), Name), skill=tostring(Properties['github.copilot.skill.name']), hook=tostring(Properties['github.copilot.hook.name']), tokens_removed=toint(Properties['github.copilot.tokens_removed']) | project TimeGenerated, event, operation, agent, model, tool, skill, hook, tokens_removed, error, Message | order by TimeGenerated asc`, [byNameUnit('tokens_removed', 'short')]),
   ];
   return baseDashboard('agentops-session-detail', 'AgentOps Session Detail', panels, true);
 }
@@ -311,6 +341,25 @@ function tracesDashboard() {
   return baseDashboard('agentops-traces-spans', 'AgentOps Traces / Spans', panels, true);
 }
 
+function toolsMcpDashboard() {
+  const panels = [
+    textPanel(1, 0, 0, 24, 2, '## Tools & MCP\nTool calls, failure rates, and likely MCP or extension-provided tools.'),
+    statPanel(2, 'Tool Calls', 0, 2, `${sessionBaseWhere()} | where operation == 'execute_tool' or isnotempty(tool) | summarize Calls=count() by bin(TimeGenerated, $__interval) | order by TimeGenerated asc`),
+    statPanel(3, 'Tool Failures', 6, 2, `${sessionBaseWhere()} | where operation == 'execute_tool' or isnotempty(tool) | summarize Failures=countif(Success == false or isnotempty(error)) by bin(TimeGenerated, $__interval) | order by TimeGenerated asc`, 'short', 'red'),
+    statPanel(4, 'Likely MCP Tools', 12, 2, `${sessionBaseWhere()} | where operation == 'execute_tool' or isnotempty(tool) | where tool !in ('bash','powershell','list_bash','list_powershell','read_bash','read_powershell','stop_bash','stop_powershell','write_bash','write_powershell','apply_patch','create','edit','view','list_agents','read_agent','task','ask_user','glob','grep','rg','skill','web_fetch') and isnotempty(tool) | summarize Tools=dcount(tool) by bin(TimeGenerated, $__interval) | order by TimeGenerated asc`, 'short', 'yellow'),
+    tablePanel(10, 'Tool and MCP usage', 0, 6, 24, 16, kqlFileQuery('16-mcp-tool-usage.kql'), [
+      byNameUnit('failure_pct', 'percent', 1),
+      byNameUnit('p50_duration_ms', 'ms', 2),
+      byNameUnit('p95_duration_ms', 'ms', 2),
+    ]),
+    tablePanel(20, 'Recent tool waterfall', 0, 22, 24, 9, `${sessionBaseWhere()} | where operation == 'execute_tool' or isnotempty(tool) | project TimeGenerated, Session=conversation, tool, model, repo, DurationMs, Success, ResultCode, error | order by TimeGenerated desc | take 300`, [
+      byNameLink('Session', 'Open session detail', '/d/agentops-session-detail?var-conversation=${__data.fields.Session}'),
+      byNameUnit('DurationMs', 'ms', 2),
+    ]),
+  ];
+  return baseDashboard('agentops-tools-mcp', 'AgentOps Tools & MCP', panels, false);
+}
+
 function runtimeEventsDashboard() {
   const panels = [
     textPanel(1, 0, 0, 24, 2, '## Runtime Events\nHooks, skills, compaction/truncation, shutdown, exceptions, and policy decisions.'),
@@ -329,6 +378,20 @@ function runtimeEventsDashboard() {
   return baseDashboard('agentops-runtime-events', 'AgentOps Runtime Events', panels, true);
 }
 
+function safetyPolicyDashboard() {
+  const panels = [
+    textPanel(1, 0, 0, 24, 2, '## Safety & Policy\nPrivacy posture, permission mode, content capture signals, and policy friction.'),
+    statPanel(2, 'Content Capture Signals', 0, 2, `${runtimeBaseWhere()} | where tostring(Properties) has 'gen_ai.input.messages' or tostring(Properties) has 'gen_ai.output.messages' or tostring(Properties) has 'gen_ai.tool.call.arguments' or tostring(Properties) has 'gen_ai.tool.call.result' | summarize Signals=count() by bin(TimeGenerated, $__interval) | order by TimeGenerated asc`, 'short', 'red'),
+    statPanel(3, 'Allow All Sessions', 6, 2, `${sessionBaseWhere()} | summarize AllowAll=max(toint(tostring(Properties['agentops.cli.allow_all']) == 'true')) by conversation, bin(TimeGenerated, $__interval) | summarize Sessions=sum(AllowAll) by TimeGenerated | order by TimeGenerated asc`, 'short', 'red'),
+    statPanel(4, 'Policy Blocks', 12, 2, `${runtimeBaseWhere()} | where tostring(Properties) has 'preToolUse' or Message has 'AgentOps preToolUse policy' | summarize Blocks=count() by bin(TimeGenerated, $__interval) | order by TimeGenerated asc`, 'short', 'yellow'),
+    statPanel(5, 'Remote Enabled', 18, 2, `${sessionBaseWhere()} | where tostring(Properties['agentops.cli.remote']) == 'enabled' | summarize Sessions=dcount(conversation) by bin(TimeGenerated, $__interval) | order by TimeGenerated asc`, 'short', 'blue'),
+    tablePanel(10, 'Governance session review', 0, 6, 24, 17, kqlFileQuery('15-policy-governance.kql'), [
+      byNameLink('session', 'Open session detail', '/d/agentops-session-detail?var-conversation=${__data.fields.session}'),
+    ]),
+  ];
+  return baseDashboard('agentops-safety-policy', 'AgentOps Safety & Policy', panels, false);
+}
+
 function qualityDashboard() {
   const panels = [
     textPanel(1, 0, 0, 24, 2, '## Quality / Optimization\nFind expensive, slow, failing, or risky Copilot CLI sessions and the likely tuning candidates.'),
@@ -342,7 +405,7 @@ function qualityDashboard() {
     ]),
     tablePanel(20, 'Tool failure candidates', 0, 12, 12, 10, `${sessionBaseWhere()} | where operation == 'execute_tool' or isnotempty(tool) | summarize Calls=count(), Failures=countif(Success == false or isnotempty(error)), P95DurationMs=percentile(DurationMs, 95), Sessions=dcount(conversation) by tool, error | extend FailurePct=round(100.0 * Failures / Calls, 1) | where Calls >= 1 | order by FailurePct desc, Failures desc | take 50`, [byNameUnit('FailurePct', 'percent', 1), byNameUnit('P95DurationMs', 'ms', 2)]),
     tablePanel(21, 'Model cost and latency', 12, 12, 12, 10, `${sessionBaseWhere()} | where operation == 'invoke_agent' | extend InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), OutputTokens=todouble(Properties['gen_ai.usage.output_tokens']), Credits=todouble(Properties['github.copilot.cost']) | summarize Runs=count(), Sessions=dcount(conversation), InputTokens=sum(InputTokens), OutputTokens=sum(OutputTokens), EstUsd=sum(Credits) * 0.01, P95DurationMs=percentile(DurationMs, 95), Failures=countif(Success == false or isnotempty(error)) by model | order by EstUsd desc`, [byNameUnit('EstUsd', 'currencyUSD', 4), byNameUnit('P95DurationMs', 'ms', 2)]),
-    tablePanel(30, 'Repo repeated-failure candidates', 0, 22, 24, 9, `${sessionBaseWhere()} | summarize Sessions=dcount(conversation), Spans=count(), Failures=countif(Success == false or isnotempty(error)), EstUsd=sum(todouble(Properties['github.copilot.cost'])) * 0.01, P95DurationMs=percentile(DurationMs, 95), TopErrors=make_set(error, 5) by repo | where isnotempty(repo) | extend FailurePct=round(100.0 * Failures / Spans, 1) | order by Failures desc, EstUsd desc | take 50`, [byNameUnit('EstUsd', 'currencyUSD', 4), byNameUnit('P95DurationMs', 'ms', 2), byNameUnit('FailurePct', 'percent', 1)]),
+    tablePanel(30, 'Repo repeated-failure candidates', 0, 22, 24, 9, `${sessionBaseWhere()} | extend ${usageFields()} | summarize Spans=count(), Failures=countif(Success == false or isnotempty(error)), P95DurationMs=percentile(DurationMs, 95), TopErrors=make_set(error, 5), ${sessionUsageRollup()} by Session=conversation, repo | extend ${extendRecommendedUsage()} | summarize Sessions=dcount(Session), Spans=sum(Spans), Failures=sum(Failures), EstUsd=sum(AICredits) * 0.01, P95DurationMs=percentile(P95DurationMs, 95), TopErrors=make_set(TopErrors, 5) by repo | where isnotempty(repo) | extend FailurePct=round(100.0 * Failures / Spans, 1) | order by Failures desc, EstUsd desc | take 50`, [byNameUnit('EstUsd', 'currencyUSD', 4), byNameUnit('P95DurationMs', 'ms', 2), byNameUnit('FailurePct', 'percent', 1)]),
     tablePanel(40, 'Workflow funnel risks', 0, 31, 24, 8, workflowRiskQuery()),
     tablePanel(41, 'Context pressure sessions', 0, 39, 24, 10, contextPressureSessionsQuery(100), [
       byNameLink('Session', 'Open session detail', '/d/agentops-session-detail?var-conversation=${__data.fields.Session}'),
@@ -364,12 +427,90 @@ function qualityDashboard() {
   return baseDashboard('agentops-quality', 'AgentOps Quality', panels, false);
 }
 
+function dataQualityDashboard() {
+  const panels = [
+    textPanel(1, 0, 0, 24, 2, '## Data Quality\nField discovery and token rollup checks for validating dashboard assumptions against real Copilot CLI telemetry.'),
+    tablePanel(10, 'Token rollup audit', 0, 2, 24, 13, fs.readFileSync(path.join(repoRoot, 'kql', '13-token-rollup-audit.kql'), 'utf8'), [
+      byNameUnit('TokenOvercountRatio', 'short', 2),
+    ]),
+    tablePanel(20, 'Observed property fields', 0, 15, 24, 14, `AppDependencies | where $__timeFilter(TimeGenerated) | where ${baseFilter} | extend fields = bag_keys(Properties) | mv-expand field = fields to typeof(string) | extend value = tostring(Properties[field]) | summarize observed=count(), example_values=make_set_if(value, isnotempty(value), 5) by field | order by observed desc, field asc`),
+  ];
+  return baseDashboard('agentops-data-quality', 'AgentOps Data Quality', panels, false);
+}
+
+function benchmarkVariables() {
+  const benchmarkFilter = `Properties has 'agentops.benchmark' or Properties has 'agentops.hypothesis.id'`;
+  return {
+    list: [
+      constantVariable('workspaceResource', workspaceResource),
+      queryVariable('benchmark_suite', 'Suite', `AppDependencies | where TimeGenerated > ago(14d) | where ${baseFilter} | where ${benchmarkFilter} | extend suite=tostring(Properties['agentops.benchmark.suite']) | where isnotempty(suite) | distinct suite | order by suite asc`),
+      queryVariable('benchmark_task', 'Task', `AppDependencies | where TimeGenerated > ago(14d) | where ${baseFilter} | where ${benchmarkFilter} | extend task_id=tostring(Properties['agentops.benchmark.task_id']) | where isnotempty(task_id) | distinct task_id | order by task_id asc`),
+      queryVariable('benchmark_variant', 'Variant', `AppDependencies | where TimeGenerated > ago(14d) | where ${baseFilter} | where ${benchmarkFilter} | extend variant=tostring(Properties['agentops.benchmark.variant']) | where isnotempty(variant) | distinct variant | order by variant asc`),
+      queryVariable('benchmark_run', 'Run', `AppDependencies | where TimeGenerated > ago(14d) | where ${baseFilter} | where ${benchmarkFilter} | extend run_id=tostring(Properties['agentops.benchmark.run_id']) | where isnotempty(run_id) | distinct run_id | order by run_id desc`),
+      queryVariable('hypothesis', 'Hypothesis', `AppDependencies | where TimeGenerated > ago(14d) | where ${baseFilter} | where ${benchmarkFilter} | extend hypothesis_id=tostring(Properties['agentops.hypothesis.id']) | where isnotempty(hypothesis_id) | distinct hypothesis_id | order by hypothesis_id asc`),
+    ],
+  };
+}
+
+function benchmarkBaseWhere() {
+  return `AppDependencies | where $__timeFilter(TimeGenerated) | where ${baseFilter} | extend suite=tostring(Properties['agentops.benchmark.suite']), task_id=tostring(Properties['agentops.benchmark.task_id']), variant=tostring(Properties['agentops.benchmark.variant']), run_id=tostring(Properties['agentops.benchmark.run_id']), hypothesis_id=tostring(Properties['agentops.hypothesis.id']), operation=tostring(Properties['gen_ai.operation.name']), conversation=${sessionKey}, tool=tostring(Properties['gen_ai.tool.name']), error=tostring(Properties['error.type']) | where isnotempty(suite) or isnotempty(task_id) or isnotempty(variant) or isnotempty(run_id) or isnotempty(hypothesis_id) | where ('$benchmark_suite' == '$__all' or suite in (${'${benchmark_suite:singlequote}'})) | where ('$benchmark_task' == '$__all' or task_id in (${'${benchmark_task:singlequote}'})) | where ('$benchmark_variant' == '$__all' or variant in (${'${benchmark_variant:singlequote}'})) | where ('$benchmark_run' == '$__all' or run_id in (${'${benchmark_run:singlequote}'})) | where ('$hypothesis' == '$__all' or hypothesis_id in (${'${hypothesis:singlequote}'})) | extend Score=coalesce(todouble(Properties['agentops.benchmark.score']), todouble(Properties['agentops.eval.score']), todouble(Properties['agentops.score']), todouble(Properties['score'])), Passed=coalesce(tobool(Properties['agentops.benchmark.passed']), tobool(Properties['agentops.eval.passed']), Success), InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), OutputTokens=todouble(Properties['gen_ai.usage.output_tokens']), AICredits=todouble(Properties['github.copilot.cost']), EstUsd=todouble(Properties['github.copilot.cost']) * 0.01, Regression=coalesce(tobool(Properties['agentops.benchmark.regression']), tobool(Properties['agentops.regression'])), SafetyIssue=iff(tostring(Properties['agentops.safety.issue']) != '' or tostring(Properties['agentops.policy.blocked']) == 'true' or tostring(Properties) has 'content_filter' or tostring(Properties) has 'safety', true, false), FailureReason=coalesce(error, tostring(Properties['agentops.benchmark.failure_reason']), tostring(Properties['agentops.eval.failure_reason']), ResultCode)`;
+}
+
+function benchmarkRollupQuery() {
+  return `${benchmarkBaseWhere()} | summarize Started=min(TimeGenerated), Ended=max(TimeGenerated), Spans=count(), Sessions=dcount(conversation), Runs=dcount(run_id), ToolCalls=countif(operation == 'execute_tool' or isnotempty(tool)), ToolFailures=countif((operation == 'execute_tool' or isnotempty(tool)) and (Success == false or isnotempty(error))), Failures=countif(Success == false or isnotempty(error)), PassSamples=countif(isnotnull(Passed)), Passes=countif(Passed == true), ScoreSamples=countif(isnotnull(Score)), AverageScore=avg(Score), InputTokens=sum(InputTokens), OutputTokens=sum(OutputTokens), EstUsd=sum(EstUsd), SafetyIssues=countif(SafetyIssue), ExplicitRegressions=countif(Regression == true), FailureReasons=make_set_if(FailureReason, isnotempty(FailureReason), 10) by suite, task_id, hypothesis_id, variant, run_id | extend TokenUse=coalesce(InputTokens, 0.0) + coalesce(OutputTokens, 0.0), PassRate=iff(PassSamples > 0, round(100.0 * Passes / PassSamples, 1), real(null))`;
+}
+
+function benchmarkHelpQuery() {
+  return `let variants = ${benchmarkRollupQuery()}; let baseline = variants | where tolower(variant) in ('baseline', 'control', 'main', 'default') | summarize BaselineScore=avg(AverageScore), BaselinePassRate=avg(PassRate), BaselineToolFailures=sum(ToolFailures), BaselineCost=avg(EstUsd), BaselineTokenUse=avg(TokenUse) by suite, task_id, hypothesis_id; variants | join kind=leftouter baseline on suite, task_id, hypothesis_id | where isempty(variant) or tolower(variant) !in ('baseline', 'control', 'main', 'default') | extend ScoreDelta=round(AverageScore - BaselineScore, 3), PassRateDelta=round(PassRate - BaselinePassRate, 1), CostDelta=round(EstUsd - BaselineCost, 4), TokenDelta=round(TokenUse - BaselineTokenUse, 0) | extend Verdict=case(isnotnull(ScoreDelta) and ScoreDelta > 0, 'helped', isnotnull(ScoreDelta) and ScoreDelta < 0, 'regressed', isnotnull(PassRateDelta) and PassRateDelta > 0, 'helped', isnotnull(PassRateDelta) and PassRateDelta < 0, 'regressed', ToolFailures < BaselineToolFailures, 'helped', ToolFailures > BaselineToolFailures, 'regressed', isnotnull(BaselineScore) or isnotnull(BaselinePassRate), 'flat', 'needs_score') | project suite, task_id, hypothesis_id, variant, run_id, Verdict, PassRate, PassRateDelta, AverageScore, ScoreDelta, ToolFailures, SafetyIssues, ExplicitRegressions, TokenUse, TokenDelta, EstUsd, CostDelta, Spans, Sessions, Runs, Started, Ended | order by suite asc, task_id asc, hypothesis_id asc, Verdict asc, ScoreDelta desc, PassRateDelta desc`;
+}
+
+function benchmarkRegressionsQuery() {
+  return `let variants = ${benchmarkRollupQuery()}; let baseline = variants | where tolower(variant) in ('baseline', 'control', 'main', 'default') | summarize BaselineScore=avg(AverageScore), BaselinePassRate=avg(PassRate), BaselineToolFailures=sum(ToolFailures), BaselineCost=avg(EstUsd), BaselineTokenUse=avg(TokenUse) by suite, task_id, hypothesis_id; variants | join kind=leftouter baseline on suite, task_id, hypothesis_id | extend ScoreDelta=round(AverageScore - BaselineScore, 3), PassRateDelta=round(PassRate - BaselinePassRate, 1), CostDelta=round(EstUsd - BaselineCost, 4), TokenDelta=round(TokenUse - BaselineTokenUse, 0) | where ExplicitRegressions > 0 or ScoreDelta < 0 or PassRateDelta < 0 or ToolFailures > BaselineToolFailures | project suite, task_id, hypothesis_id, variant, run_id, ExplicitRegressions, PassRate, PassRateDelta, AverageScore, ScoreDelta, ToolFailures, BaselineToolFailures, TokenUse, TokenDelta, EstUsd, CostDelta, FailureReasons | order by ExplicitRegressions desc, ScoreDelta asc, PassRateDelta asc, ToolFailures desc`;
+}
+
+function experimentsDashboard() {
+  const panels = [
+    tablePanel(1, 'Did the change help?', 0, 0, 24, 9, benchmarkHelpQuery(), [
+      byNameUnit('PassRate', 'percent', 1),
+      byNameUnit('PassRateDelta', 'percent', 1),
+      byNameUnit('AverageScore', 'short', 3),
+      byNameUnit('ScoreDelta', 'short', 3),
+      byNameUnit('TokenUse', 'short', 0),
+      byNameUnit('TokenDelta', 'short', 0),
+      byNameUnit('EstUsd', 'currencyUSD', 4),
+      byNameUnit('CostDelta', 'currencyUSD', 4),
+    ]),
+    statPanel(2, 'Pass rate', 0, 9, `${benchmarkBaseWhere()} | summarize Samples=countif(isnotnull(Passed)), Passes=countif(Passed == true) by TimeGenerated=bin(TimeGenerated, $__interval), variant | extend PassRate=iff(Samples > 0, 100.0 * Passes / Samples, real(null)) | project TimeGenerated, variant, PassRate | order by TimeGenerated asc`, 'percent', 'green'),
+    statPanel(3, 'Average score', 6, 9, `${benchmarkBaseWhere()} | summarize AverageScore=avg(Score) by TimeGenerated=bin(TimeGenerated, $__interval), variant | order by TimeGenerated asc`, 'short', 'blue'),
+    statPanel(4, 'Tool failures', 12, 9, `${benchmarkBaseWhere()} | where operation == 'execute_tool' or isnotempty(tool) | summarize ToolFailures=countif(Success == false or isnotempty(error)) by TimeGenerated=bin(TimeGenerated, $__interval), variant | order by TimeGenerated asc`, 'short', 'red'),
+    statPanel(5, 'Token use', 18, 9, `${benchmarkBaseWhere()} | summarize TokenUse=sum(coalesce(InputTokens, 0.0) + coalesce(OutputTokens, 0.0)) by TimeGenerated=bin(TimeGenerated, $__interval), variant | order by TimeGenerated asc`, 'short', 'yellow'),
+    statPanel(6, 'Cost', 0, 13, `${benchmarkBaseWhere()} | summarize Cost=sum(EstUsd) by TimeGenerated=bin(TimeGenerated, $__interval), variant | order by TimeGenerated asc`, 'currencyUSD', 'yellow'),
+    statPanel(7, 'Safety issues', 6, 13, `${benchmarkBaseWhere()} | summarize SafetyIssues=countif(SafetyIssue) by TimeGenerated=bin(TimeGenerated, $__interval), variant | order by TimeGenerated asc`, 'short', 'red'),
+    tablePanel(8, 'Regressions', 12, 13, 12, 10, benchmarkRegressionsQuery(), [
+      byNameUnit('PassRate', 'percent', 1),
+      byNameUnit('PassRateDelta', 'percent', 1),
+      byNameUnit('AverageScore', 'short', 3),
+      byNameUnit('ScoreDelta', 'short', 3),
+      byNameUnit('EstUsd', 'currencyUSD', 4),
+      byNameUnit('CostDelta', 'currencyUSD', 4),
+    ]),
+    tablePanel(9, 'Top failure reasons', 0, 23, 24, 10, `${benchmarkBaseWhere()} | where Success == false or isnotempty(error) or isnotempty(FailureReason) | summarize Failures=count(), Runs=dcount(run_id), Sessions=dcount(conversation), Examples=make_set(Name, 5), LastSeen=max(TimeGenerated) by suite, task_id, hypothesis_id, variant, FailureReason | order by Failures desc, LastSeen desc | take 100`),
+  ];
+  const dashboard = baseDashboard('agentops-experiments', 'AgentOps Experiments', panels, false);
+  dashboard.templating = benchmarkVariables();
+  return dashboard;
+}
+
 const dashboards = {
   'agentops-sessions.json': sessionsDashboard(),
   'agentops-session-detail.json': sessionDetailDashboard(),
   'agentops-traces-spans.json': tracesDashboard(),
+  'agentops-tools-mcp.json': toolsMcpDashboard(),
   'agentops-runtime-events.json': runtimeEventsDashboard(),
+  'agentops-safety-policy.json': safetyPolicyDashboard(),
   'agentops-quality.json': qualityDashboard(),
+  'agentops-experiments.json': experimentsDashboard(),
+  'agentops-data-quality.json': dataQualityDashboard(),
 };
 
 for (const [fileName, dashboard] of Object.entries(dashboards)) {

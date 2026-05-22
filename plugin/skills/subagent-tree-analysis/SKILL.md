@@ -17,3 +17,14 @@ Procedure:
 4. Compute fanout count, max depth, parallelism window, subagent failure rate, tool failures, tokens, and output value proxies.
 5. Flag repeated exploration, excessive fanout, overlapping work, broad tools, truncation, and missing recovery hints.
 6. Recommend architecture changes with validation metrics.
+
+Every recommendation must include:
+
+- Evidence query or Grafana dashboard link.
+- Observed failure, cost, or safety pattern.
+- Proposed file(s) to change.
+- Expected metric movement.
+- Validation benchmark or query.
+- Rollback condition.
+
+Do not auto-remediate by default. Do not require prompt/content capture, and keep MCP read-only unless explicitly approved.

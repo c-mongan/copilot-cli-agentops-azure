@@ -197,10 +197,12 @@ AgentOps already has custom agents. The next level is to make the telemetry inve
 Recommended MVP:
 
 - Add prompt templates for:
-  - investigate this session
-  - explain this tool failure
-  - tune this alert
-  - compare this model against alternatives
+  - investigate latest session
+  - explain tool failure
+  - compare benchmark variants
+  - propose agent improvement
+  - tune hook policy
+  - find MCP/tool regressions
 - Each template should include the Grafana URL, conversation id, time range, and starter KQL.
 - Add copyable prompt panels or README snippets.
 

@@ -29,3 +29,14 @@ Rules:
 7. Never add `tools: ["*"]` unless explicitly approved.
 8. Never enable content capture.
 9. Always include a before/after validation query.
+
+Every recommendation must include:
+
+- Evidence query or Grafana dashboard link.
+- Observed failure, cost, or safety pattern.
+- Proposed file(s) to change.
+- Expected metric movement.
+- Validation benchmark or query.
+- Rollback condition.
+
+Do not auto-remediate by default. Propose the patch first unless the user explicitly asks for edits. Keep MCP read-only unless the user explicitly approves broader access.

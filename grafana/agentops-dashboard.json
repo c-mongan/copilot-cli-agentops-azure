@@ -8,6 +8,13 @@
   "id": null,
   "links": [
     {
+      "title": "Experiments",
+      "url": "/d/agentops-experiments",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
       "title": "Azure Portal — Log Analytics",
       "url": "https://portal.azure.com/#@/resource/subscriptions/0222a208-955a-45fd-b6d8-ca4704421bf0/resourceGroups/rg-copilot-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-copilot-agentops-dev",
       "type": "link",

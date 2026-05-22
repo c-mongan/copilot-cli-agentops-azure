@@ -15,8 +15,209 @@ commit="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
 agentops_version="${AGENTOPS_PACK_VERSION:-0.1.0}"
 profile="${AGENTOPS_PROFILE:-safe-default}"
 experiment="${AGENTOPS_EXPERIMENT:-baseline}"
+cli_mode="interactive"
+cli_model="${COPILOT_MODEL:-}"
+cli_remote="default"
+cli_output_format="text"
+cli_agent=""
+cli_effort=""
+cli_stream=""
+allow_all="false"
+acp_enabled="false"
+cwd_changed="false"
+session_id_provided="false"
+share_enabled="false"
+share_gist_enabled="false"
+allow_tool_count=0
+deny_tool_count=0
+available_tool_count=0
+excluded_tool_count=0
+secret_env_count=0
+attachment_count=0
+plugin_dir_count=0
+additional_mcp_config_count=0
+disabled_mcp_server_count=0
+github_mcp_tool_count=0
+github_mcp_toolset_count=0
+copilot_args=("$@")
 
-agentops_resource_attributes="service.namespace=copilot-agentops,service.name=github-copilot-cli,agent.framework=github-copilot,agent.runtime=github-copilot-cli,agentops.profile=${profile},agentops.experiment=${experiment},agentops.pack.version=${agentops_version},agentops.repo.hash=${repo_hash},git.branch=${branch},git.commit=${commit}"
+while [[ $# -gt 0 ]]; do
+	case "$1" in
+		--mode=*)
+			cli_mode="${1#--mode=}"
+			;;
+		--mode)
+			[[ $# -gt 1 ]] && cli_mode="$2"
+			shift
+			;;
+		--plan)
+			cli_mode="plan"
+			;;
+		--autopilot)
+			cli_mode="autopilot"
+			;;
+		--model=*)
+			cli_model="${1#--model=}"
+			;;
+		--model)
+			[[ $# -gt 1 ]] && cli_model="$2"
+			shift
+			;;
+		--effort=*|--reasoning-effort=*)
+			cli_effort="${1#*=}"
+			;;
+		--effort|--reasoning-effort)
+			[[ $# -gt 1 ]] && cli_effort="$2"
+			shift
+			;;
+		--output-format=*)
+			cli_output_format="${1#--output-format=}"
+			;;
+		--output-format)
+			[[ $# -gt 1 ]] && cli_output_format="$2"
+			shift
+			;;
+		--remote)
+			cli_remote="enabled"
+			;;
+		--no-remote)
+			cli_remote="disabled"
+			;;
+		--agent=*)
+			cli_agent="${1#--agent=}"
+			;;
+		--agent)
+			[[ $# -gt 1 ]] && cli_agent="$2"
+			shift
+			;;
+		--stream=*)
+			cli_stream="${1#--stream=}"
+			;;
+		--stream)
+			[[ $# -gt 1 ]] && cli_stream="$2"
+			shift
+			;;
+		--acp)
+			acp_enabled="true"
+			;;
+		-C)
+			cwd_changed="true"
+			[[ $# -gt 1 && "$2" != -* ]] && shift
+			;;
+		--session-id|--session-id=*)
+			session_id_provided="true"
+			[[ "$1" == "--session-id" && $# -gt 1 && "$2" != -* ]] && shift
+			;;
+		--share|--share=*)
+			share_enabled="true"
+			[[ "$1" == "--share" && $# -gt 1 && "$2" != -* ]] && shift
+			;;
+		--share-gist)
+			share_gist_enabled="true"
+			;;
+		--attachment=*)
+			attachment_count=$((attachment_count + 1))
+			;;
+		--attachment)
+			attachment_count=$((attachment_count + 1))
+			[[ $# -gt 1 && "$2" != -* ]] && shift
+			;;
+		--plugin-dir=*)
+			plugin_dir_count=$((plugin_dir_count + 1))
+			;;
+		--plugin-dir)
+			plugin_dir_count=$((plugin_dir_count + 1))
+			[[ $# -gt 1 && "$2" != -* ]] && shift
+			;;
+		--additional-mcp-config=*)
+			additional_mcp_config_count=$((additional_mcp_config_count + 1))
+			;;
+		--additional-mcp-config)
+			additional_mcp_config_count=$((additional_mcp_config_count + 1))
+			[[ $# -gt 1 && "$2" != -* ]] && shift
+			;;
+		--disable-mcp-server=*)
+			disabled_mcp_server_count=$((disabled_mcp_server_count + 1))
+			;;
+		--disable-mcp-server)
+			disabled_mcp_server_count=$((disabled_mcp_server_count + 1))
+			[[ $# -gt 1 && "$2" != -* ]] && shift
+			;;
+		--add-github-mcp-tool=*)
+			github_mcp_tool_count=$((github_mcp_tool_count + 1))
+			;;
+		--add-github-mcp-tool)
+			github_mcp_tool_count=$((github_mcp_tool_count + 1))
+			[[ $# -gt 1 && "$2" != -* ]] && shift
+			;;
+		--add-github-mcp-toolset=*)
+			github_mcp_toolset_count=$((github_mcp_toolset_count + 1))
+			;;
+		--add-github-mcp-toolset)
+			github_mcp_toolset_count=$((github_mcp_toolset_count + 1))
+			[[ $# -gt 1 && "$2" != -* ]] && shift
+			;;
+		--enable-all-github-mcp-tools)
+			github_mcp_tool_count=$((github_mcp_tool_count + 1))
+			;;
+		--disable-builtin-mcps)
+			disabled_mcp_server_count=$((disabled_mcp_server_count + 1))
+			;;
+		--allow-all|--yolo|--allow-all-tools|--allow-all-paths|--allow-all-urls)
+			allow_all="true"
+			;;
+		--allow-tool=*|--allow-url=*)
+			allow_tool_count=$((allow_tool_count + 1))
+			;;
+		--allow-tool|--allow-url)
+			allow_tool_count=$((allow_tool_count + 1))
+			[[ $# -gt 1 && "$2" != -* ]] && shift
+			;;
+		--deny-tool=*|--deny-url=*)
+			deny_tool_count=$((deny_tool_count + 1))
+			;;
+		--deny-tool|--deny-url)
+			deny_tool_count=$((deny_tool_count + 1))
+			[[ $# -gt 1 && "$2" != -* ]] && shift
+			;;
+		--available-tools=*)
+			available_tool_count=$((available_tool_count + 1))
+			;;
+		--available-tools)
+			available_tool_count=$((available_tool_count + 1))
+			[[ $# -gt 1 && "$2" != -* ]] && shift
+			;;
+		--excluded-tools=*)
+			excluded_tool_count=$((excluded_tool_count + 1))
+			;;
+		--excluded-tools)
+			excluded_tool_count=$((excluded_tool_count + 1))
+			[[ $# -gt 1 && "$2" != -* ]] && shift
+			;;
+		--secret-env-vars=*)
+			secret_env_count=$((secret_env_count + 1))
+			;;
+		--secret-env-vars)
+			secret_env_count=$((secret_env_count + 1))
+			[[ $# -gt 1 && "$2" != -* ]] && shift
+			;;
+	esac
+	shift
+done
+
+agentops_resource_attributes="service.namespace=copilot-agentops,service.name=github-copilot-cli,agent.framework=github-copilot,agent.runtime=github-copilot-cli,agentops.profile=${profile},agentops.experiment=${experiment},agentops.pack.version=${agentops_version},agentops.repo.hash=${repo_hash},git.branch=${branch},git.commit=${commit},agentops.cli.mode=${cli_mode},agentops.cli.remote=${cli_remote},agentops.cli.output_format=${cli_output_format},agentops.cli.allow_all=${allow_all},agentops.cli.acp=${acp_enabled},agentops.cli.cwd_changed=${cwd_changed},agentops.cli.session_id_provided=${session_id_provided},agentops.cli.share=${share_enabled},agentops.cli.share_gist=${share_gist_enabled},agentops.cli.allow_tool.count=${allow_tool_count},agentops.cli.deny_tool.count=${deny_tool_count},agentops.cli.available_tools.count=${available_tool_count},agentops.cli.excluded_tools.count=${excluded_tool_count},agentops.cli.secret_env_vars.count=${secret_env_count},agentops.cli.attachment.count=${attachment_count},agentops.cli.plugin_dir.count=${plugin_dir_count},agentops.cli.additional_mcp_config.count=${additional_mcp_config_count},agentops.cli.disabled_mcp_server.count=${disabled_mcp_server_count},agentops.cli.github_mcp_tool.count=${github_mcp_tool_count},agentops.cli.github_mcp_toolset.count=${github_mcp_toolset_count}"
+if [[ -n "${cli_model}" ]]; then
+	agentops_resource_attributes="${agentops_resource_attributes},agentops.cli.model=${cli_model}"
+fi
+if [[ -n "${cli_agent}" ]]; then
+	agentops_resource_attributes="${agentops_resource_attributes},agentops.cli.agent=${cli_agent}"
+fi
+if [[ -n "${cli_effort}" ]]; then
+	agentops_resource_attributes="${agentops_resource_attributes},agentops.cli.reasoning_effort=${cli_effort}"
+fi
+if [[ -n "${cli_stream}" ]]; then
+	agentops_resource_attributes="${agentops_resource_attributes},agentops.cli.stream=${cli_stream}"
+fi
 if [[ -n "${OTEL_RESOURCE_ATTRIBUTES:-}" ]]; then
 	export OTEL_RESOURCE_ATTRIBUTES="${agentops_resource_attributes},${OTEL_RESOURCE_ATTRIBUTES}"
 else
@@ -24,4 +225,4 @@ else
 fi
 
 copilot_bin="${COPILOT_CLI_BIN:-copilot}"
-exec "$copilot_bin" "$@"
+exec "$copilot_bin" "${copilot_args[@]}"

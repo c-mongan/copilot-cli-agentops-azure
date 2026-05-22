@@ -6,8 +6,11 @@ AppDependencies
 | where TimeGenerated > ago(lookback)
 | where Properties has "github.copilot" and Properties has "github-copilot-cli"
 | extend
-    conversation = coalesce(
+    conversation = case(
+        isnotempty(tostring(Properties["gen_ai.conversation.id"])),
         tostring(Properties["gen_ai.conversation.id"]),
+        isnotempty(tostring(Properties["github.copilot.interaction_id"])),
+        tostring(Properties["github.copilot.interaction_id"]),
         strcat(
             tostring(Properties["gen_ai.agent.id"]),
             "_",
@@ -36,19 +39,33 @@ base
     spans = count(),
     runs = countif(operation == "invoke_agent"),
     failures = countif(Success == false or isnotempty(error)),
-    input_tokens = sum(input_tokens),
-    output_tokens = sum(output_tokens),
-    cache_read_tokens = sum(cache_read_tokens),
-    cache_write_tokens = sum(cache_write_tokens),
-    credits = sum(credits),
-    aiu = sum(aiu),
+    chat_spans = countif(operation == "chat"),
+    chat_input_tokens = sumif(input_tokens, operation == "chat"),
+    chat_output_tokens = sumif(output_tokens, operation == "chat"),
+    chat_cache_read_tokens = sumif(cache_read_tokens, operation == "chat"),
+    chat_cache_write_tokens = sumif(cache_write_tokens, operation == "chat"),
+    chat_credits = sumif(credits, operation == "chat"),
+    chat_aiu = sumif(aiu, operation == "chat"),
+    agent_input_tokens = maxif(input_tokens, operation == "invoke_agent"),
+    agent_output_tokens = maxif(output_tokens, operation == "invoke_agent"),
+    agent_cache_read_tokens = maxif(cache_read_tokens, operation == "invoke_agent"),
+    agent_cache_write_tokens = maxif(cache_write_tokens, operation == "invoke_agent"),
+    agent_credits = maxif(credits, operation == "invoke_agent"),
+    agent_aiu = maxif(aiu, operation == "invoke_agent"),
     p95_duration_ms = percentile(DurationMs, 95),
     models = make_set(model, 5),
     agents = make_set(agent, 5),
     tools = make_set_if(tool, isnotempty(tool), 10),
     repos = make_set_if(repo, isnotempty(repo), 3),
     errors = make_set_if(error, isnotempty(error), 10)
-  by conversation;
+  by conversation
+| extend
+    input_tokens = iff(chat_spans > 0, chat_input_tokens, agent_input_tokens),
+    output_tokens = iff(chat_spans > 0, chat_output_tokens, agent_output_tokens),
+    cache_read_tokens = iff(chat_spans > 0, chat_cache_read_tokens, agent_cache_read_tokens),
+    cache_write_tokens = iff(chat_spans > 0, chat_cache_write_tokens, agent_cache_write_tokens),
+    credits = iff(chat_spans > 0, chat_credits, agent_credits),
+    aiu = iff(chat_spans > 0, chat_aiu, agent_aiu);
 sessions
 | extend
     fresh_input_tokens = iff(input_tokens - cache_read_tokens - cache_write_tokens < 0, 0.0, input_tokens - cache_read_tokens - cache_write_tokens),

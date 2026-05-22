@@ -7,7 +7,19 @@ AppDependencies
     agent_id=tostring(Properties["gen_ai.agent.id"]),
     agent_name=tostring(Properties["gen_ai.agent.name"]),
     model=tostring(Properties["gen_ai.request.model"]),
-    conversation=tostring(Properties["gen_ai.conversation.id"]),
+    conversation=case(
+        isnotempty(tostring(Properties["gen_ai.conversation.id"])),
+        tostring(Properties["gen_ai.conversation.id"]),
+        isnotempty(tostring(Properties["github.copilot.interaction_id"])),
+        tostring(Properties["github.copilot.interaction_id"]),
+        strcat(
+            tostring(Properties["gen_ai.agent.id"]),
+            "_",
+            tostring(Properties["github.copilot.turn_count"]),
+            "_",
+            format_datetime(bin(TimeGenerated, 1h), "yyyyMMdd_HHmm")
+        )
+    ),
     tool=tostring(Properties["gen_ai.tool.name"]),
     error=tostring(Properties["error.type"]),
     repo_hash=tostring(Properties["agentops.repo.hash"])

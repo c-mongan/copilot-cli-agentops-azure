@@ -49,8 +49,12 @@ else
     "${REPO_ROOT}/grafana/agentops-sessions.json"
     "${REPO_ROOT}/grafana/agentops-session-detail.json"
     "${REPO_ROOT}/grafana/agentops-traces-spans.json"
+    "${REPO_ROOT}/grafana/agentops-tools-mcp.json"
     "${REPO_ROOT}/grafana/agentops-runtime-events.json"
+    "${REPO_ROOT}/grafana/agentops-safety-policy.json"
     "${REPO_ROOT}/grafana/agentops-quality.json"
+    "${REPO_ROOT}/grafana/agentops-experiments.json"
+    "${REPO_ROOT}/grafana/agentops-data-quality.json"
   )
 fi
 

@@ -1,0 +1,82 @@
+// Token rollup audit for Copilot CLI AgentOps.
+// Copilot emits aggregate usage on invoke_agent spans and per-turn usage on chat spans.
+// Use this before changing dashboard token panels so sessions do not double-count parent and child spans.
+let lookback = 14d;
+let base =
+AppDependencies
+| where TimeGenerated > ago(lookback)
+| where Properties has "github.copilot" and Properties has "github-copilot-cli"
+| extend
+    conversation = case(
+        isnotempty(tostring(Properties["gen_ai.conversation.id"])),
+        tostring(Properties["gen_ai.conversation.id"]),
+        isnotempty(tostring(Properties["github.copilot.interaction_id"])),
+        tostring(Properties["github.copilot.interaction_id"]),
+        strcat(
+            tostring(Properties["gen_ai.agent.id"]),
+            "_",
+            tostring(Properties["github.copilot.turn_count"]),
+            "_",
+            format_datetime(bin(TimeGenerated, 1h), "yyyyMMdd_HHmm")
+        )
+    ),
+    operation = tostring(Properties["gen_ai.operation.name"]),
+    model = tostring(Properties["gen_ai.request.model"]),
+    agent = tostring(Properties["gen_ai.agent.name"]),
+    input_tokens = todouble(Properties["gen_ai.usage.input_tokens"]),
+    output_tokens = todouble(Properties["gen_ai.usage.output_tokens"]),
+    credits = todouble(Properties["github.copilot.cost"]),
+    aiu = todouble(Properties["github.copilot.aiu"]);
+base
+| summarize
+    started = min(TimeGenerated),
+    ended = max(TimeGenerated),
+    spans = count(),
+    chat_spans = countif(operation == "chat"),
+    agent_spans = countif(operation == "invoke_agent"),
+    all_span_input_tokens = sum(input_tokens),
+    all_span_output_tokens = sum(output_tokens),
+    chat_input_tokens = sumif(input_tokens, operation == "chat"),
+    chat_output_tokens = sumif(output_tokens, operation == "chat"),
+    agent_input_tokens = maxif(input_tokens, operation == "invoke_agent"),
+    agent_output_tokens = maxif(output_tokens, operation == "invoke_agent"),
+    chat_credits = sumif(credits, operation == "chat"),
+    agent_credits = maxif(credits, operation == "invoke_agent"),
+    chat_aiu = sumif(aiu, operation == "chat"),
+    agent_aiu = maxif(aiu, operation == "invoke_agent"),
+    models = make_set(model, 5),
+    agents = make_set(agent, 5)
+  by session = conversation
+| extend
+    recommended_input_tokens = iff(chat_spans > 0, chat_input_tokens, agent_input_tokens),
+    recommended_output_tokens = iff(chat_spans > 0, chat_output_tokens, agent_output_tokens),
+    recommended_credits = iff(chat_spans > 0, chat_credits, agent_credits),
+    recommended_aiu = iff(chat_spans > 0, chat_aiu, agent_aiu)
+| extend
+    token_overcount_ratio = iff(recommended_input_tokens > 0, round(all_span_input_tokens / recommended_input_tokens, 2), 0.0),
+    rollup_mode = iff(chat_spans > 0, "chat_spans", "invoke_agent_fallback"),
+    needs_review = all_span_input_tokens > recommended_input_tokens * 1.25
+| project
+    started,
+    ended,
+    session,
+    rollup_mode,
+    needs_review,
+    token_overcount_ratio,
+    all_span_input_tokens,
+    recommended_input_tokens,
+    agent_input_tokens,
+    chat_input_tokens,
+    all_span_output_tokens,
+    recommended_output_tokens,
+    agent_output_tokens,
+    chat_output_tokens,
+    recommended_credits,
+    recommended_aiu,
+    spans,
+    chat_spans,
+    agent_spans,
+    models,
+    agents
+| order by needs_review desc, token_overcount_ratio desc, all_span_input_tokens desc
+| take 100

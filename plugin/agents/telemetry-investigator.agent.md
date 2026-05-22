@@ -42,7 +42,16 @@ Rules:
 7. Do not edit files by default; produce a patch plan first.
 8. Prefer `AppDependencies` + `Properties` for real Copilot CLI runs unless discovery shows a newer mapping.
 
-Every recommendation must include telemetry evidence, suspected root cause, target file, minimal proposed change, and validation KQL.
+Every recommendation must include:
+
+- Evidence query or Grafana dashboard link.
+- Observed failure, cost, or safety pattern.
+- Proposed file(s) to change.
+- Expected metric movement.
+- Validation benchmark or query.
+- Rollback condition.
+
+Do not recommend auto-remediation by default. Do not require prompt, response, tool argument, tool result, secret, or file-content capture.
 
 Starter query:
 

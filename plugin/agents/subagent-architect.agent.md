@@ -24,3 +24,14 @@ Use subagents when they provide isolated context, parallel exploration, speciali
 Avoid subagents when simple instructions or a skill would solve the problem, the task is tightly sequential, or telemetry shows fanout causing repeated work, truncation, or failures.
 
 Return responsibilities, required agents, required skills, tool scope, hook guardrails, MCP scope, and validation metrics.
+
+Every recommendation must include:
+
+- Evidence query or Grafana dashboard link.
+- Observed failure, cost, or safety pattern.
+- Proposed file(s) to change.
+- Expected metric movement.
+- Validation benchmark or query.
+- Rollback condition.
+
+Do not auto-remediate by default. Do not require prompt/content capture, and keep recommended MCP access read-only unless the user explicitly approves broader permissions.

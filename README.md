@@ -1,91 +1,115 @@
 # Copilot CLI AgentOps for Azure
 
-Secure Azure-native observability and self-improvement loop for GitHub Copilot CLI.
+## 1. What this does in 5 lines
 
-Status: v0.3 dashboard pack validated on top of the verified Azure deployment.
+AgentOps shows what happened during a GitHub Copilot CLI run.
+It sends privacy-safe run metadata to Azure Monitor and Managed Grafana.
+It helps you spot expensive runs, tool failures, context pressure, and policy blocks.
+It keeps prompts, code, tool arguments, and file contents out of telemetry by default.
+It gives analysts deeper Azure and dashboard workflows when they need them.
 
-## What It Gives You
+## 2. Who it is for
 
-- Copilot CLI OpenTelemetry ingestion through a localhost collector.
-- Azure Monitor, Application Insights, Log Analytics, and Azure Managed Grafana infrastructure.
-- Managed Grafana dashboard pack import after `azd provision` through the `azure.yaml` post-provision hook.
-- Grafana overview plus linked Sessions, Session Detail, Traces / Spans, Runtime Events, and Quality dashboards.
-- Grafana panels for session risk, run volume, model/tool usage, token/cost behavior, failures, content-capture signals, compaction/truncation, policy blocks, and session lifecycle events.
-- KQL query pack aligned to the verified `AppDependencies` / `Properties` workspace schema.
-- Proposal-only Azure Monitor scheduled query alerts, deployed disabled until thresholds are tuned.
-- Read-only Azure MCP and Grafana MCP investigation patterns.
-- Custom Copilot CLI agents for telemetry retrospectives and safe optimization proposals.
-- Skills for KQL, telemetry diagnosis, skill tuning, and subagent analysis.
-- Hooks for deterministic guardrails and recovery hints.
+Use this if you run GitHub Copilot CLI and want a simple answer to:
 
-## Secure Defaults
+- Did my latest run work?
+- Which tool failed?
+- Did Copilot run out of useful context?
+- Did a safety policy stop something risky?
+- Did a change make Copilot better or worse?
 
-- Content capture is off.
-- Collector binds to `127.0.0.1`.
-- Repo URL is hashed before export.
-- Existing OpenTelemetry resource attributes are preserved and merged with AgentOps metadata.
-- MCP samples are read-only.
-- Agents propose patches; they do not auto-apply changes.
+You do not need to know OpenTelemetry, KQL, MCP, or Grafana to start. Those are just the plumbing underneath the beginner path.
 
-## Quickstart
+## 3. Install in the shortest safe path
 
-Install the local wrapper and run the local debug collector:
+This repo currently points at the deployed dev stack in `rg-copilot-agentops-dev` in `northeurope`. The installer creates a local `copilot` shim that starts the Azure Monitor collector when needed, keeps content capture off, adds safe AgentOps labels, and then calls the real Copilot CLI.
+
+macOS/Linux:
 
 ```bash
 az login
-./installer/install.sh
-./collector/start.sh
-source ./copilot/env.sample.sh
-copilot-observe --help
-```
-
-For the deployed Azure path, start the Azure Monitor collector, run Copilot CLI through the wrapper, then stop the collector to flush telemetry:
-
-```bash
-./scripts/collector-azuremonitor-up.sh
-./copilot/copilot-observe
-docker compose -f collector/docker-compose.azuremonitor.yaml down
-```
-
-To keep collection on for normal use, install the AgentOps Copilot shim:
-
-```bash
-./scripts/install-copilot-agentops-shim.sh
+./install-agentops.sh
 export PATH="$HOME/.local/bin:$PATH"
-copilot-agentops --help
+copilot --help
+node agentops-cli/src/index.js status
 ```
 
 PowerShell:
 
 ```powershell
-./scripts/install-copilot-agentops-shim.ps1
-$env:PATH = "$HOME/.local/bin;$env:PATH"
-copilot-agentops --help
-```
-
-The `copilot-agentops` command starts the Azure Monitor collector if needed, keeps it running, and routes Copilot CLI through the privacy-safe `copilot-observe` wrapper. To make plain `copilot` use the same observed path, install the optional shadow shim:
-
-```bash
-./scripts/install-copilot-agentops-shim.sh --shadow-copilot
-export PATH="$HOME/.local/bin:$PATH"
-copilot --help
-```
-
-PowerShell:
-
-```powershell
-./scripts/install-copilot-agentops-shim.ps1 -ShadowCopilot
+az login
+./install-agentops.ps1
 $env:PATH = "$HOME/.local/bin;$env:PATH"
 copilot --help
+node agentops-cli/src/index.js status
 ```
 
-Stop always-on collection when needed with:
+Secure defaults to keep:
+
+- Content capture is off by default: prompts, code, tool arguments, and file contents are not recorded.
+- The collector listens on `127.0.0.1`, not the public network.
+- The repository URL is hashed before export.
+- Azure and Grafana MCP examples are read-only.
+- Alerts are deployed disabled until thresholds are tuned.
+- Agents propose changes; they do not auto-apply them.
+
+To stop routing plain `copilot` through AgentOps while keeping the explicit `copilot-agentops` command:
 
 ```bash
-docker compose -f collector/docker-compose.azuremonitor.yaml down
+node agentops-cli/src/index.js disable-shadow
 ```
 
-PowerShell uses the same Docker Compose stop command.
+To remove the installed shims:
+
+```bash
+node agentops-cli/src/index.js uninstall
+```
+
+To stop the local Azure Monitor collector:
+
+```bash
+node agentops-cli/src/index.js collector stop
+```
+
+## 4. See your latest Copilot run
+
+Run Copilot normally after install:
+
+```bash
+copilot -p "Reply with exactly: agentops smoke."
+```
+
+Open the dashboard links from the CLI:
+
+```bash
+node agentops-cli/src/index.js open
+```
+
+Then choose **Last 2 hours** in Grafana and open the newest row in **Sessions**. That row is your latest observed Copilot run.
+
+Useful things to look for first:
+
+- **Success** tells you whether the run completed cleanly.
+- **Failures** points to failed spans or tools.
+- **Input tokens** helps reveal context pressure.
+- **Policy** shows safety or permission friction.
+- **Tools** shows what Copilot tried to call.
+
+Ask for the latest live run from Azure Monitor:
+
+```bash
+node agentops-cli/src/index.js latest --last 7d
+node agentops-cli/src/index.js explain latest --last 7d
+```
+
+You can still use an offline JSONL export or fixture when you are testing locally:
+
+```bash
+node agentops-cli/src/index.js latest --file tests/sample-otel/tool-failure.jsonl
+node agentops-cli/src/index.js explain latest --file tests/sample-otel/tool-failure.jsonl
+```
+
+## 5. Open the dashboard
 
 Open the deployed overview dashboard:
 
@@ -93,103 +117,130 @@ Open the deployed overview dashboard:
 https://graf-copilotagentops-de-a4czh7g5aueyf4e0.neu.grafana.azure.com/d/copilot-agentops/copilot-cli-agentops
 ```
 
-Inside Copilot CLI:
+The dashboard pack includes:
+
+- Overview
+- Sessions
+- Session Detail
+- Traces / Spans
+- Tools & MCP
+- Runtime Events
+- Safety & Policy
+- Quality
+- Data Quality
+
+If you changed dashboard JSON and need to rebuild the local pack:
+
+```bash
+node scripts/build-grafana-dashboard-pack.js
+```
+
+If you run deployments outside `azd`, import dashboards manually:
+
+```bash
+AZURE_RESOURCE_GROUP=rg-copilot-agentops-dev \
+GRAFANA_NAME=graf-copilotagentops-de \
+./scripts/grafana-import-dashboard.sh
+```
+
+## 6. Optional: science mode
+
+Science mode means you compare one Copilot setup against another using repeatable tasks.
+
+Use this when you want to answer: "Did my new prompt, agent, model, or tool setup actually help?"
+
+1. Pick one benchmark: a small task you can run the same way more than once.
+2. Run the baseline: the current setup.
+3. Run the variant: the changed setup.
+4. Compare success, failures, tokens, duration, and policy blocks in Grafana.
+
+Start with a dry run. It plans the benchmark without changing the repo or executing Copilot:
+
+```bash
+node agentops-cli/src/index.js benchmark list
+node agentops-cli/src/index.js benchmark run starter --variant baseline --repeat 1 --dry-run
+```
+
+Run the benchmark for real when you are ready. It copies the fixture to a temp workspace, gives Copilot an isolated `COPILOT_HOME`, writes a summary, and scores the result:
+
+```bash
+node agentops-cli/src/index.js benchmark run starter --variant baseline --repeat 1
+node agentops-cli/src/index.js benchmark report <run-id>
+```
+
+For manual comparisons, label each run:
+
+```bash
+AGENTOPS_EXPERIMENT=baseline copilot -p "Run the benchmark task."
+AGENTOPS_EXPERIMENT=variant-shorter-prompt copilot -p "Run the benchmark task."
+```
+
+Do not turn on content capture for science mode. The default metadata is enough for first-pass comparisons.
+
+For deeper repeatable checks, see [docs/testing-and-next-steps.md](docs/testing-and-next-steps.md).
+
+## 7. Optional: Azure MCP analyst mode
+
+Analyst mode is for people who want Copilot or an MCP client to inspect telemetry for them.
+
+The safe default is read-only investigation:
 
 ```text
 Use the telemetry-investigator agent to analyze the last 24 hours of Copilot CLI telemetry and propose one safe improvement. Do not edit files yet.
 ```
 
-## Azure Deployment
+Read-only Azure Monitor MCP, Azure Managed Grafana MCP, and copyable prompt templates are documented in [docs/copilot-mcp-agentops-prompts.md](docs/copilot-mcp-agentops-prompts.md). The templates cover latest-session investigation, tool failures, benchmark variant comparison, agent improvement, hook policy tuning, and MCP/tool regressions.
 
-The core telemetry stack has been deployed to `rg-copilot-agentops-dev` in `northeurope`.
+Useful implemented CLI helpers for analysts:
 
-Deployed resources include:
+```bash
+node agentops-cli/src/index.js status
+node agentops-cli/src/index.js open
+node agentops-cli/src/index.js link session <conversation>
+node agentops-cli/src/index.js link trace <operationId>
+node agentops-cli/src/index.js fields --last 7d
+node agentops-cli/src/index.js context --last 7d
+node agentops-cli/src/index.js token-rollup-audit --last 14d
+node agentops-cli/src/index.js policy --last 7d
+node agentops-cli/src/index.js mcp --last 7d
+```
+
+These commands print Grafana links or Azure Log Analytics queries. You can use them without learning KQL first, and an analyst can inspect the generated query when needed.
+
+## 8. Optional: internals
+
+AgentOps is a local-first telemetry loop:
+
+```text
+Copilot CLI -> AgentOps shim -> localhost collector -> Azure Monitor -> Managed Grafana
+```
+
+The Azure deployment contains:
 
 - Log Analytics Workspace: `law-copilot-agentops-dev`
 - Application Insights: `appi-copilot-agentops-dev`
 - Azure Monitor Workspace: `amw-copilot-agentops-dev`
 - Azure Managed Grafana: `graf-copilotagentops-de`
 - Key Vault: `kv-copilotagentops-dev-u`
-- Disabled proposal-only scheduled query rules for high AIU, failed spans, and content-capture detection
+- Disabled proposal-only scheduled query rules
 
-The `azure.yaml` file includes a post-provision hook:
+More detail:
 
-```yaml
-hooks:
-  postprovision:
-    shell: sh
-    run: ./scripts/grafana-import-dashboard.sh
-```
+- [docs/secure-by-default.md](docs/secure-by-default.md)
+- [docs/copilot-mcp-agentops-prompts.md](docs/copilot-mcp-agentops-prompts.md)
+- [docs/troubleshooting.md](docs/troubleshooting.md)
+- [docs/architecture.md](docs/architecture.md)
+- [docs/telemetry-schema.md](docs/telemetry-schema.md)
+- [docs/grafana-llm-observability-ui.md](docs/grafana-llm-observability-ui.md)
+- [docs/copilot-cli-observability-research.md](docs/copilot-cli-observability-research.md)
 
-The hook uses the Bicep `GRAFANA_NAME` output and imports the overview plus linked dashboard pack into Managed Grafana after provisioning:
+## Plain English Glossary
 
-- `grafana/agentops-dashboard.json`
-- `grafana/agentops-sessions.json`
-- `grafana/agentops-session-detail.json`
-- `grafana/agentops-traces-spans.json`
-- `grafana/agentops-runtime-events.json`
-- `grafana/agentops-quality.json`
-
-Regenerate the dashboard pack after query or layout changes:
-
-```bash
-node scripts/build-grafana-dashboard-pack.js
-```
-
-Generate deep links and field-discovery KQL for investigations:
-
-```bash
-node agentops-cli/src/index.js link session <conversation>
-node agentops-cli/src/index.js link trace <operationId>
-node agentops-cli/src/index.js fields --last 7d
-node agentops-cli/src/index.js context --last 7d
-```
-
-If you run deployments outside `azd`, import the dashboard pack manually:
-
-```bash
-AZURE_RESOURCE_GROUP=rg-copilot-agentops-dev \
-GRAFANA_NAME=graf-copilotagentops-de \
-./scripts/grafana-import-dashboard.sh
-```
-
-## Alert Rules
-
-Alert rules are deployed disabled by default. Keep `enableAlerts=false` until there are enough real sessions to tune thresholds.
-
-Verify the live alert state:
-
-```bash
-for name in \
-  sqr-copilot-agentops-dev-high-aiu \
-  sqr-copilot-agentops-dev-content-capture \
-  sqr-copilot-agentops-dev-failures; do
-  az resource show \
-    --resource-group rg-copilot-agentops-dev \
-    --resource-type Microsoft.Insights/scheduledQueryRules \
-    --name "$name" \
-    --query "{name:name,enabled:properties.enabled,severity:properties.severity}" \
-    -o table
-done
-```
-
-To import a single dashboard during development, pass `DASHBOARD_JSON`:
-
-```bash
-AZURE_RESOURCE_GROUP=rg-copilot-agentops-dev \
-GRAFANA_NAME=graf-copilotagentops-de \
-DASHBOARD_JSON=grafana/agentops-sessions.json \
-./scripts/grafana-import-dashboard.sh
-```
-
-## Current Scope
-
-This slice proves the secure telemetry loop end to end and provides operational dashboards, KQL, and disabled proposal-only alerts. The v0.3 dashboard pack focuses on Datadog-style exploration inside Grafana: sessions first, then drilldown into spans, runtime events, and quality signals. It does not deploy the optional actioner Function by default, and it does not auto-apply remediation.
-
-See [.azure/deployment-plan.md](.azure/deployment-plan.md) for the implementation and deployment plan.
-
-See [docs/grafana-llm-observability-ui.md](docs/grafana-llm-observability-ui.md) and [docs/observability-product-patterns-roadmap.md](docs/observability-product-patterns-roadmap.md) for the dashboard UX direction and observability product roadmap.
-
-## Testing And Next Steps
-
-See [docs/testing-and-next-steps.md](docs/testing-and-next-steps.md) for local smoke tests, Azure validation findings, and the safe details needed before provisioning.
+- **context pressure** = Copilot had too much to remember
+- **tool failure** = a tool Copilot tried did not work
+- **policy block** = a safety rule stopped something risky
+- **content capture** = recording prompts/code/tool arguments
+- **benchmark** = a repeatable task
+- **baseline** = before
+- **variant** = after/version being tested
+- **regression** = got worse

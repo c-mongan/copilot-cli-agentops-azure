@@ -163,6 +163,33 @@ az monitor log-analytics query \
   --analytics-query "AppDependencies | where TimeGenerated > ago(2h) | where Properties has 'github.copilot' and Properties has 'github-copilot-cli' | summarize Spans=count(), Runs=countif(tostring(Properties['gen_ai.operation.name']) == 'invoke_agent'), InputTokens=sum(todouble(Properties['gen_ai.usage.input_tokens'])), OutputTokens=sum(todouble(Properties['gen_ai.usage.output_tokens'])), AIU=sum(todouble(Properties['github.copilot.aiu'])), Cost=sum(todouble(Properties['github.copilot.cost'])), P95DurationMs=percentile(DurationMs, 95)"
 ```
 
+## Read-Only MCP Investigation Smoke Test
+
+Validate the MCP sample JSON before using it:
+
+```bash
+node -e "JSON.parse(require('fs').readFileSync('plugin/.mcp.json', 'utf8')); JSON.parse(require('fs').readFileSync('copilot/mcp.azure-monitor.sample.json', 'utf8')); JSON.parse(require('fs').readFileSync('copilot/mcp.grafana.sample.json', 'utf8'))"
+```
+
+Use Azure MCP in read-only Azure Monitor scope:
+
+```bash
+az login
+copilot --additional-mcp-config @copilot/mcp.azure-monitor.sample.json
+```
+
+Use Azure Managed Grafana MCP only after setting a token outside the repo:
+
+```bash
+sed -n '1,80p' copilot/mcp.grafana.sample.json
+export AZURE_GRAFANA_MCP_TOKEN="<set-outside-repo>"
+copilot --additional-mcp-config @copilot/mcp.grafana.sample.json
+```
+
+Before running that command, replace `<grafana-endpoint>` in the sample with your Azure Managed Grafana host.
+
+Prompt templates for session investigation, tool failures, benchmark variant comparison, agent improvement, hook policy tuning, and MCP/tool regression checks are in `docs/copilot-mcp-agentops-prompts.md`.
+
 ## Alert Rule Validation
 
 The v0.2 alert rules are deployed but disabled. Verify them with:

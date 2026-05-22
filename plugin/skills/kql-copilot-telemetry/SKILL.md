@@ -16,3 +16,5 @@ When writing KQL for Copilot CLI telemetry:
 5. Always include a time bound.
 6. Include a small sample query before a broad aggregate query.
 7. For the Azure Monitor exporter path, Copilot CLI GenAI spans have landed in `AppDependencies` with `Properties` keys such as `gen_ai.operation.name`, `github.copilot.aiu`, `github.copilot.cost`, `gen_ai.usage.input_tokens`, and `gen_ai.usage.output_tokens`.
+
+When a query supports a recommendation, include the recommendation contract fields: evidence query or dashboard link, observed failure/cost/safety pattern, proposed file(s), expected metric movement, validation benchmark or query, and rollback condition. Do not require prompt/content capture or secrets.

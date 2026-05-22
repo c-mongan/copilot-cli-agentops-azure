@@ -1,9 +1,9 @@
 {
-  "servers": {
+  "mcpServers": {
     "azure-mcp": {
-      "type": "local",
+      "type": "stdio",
       "command": "npx",
-      "args": ["-y", "@azure/mcp@latest", "server", "start", "--read-only", "true", "--namespace", "monitor"]
+      "args": ["-y", "@azure/mcp@latest", "server", "start", "--read-only", "--namespace", "monitor"]
     }
   }
 }

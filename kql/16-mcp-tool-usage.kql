@@ -1,0 +1,61 @@
+// MCP and tool usage view for Copilot CLI AgentOps.
+// Copilot reports all tool invocations as execute_tool spans. Built-in tools are
+// classified from the documented CLI tool list; everything else is treated as
+// likely MCP or extension-provided until validated against real field samples.
+let lookback = 7d;
+let builtin_tools = dynamic([
+    "bash", "powershell", "list_bash", "list_powershell", "read_bash", "read_powershell",
+    "stop_bash", "stop_powershell", "write_bash", "write_powershell", "apply_patch",
+    "create", "edit", "view", "list_agents", "read_agent", "task", "ask_user",
+    "glob", "grep", "rg", "skill", "web_fetch"
+]);
+let session_id = (props:dynamic, timestamp:datetime) {
+    case(
+        isnotempty(tostring(props["gen_ai.conversation.id"])),
+        tostring(props["gen_ai.conversation.id"]),
+        isnotempty(tostring(props["github.copilot.interaction_id"])),
+        tostring(props["github.copilot.interaction_id"]),
+        strcat(
+            tostring(props["gen_ai.agent.id"]),
+            "_",
+            tostring(props["github.copilot.turn_count"]),
+            "_",
+            format_datetime(bin(timestamp, 1h), "yyyyMMdd_HHmm")
+        )
+    )
+};
+AppDependencies
+| where TimeGenerated > ago(lookback)
+| where Properties has "github.copilot" and Properties has "github-copilot-cli"
+| extend
+    session = session_id(Properties, TimeGenerated),
+    operation = tostring(Properties["gen_ai.operation.name"]),
+    tool = tostring(Properties["gen_ai.tool.name"]),
+    model = coalesce(tostring(Properties["agentops.cli.model"]), tostring(Properties["gen_ai.request.model"])),
+    mode = tostring(Properties["agentops.cli.mode"]),
+    repo = tostring(Properties["agentops.repo.hash"]),
+    error = tostring(Properties["error.type"])
+| where operation == "execute_tool" or isnotempty(tool)
+| extend
+    tool_family = case(
+        tool in (builtin_tools), "builtin",
+        tool has "-", "likely_mcp_or_extension",
+        isnotempty(tool), "custom_or_unknown",
+        "unknown"
+    ),
+    success = Success != false and isempty(error)
+| summarize
+    calls = count(),
+    failures = countif(not(success)),
+    sessions = dcount(session),
+    p50_duration_ms = percentile(DurationMs, 50),
+    p95_duration_ms = percentile(DurationMs, 95),
+    first_seen = min(TimeGenerated),
+    last_seen = max(TimeGenerated),
+    models = make_set_if(model, isnotempty(model), 5),
+    modes = make_set_if(mode, isnotempty(mode), 5),
+    repos = make_set_if(repo, isnotempty(repo), 5),
+    errors = make_set_if(error, isnotempty(error), 10)
+    by tool_family, tool
+| extend failure_pct = round(100.0 * failures / calls, 1)
+| order by tool_family asc, failures desc, calls desc

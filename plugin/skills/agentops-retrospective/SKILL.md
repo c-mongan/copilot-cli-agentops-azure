@@ -21,3 +21,14 @@ Procedure:
 6. Produce minimal recommendations with validation KQL.
 
 Use `Properties` for OTel attributes in the verified Azure Monitor workspace path. Fall back to classic `customDimensions` only if discovery shows classic Application Insights tables are being queried.
+
+Every recommendation must include:
+
+- Evidence query or Grafana dashboard link.
+- Observed failure, cost, or safety pattern.
+- Proposed file(s) to change.
+- Expected metric movement.
+- Validation benchmark or query.
+- Rollback condition.
+
+Do not auto-remediate by default. Do not require prompt/content capture, and do not include secrets in docs, configs, or examples.

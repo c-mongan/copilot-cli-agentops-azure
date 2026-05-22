@@ -2,7 +2,7 @@ let failures =
 AppDependencies
 | where TimeGenerated > ago(14d)
 | where Properties has "github.copilot" and Properties has "github-copilot-cli"
-| extend operation=tostring(Properties["gen_ai.operation.name"]), conversation=tostring(Properties["gen_ai.conversation.id"]), tool=tostring(Properties["gen_ai.tool.name"]), error=tostring(Properties["error.type"])
+| extend operation=tostring(Properties["gen_ai.operation.name"]), conversation=case(isnotempty(tostring(Properties["gen_ai.conversation.id"])), tostring(Properties["gen_ai.conversation.id"]), isnotempty(tostring(Properties["github.copilot.interaction_id"])), tostring(Properties["github.copilot.interaction_id"]), strcat(tostring(Properties["gen_ai.agent.id"]), "_", tostring(Properties["github.copilot.turn_count"]), "_", format_datetime(bin(TimeGenerated, 1h), "yyyyMMdd_HHmm"))), tool=tostring(Properties["gen_ai.tool.name"]), error=tostring(Properties["error.type"])
 | where operation == "execute_tool"
 | where Success == false or isnotempty(error)
 | summarize failed_tools=make_set(tool), failure_count=count() by conversation;
@@ -12,7 +12,7 @@ AppDependencies
 | where Properties has "github.copilot" and Properties has "github-copilot-cli"
 | extend operation=tostring(Properties["gen_ai.operation.name"])
 | where operation == "invoke_agent"
-| extend conversation=tostring(Properties["gen_ai.conversation.id"]), agent_name=tostring(Properties["gen_ai.agent.name"]), model=tostring(Properties["gen_ai.request.model"]), turns=toint(Properties["github.copilot.turn_count"]), files_modified=toint(Properties["github.copilot.files_modified_count"])
+| extend conversation=case(isnotempty(tostring(Properties["gen_ai.conversation.id"])), tostring(Properties["gen_ai.conversation.id"]), isnotempty(tostring(Properties["github.copilot.interaction_id"])), tostring(Properties["github.copilot.interaction_id"]), strcat(tostring(Properties["gen_ai.agent.id"]), "_", tostring(Properties["github.copilot.turn_count"]), "_", format_datetime(bin(TimeGenerated, 1h), "yyyyMMdd_HHmm"))), agent_name=tostring(Properties["gen_ai.agent.name"]), model=tostring(Properties["gen_ai.request.model"]), turns=toint(Properties["github.copilot.turn_count"]), files_modified=toint(Properties["github.copilot.files_modified_count"])
 | project TimeGenerated, conversation, agent_name, model, DurationMs, turns, files_modified, Success;
 roots
 | join kind=leftouter failures on conversation

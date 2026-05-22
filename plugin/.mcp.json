@@ -1,7 +1,7 @@
 {
-  "servers": {
+  "mcpServers": {
     "azure-mcp": {
-      "type": "local",
+      "type": "stdio",
       "command": "npx",
       "args": [
         "-y",
@@ -9,17 +9,9 @@
         "server",
         "start",
         "--read-only",
-        "true",
         "--namespace",
         "monitor"
       ]
-    },
-    "agent-grafana": {
-      "type": "http",
-      "url": "https://<grafana-endpoint>/api/azure-mcp",
-      "headers": {
-        "Authorization": "Bearer ${AZURE_GRAFANA_MCP_TOKEN}"
-      }
     }
   }
 }
