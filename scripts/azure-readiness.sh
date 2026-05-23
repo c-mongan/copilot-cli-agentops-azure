@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-subscription_id="${AZURE_SUBSCRIPTION_ID:-0222a208-955a-45fd-b6d8-ca4704421bf0}"
-resource_group="${AZURE_RESOURCE_GROUP:-rg-copilot-agentops-dev}"
+subscription_id="${AZURE_SUBSCRIPTION_ID:-}"
+resource_group="${AZURE_RESOURCE_GROUP:-rg-agentops-dev}"
 
-az account set --subscription "$subscription_id"
+if [[ -n "$subscription_id" ]]; then
+  az account set --subscription "$subscription_id"
+fi
 az account show --query '{name:name,id:id,tenantId:tenantId,user:user.name}' -o table
 
 for ns in Microsoft.OperationalInsights Microsoft.Insights Microsoft.Monitor Microsoft.Dashboard Microsoft.KeyVault Microsoft.Web Microsoft.Storage; do

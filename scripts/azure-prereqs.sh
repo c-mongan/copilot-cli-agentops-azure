@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-subscription_id="${AZURE_SUBSCRIPTION_ID:-0222a208-955a-45fd-b6d8-ca4704421bf0}"
-resource_group="${AZURE_RESOURCE_GROUP:-rg-copilot-agentops-dev}"
+: "${AZURE_SUBSCRIPTION_ID:?Set AZURE_SUBSCRIPTION_ID before running scripts/azure-prereqs.sh}"
+subscription_id="$AZURE_SUBSCRIPTION_ID"
+resource_group="${AZURE_RESOURCE_GROUP:-rg-agentops-dev}"
 location="${AZURE_LOCATION:-northeurope}"
 
 cat <<MSG

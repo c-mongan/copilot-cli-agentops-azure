@@ -7,11 +7,14 @@ const grafanaDir = path.join(repoRoot, 'grafana');
 
 const datasource = {
   type: 'grafana-azure-monitor-datasource',
-  uid: 'azure-monitor-oob',
+  uid: process.env.AGENTOPS_GRAFANA_DATASOURCE_UID || 'azure-monitor-oob',
 };
 
-const workspaceResource = '/subscriptions/0222a208-955a-45fd-b6d8-ca4704421bf0/resourceGroups/rg-copilot-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-copilot-agentops-dev';
-const portalLogsUrl = 'https://portal.azure.com/#@/resource/subscriptions/0222a208-955a-45fd-b6d8-ca4704421bf0/resourceGroups/rg-copilot-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-copilot-agentops-dev/logs';
+const subscriptionId = process.env.AGENTOPS_AZURE_SUBSCRIPTION_ID || process.env.AZURE_SUBSCRIPTION_ID || '00000000-0000-0000-0000-000000000000';
+const resourceGroup = process.env.AGENTOPS_AZURE_RESOURCE_GROUP || process.env.AZURE_RESOURCE_GROUP || 'rg-agentops-dev';
+const workspaceName = process.env.AGENTOPS_LOG_ANALYTICS_WORKSPACE_NAME || 'law-agentops-dev';
+const workspaceResource = process.env.AGENTOPS_LOG_ANALYTICS_WORKSPACE_RESOURCE_ID || `/subscriptions/${subscriptionId}/resourceGroups/${resourceGroup}/providers/Microsoft.OperationalInsights/workspaces/${workspaceName}`;
+const portalLogsUrl = process.env.AGENTOPS_AZURE_PORTAL_LOGS_URL || `https://portal.azure.com/#@/resource${workspaceResource}/logs`;
 const baseFilter = "Properties has 'github.copilot' and Properties has 'github-copilot-cli'";
 const sessionKey = "case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(tostring(Properties['gen_ai.agent.id']), '_', tostring(Properties['github.copilot.turn_count']), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm')))";
 const directSessionKey = "case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), '')";

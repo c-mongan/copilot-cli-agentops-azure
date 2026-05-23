@@ -1,7 +1,7 @@
 param(
-  [string]$SubscriptionId = $(if ($env:AZURE_SUBSCRIPTION_ID) { $env:AZURE_SUBSCRIPTION_ID } else { "0222a208-955a-45fd-b6d8-ca4704421bf0" }),
-  [string]$ResourceGroup = $(if ($env:AZURE_RESOURCE_GROUP) { $env:AZURE_RESOURCE_GROUP } else { "rg-copilot-agentops-dev" }),
-  [string]$ApplicationInsightsName = $(if ($env:APPLICATIONINSIGHTS_NAME) { $env:APPLICATIONINSIGHTS_NAME } else { "appi-copilot-agentops-dev" })
+  [string]$SubscriptionId = $(if ($env:AZURE_SUBSCRIPTION_ID) { $env:AZURE_SUBSCRIPTION_ID } else { "" }),
+  [string]$ResourceGroup = $(if ($env:AZURE_RESOURCE_GROUP) { $env:AZURE_RESOURCE_GROUP } else { "rg-agentops-dev" }),
+  [string]$ApplicationInsightsName = $(if ($env:APPLICATIONINSIGHTS_NAME) { $env:APPLICATIONINSIGHTS_NAME } else { "appi-agentops-dev" })
 )
 
 $ErrorActionPreference = "Stop"
@@ -10,7 +10,9 @@ $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = Split-Path -Parent $scriptDir
 $composeFile = Join-Path $repoRoot "collector/docker-compose.azuremonitor.yaml"
 
-az account set --subscription $SubscriptionId | Out-Null
+if ($SubscriptionId) {
+  az account set --subscription $SubscriptionId | Out-Null
+}
 
 $connectionString = az monitor app-insights component show `
   --resource-group $ResourceGroup `

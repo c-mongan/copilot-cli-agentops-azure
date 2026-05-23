@@ -18,10 +18,14 @@ function usage() {
   return `agentops <command>\n\nCommands:\n  status\n  latest [--file <jsonl>] [--last <duration>]\n  live|tail [--file <jsonl>] [--last <duration>] [--follow] [--interval <seconds>]\n  replay <session|latest> [--file <jsonl>] [--last <duration>]\n  explain latest [--file <jsonl>] [--last <duration>]\n  recommend latest [--file <jsonl>] [--last <duration>]\n  open [--file <jsonl>] [--last <duration>]\n  doctor [--local-only]\n  scan [--json]\n  primitives [--last <duration>] [--root <path>]\n  import-jsonl <file>\n  validate-collector [endpoint]\n  validate-azure\n  enable-shadow\n  disable-shadow\n  uninstall\n  collector start|stop\n  saved-view add <name> --url <url> [--query-file <file>] [--description <text>] [--tag <tag>]\n  saved-view list|show|open <name>\n  link session <conversation>\n  link trace <operationId>\n  fields [--last <duration>]\n  context [--last <duration>]\n  token-rollup-audit [--last <duration>]\n  permission-friction [--last <duration>]\n  alert recommend [--last <duration>]\n  lineage [--last <duration>]\n  policy [--last <duration>]\n  mcp [--last <duration>]\n  benchmark list\n  benchmark run <suite> --variant <name> --repeat <n> [--hypothesis <id>] [--dry-run]\n  benchmark report <run-id> [--azure] [--last <duration>]\n  benchmark compare <before-run-id> <after-run-id> [--azure] [--last <duration>]\n`;
 }
 
-const workspaceId = '81513958-e9aa-4a35-aeab-953e1d26e797';
-const grafanaBaseUrl = 'https://graf-copilotagentops-de-a4czh7g5aueyf4e0.neu.grafana.azure.com';
+const configuredWorkspaceId = process.env.AGENTOPS_LOG_ANALYTICS_WORKSPACE_ID || process.env.LOG_ANALYTICS_WORKSPACE_ID || '';
+const workspaceId = configuredWorkspaceId || '00000000-0000-0000-0000-000000000000';
+const grafanaBaseUrl = (process.env.AGENTOPS_GRAFANA_BASE_URL || 'https://your-grafana.grafana.azure.com').replace(/\/$/, '');
 const mainGrafanaDashboardUrl = `${grafanaBaseUrl}/d/copilot-agentops/copilot-cli-agentops`;
-const portalLogsUrl = 'https://portal.azure.com/#@/resource/subscriptions/0222a208-955a-45fd-b6d8-ca4704421bf0/resourceGroups/rg-copilot-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-copilot-agentops-dev/logs';
+const azureSubscriptionId = process.env.AGENTOPS_AZURE_SUBSCRIPTION_ID || process.env.AZURE_SUBSCRIPTION_ID || '00000000-0000-0000-0000-000000000000';
+const azureResourceGroup = process.env.AGENTOPS_AZURE_RESOURCE_GROUP || process.env.AZURE_RESOURCE_GROUP || 'rg-agentops-dev';
+const logAnalyticsWorkspaceName = process.env.AGENTOPS_LOG_ANALYTICS_WORKSPACE_NAME || 'law-agentops-dev';
+const portalLogsUrl = process.env.AGENTOPS_AZURE_PORTAL_LOGS_URL || `https://portal.azure.com/#@/resource/subscriptions/${azureSubscriptionId}/resourceGroups/${azureResourceGroup}/providers/Microsoft.OperationalInsights/workspaces/${logAnalyticsWorkspaceName}/logs`;
 const baseFilter = 'Properties has "github.copilot" and Properties has "github-copilot-cli"';
 const sessionKey = 'case(isnotempty(tostring(Properties["gen_ai.conversation.id"])), tostring(Properties["gen_ai.conversation.id"]), isnotempty(tostring(Properties["github.copilot.interaction_id"])), tostring(Properties["github.copilot.interaction_id"]), strcat(tostring(Properties["gen_ai.agent.id"]), "_", tostring(Properties["github.copilot.turn_count"]), "_", format_datetime(bin(TimeGenerated, 1h), "yyyyMMdd_HHmm")))';
 const directSessionKey = 'case(isnotempty(tostring(Properties["gen_ai.conversation.id"])), tostring(Properties["gen_ai.conversation.id"]), isnotempty(tostring(Properties["github.copilot.interaction_id"])), tostring(Properties["github.copilot.interaction_id"]), "")';
@@ -597,12 +601,22 @@ enriched
 
 function runAzureLogAnalyticsQuery(query, options = {}) {
   const spawnSync = options.spawnSync || childProcess.spawnSync;
+  const effectiveWorkspaceId = options.workspaceId || workspaceId;
+
+  if (!options.workspaceId && !configuredWorkspaceId && !options.spawnSync) {
+    return {
+      ok: false,
+      rows: [],
+      error: 'Set AGENTOPS_LOG_ANALYTICS_WORKSPACE_ID or LOG_ANALYTICS_WORKSPACE_ID before running live Azure telemetry queries.'
+    };
+  }
+
   const result = spawnSync('az', [
     'monitor',
     'log-analytics',
     'query',
     '--workspace',
-    options.workspaceId || workspaceId,
+    effectiveWorkspaceId,
     '--analytics-query',
     query,
     '-o',

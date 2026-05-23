@@ -13,14 +13,14 @@ docker compose -f collector/docker-compose.yaml config >/tmp/agentops-compose.ya
 
 All of the above pass.
 
-Azure deployment status:
+Azure deployment checklist:
 
-- Core telemetry stack is deployed in `rg-copilot-agentops-dev`.
-- Managed Grafana user access and data-source RBAC are configured.
-- Application Insights synthetic ingestion smoke test passed.
-- Collector-backed real Copilot CLI telemetry ingestion passed through `copilot-observe`.
-- Grafana dashboard with real run, token, AIU, latency, model, failure, content-capture, compaction/truncation, policy-block, and session-lifecycle panels is imported at `https://graf-copilotagentops-de-a4czh7g5aueyf4e0.neu.grafana.azure.com/d/copilot-agentops/copilot-cli-agentops`.
-- Proposal-only Azure Monitor scheduled query rules are deployed disabled.
+- Core telemetry stack can be deployed with the Bicep/AZD files in this repo.
+- Managed Grafana user access and data-source RBAC must be configured for your subscription.
+- Application Insights synthetic ingestion should pass before real Copilot telemetry testing.
+- Collector-backed real Copilot CLI telemetry should pass through `copilot-observe`.
+- Grafana dashboard imports should show run, token, AIU, latency, model, failure, content-capture, compaction/truncation, policy-block, and session-lifecycle panels.
+- Proposal-only Azure Monitor scheduled query rules should stay disabled until thresholds are tuned.
 
 ## Local Collector Smoke Test
 
@@ -74,7 +74,7 @@ The script prints a `smokeId`. The Azure Monitor exporter maps this synthetic cl
 
 ```bash
 az monitor log-analytics query \
-  --workspace 81513958-e9aa-4a35-aeab-953e1d26e797 \
+  --workspace "$AGENTOPS_LOG_ANALYTICS_WORKSPACE_ID" \
   --analytics-query "AppDependencies | where TimeGenerated > ago(2h) | where Properties has '<smokeId>' or Name has '<smokeId>' | project TimeGenerated, Name, Properties | order by TimeGenerated desc | take 20"
 ```
 
@@ -151,7 +151,7 @@ Query recent real Copilot CLI spans:
 
 ```bash
 az monitor log-analytics query \
-  --workspace 81513958-e9aa-4a35-aeab-953e1d26e797 \
+  --workspace "$AGENTOPS_LOG_ANALYTICS_WORKSPACE_ID" \
   --analytics-query "AppDependencies | where TimeGenerated > ago(2h) | where Properties has 'github.copilot' and Properties has 'github-copilot-cli' | project TimeGenerated, Name, AppRoleName, Properties | order by TimeGenerated desc | take 20"
 ```
 
@@ -159,7 +159,7 @@ Summarize recent operational posture:
 
 ```bash
 az monitor log-analytics query \
-  --workspace 81513958-e9aa-4a35-aeab-953e1d26e797 \
+  --workspace "$AGENTOPS_LOG_ANALYTICS_WORKSPACE_ID" \
   --analytics-query "AppDependencies | where TimeGenerated > ago(2h) | where Properties has 'github.copilot' and Properties has 'github-copilot-cli' | summarize Spans=count(), Runs=countif(tostring(Properties['gen_ai.operation.name']) == 'invoke_agent'), InputTokens=sum(todouble(Properties['gen_ai.usage.input_tokens'])), OutputTokens=sum(todouble(Properties['gen_ai.usage.output_tokens'])), AIU=sum(todouble(Properties['github.copilot.aiu'])), Cost=sum(todouble(Properties['github.copilot.cost'])), P95DurationMs=percentile(DurationMs, 95)"
 ```
 
@@ -255,7 +255,7 @@ for name in \
   sqr-copilot-agentops-dev-content-capture \
   sqr-copilot-agentops-dev-failures; do
   az resource show \
-    --resource-group rg-copilot-agentops-dev \
+    --resource-group "${AZURE_RESOURCE_GROUP:-rg-agentops-dev}" \
     --resource-type Microsoft.Insights/scheduledQueryRules \
     --name "$name" \
     --query "{name:name,enabled:properties.enabled,severity:properties.severity,description:properties.description}" \
@@ -267,21 +267,16 @@ Keep `enableAlerts=false` until thresholds are tuned against more real sessions.
 
 ## Azure Validation Path
 
-Current Azure CLI target:
+Set these values for your subscription before running Azure scripts:
 
-- Subscription: `Visual Studio Enterprise Subscription`
-- Subscription ID: `0222a208-955a-45fd-b6d8-ca4704421bf0`
-- Tenant ID: `cf17fc39-219d-4d2b-9cd5-a49dc7ad0898`
-- Default resource group target: `rg-copilot-agentops-dev`
-- Recommended region: `northeurope`
+```bash
+export AZURE_SUBSCRIPTION_ID="<subscription-id>"
+export AZURE_RESOURCE_GROUP="${AZURE_RESOURCE_GROUP:-rg-agentops-dev}"
+export AGENTOPS_LOG_ANALYTICS_WORKSPACE_ID="<workspace-id>"
+export AGENTOPS_GRAFANA_BASE_URL="https://<your-grafana>.grafana.azure.com"
+```
 
-Current deployed resources:
-
-- `law-copilot-agentops-dev`
-- `appi-copilot-agentops-dev`
-- `amw-copilot-agentops-dev`
-- `graf-copilotagentops-de`
-- `kv-copilotagentops-dev-u`
+The default Bicep resource names are generated from `environmentName` and `baseName`.
 
 Read-only readiness check:
 
@@ -315,8 +310,8 @@ The script prints a `smokeId`. Query it in Application Insights:
 
 ```bash
 az monitor app-insights query \
-  --resource-group rg-copilot-agentops-dev \
-  --app appi-copilot-agentops-dev \
+  --resource-group "${AZURE_RESOURCE_GROUP:-rg-agentops-dev}" \
+  --app "${APPLICATIONINSIGHTS_NAME:-appi-agentops-dev}" \
   --analytics-query "customEvents | where name == 'AgentOpsSmokeTest' | where customDimensions.smokeId == '<smokeId>' | project timestamp, name, customDimensions"
 ```
 
@@ -324,7 +319,7 @@ Or query the linked Log Analytics workspace:
 
 ```bash
 az monitor log-analytics query \
-  --workspace 81513958-e9aa-4a35-aeab-953e1d26e797 \
+  --workspace "$AGENTOPS_LOG_ANALYTICS_WORKSPACE_ID" \
   --analytics-query "AppEvents | where Name == 'AgentOpsSmokeTest' | where Properties has '<smokeId>' | project TimeGenerated, Name, Properties"
 ```
 

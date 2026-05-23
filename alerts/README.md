@@ -6,7 +6,7 @@ The rules are proposal-only and disabled by default. Deploy them with:
 
 ```bash
 az deployment group create \
-  --resource-group rg-copilot-agentops-dev \
+  --resource-group "${AZURE_RESOURCE_GROUP:-rg-agentops-dev}" \
   --template-file infra/bicep/main.bicep \
   --parameters environmentName=dev location=northeurope deployAlerts=true enableAlerts=false
 ```

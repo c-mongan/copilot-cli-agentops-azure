@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-subscription_id="${AZURE_SUBSCRIPTION_ID:-0222a208-955a-45fd-b6d8-ca4704421bf0}"
-resource_group="${AZURE_RESOURCE_GROUP:-rg-copilot-agentops-dev}"
+subscription_id="${AZURE_SUBSCRIPTION_ID:-}"
+resource_group="${AZURE_RESOURCE_GROUP:-rg-agentops-dev}"
 location="${AZURE_LOCATION:-northeurope}"
 environment_name="${AZURE_ENV_NAME:-dev}"
 base_name="${AGENTOPS_BASE_NAME:-copilot-agentops}"
 
-az account set --subscription "$subscription_id"
+if [[ -n "$subscription_id" ]]; then
+  az account set --subscription "$subscription_id"
+fi
 
 if [[ "$(az group exists --name "$resource_group")" != "true" ]]; then
   cat <<MSG

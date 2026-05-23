@@ -1,7 +1,11 @@
 {
-  "name": "@agentops/cli",
+  "name": "copilot-agentops-cli",
   "version": "0.1.0",
   "description": "Local utilities for Copilot CLI AgentOps for Azure.",
+  "files": [
+    "README.md",
+    "src"
+  ],
   "bin": {
     "agentops": "src/index.js"
   },

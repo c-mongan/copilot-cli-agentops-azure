@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-subscription_id="${AZURE_SUBSCRIPTION_ID:-0222a208-955a-45fd-b6d8-ca4704421bf0}"
-resource_group="${AZURE_RESOURCE_GROUP:-rg-copilot-agentops-dev}"
-app_insights_name="${APPLICATIONINSIGHTS_NAME:-appi-copilot-agentops-dev}"
+subscription_id="${AZURE_SUBSCRIPTION_ID:-}"
+resource_group="${AZURE_RESOURCE_GROUP:-rg-agentops-dev}"
+app_insights_name="${APPLICATIONINSIGHTS_NAME:-appi-agentops-dev}"
 
-az account set --subscription "$subscription_id"
+if [[ -n "$subscription_id" ]]; then
+  az account set --subscription "$subscription_id"
+fi
 
 export APPLICATIONINSIGHTS_CONNECTION_STRING="$(az monitor app-insights component show \
   --resource-group "$resource_group" \

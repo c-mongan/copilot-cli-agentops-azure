@@ -5,9 +5,15 @@ coverage/
 .env.*
 !.env.sample
 *.log
+*.local
 .DS_Store
+.pytest_cache/
+.agentops/
 .azure/*
 !.azure/deployment-plan.md
 collector/*.local.out
 copilot-otel*.jsonl
 .copilot-goals/
+grafana/externaldocs/
+copilot-cli-agentops-azure-implementation-brief.html
+copilot-cli-agentops-azure-implementation-brief.md

@@ -58,6 +58,6 @@ endpoint=${endpoint}
 
 Query it with:
 az monitor log-analytics query \\
-  --workspace 81513958-e9aa-4a35-aeab-953e1d26e797 \\
+  --workspace "\${AGENTOPS_LOG_ANALYTICS_WORKSPACE_ID}" \\
   --analytics-query "AppTraces | where TimeGenerated > ago(2h) | where Properties has '${smoke_id}' or Message has '${smoke_id}' | take 20"
 MSG

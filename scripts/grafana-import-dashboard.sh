@@ -3,8 +3,8 @@
 # Source of truth: grafana/agentops-dashboard.json and grafana/agentops-*.json
 #
 # Required env (auto-resolved from azd env when run as an azd hook):
-#   AZURE_RESOURCE_GROUP   e.g. rg-copilot-agentops-dev
-#   GRAFANA_NAME           e.g. graf-copilotagentops-...
+#   AZURE_RESOURCE_GROUP   e.g. rg-agentops-dev
+#   GRAFANA_NAME           e.g. graf-agentops-dev
 # Optional:
 #   GRAFANA_FOLDER         folder title (default: "AgentOps")
 #   DASHBOARD_JSON         path to one dashboard JSON (default: import the full dashboard pack)
@@ -52,6 +52,8 @@ else
     "${REPO_ROOT}/grafana/agentops-tools-mcp.json"
     "${REPO_ROOT}/grafana/agentops-runtime-events.json"
     "${REPO_ROOT}/grafana/agentops-safety-policy.json"
+    "${REPO_ROOT}/grafana/agentops-permission-friction.json"
+    "${REPO_ROOT}/grafana/agentops-alert-tuning.json"
     "${REPO_ROOT}/grafana/agentops-quality.json"
     "${REPO_ROOT}/grafana/agentops-experiments.json"
     "${REPO_ROOT}/grafana/agentops-data-quality.json"

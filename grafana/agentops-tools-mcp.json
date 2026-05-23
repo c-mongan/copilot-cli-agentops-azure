@@ -93,7 +93,7 @@
     },
     {
       "title": "Azure Portal - Log Analytics",
-      "url": "https://portal.azure.com/#@/resource/subscriptions/0222a208-955a-45fd-b6d8-ca4704421bf0/resourceGroups/rg-copilot-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-copilot-agentops-dev/logs",
+      "url": "https://portal.azure.com/#@/resource/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev/logs",
       "type": "link",
       "icon": "external link",
       "targetBlank": true
@@ -171,7 +171,7 @@
           },
           "azureLogAnalytics": {
             "resources": [
-              "/subscriptions/0222a208-955a-45fd-b6d8-ca4704421bf0/resourceGroups/rg-copilot-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-copilot-agentops-dev"
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
             ],
             "resultFormat": "time_series",
             "query": "AppDependencies | where $__timeFilter(TimeGenerated) | where Properties has 'github.copilot' and Properties has 'github-copilot-cli' | extend direct_session=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), ''), fallback_session=strcat(tostring(Properties['gen_ai.agent.id']), '_', tostring(Properties['github.copilot.turn_count']), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm')) | join kind=leftouter (AppDependencies | where $__timeFilter(TimeGenerated) | where Properties has 'github.copilot' and Properties has 'github-copilot-cli' | extend direct_session=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), '') | where isnotempty(direct_session) | summarize operation_session=take_any(direct_session) by OperationId) on OperationId | extend conversation=iff(isnotempty(operation_session), operation_session, iff(isnotempty(direct_session), direct_session, fallback_session)) | extend operation=tostring(Properties['gen_ai.operation.name']), agent=tostring(Properties['gen_ai.agent.name']), model=tostring(Properties['gen_ai.request.model']), tool=tostring(Properties['gen_ai.tool.name']), repo=tostring(Properties['agentops.repo.hash']), error=tostring(Properties['error.type']) | where ('$model' == '$__all' or model in (${model:singlequote})) | where ('$operation' == '$__all' or operation in (${operation:singlequote})) | where ('$agent' == '$__all' or agent in (${agent:singlequote})) | where ('$repo' == '$__all' or repo in (${repo:singlequote})) | where ('$tool' == '$__all' or tool in (${tool:singlequote})) | where operation == 'execute_tool' or isnotempty(tool) | summarize Calls=count() by bin(TimeGenerated, $__interval) | order by TimeGenerated asc"
@@ -235,7 +235,7 @@
           },
           "azureLogAnalytics": {
             "resources": [
-              "/subscriptions/0222a208-955a-45fd-b6d8-ca4704421bf0/resourceGroups/rg-copilot-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-copilot-agentops-dev"
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
             ],
             "resultFormat": "time_series",
             "query": "AppDependencies | where $__timeFilter(TimeGenerated) | where Properties has 'github.copilot' and Properties has 'github-copilot-cli' | extend direct_session=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), ''), fallback_session=strcat(tostring(Properties['gen_ai.agent.id']), '_', tostring(Properties['github.copilot.turn_count']), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm')) | join kind=leftouter (AppDependencies | where $__timeFilter(TimeGenerated) | where Properties has 'github.copilot' and Properties has 'github-copilot-cli' | extend direct_session=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), '') | where isnotempty(direct_session) | summarize operation_session=take_any(direct_session) by OperationId) on OperationId | extend conversation=iff(isnotempty(operation_session), operation_session, iff(isnotempty(direct_session), direct_session, fallback_session)) | extend operation=tostring(Properties['gen_ai.operation.name']), agent=tostring(Properties['gen_ai.agent.name']), model=tostring(Properties['gen_ai.request.model']), tool=tostring(Properties['gen_ai.tool.name']), repo=tostring(Properties['agentops.repo.hash']), error=tostring(Properties['error.type']) | where ('$model' == '$__all' or model in (${model:singlequote})) | where ('$operation' == '$__all' or operation in (${operation:singlequote})) | where ('$agent' == '$__all' or agent in (${agent:singlequote})) | where ('$repo' == '$__all' or repo in (${repo:singlequote})) | where ('$tool' == '$__all' or tool in (${tool:singlequote})) | where operation == 'execute_tool' or isnotempty(tool) | summarize Failures=countif(Success == false or isnotempty(error)) by bin(TimeGenerated, $__interval) | order by TimeGenerated asc"
@@ -299,7 +299,7 @@
           },
           "azureLogAnalytics": {
             "resources": [
-              "/subscriptions/0222a208-955a-45fd-b6d8-ca4704421bf0/resourceGroups/rg-copilot-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-copilot-agentops-dev"
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
             ],
             "resultFormat": "time_series",
             "query": "AppDependencies | where $__timeFilter(TimeGenerated) | where Properties has 'github.copilot' and Properties has 'github-copilot-cli' | extend direct_session=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), ''), fallback_session=strcat(tostring(Properties['gen_ai.agent.id']), '_', tostring(Properties['github.copilot.turn_count']), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm')) | join kind=leftouter (AppDependencies | where $__timeFilter(TimeGenerated) | where Properties has 'github.copilot' and Properties has 'github-copilot-cli' | extend direct_session=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), '') | where isnotempty(direct_session) | summarize operation_session=take_any(direct_session) by OperationId) on OperationId | extend conversation=iff(isnotempty(operation_session), operation_session, iff(isnotempty(direct_session), direct_session, fallback_session)) | extend operation=tostring(Properties['gen_ai.operation.name']), agent=tostring(Properties['gen_ai.agent.name']), model=tostring(Properties['gen_ai.request.model']), tool=tostring(Properties['gen_ai.tool.name']), repo=tostring(Properties['agentops.repo.hash']), error=tostring(Properties['error.type']) | where ('$model' == '$__all' or model in (${model:singlequote})) | where ('$operation' == '$__all' or operation in (${operation:singlequote})) | where ('$agent' == '$__all' or agent in (${agent:singlequote})) | where ('$repo' == '$__all' or repo in (${repo:singlequote})) | where ('$tool' == '$__all' or tool in (${tool:singlequote})) | where operation == 'execute_tool' or isnotempty(tool) | where tool !in ('bash','powershell','list_bash','list_powershell','read_bash','read_powershell','stop_bash','stop_powershell','write_bash','write_powershell','apply_patch','create','edit','view','list_agents','read_agent','task','ask_user','glob','grep','rg','skill','web_fetch') and isnotempty(tool) | summarize Tools=dcount(tool) by bin(TimeGenerated, $__interval) | order by TimeGenerated asc"
@@ -407,7 +407,7 @@
           },
           "azureLogAnalytics": {
             "resources": [
-              "/subscriptions/0222a208-955a-45fd-b6d8-ca4704421bf0/resourceGroups/rg-copilot-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-copilot-agentops-dev"
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
             ],
             "resultFormat": "table",
             "query": "// MCP and tool usage view for Copilot CLI AgentOps.\n// Copilot reports all tool invocations as execute_tool spans. Built-in tools are\n// classified from the documented CLI tool list. MCP tools are inferred from the\n// documented namespaced forms: mcp__<server>__<tool> and <server>/<tool>.\nlet lookback = 7d;\nlet builtin_tools = dynamic([\n    \"bash\", \"powershell\", \"list_bash\", \"list_powershell\", \"read_bash\", \"read_powershell\",\n    \"stop_bash\", \"stop_powershell\", \"write_bash\", \"write_powershell\", \"apply_patch\",\n    \"create\", \"edit\", \"view\", \"list_agents\", \"read_agent\", \"task\", \"ask_user\",\n    \"glob\", \"grep\", \"rg\", \"skill\", \"web_fetch\"\n]);\nlet session_id = (props:dynamic, timestamp:datetime) {\n    case(\n        isnotempty(tostring(props[\"gen_ai.conversation.id\"])),\n        tostring(props[\"gen_ai.conversation.id\"]),\n        isnotempty(tostring(props[\"github.copilot.interaction_id\"])),\n        tostring(props[\"github.copilot.interaction_id\"]),\n        strcat(\n            tostring(props[\"gen_ai.agent.id\"]),\n            \"_\",\n            tostring(props[\"github.copilot.turn_count\"]),\n            \"_\",\n            format_datetime(bin(timestamp, 1h), \"yyyyMMdd_HHmm\")\n        )\n    )\n};\nlet raw_spans =\nAppDependencies\n| where TimeGenerated > ago(lookback)\n| where Properties has \"github.copilot\" and Properties has \"github-copilot-cli\"\n| extend\n    direct_session = case(\n        isnotempty(tostring(Properties[\"gen_ai.conversation.id\"])),\n        tostring(Properties[\"gen_ai.conversation.id\"]),\n        isnotempty(tostring(Properties[\"github.copilot.interaction_id\"])),\n        tostring(Properties[\"github.copilot.interaction_id\"]),\n        \"\"\n    ),\n    fallback_session = session_id(Properties, TimeGenerated),\n    operation = tostring(Properties[\"gen_ai.operation.name\"]),\n    tool = tostring(Properties[\"gen_ai.tool.name\"]),\n    configured_servers = tostring(Properties[\"agentops.mcp.config.servers\"]),\n    configured_files = tostring(Properties[\"agentops.mcp.config.files\"]),\n    disabled_servers = tostring(Properties[\"agentops.mcp.disabled.servers\"]),\n    github_tools = tostring(Properties[\"agentops.mcp.github.tools\"]),\n    github_toolsets = tostring(Properties[\"agentops.mcp.github.toolsets\"]),\n    model = coalesce(tostring(Properties[\"agentops.cli.model\"]), tostring(Properties[\"gen_ai.request.model\"])),\n    mode = tostring(Properties[\"agentops.cli.mode\"]),\n    repo = tostring(Properties[\"agentops.repo.hash\"]),\n    error = tostring(Properties[\"error.type\"]);\nlet operation_sessions =\nraw_spans\n| where isnotempty(direct_session)\n| summarize operation_session = take_any(direct_session) by OperationId;\nraw_spans\n| join kind=leftouter operation_sessions on OperationId\n| extend session = iff(isnotempty(operation_session), operation_session, iff(isnotempty(direct_session), direct_session, fallback_session))\n| where operation == \"execute_tool\" or isnotempty(tool)\n| extend\n    single_configured_server = iff(isnotempty(configured_servers) and configured_servers !contains \"|\", configured_servers, \"\")\n| extend\n    mcp_server = case(\n        tool startswith \"mcp__\", extract(@\"^mcp__(.+?)__\", 1, tool),\n        tool contains \"/\", tostring(split(tool, \"/\")[0]),\n        isnotempty(tool) and isnotempty(single_configured_server) and tool !in (builtin_tools), single_configured_server,\n        \"\"\n    ),\n    mcp_tool = case(\n        tool startswith \"mcp__\", extract(@\"^mcp__.+?__(.+)$\", 1, tool),\n        tool contains \"/\", tostring(split(tool, \"/\")[1]),\n        tool\n    )\n| extend\n    tool_family = case(\n        tool in (builtin_tools), \"builtin\",\n        isnotempty(mcp_server), \"mcp\",\n        tool has \"-\", \"likely_mcp_or_extension\",\n        isnotempty(tool), \"custom_or_unknown\",\n        \"unknown\"\n    ),\n    success = Success != false and isempty(error)\n| summarize\n    calls = count(),\n    failures = countif(not(success)),\n    sessions = dcount(session),\n    p50_duration_ms = percentile(DurationMs, 50),\n    p95_duration_ms = percentile(DurationMs, 95),\n    first_seen = min(TimeGenerated),\n    last_seen = max(TimeGenerated),\n    models = make_set_if(model, isnotempty(model), 5),\n    modes = make_set_if(mode, isnotempty(mode), 5),\n    repos = make_set_if(repo, isnotempty(repo), 5),\n    configured_mcp_servers = make_set_if(configured_servers, isnotempty(configured_servers), 10),\n    configured_mcp_files = make_set_if(configured_files, isnotempty(configured_files), 10),\n    disabled_mcp_servers = make_set_if(disabled_servers, isnotempty(disabled_servers), 10),\n    selected_github_mcp_tools = make_set_if(github_tools, isnotempty(github_tools), 10),\n    selected_github_mcp_toolsets = make_set_if(github_toolsets, isnotempty(github_toolsets), 10),\n    errors = make_set_if(error, isnotempty(error), 10)\n    by tool_family, mcp_server, mcp_tool, tool\n| extend failure_pct = round(100.0 * failures / calls, 1)\n| order by tool_family asc, mcp_server asc, failures desc, calls desc\n"
@@ -501,7 +501,7 @@
           },
           "azureLogAnalytics": {
             "resources": [
-              "/subscriptions/0222a208-955a-45fd-b6d8-ca4704421bf0/resourceGroups/rg-copilot-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-copilot-agentops-dev"
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
             ],
             "resultFormat": "table",
             "query": "AppDependencies | where $__timeFilter(TimeGenerated) | where Properties has 'github.copilot' and Properties has 'github-copilot-cli' | extend direct_session=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), ''), fallback_session=strcat(tostring(Properties['gen_ai.agent.id']), '_', tostring(Properties['github.copilot.turn_count']), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm')) | join kind=leftouter (AppDependencies | where $__timeFilter(TimeGenerated) | where Properties has 'github.copilot' and Properties has 'github-copilot-cli' | extend direct_session=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), '') | where isnotempty(direct_session) | summarize operation_session=take_any(direct_session) by OperationId) on OperationId | extend conversation=iff(isnotempty(operation_session), operation_session, iff(isnotempty(direct_session), direct_session, fallback_session)) | extend operation=tostring(Properties['gen_ai.operation.name']), agent=tostring(Properties['gen_ai.agent.name']), model=tostring(Properties['gen_ai.request.model']), tool=tostring(Properties['gen_ai.tool.name']), repo=tostring(Properties['agentops.repo.hash']), error=tostring(Properties['error.type']) | where ('$model' == '$__all' or model in (${model:singlequote})) | where ('$operation' == '$__all' or operation in (${operation:singlequote})) | where ('$agent' == '$__all' or agent in (${agent:singlequote})) | where ('$repo' == '$__all' or repo in (${repo:singlequote})) | where ('$tool' == '$__all' or tool in (${tool:singlequote})) | where operation == 'execute_tool' or isnotempty(tool) | project TimeGenerated, Session=conversation, tool, model, repo, DurationMs, Success, ResultCode, error | order by TimeGenerated desc | take 300"
@@ -522,11 +522,11 @@
       {
         "name": "workspaceResource",
         "type": "constant",
-        "query": "/subscriptions/0222a208-955a-45fd-b6d8-ca4704421bf0/resourceGroups/rg-copilot-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-copilot-agentops-dev",
+        "query": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev",
         "current": {
           "selected": false,
-          "text": "/subscriptions/0222a208-955a-45fd-b6d8-ca4704421bf0/resourceGroups/rg-copilot-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-copilot-agentops-dev",
-          "value": "/subscriptions/0222a208-955a-45fd-b6d8-ca4704421bf0/resourceGroups/rg-copilot-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-copilot-agentops-dev"
+          "text": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev",
+          "value": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
         },
         "hide": 2
       },
@@ -543,7 +543,7 @@
           "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
             "resources": [
-              "/subscriptions/0222a208-955a-45fd-b6d8-ca4704421bf0/resourceGroups/rg-copilot-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-copilot-agentops-dev"
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
             ],
             "query": "AppDependencies | where TimeGenerated > ago(14d) | where Properties has 'github.copilot' and Properties has 'github-copilot-cli' | extend model=tostring(Properties['gen_ai.request.model']) | where isnotempty(model) | distinct model | order by model asc"
           }
@@ -574,7 +574,7 @@
           "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
             "resources": [
-              "/subscriptions/0222a208-955a-45fd-b6d8-ca4704421bf0/resourceGroups/rg-copilot-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-copilot-agentops-dev"
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
             ],
             "query": "AppDependencies | where TimeGenerated > ago(14d) | where Properties has 'github.copilot' and Properties has 'github-copilot-cli' | extend operation=tostring(Properties['gen_ai.operation.name']) | where isnotempty(operation) | distinct operation | order by operation asc"
           }
@@ -605,7 +605,7 @@
           "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
             "resources": [
-              "/subscriptions/0222a208-955a-45fd-b6d8-ca4704421bf0/resourceGroups/rg-copilot-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-copilot-agentops-dev"
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
             ],
             "query": "AppDependencies | where TimeGenerated > ago(14d) | where Properties has 'github.copilot' and Properties has 'github-copilot-cli' | extend agent=tostring(Properties['gen_ai.agent.name']) | where isnotempty(agent) | distinct agent | order by agent asc"
           }
@@ -636,7 +636,7 @@
           "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
             "resources": [
-              "/subscriptions/0222a208-955a-45fd-b6d8-ca4704421bf0/resourceGroups/rg-copilot-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-copilot-agentops-dev"
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
             ],
             "query": "AppDependencies | where TimeGenerated > ago(14d) | where Properties has 'github.copilot' and Properties has 'github-copilot-cli' | extend repo=tostring(Properties['agentops.repo.hash']) | where isnotempty(repo) | distinct repo | order by repo asc"
           }
@@ -667,7 +667,7 @@
           "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
             "resources": [
-              "/subscriptions/0222a208-955a-45fd-b6d8-ca4704421bf0/resourceGroups/rg-copilot-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-copilot-agentops-dev"
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
             ],
             "query": "AppDependencies | where TimeGenerated > ago(14d) | where Properties has 'github.copilot' and Properties has 'github-copilot-cli' | extend tool=tostring(Properties['gen_ai.tool.name']) | where isnotempty(tool) | distinct tool | order by tool asc"
           }

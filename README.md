@@ -22,12 +22,15 @@ You do not need to know OpenTelemetry, KQL, MCP, or Grafana to start. Those are 
 
 ## 3. Install in the shortest safe path
 
-This repo currently points at the deployed dev stack in `rg-copilot-agentops-dev` in `northeurope`. The installer creates a local `copilot` shim that starts the Azure Monitor collector when needed, keeps content capture off, adds safe AgentOps labels, and then calls the real Copilot CLI.
+Configure the Azure workspace and Grafana endpoint for your own stack, then install the local shim. The shim starts the Azure Monitor collector when needed, keeps content capture off, adds safe AgentOps labels, and then calls the real Copilot CLI.
 
 macOS/Linux:
 
 ```bash
 az login
+export AZURE_RESOURCE_GROUP=rg-agentops-dev
+export AGENTOPS_LOG_ANALYTICS_WORKSPACE_ID="<workspace-id>"
+export AGENTOPS_GRAFANA_BASE_URL="https://<your-grafana>.grafana.azure.com"
 ./install-agentops.sh
 export PATH="$HOME/.local/bin:$PATH"
 copilot --help
@@ -38,6 +41,9 @@ PowerShell:
 
 ```powershell
 az login
+$env:AZURE_RESOURCE_GROUP = "rg-agentops-dev"
+$env:AGENTOPS_LOG_ANALYTICS_WORKSPACE_ID = "<workspace-id>"
+$env:AGENTOPS_GRAFANA_BASE_URL = "https://<your-grafana>.grafana.azure.com"
 ./install-agentops.ps1
 $env:PATH = "$HOME/.local/bin;$env:PATH"
 copilot --help
@@ -137,10 +143,10 @@ node agentops-cli/src/index.js replay latest --file tests/sample-otel/tool-failu
 
 ## 5. Open the dashboard
 
-Open the deployed overview dashboard:
+Open your overview dashboard after setting `AGENTOPS_GRAFANA_BASE_URL`:
 
 ```text
-https://graf-copilotagentops-de-a4czh7g5aueyf4e0.neu.grafana.azure.com/d/copilot-agentops/copilot-cli-agentops
+https://<your-grafana>.grafana.azure.com/d/copilot-agentops/copilot-cli-agentops
 ```
 
 The dashboard pack includes:
@@ -167,8 +173,8 @@ node scripts/build-grafana-dashboard-pack.js
 If you run deployments outside `azd`, import dashboards manually:
 
 ```bash
-AZURE_RESOURCE_GROUP=rg-copilot-agentops-dev \
-GRAFANA_NAME=graf-copilotagentops-de \
+AZURE_RESOURCE_GROUP=rg-agentops-dev \
+GRAFANA_NAME=graf-agentops-dev \
 ./scripts/grafana-import-dashboard.sh
 ```
 
@@ -259,13 +265,13 @@ AgentOps is a local-first telemetry loop:
 Copilot CLI -> AgentOps shim -> localhost collector -> Azure Monitor -> Managed Grafana
 ```
 
-The Azure deployment contains:
+The Azure deployment creates:
 
-- Log Analytics Workspace: `law-copilot-agentops-dev`
-- Application Insights: `appi-copilot-agentops-dev`
-- Azure Monitor Workspace: `amw-copilot-agentops-dev`
-- Azure Managed Grafana: `graf-copilotagentops-de`
-- Key Vault: `kv-copilotagentops-dev-u`
+- Log Analytics Workspace
+- Application Insights
+- Azure Monitor Workspace
+- Azure Managed Grafana
+- Key Vault
 - Disabled proposal-only scheduled query rules
 
 More detail:
