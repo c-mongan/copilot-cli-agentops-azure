@@ -37,6 +37,20 @@ copilot --help
 node agentops-cli/src/index.js status
 ```
 
+The installer also adds the bundled AgentOps skills to your default Copilot skills directory. That means you can ask Copilot for the common workflows instead of remembering every CLI command:
+
+```text
+Use agentops-live-triage to explain my latest Copilot run and recommend one next action.
+Use agentops-benchmark-gate to compare my baseline and candidate benchmark runs.
+Use agentops-primitive-inventory to show which agents, skills, hooks, and MCP tools are configured.
+```
+
+If you only want to refresh the skills later:
+
+```bash
+node agentops-cli/src/index.js skills install
+```
+
 PowerShell:
 
 ```powershell
@@ -84,6 +98,14 @@ Run Copilot normally after install:
 ```bash
 copilot -p "Reply with exactly: agentops smoke."
 ```
+
+The easiest follow-up is to ask Copilot to use the installed skill:
+
+```text
+Use agentops-live-triage to explain the latest run.
+```
+
+The CLI commands below are still useful for scripts, CI checks, and troubleshooting.
 
 Open the dashboard links from the CLI:
 

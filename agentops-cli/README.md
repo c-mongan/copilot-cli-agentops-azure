@@ -11,6 +11,8 @@ node src/index.js primitives --last 7d
 node src/index.js import-jsonl ../tests/sample-otel/tool-failure.jsonl
 node src/index.js validate-collector
 node src/index.js validate-azure
+node src/index.js skills install
+node src/index.js skills list
 node src/index.js link session <conversation>
 node src/index.js link trace <operationId>
 node src/index.js fields --last 7d
@@ -25,6 +27,8 @@ node src/index.js saved-view add latest-risk --session <conversation>
 ```
 
 `validate-azure` is intentionally a handoff reminder in v0.1. Run Azure validation before any deployment.
+
+`skills install` copies the bundled AgentOps skills into `COPILOT_HOME/skills`, or `~/.copilot/skills` when `COPILOT_HOME` is not set. Existing local skills are skipped unless you pass `--force`.
 
 `link` prints a Grafana URL plus the raw Azure Log Analytics KQL for a session or trace.
 

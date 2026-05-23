@@ -41,6 +41,13 @@ mkdir -p "${install_dir}"
 chmod +x "${repo_root}/scripts/copilot-agentops" "${repo_root}/scripts/collector-azuremonitor-up.sh" "${repo_root}/copilot/copilot-observe"
 ln -sf "${repo_root}/scripts/copilot-agentops" "${install_dir}/copilot-agentops"
 
+if command -v node >/dev/null 2>&1; then
+  node "${repo_root}/agentops-cli/src/index.js" skills install
+else
+  echo "WARNING: node was not found, so AgentOps Copilot skills were not installed." >&2
+  echo "Install Node.js, then run: node ${repo_root}/agentops-cli/src/index.js skills install" >&2
+fi
+
 if [[ "${mode}" == "shadow" ]]; then
   real_copilot="$(PATH="$(printf '%s' "$PATH" | tr ':' '\n' | grep -vx "${install_dir}" | paste -sd ':' -)" command -v copilot || true)"
 

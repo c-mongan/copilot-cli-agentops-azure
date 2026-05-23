@@ -19,6 +19,13 @@ $agentopsCmd = Join-Path $InstallDir "copilot-agentops.cmd"
 "$powershell" -NoProfile -ExecutionPolicy Bypass -File "$agentopsScript" %*
 "@ | Set-Content -Path $agentopsCmd -Encoding ASCII
 
+$node = Get-Command node -ErrorAction SilentlyContinue
+if ($node) {
+  & $node.Source (Join-Path $repoRoot "agentops-cli/src/index.js") skills install
+} else {
+  Write-Warning "node was not found, so AgentOps Copilot skills were not installed. Install Node.js, then run: node $(Join-Path $repoRoot 'agentops-cli/src/index.js') skills install"
+}
+
 if ($ShadowCopilot) {
   $installDirFull = [System.IO.Path]::GetFullPath($InstallDir).TrimEnd([System.IO.Path]::DirectorySeparatorChar)
   $commands = Get-Command copilot -All -ErrorAction SilentlyContinue

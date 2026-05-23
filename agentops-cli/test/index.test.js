@@ -22,10 +22,12 @@ const {
   fieldCatalogQuery,
   importJsonl,
   installedShimStatus,
+  installDefaultSkills,
   kqlFileQuery,
   latestAzureSessionSummary,
   latestSessionAzureQuery,
   latestSessionSummary,
+  listDefaultSkills,
   listBenchmarks,
   loadBenchmarkSummaries,
   liveViewFromArgs,
@@ -42,6 +44,7 @@ const {
   renderOpenLinks,
   renderRecommendation,
   renderReplay,
+  renderSkillsInstall,
   renderStatus,
   recommendationForExplanation,
   runBenchmarkSuite,
@@ -61,6 +64,71 @@ test('scan finds plugin agents and skills', () => {
   assert.ok(result.agents.length >= 5);
   assert.ok(result.skills.length >= 4);
   assert.ok(result.mcp_servers.includes('azure-mcp'));
+});
+
+test('default skills list exposes user-friendly AgentOps workflows', () => {
+  const skills = listDefaultSkills();
+  const names = skills.map(skill => skill.name);
+
+  assert.ok(names.includes('agentops-live-triage'));
+  assert.ok(names.includes('agentops-benchmark-gate'));
+  assert.ok(skills.every(skill => skill.source.endsWith(path.join(skill.name, 'SKILL.md'))));
+});
+
+test('default skills install copies bundled skills into Copilot home', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-skills-'));
+  try {
+    const result = installDefaultSkills({ copilotHome: tempDir });
+    const liveSkill = path.join(tempDir, 'skills', 'agentops-live-triage', 'SKILL.md');
+    const benchmarkSkill = path.join(tempDir, 'skills', 'agentops-benchmark-gate', 'SKILL.md');
+
+    assert.equal(result.copilotHome, tempDir);
+    assert.equal(result.targetDir, path.join(tempDir, 'skills'));
+    assert.ok(result.installed >= 2);
+    assert.equal(fs.existsSync(liveSkill), true);
+    assert.equal(fs.existsSync(benchmarkSkill), true);
+    assert.match(fs.readFileSync(liveSkill, 'utf8'), /what happened in the latest Copilot CLI session/);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('default skills install does not overwrite existing skills unless forced', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-skills-preserve-'));
+  const customSkill = path.join(tempDir, 'skills', 'agentops-live-triage', 'SKILL.md');
+  try {
+    fs.mkdirSync(path.dirname(customSkill), { recursive: true });
+    fs.writeFileSync(customSkill, 'local edit\n');
+
+    const preserved = installDefaultSkills({ copilotHome: tempDir });
+    assert.equal(fs.readFileSync(customSkill, 'utf8'), 'local edit\n');
+    assert.ok(preserved.skipped.some(skill => skill.name === 'agentops-live-triage'));
+
+    const forced = installDefaultSkills({ copilotHome: tempDir, force: true });
+    assert.match(fs.readFileSync(customSkill, 'utf8'), /agentops-live-triage/);
+    assert.ok(forced.updated.some(skill => skill.name === 'agentops-live-triage'));
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('default skills install renderer points users at natural language workflows', () => {
+  const output = renderSkillsInstall({
+    copilotHome: '/tmp/copilot-home',
+    targetDir: '/tmp/copilot-home/skills',
+    installed: 2,
+    updated: [],
+    skipped: [{ name: 'agentops-live-triage' }],
+    skills: [
+      { name: 'agentops-live-triage' },
+      { name: 'agentops-benchmark-gate' }
+    ]
+  });
+
+  assert.match(output, /Installed AgentOps skills/);
+  assert.match(output, /agentops-live-triage/);
+  assert.match(output, /Ask Copilot: Use agentops-live-triage/);
+  assert.match(output, /skipped 1 existing skill/);
 });
 
 test('primitives inventory reports configured and runtime Copilot surfaces', () => {

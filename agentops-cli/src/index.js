@@ -15,7 +15,7 @@ const { createTelemetry } = require('./telemetry');
 const root = path.resolve(__dirname, '..', '..');
 
 function usage() {
-  return `agentops <command>\n\nCommands:\n  status\n  latest [--file <jsonl>] [--last <duration>]\n  live|tail [--file <jsonl>] [--last <duration>] [--follow] [--interval <seconds>]\n  replay <session|latest> [--file <jsonl>] [--last <duration>]\n  explain latest [--file <jsonl>] [--last <duration>]\n  recommend latest [--file <jsonl>] [--last <duration>]\n  open [--file <jsonl>] [--last <duration>]\n  doctor [--local-only]\n  scan [--json]\n  primitives [--last <duration>] [--root <path>]\n  import-jsonl <file>\n  validate-collector [endpoint]\n  validate-azure\n  enable-shadow\n  disable-shadow\n  uninstall\n  collector start|stop\n  saved-view add <name> --url <url> [--query-file <file>] [--description <text>] [--tag <tag>]\n  saved-view list|show|open <name>\n  link session <conversation>\n  link trace <operationId>\n  fields [--last <duration>]\n  context [--last <duration>]\n  token-rollup-audit [--last <duration>]\n  permission-friction [--last <duration>]\n  alert recommend [--last <duration>]\n  lineage [--last <duration>]\n  policy [--last <duration>]\n  mcp [--last <duration>]\n  benchmark list\n  benchmark run <suite> --variant <name> --repeat <n> [--hypothesis <id>] [--dry-run]\n  benchmark report <run-id> [--azure] [--last <duration>]\n  benchmark compare <before-run-id> <after-run-id> [--azure] [--last <duration>]\n`;
+  return `agentops <command>\n\nCommands:\n  status\n  latest [--file <jsonl>] [--last <duration>]\n  live|tail [--file <jsonl>] [--last <duration>] [--follow] [--interval <seconds>]\n  replay <session|latest> [--file <jsonl>] [--last <duration>]\n  explain latest [--file <jsonl>] [--last <duration>]\n  recommend latest [--file <jsonl>] [--last <duration>]\n  open [--file <jsonl>] [--last <duration>]\n  skills list|path|install [--copilot-home <path>] [--force] [--json]\n  doctor [--local-only]\n  scan [--json]\n  primitives [--last <duration>] [--root <path>]\n  import-jsonl <file>\n  validate-collector [endpoint]\n  validate-azure\n  enable-shadow\n  disable-shadow\n  uninstall\n  collector start|stop\n  saved-view add <name> --url <url> [--query-file <file>] [--description <text>] [--tag <tag>]\n  saved-view list|show|open <name>\n  link session <conversation>\n  link trace <operationId>\n  fields [--last <duration>]\n  context [--last <duration>]\n  token-rollup-audit [--last <duration>]\n  permission-friction [--last <duration>]\n  alert recommend [--last <duration>]\n  lineage [--last <duration>]\n  policy [--last <duration>]\n  mcp [--last <duration>]\n  benchmark list\n  benchmark run <suite> --variant <name> --repeat <n> [--hypothesis <id>] [--dry-run]\n  benchmark report <run-id> [--azure] [--last <duration>]\n  benchmark compare <before-run-id> <after-run-id> [--azure] [--last <duration>]\n`;
 }
 
 const configuredWorkspaceId = process.env.AGENTOPS_LOG_ANALYTICS_WORKSPACE_ID || process.env.LOG_ANALYTICS_WORKSPACE_ID || '';
@@ -245,6 +245,118 @@ function installedShimStatus(installDir = defaultInstallDir) {
     first_copilot_on_path: firstCopilot,
     real_copilot: realCopilot,
     copilot_candidates: copilotCommands
+  };
+}
+
+function defaultCopilotHome() {
+  return process.env.AGENTOPS_COPILOT_HOME || process.env.COPILOT_HOME || path.join(os.homedir(), '.copilot');
+}
+
+function listDefaultSkills(sourceDir = path.join(root, 'plugin', 'skills')) {
+  if (!fs.existsSync(sourceDir)) return [];
+
+  return fs.readdirSync(sourceDir, { withFileTypes: true })
+    .filter(entry => entry.isDirectory())
+    .map(entry => {
+      const skillDir = path.join(sourceDir, entry.name);
+      const skillFile = path.join(skillDir, 'SKILL.md');
+      if (!fs.existsSync(skillFile)) return null;
+      const frontmatter = parseFrontmatter(skillFile);
+      return {
+        name: frontmatter.name || entry.name,
+        directory: entry.name,
+        description: frontmatter.description || '',
+        source: skillFile
+      };
+    })
+    .filter(Boolean)
+    .sort((left, right) => left.name.localeCompare(right.name));
+}
+
+function skillInstallTarget(options = {}) {
+  const copilotHome = path.resolve(options.copilotHome || defaultCopilotHome());
+  const targetDir = path.resolve(options.skillsDir || path.join(copilotHome, 'skills'));
+  return { copilotHome, targetDir };
+}
+
+function installDefaultSkills(options = {}) {
+  const sourceDir = path.resolve(options.sourceDir || path.join(root, 'plugin', 'skills'));
+  const { copilotHome, targetDir } = skillInstallTarget(options);
+  const force = Boolean(options.force);
+  const dryRun = Boolean(options.dryRun);
+  const skills = listDefaultSkills(sourceDir);
+  const installedSkills = [];
+  const updated = [];
+  const skipped = [];
+
+  if (!dryRun) fs.mkdirSync(targetDir, { recursive: true });
+
+  for (const skill of skills) {
+    const sourceSkillDir = path.dirname(skill.source);
+    const targetSkillDir = path.join(targetDir, skill.directory);
+    const targetExists = fs.existsSync(targetSkillDir);
+
+    if (targetExists && !force) {
+      skipped.push({ name: skill.name, target: targetSkillDir, reason: 'exists' });
+      continue;
+    }
+
+    if (!dryRun) {
+      if (targetExists) fs.rmSync(targetSkillDir, { recursive: true, force: true });
+      fs.cpSync(sourceSkillDir, targetSkillDir, { recursive: true });
+    }
+
+    const record = { name: skill.name, target: targetSkillDir };
+    if (targetExists) updated.push(record);
+    else installedSkills.push(record);
+  }
+
+  return {
+    copilotHome,
+    targetDir,
+    sourceDir,
+    force,
+    dryRun,
+    skills,
+    installed: installedSkills.length,
+    installedSkills,
+    updated,
+    skipped
+  };
+}
+
+function plural(count, singular, pluralValue = `${singular}s`) {
+  return `${count} ${count === 1 ? singular : pluralValue}`;
+}
+
+function renderSkillsInstall(result) {
+  const lines = [
+    `Installed AgentOps skills into ${result.targetDir}.`,
+    `${plural(result.installed, 'new skill')}; ${plural(result.updated.length, 'updated skill')}; skipped ${plural(result.skipped.length, 'existing skill')}.`
+  ];
+
+  if (result.skills.length > 0) {
+    lines.push('', 'Available skills:');
+    for (const skill of result.skills) lines.push(`- ${skill.name}`);
+    const starterSkill = result.skills.find(skill => skill.name === 'agentops-live-triage') || result.skills[0];
+    lines.push('', `Ask Copilot: Use ${starterSkill.name} to inspect the latest AgentOps run.`);
+  }
+
+  if (result.skipped.length > 0) {
+    lines.push('Run `agentops skills install --force` to refresh skipped skills from this repo.');
+  }
+
+  return `${lines.join('\n')}\n`;
+}
+
+function parseSkillsArgs(args) {
+  const subcommand = args[0] || 'install';
+  const rest = args.slice(1);
+  return {
+    subcommand,
+    copilotHome: optionValue(rest, ['--copilot-home', '--home']),
+    force: rest.includes('--force'),
+    json: rest.includes('--json')
   };
 }
 
@@ -2043,6 +2155,24 @@ async function main(argv) {
     return;
   }
 
+  if (command === 'skills') {
+    const options = parseSkillsArgs(args);
+    if (options.subcommand === 'list') {
+      process.stdout.write(JSON.stringify({ skills: listDefaultSkills() }, null, 2) + '\n');
+      return;
+    }
+    if (options.subcommand === 'path') {
+      process.stdout.write(`${skillInstallTarget(options).targetDir}\n`);
+      return;
+    }
+    if (options.subcommand === 'install') {
+      const result = installDefaultSkills(options);
+      process.stdout.write(options.json ? JSON.stringify(result, null, 2) + '\n' : renderSkillsInstall(result));
+      return;
+    }
+    throw new Error('skills requires list, path, or install');
+  }
+
   if (command === 'scan') {
     process.stdout.write(JSON.stringify(scan(), null, 2) + '\n');
     return;
@@ -2208,11 +2338,13 @@ module.exports = {
   fieldCatalogQuery,
   importJsonl,
   installedShimStatus,
+  installDefaultSkills,
   kqlFileQuery,
   latestAzureSessionSummary,
   latestSessionAzureQuery,
   latestSessionSummary,
   latestSummaryFromArgs,
+  listDefaultSkills,
   listBenchmarks,
   loadBenchmarkSummaries,
   loadBenchmarkSuites,
@@ -2230,6 +2362,7 @@ module.exports = {
   renderOpenLinks,
   renderRecommendation,
   renderReplay,
+  renderSkillsInstall,
   renderStatus,
   recommendationForExplanation,
   readJsonlRows,
@@ -2240,6 +2373,7 @@ module.exports = {
   scan,
   sessionQuery,
   spanRowsFromSource,
+  skillInstallTarget,
   tokenRollupAuditQuery,
   enrichBenchmarkSummariesWithAzure,
   traceQuery,
