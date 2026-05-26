@@ -35,10 +35,21 @@ git diff --check
 Search for deployment-specific identifiers before publishing:
 
 ```bash
-rg -n "subscription-id|workspace-id|grafana-token|connection-string|InstrumentationKey|Bearer " .
+rg -n "InstrumentationKey|connectionString|Connection String|Bearer |client_secret|AZURE_TENANT_ID|tenantId|subscriptionId|workspaceId|grafana-token|api_key|PRIVATE KEY" .
 ```
 
 Placeholders such as `<workspace-id>`, `00000000-0000-0000-0000-000000000000`, and `https://<your-grafana>.grafana.azure.com` are expected.
+
+Confirm the public safety files are present:
+
+```bash
+test -f DISCLAIMER.md
+test -f SECURITY.md
+test -f CONTRIBUTING.md
+test -f OPEN_SOURCE_REVIEW.md
+```
+
+Confirm the README clearly states that this is an independent personal project and not an official Microsoft, GitHub, OpenAI, Azure, or Grafana product.
 
 ## Runtime Configuration
 

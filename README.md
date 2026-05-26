@@ -1,5 +1,7 @@
 # Copilot CLI AgentOps for Azure
 
+> Independent personal open-source project. Not an official Microsoft, GitHub, OpenAI, Azure, or Grafana product, and not endorsed by those organizations. See [DISCLAIMER.md](DISCLAIMER.md) and [SECURITY.md](SECURITY.md) before using with real telemetry.
+
 ## 1. What this does in 5 lines
 
 AgentOps shows what happened during a GitHub Copilot CLI run.
