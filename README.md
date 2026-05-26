@@ -158,6 +158,13 @@ node agentops-cli/src/index.js skills install
 agentops skills install
 ```
 
+Plugin layout note:
+
+- `plugin/agents/` contains the user-invocable and helper `.agent.md` files.
+- `plugin/skills/` contains bundled `SKILL.md` workflows.
+- `plugin/plugin.json` declares those runtime locations.
+- `.github/plugin/marketplace.json` is only marketplace metadata pointing at `./plugin`; it should not duplicate the agents or skills.
+
 If you are unsure which command maps to a README workflow:
 
 ```bash
