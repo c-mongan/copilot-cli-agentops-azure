@@ -38,6 +38,7 @@ done
 shadow_cmd="${install_dir}/copilot"
 agentops_cli_cmd="${install_dir}/agentops"
 agentops_cmd="${install_dir}/copilot-agentops"
+agentops_codex_cmd="${install_dir}/agentops-codex"
 
 if [[ -e "${shadow_cmd}" || -L "${shadow_cmd}" ]]; then
   rm -f "${shadow_cmd}"
@@ -65,6 +66,15 @@ if [[ "${keep_agentops}" != true ]]; then
   else
     echo "No copilot-agentops command found at:"
     echo "  ${agentops_cmd}"
+  fi
+
+  if [[ -e "${agentops_codex_cmd}" || -L "${agentops_codex_cmd}" ]]; then
+    rm -f "${agentops_codex_cmd}"
+    echo "Removed explicit agentops-codex command:"
+    echo "  ${agentops_codex_cmd}"
+  else
+    echo "No agentops-codex command found at:"
+    echo "  ${agentops_codex_cmd}"
   fi
 fi
 

@@ -8,6 +8,7 @@ $ErrorActionPreference = "Stop"
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = Split-Path -Parent $scriptDir
 $agentopsScript = Join-Path $repoRoot "scripts/copilot-agentops.ps1"
+$agentopsCodexScript = Join-Path $repoRoot "scripts/agentops-codex.ps1"
 $agentopsCli = Join-Path $repoRoot "agentops-cli/src/index.js"
 $pwsh = Get-Command pwsh -ErrorAction SilentlyContinue
 $powershell = if ($pwsh) { $pwsh.Source } else { "powershell.exe" }
@@ -25,6 +26,12 @@ $agentopsCmd = Join-Path $InstallDir "copilot-agentops.cmd"
 @echo off
 "$powershell" -NoProfile -ExecutionPolicy Bypass -File "$agentopsScript" %*
 "@ | Set-Content -Path $agentopsCmd -Encoding ASCII
+
+$agentopsCodexCmd = Join-Path $InstallDir "agentops-codex.cmd"
+@"
+@echo off
+"$powershell" -NoProfile -ExecutionPolicy Bypass -File "$agentopsCodexScript" %*
+"@ | Set-Content -Path $agentopsCodexCmd -Encoding ASCII
 
 $node = Get-Command node -ErrorAction SilentlyContinue
 if ($node) {
@@ -58,6 +65,7 @@ set "COPILOT_CLI_BIN=$($realCopilot.Source)"
 Write-Host "Installed:"
 Write-Host "  $agentopsCliCmd"
 Write-Host "  $agentopsCmd"
+Write-Host "  $agentopsCodexCmd"
 
 if ($ShadowCopilot) {
   Write-Host "  $(Join-Path $InstallDir 'copilot.cmd')"

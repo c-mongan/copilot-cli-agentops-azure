@@ -284,6 +284,14 @@ az login
 copilot --additional-mcp-config @copilot/mcp.azure-monitor.sample.json --allow-tool='azure-mcp'
 ```
 
+Use Codex with the same read-only Azure Monitor MCP server:
+
+```bash
+az login
+codex mcp add azure-mcp -- npx -y @azure/mcp@latest server start --read-only --namespace monitor
+codex mcp list
+```
+
 Use Azure Managed Grafana MCP only after setting a token outside the repo:
 
 ```bash
@@ -295,6 +303,20 @@ copilot --additional-mcp-config @copilot/mcp.grafana.sample.json --allow-tool='a
 Before running that command, replace `<grafana-endpoint>` in the sample with your Azure Managed Grafana host.
 
 Prompt templates for session investigation, tool failures, benchmark variant comparison, agent improvement, hook policy tuning, and MCP/tool regression checks are in `docs/copilot-mcp-agentops-prompts.md`.
+
+## Agent Skill MCP Script Attribution Smoke Test
+
+After the normal collector smoke passes, run the attribution smoke to verify the full AgentOps filter surface:
+
+```bash
+agentops plugin install
+agentops attribution-smoke --wait 5m --poll 15s
+agentops attribution --last 2h
+agentops mcp --last 2h
+agentops lineage --last 2h
+```
+
+This sends a metadata-only synthetic trace for `agentops-kitchen-sink-smoke`. It should light up custom agent, skill, Azure MCP, and script/hook fields without recording prompt text, tool arguments, code contents, or secrets.
 
 ## Alert Rule Validation
 

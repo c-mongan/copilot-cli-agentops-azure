@@ -8,6 +8,7 @@ const test = require('node:test');
 process.env.AGENTOPS_CONFIG_PATH = path.join(os.tmpdir(), `agentops-test-config-${process.pid}.json`);
 
 const {
+  agentopsAttributionSmoke,
   agentopsInit,
   agentopsConfigure,
   agentopsSmoke,
@@ -51,6 +52,7 @@ const {
   loadBenchmarkSummaries,
   liveViewFromArgs,
   openLinksSummary,
+  otlpAttributionSmokeTracePayload,
   otelCompatibilityQuery,
   parseBenchmarkCompareArgs,
   parseBenchmarkReportArgs,
@@ -469,6 +471,32 @@ test('smoke dry run creates a privacy-safe OTLP plan and Azure verification quer
   assert.match(result.azure_query, /agentops-smoke-test/);
   assert.match(output, /AgentOps smoke/);
   assert.match(output, /POST http:\/\/127\.0\.0\.1:4318\/v1\/traces/);
+});
+
+test('attribution smoke emits agent skill mcp and script dimensions', async () => {
+  const payload = otlpAttributionSmokeTracePayload('agentops-attribution-smoke-test', Date.parse('2026-05-26T12:00:00Z'));
+  const spans = payload.resourceSpans[0].scopeSpans[0].spans;
+  const attrs = spans.flatMap(span => span.attributes.map(attr => attr.key));
+  const attrValues = JSON.stringify(payload);
+
+  assert.equal(spans.length, 4);
+  assert.ok(attrs.includes('agentops.agent.name'));
+  assert.ok(attrs.includes('agentops.skill.name'));
+  assert.ok(attrs.includes('agentops.mcp.server'));
+  assert.ok(attrs.includes('agentops.script.name'));
+  assert.match(attrValues, /azure-mcp/);
+  assert.match(attrValues, /agentops-kitchen-sink-smoke/);
+
+  const result = await agentopsAttributionSmoke({
+    dryRun: true,
+    id: 'agentops-attribution-smoke-test',
+    workspaceId: 'workspace-123'
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.payload_preview.agent, 'agentops-kitchen-sink-smoke');
+  assert.equal(result.payload_preview.skill, 'agentops-attribution');
+  assert.ok(result.next.some(command => command.includes('attribution --last 2h')));
 });
 
 test('smoke live mode verifies synthetic telemetry in Azure', async () => {
@@ -1588,6 +1616,20 @@ test('command plan exposes shadow and collector lifecycle commands', () => {
   assert.equal(stop.args.at(-1), 'down');
   assert.equal(stop.env.AZURE_RESOURCE_GROUP, 'rg-agentops-dev');
   assert.equal(stop.env.APPLICATIONINSIGHTS_NAME, 'appi-agentops-dev');
+
+  const startAlias = commandPlan('start', [], 'darwin');
+  assert.match(startAlias.command, /collector-azuremonitor-up\.sh$/);
+
+  const stopAlias = commandPlan('stop', [], 'darwin');
+  assert.equal(stopAlias.command, 'docker');
+
+  const copilot = commandPlan('copilot', ['-p', 'hello'], 'darwin');
+  assert.match(copilot.command, /copilot-agentops$/);
+  assert.deepEqual(copilot.args, ['-p', 'hello']);
+
+  const codex = commandPlan('codex', ['--help'], 'darwin');
+  assert.match(codex.command, /agentops-codex$/);
+  assert.deepEqual(codex.args, ['--help']);
 });
 
 test('windows command plan prefers PowerShell Core wrappers', () => {
@@ -1610,6 +1652,10 @@ test('windows command plan prefers PowerShell Core wrappers', () => {
   assert.equal(collector.command, 'pwsh');
   assert.match(collector.args.at(-1), /collector-azuremonitor-up\.ps1$/);
   assert.equal(collector.env.AZURE_RESOURCE_GROUP, 'rg-agentops-dev');
+
+  const codex = commandPlan('codex', ['--help'], 'win32');
+  assert.equal(codex.command, 'pwsh');
+  assert.match(codex.args.at(-2), /agentops-codex\.ps1$/);
 });
 
 test('policy and mcp KQL queries expose documented Copilot dimensions', () => {

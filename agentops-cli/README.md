@@ -10,6 +10,10 @@ node src/index.js install --shadow-copilot
 node src/index.js configure show
 node src/index.js configure set --resource-group rg-agentops-dev --workspace-id <workspace-id> --grafana-url https://<your-grafana>.grafana.azure.com
 node src/index.js configure import-azd
+node src/index.js start
+node src/index.js stop
+node src/index.js copilot -p "Reply with exactly: agentops smoke."
+node src/index.js codex
 node src/index.js otel-setup
 node src/index.js otel-setup --shell powershell
 node src/index.js compat-check --last 2h
@@ -21,6 +25,7 @@ node src/index.js validate-collector
 node src/index.js validate-azure
 node src/index.js smoke --dry-run
 node src/index.js smoke --wait 2m --poll 10s
+node src/index.js attribution-smoke --wait 5m --poll 15s
 node src/index.js ask-context latest --last 2h
 node src/index.js plugin install
 node src/index.js plugin uninstall
@@ -50,6 +55,12 @@ node src/index.js saved-view add latest-risk --session <conversation>
 
 `install` installs the `agentops` and `copilot-agentops` commands into `~/.local/bin`. Pass `--shadow-copilot` when you want plain `copilot` to route through AgentOps too.
 
+`start` and `stop` are short aliases for `collector start` and `collector stop`.
+
+`copilot` starts the collector if needed and runs the real Copilot CLI through the AgentOps shim.
+
+`codex` starts the collector if needed, sets privacy-safe OTLP environment defaults, and runs the local Codex CLI. Add Azure Monitor MCP with `codex mcp add azure-mcp -- npx -y @azure/mcp@latest server start --read-only --namespace monitor`.
+
 `configure` stores non-secret Azure/Grafana identifiers in `~/.agentops/config.json` so users do not need to export terminal environment variables for every shell. Environment variables still override saved config for CI and advanced workflows.
 
 `otel-setup` prints copyable VS Code Copilot Chat settings, Copilot CLI terminal environment variables, and a Copilot SDK TypeScript snippet that point native Copilot OTel at the AgentOps collector. This is the no-wrapper path: users can emit OTLP directly without installing `copilot-agentops`.
@@ -59,6 +70,8 @@ node src/index.js saved-view add latest-risk --session <conversation>
 `validate-azure` runs read-only Azure checks for CLI login, resource group, Log Analytics query access, Application Insights, Grafana resource, datasource UID, and imported dashboard UIDs.
 
 `smoke` sends or dry-runs a privacy-safe OTLP trace through the local collector. In live mode it polls Log Analytics for the smoke id by default; use `--no-verify` only when you want a collector-only check.
+
+`attribution-smoke` sends a privacy-safe synthetic trace that exercises custom agent, skill, Azure MCP, and script/hook attribution fields. Use it after `smoke` when you want to verify attribution dashboards and filters without relying on a live agent to call every primitive.
 
 `collector-health` prints a KQL query for smoke span counts, latest Copilot span, and collector error/warning signals.
 

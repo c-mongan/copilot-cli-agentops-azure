@@ -62,6 +62,47 @@ Add `@copilot/mcp.grafana.sample.json` only after replacing the placeholder Graf
 
 Keep MCP read-only by default. If a future workflow needs write access, require an explicit approval step and document the exact tool, resource, and rollback plan.
 
+### Codex Usage
+
+Codex reads MCP servers from `~/.codex/config.toml`. Add the read-only Azure Monitor server with:
+
+```bash
+az login
+codex mcp add azure-mcp -- npx -y @azure/mcp@latest server start --read-only --namespace monitor
+codex mcp list
+codex mcp get azure-mcp
+```
+
+This creates a global Codex MCP server equivalent to:
+
+```toml
+[mcp_servers.azure-mcp]
+command = "npx"
+args = ["-y", "@azure/mcp@latest", "server", "start", "--read-only", "--namespace", "monitor"]
+```
+
+Keep the server read-only for AgentOps investigation. For this repo, use Codex to ask for Azure Monitor evidence, then validate the same query with `agentops latest`, `agentops attribution`, `agentops mcp`, or `agentops lineage`.
+
+### Attribution Smoke
+
+Use the bundled `agentops-kitchen-sink-smoke` agent profile and synthetic attribution smoke to verify that filters work before debugging a real custom agent:
+
+```bash
+agentops plugin install
+agentops validate-collector
+agentops attribution-smoke --wait 5m --poll 15s
+agentops attribution --last 2h
+agentops mcp --last 2h
+agentops lineage --last 2h
+```
+
+The synthetic trace is metadata-only. It does not send prompt text, tool arguments, code contents, or secrets. It should produce these dimensions:
+
+- `agentops.agent.name=agentops-kitchen-sink-smoke`
+- `agentops.skill.name=agentops-attribution`
+- `agentops.mcp.server=azure-mcp`
+- `agentops.script.name=pre-tool-policy`
+
 ## Recommendation Contract
 
 Every AgentOps recommendation must include:

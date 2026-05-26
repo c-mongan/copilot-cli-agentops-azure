@@ -38,9 +38,10 @@ while [[ $# -gt 0 ]]; do
 done
 
 mkdir -p "${install_dir}"
-chmod +x "${repo_root}/agentops-cli/src/index.js" "${repo_root}/scripts/copilot-agentops" "${repo_root}/scripts/collector-azuremonitor-up.sh" "${repo_root}/copilot/copilot-observe"
+chmod +x "${repo_root}/agentops-cli/src/index.js" "${repo_root}/scripts/copilot-agentops" "${repo_root}/scripts/agentops-codex" "${repo_root}/scripts/collector-azuremonitor-up.sh" "${repo_root}/copilot/copilot-observe"
 ln -sf "${repo_root}/agentops-cli/src/index.js" "${install_dir}/agentops"
 ln -sf "${repo_root}/scripts/copilot-agentops" "${install_dir}/copilot-agentops"
+ln -sf "${repo_root}/scripts/agentops-codex" "${install_dir}/agentops-codex"
 
 if command -v node >/dev/null 2>&1; then
   node "${repo_root}/agentops-cli/src/index.js" plugin install
@@ -74,6 +75,7 @@ cat <<MSG
 Installed:
   ${install_dir}/agentops
   ${install_dir}/copilot-agentops
+  ${install_dir}/agentops-codex
 MSG
 
 if [[ "${mode}" == "shadow" ]]; then

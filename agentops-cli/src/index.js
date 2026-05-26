@@ -35,11 +35,15 @@ function usage() {
     'configure show|set|import-azd [--json]',
     'install [--shadow-copilot]',
     'otel-setup [--endpoint <url>] [--service-name <name>] [--shell bash|powershell|json]',
+    'start|stop',
+    'copilot [copilot-args...]',
+    'codex [codex-args...]',
     'compat-check [--last <duration>]',
     'validate-collector [endpoint]',
     'validate-azure [--last <duration>] [--json]',
     'init [--dry-run] [--force-skills] [--json]',
     'smoke [--dry-run] [--endpoint <url>] [--id <smoke-id>] [--last <duration>] [--wait <duration>] [--poll <duration>] [--no-verify] [--json]',
+    'attribution-smoke [--dry-run] [--endpoint <url>] [--id <smoke-id>] [--last <duration>] [--wait <duration>] [--poll <duration>] [--no-verify] [--json]',
     'ask-context <latest|session-id> [--file <jsonl>] [--last <duration>] [--json]',
     'enable-shadow',
     'disable-shadow',
@@ -423,8 +427,20 @@ function commandPlan(command, args = [], platform = process.platform) {
       : { command: path.join(root, 'uninstall-agentops.sh'), args: [] };
   }
 
-  if (command === 'collector') {
-    const action = args[0];
+  if (command === 'copilot') {
+    return isWindows
+      ? { command: 'pwsh', args: ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath('copilot-agentops.ps1'), ...args], env: cloudEnv() }
+      : { command: scriptPath('copilot-agentops'), args, env: cloudEnv() };
+  }
+
+  if (command === 'codex') {
+    return isWindows
+      ? { command: 'pwsh', args: ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath('agentops-codex.ps1'), ...args], env: cloudEnv() }
+      : { command: scriptPath('agentops-codex'), args, env: cloudEnv() };
+  }
+
+  if (command === 'collector' || command === 'start' || command === 'stop') {
+    const action = command === 'start' ? 'start' : command === 'stop' ? 'stop' : args[0];
     if (action === 'start') {
       return isWindows
         ? { command: 'pwsh', args: ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath('collector-azuremonitor-up.ps1')], env: cloudEnv() }
@@ -1680,6 +1696,11 @@ function smokeId(now = new Date()) {
   return `agentops-smoke-${stamp}-${crypto.randomBytes(3).toString('hex')}`;
 }
 
+function attributionSmokeId(now = new Date()) {
+  const stamp = now.toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
+  return `agentops-attribution-smoke-${stamp}-${crypto.randomBytes(3).toString('hex')}`;
+}
+
 function smokeAzureQuery(id, last = '2h') {
   const lookback = validateKqlDuration(last);
   const escapedId = escapeKqlString(id);
@@ -1724,6 +1745,84 @@ function otlpSmokeTracePayload(id, nowMs = Date.now()) {
                 ],
                 status: { code: 1 }
               }
+            ]
+          }
+        ]
+      }
+    ]
+  };
+}
+
+function otlpAttributionSmokeTracePayload(id, nowMs = Date.now()) {
+  const traceId = crypto.randomBytes(16).toString('hex');
+  const start = BigInt(nowMs) * 1000000n;
+  const attr = (key, stringValue) => ({ key, value: { stringValue } });
+  const boolAttr = (key, boolValue) => ({ key, value: { boolValue } });
+  const intAttr = (key, intValue) => ({ key, value: { intValue: String(intValue) } });
+  const span = (name, offsetMs, durationMs, attributes) => {
+    const spanStart = start + BigInt(offsetMs) * 1000000n;
+    const spanEnd = spanStart + BigInt(durationMs) * 1000000n;
+    return {
+      traceId,
+      spanId: crypto.randomBytes(8).toString('hex'),
+      name,
+      kind: 1,
+      startTimeUnixNano: spanStart.toString(),
+      endTimeUnixNano: spanEnd.toString(),
+      attributes: [
+        attr('agentops.smoke_id', id),
+        attr('agentops.test.kind', 'attribution'),
+        attr('gen_ai.conversation.id', id),
+        boolAttr('content.capture.enabled', false),
+        ...attributes
+      ],
+      status: { code: 1 }
+    };
+  };
+
+  return {
+    resourceSpans: [
+      {
+        resource: {
+          attributes: [
+            attr('service.name', 'github-copilot-cli'),
+            attr('service.namespace', 'copilot-agentops'),
+            attr('agent.framework', 'github-copilot'),
+            attr('agent.runtime', 'github-copilot-cli'),
+            attr('agentops.profile', 'attribution-smoke'),
+            attr('agentops.smoke_id', id)
+          ]
+        },
+        scopeSpans: [
+          {
+            scope: { name: 'agentops.attribution-smoke', version: '0.1.0' },
+            spans: [
+              span(`agentops.attribution.${id}.agent`, 0, 100, [
+                attr('gen_ai.operation.name', 'invoke_agent'),
+                attr('gen_ai.agent.name', 'agentops-kitchen-sink-smoke'),
+                attr('agentops.agent.name', 'agentops-kitchen-sink-smoke'),
+                attr('agentops.agent.file', 'agentops-kitchen-sink-smoke.agent.md'),
+                intAttr('gen_ai.usage.input_tokens', 1200),
+                intAttr('gen_ai.usage.output_tokens', 80),
+                attr('github.copilot.cost', '0.2')
+              ]),
+              span(`agentops.attribution.${id}.skill`, 110, 40, [
+                attr('gen_ai.operation.name', 'skill.invoke'),
+                attr('agentops.skill.name', 'agentops-attribution'),
+                attr('agentops.skill.file', 'agentops-attribution/SKILL.md')
+              ]),
+              span(`agentops.attribution.${id}.mcp`, 160, 60, [
+                attr('gen_ai.operation.name', 'execute_tool'),
+                attr('gen_ai.tool.name', 'azure-mcp/monitor_query'),
+                attr('agentops.mcp.server', 'azure-mcp'),
+                attr('agentops.mcp.tool', 'monitor_query')
+              ]),
+              span(`agentops.attribution.${id}.script`, 230, 30, [
+                attr('gen_ai.operation.name', 'hook.execute'),
+                attr('agentops.script.name', 'pre-tool-policy'),
+                attr('agentops.script.file', 'plugin/scripts/pre-tool-policy.js'),
+                attr('agentops.hook.name', 'preToolUse')
+              ])
             ]
           }
         ]
@@ -1843,6 +1942,7 @@ async function agentopsSmoke(options = {}) {
   const pollMs = durationToMs(options.pollMs ?? options.poll, 10000);
   const verify = options.verify !== false;
   const result = {
+    smoke_kind: 'collector',
     smoke_id: id,
     endpoint,
     dry_run: Boolean(options.dryRun),
@@ -1906,9 +2006,88 @@ async function agentopsSmoke(options = {}) {
   };
 }
 
+async function agentopsAttributionSmoke(options = {}) {
+  const endpoint = (options.endpoint || 'http://127.0.0.1:4318').replace(/\/$/, '');
+  const id = options.id || attributionSmokeId(options.now);
+  const last = validateKqlDuration(options.last || '2h');
+  const query = smokeAzureQuery(id, last);
+  const waitMs = durationToMs(options.waitMs ?? options.wait, 60000);
+  const pollMs = durationToMs(options.pollMs ?? options.poll, 10000);
+  const verify = options.verify !== false;
+  const result = {
+    smoke_kind: 'attribution',
+    smoke_id: id,
+    endpoint,
+    dry_run: Boolean(options.dryRun),
+    verify,
+    wait_ms: waitMs,
+    poll_ms: pollMs,
+    workspace_id: options.workspaceId || workspaceId,
+    azure_query: query,
+    payload_preview: {
+      service: 'github-copilot-cli',
+      operation: 'attribution_smoke',
+      agent: 'agentops-kitchen-sink-smoke',
+      skill: 'agentops-attribution',
+      mcp_server: 'azure-mcp',
+      script: 'pre-tool-policy',
+      content_capture_enabled: false
+    }
+  };
+
+  if (options.dryRun) {
+    return {
+      ...result,
+      ok: true,
+      next: [
+        `POST ${endpoint}/v1/traces`,
+        'node agentops-cli/src/index.js attribution --last 2h',
+        verify
+          ? `node agentops-cli/src/index.js attribution-smoke --id ${id} --wait ${Math.ceil(waitMs / 1000)}s --poll ${Math.ceil(pollMs / 1000)}s`
+          : `az monitor log-analytics query --workspace "${result.workspace_id}" --analytics-query "<azure_query>"`
+      ]
+    };
+  }
+
+  const post = options.postJson || postJson;
+  const response = await post(`${endpoint}/v1/traces`, otlpAttributionSmokeTracePayload(id, options.nowMs), options);
+  let verification = null;
+  if (response.ok && verify) {
+    verification = await verifySmokeInAzure(id, {
+      ...options,
+      last,
+      workspaceId: result.workspace_id,
+      waitMs,
+      pollMs
+    });
+  }
+  const ok = response.ok && (!verify || verification?.ok === true);
+  return {
+    ...result,
+    ok,
+    collector_response: response,
+    verification,
+    next: response.ok
+      ? (verification?.ok
+          ? [
+              `Verified ${verification.rows} attribution smoke row${verification.rows === 1 ? '' : 's'} in Log Analytics.`,
+              'node agentops-cli/src/index.js attribution --last 2h',
+              'node agentops-cli/src/index.js mcp --last 2h',
+              'node agentops-cli/src/index.js lineage --last 2h'
+            ]
+          : [
+              verify
+                ? `Attribution smoke was sent, but Log Analytics did not return ${id} before the wait expired.`
+                : `Run this Azure query after ingestion latency settles: ${query}`,
+              'node agentops-cli/src/index.js validate-azure'
+            ])
+      : ['Start the collector with `node agentops-cli/src/index.js collector start` or `./scripts/collector-azuremonitor-up.sh`.']
+  };
+}
+
 function renderSmoke(result) {
   const lines = [
-    'AgentOps smoke',
+    result.smoke_kind === 'attribution' ? 'AgentOps attribution smoke' : 'AgentOps smoke',
     '',
     `Smoke id: ${result.smoke_id}`,
     `Endpoint: ${result.endpoint}`,
@@ -4108,6 +4287,14 @@ async function main(argv) {
     return;
   }
 
+  if (command === 'attribution-smoke') {
+    const options = parseSmokeArgs(args);
+    const result = await agentopsAttributionSmoke(options);
+    process.stdout.write(options.json ? JSON.stringify(result, null, 2) + '\n' : renderSmoke(result));
+    process.exitCode = result.ok ? 0 : 1;
+    return;
+  }
+
   if (command === 'ask-context') {
     const options = parseAskContextArgs(args);
     const result = askAgentOpsContext(options);
@@ -4116,12 +4303,7 @@ async function main(argv) {
     return;
   }
 
-  if (['install', 'enable-shadow', 'disable-shadow', 'uninstall'].includes(command)) {
-    runPlannedCommand(commandPlan(command, args));
-    return;
-  }
-
-  if (command === 'collector') {
+  if (['install', 'enable-shadow', 'disable-shadow', 'uninstall', 'collector', 'start', 'stop', 'copilot', 'codex'].includes(command)) {
     runPlannedCommand(commandPlan(command, args));
     return;
   }
@@ -4240,6 +4422,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  agentopsAttributionSmoke,
   agentopsInit,
   agentopsConfigure,
   agentopsSmoke,
@@ -4271,6 +4454,7 @@ module.exports = {
   importJsonl,
   installedShimStatus,
   agentInstallTarget,
+  attributionSmokeId,
   installDefaultAgents,
   installDefaultSkills,
   installPlugin,
@@ -4287,6 +4471,7 @@ module.exports = {
   loadBenchmarkSuites,
   liveViewFromArgs,
   openLinksSummary,
+  otlpAttributionSmokeTracePayload,
   parseBenchmarkCompareArgs,
   parseBenchmarkReportArgs,
   parseBenchmarkRunArgs,
