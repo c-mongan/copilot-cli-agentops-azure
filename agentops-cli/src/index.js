@@ -25,7 +25,9 @@ function usage() {
     'recommend latest [--file <jsonl>] [--last <duration>]',
     'open [--file <jsonl>] [--last <duration>]',
     'workflows list|show <name> [--json]',
-    'skills list|path|install [--copilot-home <path>] [--force] [--json]',
+    'plugin install|uninstall [--copilot-home <path>] [--force] [--json]',
+    'agents list|path|install|uninstall [--copilot-home <path>] [--force] [--json]',
+    'skills list|path|install|uninstall [--copilot-home <path>] [--force] [--json]',
     'doctor [--local-only]',
     'scan [--json]',
     'primitives [--last <duration>] [--root <path>]',
@@ -549,9 +551,33 @@ function listDefaultSkills(sourceDir = path.join(root, 'plugin', 'skills')) {
     .sort((left, right) => left.name.localeCompare(right.name));
 }
 
+function listDefaultAgents(sourceDir = path.join(root, 'plugin', 'agents')) {
+  if (!fs.existsSync(sourceDir)) return [];
+
+  return fs.readdirSync(sourceDir, { withFileTypes: true })
+    .filter(entry => entry.isFile() && entry.name.endsWith('.agent.md'))
+    .map(entry => {
+      const agentFile = path.join(sourceDir, entry.name);
+      const frontmatter = parseFrontmatter(agentFile);
+      return {
+        name: frontmatter.name || entry.name.replace(/\.agent\.md$/, ''),
+        file: entry.name,
+        description: frontmatter.description || '',
+        source: agentFile
+      };
+    })
+    .sort((left, right) => left.name.localeCompare(right.name));
+}
+
 function skillInstallTarget(options = {}) {
   const copilotHome = path.resolve(options.copilotHome || defaultCopilotHome());
   const targetDir = path.resolve(options.skillsDir || path.join(copilotHome, 'skills'));
+  return { copilotHome, targetDir };
+}
+
+function agentInstallTarget(options = {}) {
+  const copilotHome = path.resolve(options.copilotHome || defaultCopilotHome());
+  const targetDir = path.resolve(options.agentsDir || path.join(copilotHome, 'agents'));
   return { copilotHome, targetDir };
 }
 
@@ -601,6 +627,110 @@ function installDefaultSkills(options = {}) {
   };
 }
 
+function uninstallDefaultSkills(options = {}) {
+  const sourceDir = path.resolve(options.sourceDir || path.join(root, 'plugin', 'skills'));
+  const { copilotHome, targetDir } = skillInstallTarget(options);
+  const dryRun = Boolean(options.dryRun);
+  const skills = listDefaultSkills(sourceDir);
+  const removed = [];
+  const missing = [];
+
+  for (const skill of skills) {
+    const targetSkillDir = path.join(targetDir, skill.directory);
+    if (!fs.existsSync(targetSkillDir)) {
+      missing.push({ name: skill.name, target: targetSkillDir });
+      continue;
+    }
+
+    if (!dryRun) fs.rmSync(targetSkillDir, { recursive: true, force: true });
+    removed.push({ name: skill.name, target: targetSkillDir });
+  }
+
+  return {
+    copilotHome,
+    targetDir,
+    sourceDir,
+    dryRun,
+    skills,
+    removed,
+    missing
+  };
+}
+
+function installDefaultAgents(options = {}) {
+  const sourceDir = path.resolve(options.sourceDir || path.join(root, 'plugin', 'agents'));
+  const { copilotHome, targetDir } = agentInstallTarget(options);
+  const force = Boolean(options.force);
+  const dryRun = Boolean(options.dryRun);
+  const agents = listDefaultAgents(sourceDir);
+  const installedAgents = [];
+  const updated = [];
+  const skipped = [];
+
+  if (!dryRun) fs.mkdirSync(targetDir, { recursive: true });
+
+  for (const agent of agents) {
+    const targetFile = path.join(targetDir, agent.file);
+    const targetExists = fs.existsSync(targetFile);
+
+    if (targetExists && !force) {
+      skipped.push({ name: agent.name, target: targetFile, reason: 'exists' });
+      continue;
+    }
+
+    if (!dryRun) {
+      fs.copyFileSync(agent.source, targetFile);
+    }
+
+    const record = { name: agent.name, target: targetFile };
+    if (targetExists) updated.push(record);
+    else installedAgents.push(record);
+  }
+
+  return {
+    copilotHome,
+    targetDir,
+    sourceDir,
+    force,
+    dryRun,
+    agents,
+    installed: installedAgents.length,
+    installedAgents,
+    updated,
+    skipped
+  };
+}
+
+function uninstallDefaultAgents(options = {}) {
+  const sourceDir = path.resolve(options.sourceDir || path.join(root, 'plugin', 'agents'));
+  const { copilotHome, targetDir } = agentInstallTarget(options);
+  const dryRun = Boolean(options.dryRun);
+  const agents = listDefaultAgents(sourceDir);
+  const removed = [];
+  const missing = [];
+
+  for (const agent of agents) {
+    const targetFile = path.join(targetDir, agent.file);
+    if (!fs.existsSync(targetFile)) {
+      missing.push({ name: agent.name, target: targetFile });
+      continue;
+    }
+
+    if (!dryRun) fs.rmSync(targetFile, { force: true });
+    removed.push({ name: agent.name, target: targetFile });
+  }
+
+  return {
+    copilotHome,
+    targetDir,
+    sourceDir,
+    dryRun,
+    agents,
+    removed,
+    missing
+  };
+}
+
 function plural(count, singular, pluralValue = `${singular}s`) {
   return `${count} ${count === 1 ? singular : pluralValue}`;
 }
@@ -625,6 +755,77 @@ function renderSkillsInstall(result) {
   return `${lines.join('\n')}\n`;
 }
 
+function renderSkillsUninstall(result) {
+  const lines = [
+    `Removed AgentOps skills from ${result.targetDir}.`,
+    `${plural(result.removed.length, 'skill')} removed; ${plural(result.missing.length, 'skill')} already absent.`
+  ];
+  return `${lines.join('\n')}\n`;
+}
+
+function renderAgentsInstall(result) {
+  const lines = [
+    `Installed AgentOps agents into ${result.targetDir}.`,
+    `${plural(result.installed, 'new agent')}; ${plural(result.updated.length, 'updated agent')}; skipped ${plural(result.skipped.length, 'existing agent')}.`
+  ];
+
+  if (result.agents.length > 0) {
+    lines.push('', 'Available agents:');
+    for (const agent of result.agents) lines.push(`- ${agent.name}`);
+    const starterAgent = result.agents.find(agent => agent.name === 'agentops-orchestrator') || result.agents[0];
+    lines.push('', `Ask Copilot: Use ${starterAgent.name} to route my AgentOps question.`);
+  }
+
+  if (result.skipped.length > 0) {
+    lines.push('Run `agentops agents install --force` to refresh skipped agents from this repo.');
+  }
+
+  return `${lines.join('\n')}\n`;
+}
+
+function renderAgentsUninstall(result) {
+  const lines = [
+    `Removed AgentOps agents from ${result.targetDir}.`,
+    `${plural(result.removed.length, 'agent')} removed; ${plural(result.missing.length, 'agent')} already absent.`
+  ];
+  return `${lines.join('\n')}\n`;
+}
+
+function installPlugin(options = {}) {
+  return {
+    agents: installDefaultAgents(options),
+    skills: installDefaultSkills(options)
+  };
+}
+
+function uninstallPlugin(options = {}) {
+  return {
+    agents: uninstallDefaultAgents(options),
+    skills: uninstallDefaultSkills(options)
+  };
+}
+
+function renderPluginInstall(result) {
+  const lines = [
+    'Installed AgentOps Copilot plugin files.',
+    `Agents: ${plural(result.agents.installed, 'new agent')}; ${plural(result.agents.updated.length, 'updated agent')}; skipped ${plural(result.agents.skipped.length, 'existing agent')}.`,
+    `Skills: ${plural(result.skills.installed, 'new skill')}; ${plural(result.skills.updated.length, 'updated skill')}; skipped ${plural(result.skills.skipped.length, 'existing skill')}.`,
+    '',
+    'Ask Copilot: Use agentops-orchestrator to run the first read-only AgentOps check.',
+    'Remove later with `agentops plugin uninstall`.'
+  ];
+  return `${lines.join('\n')}\n`;
+}
+
+function renderPluginUninstall(result) {
+  const lines = [
+    'Removed AgentOps Copilot plugin files.',
+    `Agents: ${plural(result.agents.removed.length, 'agent')} removed; ${plural(result.agents.missing.length, 'agent')} already absent.`,
+    `Skills: ${plural(result.skills.removed.length, 'skill')} removed; ${plural(result.skills.missing.length, 'skill')} already absent.`
+  ];
+  return `${lines.join('\n')}\n`;
+}
+
 function parseSkillsArgs(args) {
   const subcommand = args[0] || 'install';
   const rest = args.slice(1);
@@ -632,6 +833,7 @@ function parseSkillsArgs(args) {
     subcommand,
     copilotHome: optionValue(rest, ['--copilot-home', '--home']),
     force: rest.includes('--force'),
+    dryRun: rest.includes('--dry-run'),
     json: rest.includes('--json')
   };
 }
@@ -642,7 +844,7 @@ function agentopsWorkflows() {
     {
       name: 'setup',
       skill: 'agentops-setup',
-      description: 'Install the local shim, skills, and safe defaults.',
+      description: 'Install the local shim, Copilot plugin files, and safe defaults.',
       prompt: 'Use agentops-setup to check my AgentOps install and tell me the next command to run.',
       commands: [
         'az login',
@@ -655,7 +857,7 @@ function agentopsWorkflows() {
         `${cli} validate-azure`,
         `${cli} smoke --dry-run`,
         `${cli} smoke --wait 2m --poll 10s`,
-        `${cli} skills install`,
+        `${cli} plugin install`,
         `${cli} status`,
         `${cli} doctor --local-only`
       ]
@@ -784,6 +986,7 @@ function agentopsWorkflows() {
         `${cli} collector-health --last 24h`,
         `${cli} disable-shadow`,
         `${cli} collector stop`,
+        `${cli} plugin uninstall`,
         `${cli} uninstall`
       ]
     }
@@ -1360,7 +1563,7 @@ function parseInitArgs(args) {
     dryRun: args.includes('--dry-run'),
     forceSkills: args.includes('--force-skills') || args.includes('--force'),
     json: args.includes('--json'),
-    noSkills: args.includes('--no-skills'),
+    noSkills: args.includes('--no-skills') || args.includes('--no-plugin'),
     copilotHome: optionValue(args, ['--copilot-home', '--home'])
   };
 }
@@ -1373,6 +1576,13 @@ function agentopsInit(options = {}) {
   const skills = options.noSkills
     ? null
     : installDefaultSkills({
+        copilotHome: options.copilotHome,
+        force: options.forceSkills,
+        dryRun: options.dryRun
+      });
+  const agents = options.noSkills
+    ? null
+    : installDefaultAgents({
         copilotHome: options.copilotHome,
         force: options.forceSkills,
         dryRun: options.dryRun
@@ -1399,12 +1609,14 @@ function agentopsInit(options = {}) {
   next.push('copilot -p "Reply with exactly: agentops smoke."');
   next.push('node agentops-cli/src/index.js latest --last 2h');
   next.push('node agentops-cli/src/index.js ask-context latest --last 2h');
+  next.push('node agentops-cli/src/index.js plugin uninstall');
 
   return {
     ok: status.ok && Boolean(shim.agentops_cli_installed) && Boolean(shim.copilot_agentops_installed) && workspaceConfigured && grafanaConfigured,
     mode: options.dryRun ? 'dry-run' : 'local-init',
     local_status: status,
     skills,
+    agents,
     shim,
     cloud: {
       resource_group: cloud.resourceGroup,
@@ -1436,9 +1648,13 @@ function renderInit(result) {
   if (result.skills) {
     lines.push(`Skills: ${plural(result.skills.installed, 'new skill')}; ${plural(result.skills.updated.length, 'updated skill')}; skipped ${plural(result.skills.skipped.length, 'existing skill')}.`);
   }
+  if (result.agents) {
+    lines.push(`Agents: ${plural(result.agents.installed, 'new agent')}; ${plural(result.agents.updated.length, 'updated agent')}; skipped ${plural(result.agents.skipped.length, 'existing agent')}.`);
+  }
 
   lines.push('', 'Next commands:');
   for (const command of result.next) lines.push(`- ${command}`);
+  lines.push('', 'Plugin files are reversible: run `agentops plugin uninstall` to remove only the bundled AgentOps agents and skills from Copilot home.');
   return `${lines.join('\n')}\n`;
 }
 
@@ -3740,6 +3956,44 @@ async function main(argv) {
     throw new Error('workflows requires list or show');
   }
 
+  if (command === 'plugin') {
+    const options = parseSkillsArgs(args);
+    if (options.subcommand === 'install') {
+      const result = installPlugin(options);
+      process.stdout.write(options.json ? JSON.stringify(result, null, 2) + '\n' : renderPluginInstall(result));
+      return;
+    }
+    if (options.subcommand === 'uninstall' || options.subcommand === 'remove') {
+      const result = uninstallPlugin(options);
+      process.stdout.write(options.json ? JSON.stringify(result, null, 2) + '\n' : renderPluginUninstall(result));
+      return;
+    }
+    throw new Error('plugin requires install or uninstall');
+  }
+
+  if (command === 'agents') {
+    const options = parseSkillsArgs(args);
+    if (options.subcommand === 'list') {
+      process.stdout.write(JSON.stringify({ agents: listDefaultAgents() }, null, 2) + '\n');
+      return;
+    }
+    if (options.subcommand === 'path') {
+      process.stdout.write(`${agentInstallTarget(options).targetDir}\n`);
+      return;
+    }
+    if (options.subcommand === 'install') {
+      const result = installDefaultAgents(options);
+      process.stdout.write(options.json ? JSON.stringify(result, null, 2) + '\n' : renderAgentsInstall(result));
+      return;
+    }
+    if (options.subcommand === 'uninstall' || options.subcommand === 'remove') {
+      const result = uninstallDefaultAgents(options);
+      process.stdout.write(options.json ? JSON.stringify(result, null, 2) + '\n' : renderAgentsUninstall(result));
+      return;
+    }
+    throw new Error('agents requires list, path, install, or uninstall');
+  }
+
   if (command === 'skills') {
     const options = parseSkillsArgs(args);
     if (options.subcommand === 'list') {
@@ -3755,7 +4009,12 @@ async function main(argv) {
       process.stdout.write(options.json ? JSON.stringify(result, null, 2) + '\n' : renderSkillsInstall(result));
       return;
     }
-    throw new Error('skills requires list, path, or install');
+    if (options.subcommand === 'uninstall' || options.subcommand === 'remove') {
+      const result = uninstallDefaultSkills(options);
+      process.stdout.write(options.json ? JSON.stringify(result, null, 2) + '\n' : renderSkillsUninstall(result));
+      return;
+    }
+    throw new Error('skills requires list, path, install, or uninstall');
   }
 
   if (command === 'scan') {
@@ -3994,13 +4253,17 @@ module.exports = {
   configFromEnvValues,
   importJsonl,
   installedShimStatus,
+  agentInstallTarget,
+  installDefaultAgents,
   installDefaultSkills,
+  installPlugin,
   kqlFileQuery,
   latestAzureSessionSummary,
   latestSessionAzureQuery,
   latestSessionSummary,
   latestSummaryFromArgs,
   listGrafanaDashboardFiles,
+  listDefaultAgents,
   listDefaultSkills,
   listBenchmarks,
   loadBenchmarkSummaries,
@@ -4029,7 +4292,12 @@ module.exports = {
   renderRecommendation,
   renderReplay,
   renderSmoke,
+  renderAgentsInstall,
+  renderAgentsUninstall,
+  renderPluginInstall,
+  renderPluginUninstall,
   renderSkillsInstall,
+  renderSkillsUninstall,
   renderStatus,
   renderValidateAzure,
   renderWorkflow,
@@ -4054,5 +4322,8 @@ module.exports = {
   validateBenchmarkTask,
   validateCollector,
   verifySmokeInAzure,
+  uninstallDefaultAgents,
+  uninstallDefaultSkills,
+  uninstallPlugin,
   writeAgentOpsConfig
 };

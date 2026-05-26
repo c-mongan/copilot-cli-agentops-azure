@@ -37,11 +37,14 @@ const {
   configFromEnvValues,
   importJsonl,
   installedShimStatus,
+  installDefaultAgents,
   installDefaultSkills,
+  installPlugin,
   kqlFileQuery,
   latestAzureSessionSummary,
   latestSessionAzureQuery,
   latestSessionSummary,
+  listDefaultAgents,
   listDefaultSkills,
   listGrafanaDashboardFiles,
   listBenchmarks,
@@ -70,7 +73,12 @@ const {
   renderRecommendation,
   renderReplay,
   renderSmoke,
+  renderAgentsInstall,
+  renderAgentsUninstall,
+  renderPluginInstall,
+  renderPluginUninstall,
   renderSkillsInstall,
+  renderSkillsUninstall,
   renderStatus,
   renderValidateAzure,
   renderWorkflow,
@@ -85,6 +93,7 @@ const {
   validateAzure,
   validateKqlDuration,
   validateBenchmarkTask,
+  uninstallPlugin,
   writeAgentOpsConfig,
   verifySmokeInAzure
 } = require('../src/index.js');
@@ -110,6 +119,70 @@ test('default skills list exposes user-friendly AgentOps workflows', () => {
   assert.ok(names.includes('agentops-dashboard-ops'));
   assert.ok(names.includes('agentops-operations'));
   assert.ok(skills.every(skill => skill.source.endsWith(path.join(skill.name, 'SKILL.md'))));
+});
+
+test('default agents list exposes the orchestrator and specialist agents', () => {
+  const agents = listDefaultAgents();
+  const names = agents.map(agent => agent.name);
+
+  assert.ok(names.includes('agentops-orchestrator'));
+  assert.ok(names.includes('telemetry-investigator'));
+  assert.ok(names.includes('agent-optimizer'));
+  assert.ok(agents.every(agent => agent.source.endsWith(agent.file)));
+});
+
+test('default agents install copies bundled agents into Copilot home', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-agents-'));
+  try {
+    const result = installDefaultAgents({ copilotHome: tempDir });
+    const orchestrator = path.join(tempDir, 'agents', 'agentops-orchestrator.agent.md');
+
+    assert.equal(result.copilotHome, tempDir);
+    assert.equal(result.targetDir, path.join(tempDir, 'agents'));
+    assert.ok(result.installed >= 2);
+    assert.equal(fs.existsSync(orchestrator), true);
+    assert.match(fs.readFileSync(orchestrator, 'utf8'), /agentops-orchestrator/);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('default agents install does not overwrite existing agents unless forced', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-agents-preserve-'));
+  const customAgent = path.join(tempDir, 'agents', 'agentops-orchestrator.agent.md');
+  try {
+    fs.mkdirSync(path.dirname(customAgent), { recursive: true });
+    fs.writeFileSync(customAgent, 'local edit\n');
+
+    const preserved = installDefaultAgents({ copilotHome: tempDir });
+    assert.equal(fs.readFileSync(customAgent, 'utf8'), 'local edit\n');
+    assert.ok(preserved.skipped.some(agent => agent.name === 'agentops-orchestrator'));
+
+    const forced = installDefaultAgents({ copilotHome: tempDir, force: true });
+    assert.match(fs.readFileSync(customAgent, 'utf8'), /agentops-orchestrator/);
+    assert.ok(forced.updated.some(agent => agent.name === 'agentops-orchestrator'));
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('default agents install renderer points users at the orchestrator', () => {
+  const output = renderAgentsInstall({
+    copilotHome: '/tmp/copilot-home',
+    targetDir: '/tmp/copilot-home/agents',
+    installed: 2,
+    updated: [],
+    skipped: [{ name: 'agentops-orchestrator' }],
+    agents: [
+      { name: 'agentops-orchestrator' },
+      { name: 'telemetry-investigator' }
+    ]
+  });
+
+  assert.match(output, /Installed AgentOps agents/);
+  assert.match(output, /agentops-orchestrator/);
+  assert.match(output, /Ask Copilot: Use agentops-orchestrator/);
+  assert.match(output, /skipped 1 existing agent/);
 });
 
 test('default skills install copies bundled skills into Copilot home', () => {
@@ -168,12 +241,45 @@ test('default skills install renderer points users at natural language workflows
   assert.match(output, /skipped 1 existing skill/);
 });
 
+test('plugin install and uninstall manage only bundled AgentOps files', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-plugin-'));
+  const unrelatedSkill = path.join(tempDir, 'skills', 'my-own-skill', 'SKILL.md');
+  const unrelatedAgent = path.join(tempDir, 'agents', 'my-own-agent.agent.md');
+
+  try {
+    fs.mkdirSync(path.dirname(unrelatedSkill), { recursive: true });
+    fs.writeFileSync(unrelatedSkill, 'keep me\n');
+    fs.mkdirSync(path.dirname(unrelatedAgent), { recursive: true });
+    fs.writeFileSync(unrelatedAgent, 'keep me\n');
+
+    const installed = installPlugin({ copilotHome: tempDir });
+    assert.ok(installed.agents.installed >= 2);
+    assert.ok(installed.skills.installed >= 2);
+    assert.match(renderPluginInstall(installed), /Remove later with `agentops plugin uninstall`/);
+
+    const removed = uninstallPlugin({ copilotHome: tempDir });
+    assert.ok(removed.agents.removed.some(agent => agent.name === 'agentops-orchestrator'));
+    assert.ok(removed.skills.removed.some(skill => skill.name === 'agentops-live-triage'));
+    assert.match(renderPluginUninstall(removed), /Removed AgentOps Copilot plugin files/);
+    assert.equal(fs.existsSync(unrelatedSkill), true);
+    assert.equal(fs.existsSync(unrelatedAgent), true);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('agent and skill uninstall renderers summarize removed files', () => {
+  assert.match(renderAgentsUninstall({ targetDir: '/tmp/agents', removed: [{ name: 'a' }], missing: [] }), /1 agent removed/);
+  assert.match(renderSkillsUninstall({ targetDir: '/tmp/skills', removed: [{ name: 's' }], missing: [] }), /1 skill removed/);
+});
+
 test('workflows map README goals to invocable skills and commands', () => {
   const workflows = agentopsWorkflows();
   const byName = Object.fromEntries(workflows.map(workflow => [workflow.name, workflow]));
 
   assert.ok(byName.setup.commands.includes('./setup-agentops.sh'));
   assert.equal(byName.setup.skill, 'agentops-setup');
+  assert.ok(byName.setup.commands.includes('node agentops-cli/src/index.js plugin install'));
   assert.equal(byName.orchestrate.skill, 'agentops-orchestrator');
   assert.ok(byName.orchestrate.commands.includes('node agentops-cli/src/index.js workflows show attribution'));
   assert.ok(byName['latest-run'].commands.includes('node agentops-cli/src/index.js explain latest --last 7d'));
@@ -182,6 +288,7 @@ test('workflows map README goals to invocable skills and commands', () => {
   assert.equal(byName['science-mode'].skill, 'agentops-benchmark-gate');
   assert.ok(byName['offline-test'].commands.includes('node agentops-cli/src/index.js live --file tests/sample-otel/tool-failure.jsonl'));
   assert.ok(byName['analyst-mode'].commands.includes('node agentops-cli/src/index.js alert recommend --last 14d'));
+  assert.ok(byName.operations.commands.includes('node agentops-cli/src/index.js plugin uninstall'));
   assert.ok(byName.operations.commands.includes('node agentops-cli/src/index.js uninstall'));
 });
 
@@ -329,12 +436,17 @@ test('init workflow installs skills in dry-run mode and returns first-run next s
 
     assert.equal(result.mode, 'dry-run');
     assert.equal(result.skills.dryRun, true);
+    assert.equal(result.agents.dryRun, true);
     assert.equal(result.cloud.workspace_id_configured, false);
     assert.equal(result.cloud.grafana_url_configured, false);
     assert.ok(result.next.includes('node agentops-cli/src/index.js validate-azure'));
     assert.ok(result.next.includes('node agentops-cli/src/index.js ask-context latest --last 2h'));
+    assert.ok(result.next.includes('node agentops-cli/src/index.js plugin uninstall'));
     assert.match(output, /AgentOps init/);
+    assert.match(output, /Agents:/);
+    assert.match(output, /Skills:/);
     assert.match(output, /Cloud config: workspace=missing, grafana=missing/);
+    assert.match(output, /agentops plugin uninstall/);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }

@@ -141,7 +141,7 @@ If you deployed with `azd` and the environment contains the expected outputs, us
 agentops configure import-azd
 ```
 
-The installer adds `agentops`, `copilot-agentops`, optional plain-`copilot` shadowing, and the bundled AgentOps skills to your default Copilot skills directory. That means you can ask Copilot for the common workflows instead of remembering every CLI command:
+The installer adds `agentops`, `copilot-agentops`, and optional plain-`copilot` shadowing. `agentops init` also installs the bundled AgentOps agents and skills into your default Copilot home, so you can ask Copilot for the common workflows instead of remembering every CLI command:
 
 ```text
 Use agentops-orchestrator to figure out which AgentOps workflow I need and run the first read-only check.
@@ -151,11 +151,22 @@ Use agentops-benchmark-gate to compare my baseline and candidate benchmark runs.
 Use agentops-primitive-inventory to show which agents, skills, hooks, and MCP tools are configured.
 ```
 
-If you only want to refresh the skills later:
+If you only want to install or refresh the Copilot plugin files later:
 
 ```bash
+node agentops-cli/src/index.js plugin install
+agentops plugin install
+node agentops-cli/src/index.js agents install
+agentops agents install
 node agentops-cli/src/index.js skills install
 agentops skills install
+```
+
+To remove only the AgentOps Copilot agents and skills while keeping the CLI/shim installed:
+
+```bash
+node agentops-cli/src/index.js plugin uninstall
+agentops plugin uninstall
 ```
 
 Plugin layout note:
@@ -215,6 +226,8 @@ If the Azure Monitor collector cannot start, plain `copilot` warns and continues
 To remove the installed shims:
 
 ```bash
+node agentops-cli/src/index.js plugin uninstall
+agentops plugin uninstall
 node agentops-cli/src/index.js uninstall
 agentops uninstall
 ```

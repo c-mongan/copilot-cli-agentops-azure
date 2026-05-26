@@ -22,6 +22,10 @@ node src/index.js validate-azure
 node src/index.js smoke --dry-run
 node src/index.js smoke --wait 2m --poll 10s
 node src/index.js ask-context latest --last 2h
+node src/index.js plugin install
+node src/index.js plugin uninstall
+node src/index.js agents install
+node src/index.js agents list
 node src/index.js skills install
 node src/index.js skills list
 node src/index.js workflows list
@@ -42,7 +46,7 @@ node src/index.js alert recommend --last 14d
 node src/index.js saved-view add latest-risk --session <conversation>
 ```
 
-`init` performs the local first-run checklist, installs or dry-runs bundled skills, checks shim posture, and prints the next commands needed for Azure validation and a real Copilot smoke run.
+`init` performs the local first-run checklist, installs or dry-runs bundled agents and skills, checks shim posture, and prints the next commands needed for Azure validation and a real Copilot smoke run.
 
 `install` installs the `agentops` and `copilot-agentops` commands into `~/.local/bin`. Pass `--shadow-copilot` when you want plain `copilot` to route through AgentOps too.
 
@@ -62,7 +66,11 @@ node src/index.js saved-view add latest-risk --session <conversation>
 
 `ask-context` builds a copyable telemetry-investigator prompt with the session id, Grafana URL, Log Analytics query, workspace id, and read-only MCP config references.
 
-`skills install` copies the bundled AgentOps skills into `COPILOT_HOME/skills`, or `~/.copilot/skills` when `COPILOT_HOME` is not set. Existing local skills are skipped unless you pass `--force`.
+`plugin install` copies the bundled AgentOps agents and skills into `COPILOT_HOME/agents` and `COPILOT_HOME/skills`, or `~/.copilot/agents` and `~/.copilot/skills` when `COPILOT_HOME` is not set. Existing local files are skipped unless you pass `--force`.
+
+`plugin uninstall` removes only the known bundled AgentOps agent and skill files from Copilot home. It leaves unrelated user agents and skills alone.
+
+`agents install` and `skills install` manage those pieces separately when users do not want the full plugin bundle.
 
 `workflows` maps the main README workflows to both CLI commands and invocable Copilot skills, so users can start from a goal instead of memorizing command names.
 
