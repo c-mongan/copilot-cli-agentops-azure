@@ -191,3 +191,10 @@ node agentops-cli/src/index.js lineage --last 24h
 node agentops-cli/src/index.js primitives --last 7d
 node agentops-cli/src/index.js attribution --last 7d
 ```
+
+For a Copilot-native route into these workflows, ask:
+
+```text
+Use agentops-orchestrator to show the right AgentOps workflow for this telemetry question.
+Use agentops-attribution to show usage and failures for this custom agent, skill, MCP server, or hook.
+```

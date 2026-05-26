@@ -25,6 +25,7 @@ node src/index.js ask-context latest --last 2h
 node src/index.js skills install
 node src/index.js skills list
 node src/index.js workflows list
+node src/index.js workflows show orchestrate
 node src/index.js workflows show latest-run
 node src/index.js link session <conversation>
 node src/index.js link trace <operationId>
@@ -64,6 +65,8 @@ node src/index.js saved-view add latest-risk --session <conversation>
 `skills install` copies the bundled AgentOps skills into `COPILOT_HOME/skills`, or `~/.copilot/skills` when `COPILOT_HOME` is not set. Existing local skills are skipped unless you pass `--force`.
 
 `workflows` maps the main README workflows to both CLI commands and invocable Copilot skills, so users can start from a goal instead of memorizing command names.
+
+Start with `workflows show orchestrate` when the user does not know which AgentOps skill to use. The orchestrator routes setup, live triage, attribution, dashboard, benchmark, and operations requests.
 
 `link` prints a Grafana URL plus the raw Azure Log Analytics KQL for a session or trace.
 

@@ -104,6 +104,7 @@ test('default skills list exposes user-friendly AgentOps workflows', () => {
   const names = skills.map(skill => skill.name);
 
   assert.ok(names.includes('agentops-setup'));
+  assert.ok(names.includes('agentops-attribution'));
   assert.ok(names.includes('agentops-live-triage'));
   assert.ok(names.includes('agentops-benchmark-gate'));
   assert.ok(names.includes('agentops-dashboard-ops'));
@@ -173,7 +174,11 @@ test('workflows map README goals to invocable skills and commands', () => {
 
   assert.ok(byName.setup.commands.includes('./setup-agentops.sh'));
   assert.equal(byName.setup.skill, 'agentops-setup');
+  assert.equal(byName.orchestrate.skill, 'agentops-orchestrator');
+  assert.ok(byName.orchestrate.commands.includes('node agentops-cli/src/index.js workflows show attribution'));
   assert.ok(byName['latest-run'].commands.includes('node agentops-cli/src/index.js explain latest --last 7d'));
+  assert.equal(byName.attribution.skill, 'agentops-attribution');
+  assert.ok(byName.attribution.commands.includes('node agentops-cli/src/index.js attribution --last 7d'));
   assert.equal(byName['science-mode'].skill, 'agentops-benchmark-gate');
   assert.ok(byName['offline-test'].commands.includes('node agentops-cli/src/index.js live --file tests/sample-otel/tool-failure.jsonl'));
   assert.ok(byName['analyst-mode'].commands.includes('node agentops-cli/src/index.js alert recommend --last 14d'));

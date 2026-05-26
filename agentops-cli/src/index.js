@@ -661,6 +661,21 @@ function agentopsWorkflows() {
       ]
     },
     {
+      name: 'orchestrate',
+      skill: 'agentops-orchestrator',
+      description: 'Route setup, triage, attribution, dashboard, benchmark, and operations questions to the right AgentOps skill.',
+      prompt: 'Use agentops-orchestrator to figure out which AgentOps workflow I need and run the first read-only check.',
+      commands: [
+        `${cli} workflows list`,
+        `${cli} workflows show setup`,
+        `${cli} workflows show latest-run`,
+        `${cli} workflows show attribution`,
+        `${cli} workflows show dashboard`,
+        `${cli} workflows show science-mode`,
+        `${cli} workflows show operations`
+      ]
+    },
+    {
       name: 'latest-run',
       skill: 'agentops-live-triage',
       description: 'Inspect the latest observed Copilot CLI run.',
@@ -674,6 +689,19 @@ function agentopsWorkflows() {
         `${cli} live --last 2h`,
         `${cli} replay latest --last 7d`,
         `${cli} ask-context latest --last 2h`
+      ]
+    },
+    {
+      name: 'attribution',
+      skill: 'agentops-attribution',
+      description: 'Filter telemetry by custom agent, skill, MCP server/tool, script, or hook.',
+      prompt: 'Use agentops-attribution to show usage, failures, cost, and tools for my custom agents, skills, MCP servers, and hooks.',
+      commands: [
+        `${cli} attribution --last 7d`,
+        `${cli} primitives --last 7d`,
+        `${cli} mcp --last 7d`,
+        `${cli} lineage --last 24h`,
+        `${cli} link session <conversation-id>`
       ]
     },
     {

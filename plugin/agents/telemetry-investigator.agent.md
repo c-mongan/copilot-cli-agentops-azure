@@ -27,7 +27,7 @@ Default telemetry contract:
 - Set `AGENTOPS_LOG_ANALYTICS_WORKSPACE_ID` for CLI queries and `AGENTOPS_GRAFANA_BASE_URL` for dashboard links.
 - Real Copilot CLI spans exported by the Azure Monitor collector should land in `AppDependencies`.
 - OTel attributes are in dynamic `Properties`, not classic `customDimensions`, on the verified workspace path.
-- The primary filter is: `Properties has "github.copilot" and Properties has "github-copilot-cli"`.
+- The primary Copilot OTel compatibility filter is: `Properties has "github.copilot" or Properties has "gen_ai.operation.name" or AppRoleName in ("github-copilot", "copilot-chat", "github-copilot-cli")`.
 
 Rules:
 1. Query telemetry before inspecting files.
@@ -55,7 +55,7 @@ Starter query:
 ```kql
 AppDependencies
 | where TimeGenerated > ago(24h)
-| where Properties has "github.copilot" and Properties has "github-copilot-cli"
+| where Properties has "github.copilot" or Properties has "gen_ai.operation.name" or AppRoleName in ("github-copilot", "copilot-chat", "github-copilot-cli")
 | extend operation=tostring(Properties["gen_ai.operation.name"]), model=tostring(Properties["gen_ai.request.model"]), conversation=tostring(Properties["gen_ai.conversation.id"]), input_tokens=todouble(Properties["gen_ai.usage.input_tokens"]), output_tokens=todouble(Properties["gen_ai.usage.output_tokens"]), aiu=todouble(Properties["github.copilot.aiu"]), cost=todouble(Properties["github.copilot.cost"])
 | summarize spans=count(), failures=countif(Success == false), input_tokens=sum(input_tokens), output_tokens=sum(output_tokens), aiu=sum(aiu), cost=sum(cost), p95_duration_ms=percentile(DurationMs, 95) by operation, model
 | order by spans desc

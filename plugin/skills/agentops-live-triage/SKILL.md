@@ -21,7 +21,7 @@ node agentops-cli/src/index.js primitives --last 7d
 node agentops-cli/src/index.js recommend latest --last 24h
 ```
 
-If the local CLI is unavailable, use read-only Azure MCP or Grafana MCP against `AppDependencies` where `Properties has "github.copilot"` and `Properties has "github-copilot-cli"`.
+If the local CLI is unavailable, use read-only Azure MCP or Grafana MCP against `AppDependencies` with the Copilot OTel compatibility filter: `Properties has "github.copilot" or Properties has "gen_ai.operation.name" or AppRoleName in ("github-copilot", "copilot-chat", "github-copilot-cli")`.
 
 Report:
 

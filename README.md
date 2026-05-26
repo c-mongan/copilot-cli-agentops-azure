@@ -144,7 +144,9 @@ agentops configure import-azd
 The installer adds `agentops`, `copilot-agentops`, optional plain-`copilot` shadowing, and the bundled AgentOps skills to your default Copilot skills directory. That means you can ask Copilot for the common workflows instead of remembering every CLI command:
 
 ```text
+Use agentops-orchestrator to figure out which AgentOps workflow I need and run the first read-only check.
 Use agentops-live-triage to explain my latest Copilot run and recommend one next action.
+Use agentops-attribution to show usage and failures by custom agent, skill, MCP server, and hook.
 Use agentops-benchmark-gate to compare my baseline and candidate benchmark runs.
 Use agentops-primitive-inventory to show which agents, skills, hooks, and MCP tools are configured.
 ```
@@ -160,6 +162,7 @@ If you are unsure which command maps to a README workflow:
 
 ```bash
 node agentops-cli/src/index.js workflows list
+node agentops-cli/src/index.js workflows show orchestrate
 node agentops-cli/src/index.js workflows show setup
 agentops workflows show setup
 ```
