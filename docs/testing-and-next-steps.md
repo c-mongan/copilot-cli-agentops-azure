@@ -197,7 +197,7 @@ Query recent real Copilot CLI spans:
 ```bash
 az monitor log-analytics query \
   --workspace "$AGENTOPS_LOG_ANALYTICS_WORKSPACE_ID" \
-  --analytics-query "AppDependencies | where TimeGenerated > ago(2h) | where Properties has 'github.copilot' and Properties has 'github-copilot-cli' | project TimeGenerated, Name, AppRoleName, Properties | order by TimeGenerated desc | take 20"
+  --analytics-query "AppDependencies | where TimeGenerated > ago(2h) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli')) | project TimeGenerated, Name, AppRoleName, Properties | order by TimeGenerated desc | take 20"
 ```
 
 Summarize recent operational posture:
@@ -205,7 +205,7 @@ Summarize recent operational posture:
 ```bash
 az monitor log-analytics query \
   --workspace "$AGENTOPS_LOG_ANALYTICS_WORKSPACE_ID" \
-  --analytics-query "AppDependencies | where TimeGenerated > ago(2h) | where Properties has 'github.copilot' and Properties has 'github-copilot-cli' | summarize Spans=count(), Runs=countif(tostring(Properties['gen_ai.operation.name']) == 'invoke_agent'), InputTokens=sum(todouble(Properties['gen_ai.usage.input_tokens'])), OutputTokens=sum(todouble(Properties['gen_ai.usage.output_tokens'])), AIU=sum(todouble(Properties['github.copilot.aiu'])), Cost=sum(todouble(Properties['github.copilot.cost'])), P95DurationMs=percentile(DurationMs, 95)"
+  --analytics-query "AppDependencies | where TimeGenerated > ago(2h) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli')) | summarize Spans=count(), Runs=countif(tostring(Properties['gen_ai.operation.name']) == 'invoke_agent'), InputTokens=sum(todouble(Properties['gen_ai.usage.input_tokens'])), OutputTokens=sum(todouble(Properties['gen_ai.usage.output_tokens'])), AIU=sum(todouble(Properties['github.copilot.aiu'])), Cost=sum(todouble(Properties['github.copilot.cost'])), P95DurationMs=percentile(DurationMs, 95)"
 ```
 
 ## Local Live And Replay Checks
@@ -221,6 +221,7 @@ node agentops-cli/src/index.js live --last 2h
 node agentops-cli/src/index.js replay latest --last 2h
 node agentops-cli/src/index.js lineage --last 24h
 node agentops-cli/src/index.js primitives --last 7d
+node agentops-cli/src/index.js attribution --last 7d
 node agentops-cli/src/index.js recommend latest --last 2h
 node agentops-cli/src/index.js ask-context latest --last 2h
 ```

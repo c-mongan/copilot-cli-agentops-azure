@@ -16,6 +16,7 @@ const {
   alertRecommendationQuery,
   alertRecommendations,
   askAgentOpsContext,
+  attributionUsageQuery,
   benchmarkCheatSignals,
   benchmarkAzureTelemetryQuery,
   benchmarkReport,
@@ -298,6 +299,16 @@ test('compatibility query accepts current Copilot service names', () => {
   assert.match(query, /Status=case/);
 });
 
+test('attribution query groups agents skills MCP servers and scripts', () => {
+  const query = attributionUsageQuery('7d');
+  assert.match(query, /agentops\.agent\.name/);
+  assert.match(query, /agentops\.skill\.name/);
+  assert.match(query, /agentops\.mcp\.server/);
+  assert.match(query, /agentops\.script\.name/);
+  assert.match(query, /AttributionKind/);
+  assert.match(query, /script_or_hook/);
+});
+
 test('init workflow installs skills in dry-run mode and returns first-run next steps', () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-init-'));
   try {
@@ -501,6 +512,18 @@ test('Grafana dashboard inventory reads stable dashboard UIDs from repo', () => 
 
   assert.ok(uids.includes('agentops-sessions'));
   assert.ok(uids.includes('agentops-session-detail'));
+  assert.ok(uids.includes('agentops-attribution'));
+});
+
+test('Grafana dashboards use Copilot OTel compatibility filters', () => {
+  const dashboards = listGrafanaDashboardFiles();
+  const combined = dashboards
+    .map(dashboard => fs.readFileSync(path.join(root, dashboard.file), 'utf8'))
+    .join('\n');
+
+  assert.doesNotMatch(combined, /Properties has ['"]github\.copilot['"] and Properties has ['"]github-copilot-cli['"]/);
+  assert.match(combined, /copilot-chat/);
+  assert.match(combined, /agentops_agent/);
 });
 
 test('verifySmokeInAzure returns query failure details', async () => {

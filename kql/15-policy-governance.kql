@@ -20,7 +20,7 @@ let session_id = (props:dynamic, timestamp:datetime) {
 let sessions =
 AppDependencies
 | where TimeGenerated > ago(lookback)
-| where Properties has "github.copilot" and Properties has "github-copilot-cli"
+| where (Properties has "github.copilot" or Properties has "gen_ai.operation.name" or AppRoleName in ("github-copilot", "copilot-chat", "github-copilot-cli") or tostring(Properties["service.name"]) in ("github-copilot", "copilot-chat", "github-copilot-cli"))
 | extend
     session = session_id(Properties, TimeGenerated),
     operation = tostring(Properties["gen_ai.operation.name"]),

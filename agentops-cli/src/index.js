@@ -51,6 +51,7 @@ function usage() {
     'context [--last <duration>]',
     'token-rollup-audit [--last <duration>]',
     'collector-health [--last <duration>]',
+    'attribution [--last <duration>]',
     'permission-friction [--last <duration>]',
     'alert recommend [--last <duration>]',
     'lineage [--last <duration>]',
@@ -76,8 +77,8 @@ const azureSubscriptionId = process.env.AGENTOPS_AZURE_SUBSCRIPTION_ID || proces
 const azureResourceGroup = process.env.AGENTOPS_AZURE_RESOURCE_GROUP || process.env.AZURE_RESOURCE_GROUP || agentopsConfig.resourceGroup || 'rg-agentops-dev';
 const logAnalyticsWorkspaceName = process.env.AGENTOPS_LOG_ANALYTICS_WORKSPACE_NAME || agentopsConfig.workspaceName || 'law-agentops-dev';
 const portalLogsUrl = process.env.AGENTOPS_AZURE_PORTAL_LOGS_URL || agentopsConfig.portalLogsUrl || `https://portal.azure.com/#@/resource/subscriptions/${azureSubscriptionId}/resourceGroups/${azureResourceGroup}/providers/Microsoft.OperationalInsights/workspaces/${logAnalyticsWorkspaceName}/logs`;
-const baseFilter = 'Properties has "github.copilot" and Properties has "github-copilot-cli"';
-const copilotOtelFilter = '(Properties has "github.copilot" or Properties has "gen_ai.operation.name" or AppRoleName in ("github-copilot", "copilot-chat", "github-copilot-cli"))';
+const baseFilter = '(Properties has "github.copilot" or Properties has "gen_ai.operation.name" or AppRoleName in ("github-copilot", "copilot-chat", "github-copilot-cli") or tostring(Properties["service.name"]) in ("github-copilot", "copilot-chat", "github-copilot-cli"))';
+const copilotOtelFilter = baseFilter;
 const copilotMetricNames = [
   'gen_ai.client.operation.duration',
   'gen_ai.client.token.usage',
@@ -252,6 +253,50 @@ span_summary
     iff(coalesce(Events, 0) == 0, "no Copilot/GenAI events matched", "")
 )
 | project Status, Spans=coalesce(Spans, 0), Metrics=coalesce(Metrics, 0), Events=coalesce(Events, 0), LastSpan, LastMetric, LastEvent, Services, Operations, Agents, MetricNames, EventNames, HasOperation, HasSession, HasModel, HasTool, HasTokenUsage, HasCostOrAIU, HasGenAiMetrics, HasCopilotCliMetrics, HasVsCodeMetrics, HasLifecycleEvents, HasVsCodeEvents, Missing`;
+}
+
+function attributionUsageQuery(last = '7d') {
+  const lookback = validateKqlDuration(last);
+  return `let lookback = ${lookback};
+let dependency_rows = AppDependencies
+| where TimeGenerated > ago(lookback)
+| where ${copilotOtelFilter}
+| extend conversation=${sessionKey},
+    operation=tostring(Properties["gen_ai.operation.name"]),
+    agentops_agent=coalesce(tostring(Properties["agentops.agent.name"]), tostring(Properties["agentops.cli.agent"]), tostring(Properties["gen_ai.agent.name"])),
+    skill=coalesce(tostring(Properties["agentops.skill.name"]), tostring(Properties["github.copilot.skill.name"])),
+    tool=tostring(Properties["gen_ai.tool.name"]),
+    mcp_server=coalesce(tostring(Properties["agentops.mcp.server"]), tostring(Properties["agentops.mcp.config.servers"]), extract("^mcp__([^_]+)__", 1, tostring(Properties["gen_ai.tool.name"])), extract("^([^/]+)/", 1, tostring(Properties["gen_ai.tool.name"]))),
+    script=coalesce(tostring(Properties["agentops.script.name"]), tostring(Properties["agentops.hook.name"]), tostring(Properties["github.copilot.hook.name"]), tostring(Properties["github.copilot.hook.type"])),
+    model=tostring(Properties["gen_ai.request.model"]),
+    repo=tostring(Properties["agentops.repo.hash"]),
+    error=tostring(Properties["error.type"]),
+    InputTokens=todouble(Properties["gen_ai.usage.input_tokens"]),
+    OutputTokens=todouble(Properties["gen_ai.usage.output_tokens"]),
+    AICredits=todouble(Properties["github.copilot.cost"]),
+    AIU=todouble(Properties["github.copilot.aiu"])
+| project TimeGenerated, conversation, operation, agentops_agent, skill, tool, mcp_server, script, model, repo, DurationMs, Success, error, InputTokens, OutputTokens, AICredits, AIU, Properties;
+let event_rows = union isfuzzy=true AppTraces, AppEvents
+| where TimeGenerated > ago(lookback)
+| where tostring(Properties) has_any ("agentops.", "github.copilot", "copilot_chat") or Message has_any ("AgentOps", "github.copilot", "copilot_chat")
+| extend conversation=${sessionKey},
+    operation=coalesce(tostring(Properties["gen_ai.operation.name"]), tostring(Properties["event.name"]), Name),
+    agentops_agent=coalesce(tostring(Properties["agentops.agent.name"]), tostring(Properties["agentops.cli.agent"]), tostring(Properties["gen_ai.agent.name"])),
+    skill=coalesce(tostring(Properties["agentops.skill.name"]), tostring(Properties["github.copilot.skill.name"])),
+    tool=tostring(Properties["gen_ai.tool.name"]),
+    mcp_server=coalesce(tostring(Properties["agentops.mcp.server"]), tostring(Properties["agentops.mcp.config.servers"]), extract("^mcp__([^_]+)__", 1, tostring(Properties["gen_ai.tool.name"])), extract("^([^/]+)/", 1, tostring(Properties["gen_ai.tool.name"]))),
+    script=coalesce(tostring(Properties["agentops.script.name"]), tostring(Properties["agentops.hook.name"]), tostring(Properties["github.copilot.hook.name"]), tostring(Properties["github.copilot.hook.type"])),
+    model=tostring(Properties["gen_ai.request.model"]),
+    repo=tostring(Properties["agentops.repo.hash"]),
+    error=tostring(Properties["error.type"])
+| project TimeGenerated, conversation, operation, agentops_agent, skill, tool, mcp_server, script, model, repo, DurationMs=real(null), Success=bool(null), error, InputTokens=real(null), OutputTokens=real(null), AICredits=real(null), AIU=real(null), Properties;
+union isfuzzy=true dependency_rows, event_rows
+| extend AttributionKind=case(isnotempty(skill), "skill", isnotempty(mcp_server), "mcp", isnotempty(script), "script_or_hook", isnotempty(agentops_agent), "agent", "unattributed"),
+    AttributionName=case(isnotempty(skill), skill, isnotempty(mcp_server), mcp_server, isnotempty(script), script, isnotempty(agentops_agent), agentops_agent, "unattributed")
+| summarize Started=min(TimeGenerated), LastSeen=max(TimeGenerated), Sessions=dcount(conversation), SpansOrEvents=count(), Failures=countif(Success == false or isnotempty(error)), ToolCalls=countif(operation == "execute_tool" or isnotempty(tool)), InputTokens=sum(InputTokens), OutputTokens=sum(OutputTokens), AICredits=sum(AICredits), AIU=sum(AIU), Models=make_set_if(model, isnotempty(model), 5), Tools=make_set_if(tool, isnotempty(tool), 10), Errors=make_set_if(error, isnotempty(error), 10) by AttributionKind, AttributionName
+| extend EstUsd=round(AICredits * 0.01, 4), FailurePct=iff(SpansOrEvents > 0, round(100.0 * Failures / SpansOrEvents, 1), 0.0)
+| where AttributionKind != "unattributed"
+| order by Sessions desc, Failures desc, AICredits desc`;
 }
 
 function kqlFileQuery(fileName, last = '7d') {
@@ -3842,6 +3887,12 @@ async function main(argv) {
     return;
   }
 
+  if (command === 'attribution') {
+    const last = parseLastArg(args, '7d');
+    process.stdout.write(JSON.stringify({ workspace_id: workspaceId, query: attributionUsageQuery(last) }, null, 2) + '\n');
+    return;
+  }
+
   if (command === 'permission-friction') {
     const last = parseLastArg(args, '7d');
     process.stdout.write(JSON.stringify({ workspace_id: workspaceId, query: kqlFileQuery('17-permission-friction.kql', last) }, null, 2) + '\n');
@@ -3893,6 +3944,7 @@ module.exports = {
   alertRecommendationQuery,
   alertRecommendations,
   askAgentOpsContext,
+  attributionUsageQuery,
   benchmarkCheatSignals,
   benchmarkAzureTelemetry,
   benchmarkAzureTelemetryQuery,

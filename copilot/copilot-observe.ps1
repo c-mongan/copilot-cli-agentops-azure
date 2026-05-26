@@ -85,6 +85,33 @@ function Track-McpConfig($rawPath) {
 	}
 }
 
+function Find-AgentFile($agentName) {
+	if (-not $agentName) { return "" }
+	$candidates = @()
+	if ($env:COPILOT_HOME) {
+		$candidates += Join-Path $env:COPILOT_HOME "agents/$agentName.agent.md"
+		$candidates += Join-Path $env:COPILOT_HOME "agents/$agentName.md"
+	}
+	$candidates += ".copilot/agents/$agentName.agent.md"
+	$candidates += ".copilot/agents/$agentName.md"
+	$candidates += "agents/$agentName.agent.md"
+	$candidates += "agents/$agentName.md"
+	foreach ($candidate in $candidates) {
+		if (Test-Path $candidate) { return $candidate }
+	}
+	return ""
+}
+
+function Get-FileSha256($filePath) {
+	$sha = [System.Security.Cryptography.SHA256]::Create()
+	$stream = [System.IO.File]::OpenRead((Resolve-Path $filePath))
+	try {
+		return -join ($sha.ComputeHash($stream) | ForEach-Object { $_.ToString("x2") })
+	} finally {
+		$stream.Dispose()
+	}
+}
+
 function Has-NextValue($values, $index) {
 	return ($index + 1 -lt $values.Count) -and (-not $values[$index + 1].StartsWith("-"))
 }
@@ -161,7 +188,11 @@ if ($cliModel) {
 	$agentopsResourceAttributes = "$agentopsResourceAttributes,agentops.cli.model=$cliModel"
 }
 if ($cliAgent) {
-	$agentopsResourceAttributes = "$agentopsResourceAttributes,agentops.cli.agent=$cliAgent"
+	$agentopsResourceAttributes = "$agentopsResourceAttributes,agentops.cli.agent=$cliAgent,agentops.agent.name=$cliAgent"
+	$agentFile = Find-AgentFile $cliAgent
+	if ($agentFile) {
+		$agentopsResourceAttributes = "$agentopsResourceAttributes,agentops.agent.file=$(Safe-AttrValue ([System.IO.Path]::GetFileName($agentFile))),agentops.agent.hash=$(Get-FileSha256 $agentFile)"
+	}
 }
 if ($cliEffort) {
 	$agentopsResourceAttributes = "$agentopsResourceAttributes,agentops.cli.reasoning_effort=$cliEffort"

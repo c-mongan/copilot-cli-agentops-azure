@@ -92,6 +92,18 @@ Important events and span events:
 
 AgentOps shim fields:
 
+- `agentops.agent.name`
+- `agentops.agent.file`
+- `agentops.agent.hash`
+- `agentops.skill.name`
+- `agentops.skill.file`
+- `agentops.skill.hash`
+- `agentops.mcp.server`
+- `agentops.mcp.tool`
+- `agentops.script.name`
+- `agentops.script.file`
+- `agentops.script.hash`
+- `agentops.hook.name`
 - `agentops.cli.mode`
 - `agentops.cli.model`
 - `agentops.cli.remote`
@@ -127,6 +139,8 @@ AgentOps shim fields:
 - `agentops.mcp.github.toolsets`
 
 The shim records only privacy-safe run dimensions and counts from Copilot CLI flags. It does not record prompt text, tool arguments, allow/deny pattern values, URLs, paths, attachment names, plugin directories, session IDs, or secret variable names. For MCP lineage, it records MCP config basenames, configured server names, disabled server names, and explicitly selected GitHub MCP tool/toolset names when those values are provided by CLI flags or readable MCP config files.
+
+When the wrapper sees `--agent <name>`, it emits `agentops.agent.name`. If a matching local agent file is present under `COPILOT_HOME/agents`, `.copilot/agents`, or `agents`, it also emits the basename and content hash. Skills, hooks, scripts, and exact MCP server/tool attribution are supported when spans or sidecar events provide `agentops.skill.*`, `agentops.script.*`, `agentops.hook.*`, or `agentops.mcp.*`; otherwise MCP server attribution is inferred from tool names such as `mcp__<server>__<tool>` or `<server>/<tool>`.
 
 The collector strips content-capture attributes before Azure export, including `gen_ai.input.messages`, `gen_ai.output.messages`, `gen_ai.system_instructions`, `gen_ai.tool.definitions`, `gen_ai.tool.call.arguments`, `gen_ai.tool.call.result`, legacy `gen_ai.prompt`/`gen_ai.completion`, request/response bodies, raw URLs, and file paths.
 
@@ -166,6 +180,7 @@ Validate these against real Copilot CLI OTel output before treating dashboards a
 - `kql/16-mcp-tool-usage.kql` summarizes tool calls, inferred MCP server/tool lineage, configured MCP posture, and documented built-in tools.
 - `kql/19-agent-flow-lineage.kql` reconstructs session flow across agent, subagent, LLM, built-in tool, MCP tool, skill, hook, context, and error events using span parent-child ids when present.
 - `kql/20-copilot-primitives-inventory.kql` shows runtime coverage for Copilot primitives and complements the local `agentops primitives` configuration scan.
+- `kql/23-attribution-usage.kql` groups usage, failures, token/cost signals, tools, and sessions by custom agents, skills, MCP servers, and scripts/hooks.
 
 These queries are also available through:
 
@@ -174,4 +189,5 @@ node agentops-cli/src/index.js policy --last 7d
 node agentops-cli/src/index.js mcp --last 7d
 node agentops-cli/src/index.js lineage --last 24h
 node agentops-cli/src/index.js primitives --last 7d
+node agentops-cli/src/index.js attribution --last 7d
 ```

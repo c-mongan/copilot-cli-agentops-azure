@@ -50,6 +50,13 @@
       "targetBlank": false
     },
     {
+      "title": "Attribution",
+      "url": "/d/agentops-attribution",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
       "title": "Safety & Policy",
       "url": "/d/agentops-safety-policy",
       "type": "link",
@@ -304,7 +311,7 @@
               "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
             ],
             "resultFormat": "table",
-            "query": "AppDependencies | where $__timeFilter(TimeGenerated) | where Properties has 'github.copilot' and Properties has 'github-copilot-cli' | extend fields = bag_keys(Properties) | mv-expand field = fields to typeof(string) | extend value = tostring(Properties[field]) | summarize observed=count(), example_values=make_set_if(value, isnotempty(value), 5) by field | order by observed desc, field asc"
+            "query": "AppDependencies | where $__timeFilter(TimeGenerated) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli')) | extend fields = bag_keys(Properties) | mv-expand field = fields to typeof(string) | extend value = tostring(Properties[field]) | summarize observed=count(), example_values=make_set_if(value, isnotempty(value), 5) by field | order by observed desc, field asc"
           }
         }
       ]
@@ -345,7 +352,7 @@
             "resources": [
               "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
             ],
-            "query": "AppDependencies | where TimeGenerated > ago(14d) | where Properties has 'github.copilot' and Properties has 'github-copilot-cli' | extend model=tostring(Properties['gen_ai.request.model']) | where isnotempty(model) | distinct model | order by model asc"
+            "query": "AppDependencies | where TimeGenerated > ago(14d) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli')) | extend model=tostring(Properties['gen_ai.request.model']) | where isnotempty(model) | distinct model | order by model asc"
           }
         },
         "refresh": 2,
@@ -376,7 +383,7 @@
             "resources": [
               "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
             ],
-            "query": "AppDependencies | where TimeGenerated > ago(14d) | where Properties has 'github.copilot' and Properties has 'github-copilot-cli' | extend operation=tostring(Properties['gen_ai.operation.name']) | where isnotempty(operation) | distinct operation | order by operation asc"
+            "query": "AppDependencies | where TimeGenerated > ago(14d) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli')) | extend operation=tostring(Properties['gen_ai.operation.name']) | where isnotempty(operation) | distinct operation | order by operation asc"
           }
         },
         "refresh": 2,
@@ -407,7 +414,131 @@
             "resources": [
               "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
             ],
-            "query": "AppDependencies | where TimeGenerated > ago(14d) | where Properties has 'github.copilot' and Properties has 'github-copilot-cli' | extend agent=tostring(Properties['gen_ai.agent.name']) | where isnotempty(agent) | distinct agent | order by agent asc"
+            "query": "AppDependencies | where TimeGenerated > ago(14d) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli')) | extend agent=tostring(Properties['gen_ai.agent.name']) | where isnotempty(agent) | distinct agent | order by agent asc"
+          }
+        },
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "current": {
+          "selected": false,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        }
+      },
+      {
+        "name": "agentops_agent",
+        "label": "Custom Agent",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-azure-monitor-datasource",
+          "uid": "azure-monitor-oob"
+        },
+        "queryType": "Azure Log Analytics",
+        "query": {
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
+            ],
+            "query": "AppDependencies | where TimeGenerated > ago(14d) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli')) | extend agentops_agent=coalesce(tostring(Properties['agentops.agent.name']), tostring(Properties['agentops.cli.agent']), tostring(Properties['gen_ai.agent.name'])) | where isnotempty(agentops_agent) | distinct agentops_agent | order by agentops_agent asc"
+          }
+        },
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "current": {
+          "selected": false,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        }
+      },
+      {
+        "name": "skill",
+        "label": "Skill",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-azure-monitor-datasource",
+          "uid": "azure-monitor-oob"
+        },
+        "queryType": "Azure Log Analytics",
+        "query": {
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
+            ],
+            "query": "union isfuzzy=true AppDependencies, AppTraces, AppEvents | where TimeGenerated > ago(14d) | where tostring(Properties) has_any ('agentops.skill', 'github.copilot.skill') | extend skill=coalesce(tostring(Properties['agentops.skill.name']), tostring(Properties['github.copilot.skill.name'])) | where isnotempty(skill) | distinct skill | order by skill asc"
+          }
+        },
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "current": {
+          "selected": false,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        }
+      },
+      {
+        "name": "mcp_server",
+        "label": "MCP Server",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-azure-monitor-datasource",
+          "uid": "azure-monitor-oob"
+        },
+        "queryType": "Azure Log Analytics",
+        "query": {
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
+            ],
+            "query": "union isfuzzy=true AppDependencies, AppTraces, AppEvents | where TimeGenerated > ago(14d) | where tostring(Properties) has_any ('agentops.mcp', 'mcp__') | extend tool=tostring(Properties['gen_ai.tool.name']), mcp_server=coalesce(tostring(Properties['agentops.mcp.server']), tostring(Properties['agentops.mcp.config.servers']), extract('^mcp__([^_]+)__', 1, tool), extract('^([^/]+)/', 1, tool)) | where isnotempty(mcp_server) | distinct mcp_server | order by mcp_server asc"
+          }
+        },
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "current": {
+          "selected": false,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        }
+      },
+      {
+        "name": "script",
+        "label": "Script / Hook",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-azure-monitor-datasource",
+          "uid": "azure-monitor-oob"
+        },
+        "queryType": "Azure Log Analytics",
+        "query": {
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
+            ],
+            "query": "union isfuzzy=true AppDependencies, AppTraces, AppEvents | where TimeGenerated > ago(14d) | where tostring(Properties) has_any ('agentops.script', 'agentops.hook', 'github.copilot.hook') | extend script=coalesce(tostring(Properties['agentops.script.name']), tostring(Properties['agentops.hook.name']), tostring(Properties['github.copilot.hook.name']), tostring(Properties['github.copilot.hook.type'])) | where isnotempty(script) | distinct script | order by script asc"
           }
         },
         "refresh": 2,
@@ -438,7 +569,7 @@
             "resources": [
               "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
             ],
-            "query": "AppDependencies | where TimeGenerated > ago(14d) | where Properties has 'github.copilot' and Properties has 'github-copilot-cli' | extend repo=tostring(Properties['agentops.repo.hash']) | where isnotempty(repo) | distinct repo | order by repo asc"
+            "query": "AppDependencies | where TimeGenerated > ago(14d) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli')) | extend repo=tostring(Properties['agentops.repo.hash']) | where isnotempty(repo) | distinct repo | order by repo asc"
           }
         },
         "refresh": 2,
@@ -469,7 +600,7 @@
             "resources": [
               "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
             ],
-            "query": "AppDependencies | where TimeGenerated > ago(14d) | where Properties has 'github.copilot' and Properties has 'github-copilot-cli' | extend tool=tostring(Properties['gen_ai.tool.name']) | where isnotempty(tool) | distinct tool | order by tool asc"
+            "query": "AppDependencies | where TimeGenerated > ago(14d) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli')) | extend tool=tostring(Properties['gen_ai.tool.name']) | where isnotempty(tool) | distinct tool | order by tool asc"
           }
         },
         "refresh": 2,

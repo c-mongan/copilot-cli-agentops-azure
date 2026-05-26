@@ -15,7 +15,7 @@ const resourceGroup = process.env.AGENTOPS_AZURE_RESOURCE_GROUP || process.env.A
 const workspaceName = process.env.AGENTOPS_LOG_ANALYTICS_WORKSPACE_NAME || 'law-agentops-dev';
 const workspaceResource = process.env.AGENTOPS_LOG_ANALYTICS_WORKSPACE_RESOURCE_ID || `/subscriptions/${subscriptionId}/resourceGroups/${resourceGroup}/providers/Microsoft.OperationalInsights/workspaces/${workspaceName}`;
 const portalLogsUrl = process.env.AGENTOPS_AZURE_PORTAL_LOGS_URL || `https://portal.azure.com/#@/resource${workspaceResource}/logs`;
-const baseFilter = "Properties has 'github.copilot' and Properties has 'github-copilot-cli'";
+const baseFilter = "(Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli'))";
 const sessionKey = "case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(tostring(Properties['gen_ai.agent.id']), '_', tostring(Properties['github.copilot.turn_count']), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm')))";
 const directSessionKey = "case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), '')";
 const fallbackSessionKey = "strcat(tostring(Properties['gen_ai.agent.id']), '_', tostring(Properties['github.copilot.turn_count']), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm'))";
@@ -82,6 +82,10 @@ function sharedVariables(includeConversation = true) {
     queryVariable('model', 'Model', `AppDependencies | where TimeGenerated > ago(14d) | where ${baseFilter} | extend model=tostring(Properties['gen_ai.request.model']) | where isnotempty(model) | distinct model | order by model asc`),
     queryVariable('operation', 'Operation', `AppDependencies | where TimeGenerated > ago(14d) | where ${baseFilter} | extend operation=tostring(Properties['gen_ai.operation.name']) | where isnotempty(operation) | distinct operation | order by operation asc`),
     queryVariable('agent', 'Agent', `AppDependencies | where TimeGenerated > ago(14d) | where ${baseFilter} | extend agent=tostring(Properties['gen_ai.agent.name']) | where isnotempty(agent) | distinct agent | order by agent asc`),
+    queryVariable('agentops_agent', 'Custom Agent', `AppDependencies | where TimeGenerated > ago(14d) | where ${baseFilter} | extend agentops_agent=coalesce(tostring(Properties['agentops.agent.name']), tostring(Properties['agentops.cli.agent']), tostring(Properties['gen_ai.agent.name'])) | where isnotempty(agentops_agent) | distinct agentops_agent | order by agentops_agent asc`),
+    queryVariable('skill', 'Skill', `union isfuzzy=true AppDependencies, AppTraces, AppEvents | where TimeGenerated > ago(14d) | where tostring(Properties) has_any ('agentops.skill', 'github.copilot.skill') | extend skill=coalesce(tostring(Properties['agentops.skill.name']), tostring(Properties['github.copilot.skill.name'])) | where isnotempty(skill) | distinct skill | order by skill asc`),
+    queryVariable('mcp_server', 'MCP Server', `union isfuzzy=true AppDependencies, AppTraces, AppEvents | where TimeGenerated > ago(14d) | where tostring(Properties) has_any ('agentops.mcp', 'mcp__') | extend tool=tostring(Properties['gen_ai.tool.name']), mcp_server=coalesce(tostring(Properties['agentops.mcp.server']), tostring(Properties['agentops.mcp.config.servers']), extract('^mcp__([^_]+)__', 1, tool), extract('^([^/]+)/', 1, tool)) | where isnotempty(mcp_server) | distinct mcp_server | order by mcp_server asc`),
+    queryVariable('script', 'Script / Hook', `union isfuzzy=true AppDependencies, AppTraces, AppEvents | where TimeGenerated > ago(14d) | where tostring(Properties) has_any ('agentops.script', 'agentops.hook', 'github.copilot.hook') | extend script=coalesce(tostring(Properties['agentops.script.name']), tostring(Properties['agentops.hook.name']), tostring(Properties['github.copilot.hook.name']), tostring(Properties['github.copilot.hook.type'])) | where isnotempty(script) | distinct script | order by script asc`),
     queryVariable('repo', 'Repo', `AppDependencies | where TimeGenerated > ago(14d) | where ${baseFilter} | extend repo=tostring(Properties['agentops.repo.hash']) | where isnotempty(repo) | distinct repo | order by repo asc`),
     queryVariable('tool', 'Tool', `AppDependencies | where TimeGenerated > ago(14d) | where ${baseFilter} | extend tool=tostring(Properties['gen_ai.tool.name']) | where isnotempty(tool) | distinct tool | order by tool asc`),
     customVariable('risk', 'Risk', ['all', 'failed', 'expensive', 'slow', 'policy', 'content'], 'all'),
@@ -102,6 +106,7 @@ function dashboardLinks() {
     { title: 'Traces / Spans', url: '/d/agentops-traces-spans', type: 'link', icon: 'dashboard', targetBlank: false },
     { title: 'Tools & MCP', url: '/d/agentops-tools-mcp', type: 'link', icon: 'dashboard', targetBlank: false },
     { title: 'Runtime Events', url: '/d/agentops-runtime-events', type: 'link', icon: 'dashboard', targetBlank: false },
+    { title: 'Attribution', url: '/d/agentops-attribution', type: 'link', icon: 'dashboard', targetBlank: false },
     { title: 'Safety & Policy', url: '/d/agentops-safety-policy', type: 'link', icon: 'dashboard', targetBlank: false },
     { title: 'Permission Friction', url: '/d/agentops-permission-friction', type: 'link', icon: 'dashboard', targetBlank: false },
     { title: 'Alert Tuning', url: '/d/agentops-alert-tuning', type: 'link', icon: 'dashboard', targetBlank: false },
@@ -229,7 +234,7 @@ function byNameUnit(fieldName, unit, decimals) {
 }
 
 function sessionBaseWhere() {
-  return `${sessionizedDependenciesBase('$__timeFilter(TimeGenerated)')} | extend operation=tostring(Properties['gen_ai.operation.name']), agent=tostring(Properties['gen_ai.agent.name']), model=tostring(Properties['gen_ai.request.model']), tool=tostring(Properties['gen_ai.tool.name']), repo=tostring(Properties['agentops.repo.hash']), error=tostring(Properties['error.type']) | where ('$model' == '$__all' or model in (${'${model:singlequote}'})) | where ('$operation' == '$__all' or operation in (${'${operation:singlequote}'})) | where ('$agent' == '$__all' or agent in (${'${agent:singlequote}'})) | where ('$repo' == '$__all' or repo in (${'${repo:singlequote}'})) | where ('$tool' == '$__all' or tool in (${'${tool:singlequote}'}))`;
+  return `${sessionizedDependenciesBase('$__timeFilter(TimeGenerated)')} | extend operation=tostring(Properties['gen_ai.operation.name']), agent=tostring(Properties['gen_ai.agent.name']), agentops_agent=coalesce(tostring(Properties['agentops.agent.name']), tostring(Properties['agentops.cli.agent']), tostring(Properties['gen_ai.agent.name'])), model=tostring(Properties['gen_ai.request.model']), tool=tostring(Properties['gen_ai.tool.name']), repo=tostring(Properties['agentops.repo.hash']), skill=coalesce(tostring(Properties['agentops.skill.name']), tostring(Properties['github.copilot.skill.name'])), mcp_server=coalesce(tostring(Properties['agentops.mcp.server']), tostring(Properties['agentops.mcp.config.servers']), extract('^mcp__([^_]+)__', 1, tostring(Properties['gen_ai.tool.name'])), extract('^([^/]+)/', 1, tostring(Properties['gen_ai.tool.name']))), script=coalesce(tostring(Properties['agentops.script.name']), tostring(Properties['agentops.hook.name']), tostring(Properties['github.copilot.hook.name']), tostring(Properties['github.copilot.hook.type'])), error=tostring(Properties['error.type']) | where ('$model' == '$__all' or model in (${'${model:singlequote}'})) | where ('$operation' == '$__all' or operation in (${'${operation:singlequote}'})) | where ('$agent' == '$__all' or agent in (${'${agent:singlequote}'})) | where ('$agentops_agent' == '$__all' or agentops_agent in (${'${agentops_agent:singlequote}'})) | where ('$repo' == '$__all' or repo in (${'${repo:singlequote}'})) | where ('$tool' == '$__all' or tool in (${'${tool:singlequote}'})) | where ('$skill' == '$__all' or skill in (${'${skill:singlequote}'})) | where ('$mcp_server' == '$__all' or mcp_server in (${'${mcp_server:singlequote}'})) | where ('$script' == '$__all' or script in (${'${script:singlequote}'}))`;
 }
 
 function sessionizedDependenciesBase(timePredicate) {
@@ -281,7 +286,7 @@ function sessionFilterPipe() {
 }
 
 function runtimeBaseWhere() {
-  return `union isfuzzy=true AppTraces, AppDependencies | where $__timeFilter(TimeGenerated) | where tostring(Properties) has 'github.copilot' or Message has 'github.copilot' | extend conversation=${sessionKey}, operation=tostring(Properties['gen_ai.operation.name']), agent=tostring(Properties['gen_ai.agent.name']), model=tostring(Properties['gen_ai.request.model']), tool=tostring(Properties['gen_ai.tool.name']), repo=tostring(Properties['agentops.repo.hash']), error=tostring(Properties['error.type'])`;
+  return `union isfuzzy=true AppTraces, AppDependencies, AppEvents | where $__timeFilter(TimeGenerated) | where tostring(Properties) has_any ('github.copilot', 'gen_ai.operation.name', 'agentops.', 'copilot_chat') or Message has_any ('github.copilot', 'AgentOps', 'copilot_chat') | extend conversation=${sessionKey}, operation=tostring(Properties['gen_ai.operation.name']), agent=tostring(Properties['gen_ai.agent.name']), agentops_agent=coalesce(tostring(Properties['agentops.agent.name']), tostring(Properties['agentops.cli.agent']), tostring(Properties['gen_ai.agent.name'])), model=tostring(Properties['gen_ai.request.model']), tool=tostring(Properties['gen_ai.tool.name']), repo=tostring(Properties['agentops.repo.hash']), skill=coalesce(tostring(Properties['agentops.skill.name']), tostring(Properties['github.copilot.skill.name'])), mcp_server=coalesce(tostring(Properties['agentops.mcp.server']), tostring(Properties['agentops.mcp.config.servers']), extract('^mcp__([^_]+)__', 1, tostring(Properties['gen_ai.tool.name'])), extract('^([^/]+)/', 1, tostring(Properties['gen_ai.tool.name']))), script=coalesce(tostring(Properties['agentops.script.name']), tostring(Properties['agentops.hook.name']), tostring(Properties['github.copilot.hook.name']), tostring(Properties['github.copilot.hook.type'])), error=tostring(Properties['error.type']) | where ('$agentops_agent' == '$__all' or agentops_agent in (${'${agentops_agent:singlequote}'})) | where ('$skill' == '$__all' or skill in (${'${skill:singlequote}'})) | where ('$mcp_server' == '$__all' or mcp_server in (${'${mcp_server:singlequote}'})) | where ('$script' == '$__all' or script in (${'${script:singlequote}'}))`;
 }
 
 function sessionReplayQuery() {
@@ -351,6 +356,34 @@ function tracesDashboard() {
     tablePanel(30, 'Errors by operation', 0, 24, 24, 8, `${sessionBaseWhere()} ${sessionFilterPipe()} | where Success == false or isnotempty(error) | summarize Failures=count(), P95DurationMs=percentile(DurationMs, 95), ResultCodes=make_set(ResultCode, 5) by operation, error, model, tool | order by Failures desc`, [byNameUnit('P95DurationMs', 'ms', 2)]),
   ];
   return baseDashboard('agentops-traces-spans', 'AgentOps Traces / Spans', panels, true);
+}
+
+function attributionBaseWhere() {
+  return `union isfuzzy=true (${sessionBaseWhere()} | project TimeGenerated, conversation, operation, agentops_agent, model, tool, repo, skill, mcp_server, script, DurationMs, Success, error, Properties), (${runtimeBaseWhere()} | project TimeGenerated, conversation, operation, agentops_agent, model, tool, repo, skill, mcp_server, script, DurationMs=real(null), Success=bool(null), error, Properties) | extend AttributionKind=case(isnotempty(skill), 'skill', isnotempty(mcp_server), 'mcp', isnotempty(script), 'script_or_hook', isnotempty(agentops_agent), 'agent', 'unattributed'), AttributionName=case(isnotempty(skill), skill, isnotempty(mcp_server), mcp_server, isnotempty(script), script, isnotempty(agentops_agent), agentops_agent, 'unattributed')`;
+}
+
+function attributionDashboard() {
+  const base = attributionBaseWhere();
+  const panels = [
+    textPanel(1, 0, 0, 24, 2, '## Attribution\nUsage, failures, cost, and tool activity grouped by custom agents, skills, MCP servers/tools, and scripts/hooks. Filters apply across the dashboard.'),
+    statPanel(2, 'Attributed Sessions', 0, 2, `${base} | where AttributionKind != 'unattributed' | summarize Sessions=dcount(conversation) by bin(TimeGenerated, $__interval) | order by TimeGenerated asc`),
+    statPanel(3, 'Attributed Failures', 6, 2, `${base} | where AttributionKind != 'unattributed' | summarize Failures=countif(Success == false or isnotempty(error)) by bin(TimeGenerated, $__interval) | order by TimeGenerated asc`, 'short', 'red'),
+    statPanel(4, 'MCP Tool Calls', 12, 2, `${base} | where isnotempty(mcp_server) or tool startswith 'mcp__' or tool contains '/' | summarize Calls=countif(operation == 'execute_tool' or isnotempty(tool)) by bin(TimeGenerated, $__interval) | order by TimeGenerated asc`, 'short', 'yellow'),
+    statPanel(5, 'Skills / Hooks', 18, 2, `${base} | where isnotempty(skill) or isnotempty(script) | summarize Events=count() by bin(TimeGenerated, $__interval) | order by TimeGenerated asc`, 'short', 'blue'),
+    tablePanel(10, 'Attribution Explorer', 0, 6, 24, 12, `${base} | extend InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), OutputTokens=todouble(Properties['gen_ai.usage.output_tokens']), AICredits=todouble(Properties['github.copilot.cost']), AIU=todouble(Properties['github.copilot.aiu']) | summarize Started=min(TimeGenerated), LastSeen=max(TimeGenerated), Sessions=dcount(conversation), Spans=count(), Failures=countif(Success == false or isnotempty(error)), ToolCalls=countif(operation == 'execute_tool' or isnotempty(tool)), InputTokens=sum(InputTokens), OutputTokens=sum(OutputTokens), AICredits=sum(AICredits), AIU=sum(AIU), Models=make_set_if(model, isnotempty(model), 5), Tools=make_set_if(tool, isnotempty(tool), 10), Errors=make_set_if(error, isnotempty(error), 10) by AttributionKind, AttributionName | extend EstUsd=round(AICredits * 0.01, 4), FailurePct=iff(Spans > 0, round(100.0 * Failures / Spans, 1), 0.0) | where AttributionKind != 'unattributed' | order by Sessions desc, Failures desc, AICredits desc`, [
+      byNameUnit('FailurePct', 'percent', 1),
+      byNameUnit('EstUsd', 'currencyUSD', 4),
+      byNameUnit('AICredits', 'short', 2),
+    ]),
+    timeseriesPanel(20, 'Sessions by attribution kind', 0, 18, 12, 8, `${base} | where AttributionKind != 'unattributed' | summarize Sessions=dcount(conversation) by TimeGenerated=bin(TimeGenerated, $__interval), AttributionKind | order by TimeGenerated asc`),
+    timeseriesPanel(21, 'Failures by attribution kind', 12, 18, 12, 8, `${base} | where AttributionKind != 'unattributed' | summarize Failures=countif(Success == false or isnotempty(error)) by TimeGenerated=bin(TimeGenerated, $__interval), AttributionKind | order by TimeGenerated asc`),
+    tablePanel(30, 'MCP server and tool usage', 0, 26, 12, 9, `${base} | where isnotempty(mcp_server) or tool startswith 'mcp__' or tool contains '/' | summarize Calls=count(), Failures=countif(Success == false or isnotempty(error)), Sessions=dcount(conversation), P95DurationMs=percentile(DurationMs, 95), Errors=make_set_if(error, isnotempty(error), 10) by mcp_server, tool | extend FailurePct=iff(Calls > 0, round(100.0 * Failures / Calls, 1), 0.0) | order by Calls desc, Failures desc | take 100`, [
+      byNameUnit('FailurePct', 'percent', 1),
+      byNameUnit('P95DurationMs', 'ms', 2),
+    ]),
+    tablePanel(31, 'Skill and script events', 12, 26, 12, 9, `${base} | where isnotempty(skill) or isnotempty(script) | extend event=coalesce(tostring(Properties['event.name']), tostring(Properties['github.copilot.event.name']), operation, tostring(Properties['type'])) | summarize Events=count(), Sessions=dcount(conversation), Failures=countif(Success == false or isnotempty(error)), LastSeen=max(TimeGenerated), EventNames=make_set_if(event, isnotempty(event), 10), Errors=make_set_if(error, isnotempty(error), 10) by skill, script | order by Events desc, Failures desc | take 100`),
+  ];
+  return baseDashboard('agentops-attribution', 'AgentOps Attribution', panels, true);
 }
 
 function toolsMcpDashboard() {
@@ -582,6 +615,7 @@ const dashboards = {
   'agentops-traces-spans.json': tracesDashboard(),
   'agentops-tools-mcp.json': toolsMcpDashboard(),
   'agentops-runtime-events.json': runtimeEventsDashboard(),
+  'agentops-attribution.json': attributionDashboard(),
   'agentops-safety-policy.json': safetyPolicyDashboard(),
   'agentops-permission-friction.json': permissionFrictionDashboard(),
   'agentops-alert-tuning.json': alertTuningDashboard(),

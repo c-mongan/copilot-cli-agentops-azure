@@ -309,6 +309,7 @@ The dashboard pack includes:
 - Traces / Spans
 - Tools & MCP
 - Runtime Events
+- Attribution
 - Safety & Policy
 - Permission Friction
 - Alert Tuning
@@ -403,6 +404,7 @@ node agentops-cli/src/index.js fields --last 7d
 node agentops-cli/src/index.js context --last 7d
 node agentops-cli/src/index.js token-rollup-audit --last 14d
 node agentops-cli/src/index.js collector-health --last 24h
+node agentops-cli/src/index.js attribution --last 7d
 node agentops-cli/src/index.js primitives --last 7d
 node agentops-cli/src/index.js policy --last 7d
 node agentops-cli/src/index.js mcp --last 7d

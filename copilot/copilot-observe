@@ -51,6 +51,8 @@ github_mcp_tools=()
 github_mcp_toolsets=()
 copilot_args=("$@")
 copilot_arg_count=$#
+agent_file=""
+agent_file_hash=""
 
 sanitize_attr_value() {
 	printf '%s' "$1" | tr ',=\n\r\t ' '______'
@@ -93,6 +95,22 @@ track_mcp_config() {
 	while IFS= read -r server; do
 		append_unique additional_mcp_config_servers "$server"
 	done <<< "$servers"
+}
+
+find_agent_file() {
+	local agent_name="${1:-}"
+	[[ -z "$agent_name" ]] && return
+	local candidates=()
+	if [[ -n "${COPILOT_HOME:-}" ]]; then
+		candidates+=("${COPILOT_HOME}/agents/${agent_name}.agent.md" "${COPILOT_HOME}/agents/${agent_name}.md")
+	fi
+	candidates+=(".copilot/agents/${agent_name}.agent.md" ".copilot/agents/${agent_name}.md" "agents/${agent_name}.agent.md" "agents/${agent_name}.md")
+	for candidate in "${candidates[@]}"; do
+		if [[ -f "$candidate" ]]; then
+			printf '%s' "$candidate"
+			return
+		fi
+	done
 }
 
 while [[ $# -gt 0 ]]; do
@@ -307,6 +325,12 @@ if [[ -n "${cli_model}" ]]; then
 fi
 if [[ -n "${cli_agent}" ]]; then
 	agentops_resource_attributes="${agentops_resource_attributes},agentops.cli.agent=${cli_agent}"
+	agentops_resource_attributes="${agentops_resource_attributes},agentops.agent.name=${cli_agent}"
+	agent_file="$(find_agent_file "$cli_agent" || true)"
+	if [[ -n "$agent_file" ]]; then
+		agent_file_hash="$(shasum -a 256 "$agent_file" | awk '{print $1}')"
+		agentops_resource_attributes="${agentops_resource_attributes},agentops.agent.file=$(sanitize_attr_value "$(basename "$agent_file")"),agentops.agent.hash=${agent_file_hash}"
+	fi
 fi
 if [[ -n "${cli_effort}" ]]; then
 	agentops_resource_attributes="${agentops_resource_attributes},agentops.cli.reasoning_effort=${cli_effort}"

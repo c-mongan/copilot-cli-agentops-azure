@@ -31,6 +31,7 @@ node src/index.js link trace <operationId>
 node src/index.js fields --last 7d
 node src/index.js context --last 7d
 node src/index.js collector-health --last 24h
+node src/index.js attribution --last 7d
 node src/index.js live --last 2h
 node src/index.js replay latest --last 7d
 node src/index.js recommend latest --last 7d
@@ -55,6 +56,8 @@ node src/index.js saved-view add latest-risk --session <conversation>
 `smoke` sends or dry-runs a privacy-safe OTLP trace through the local collector. In live mode it polls Log Analytics for the smoke id by default; use `--no-verify` only when you want a collector-only check.
 
 `collector-health` prints a KQL query for smoke span counts, latest Copilot span, and collector error/warning signals.
+
+`attribution` prints KQL that groups usage, failures, tokens, cost, and tools by custom agent, skill, MCP server, and script/hook attribution fields.
 
 `ask-context` builds a copyable telemetry-investigator prompt with the session id, Grafana URL, Log Analytics query, workspace id, and read-only MCP config references.
 
