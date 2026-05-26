@@ -10,7 +10,7 @@ Usage:
   ./scripts/uninstall-copilot-agentops-shim.sh [--keep-agentops-command]
 
 Removes the plain `copilot` shadow shim and, by default, the explicit
-`copilot-agentops` command from ~/.local/bin.
+`agentops` and `copilot-agentops` commands from ~/.local/bin.
 
 Options:
   --keep-agentops-command  Remove only the plain `copilot` shadow shim.
@@ -36,6 +36,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 shadow_cmd="${install_dir}/copilot"
+agentops_cli_cmd="${install_dir}/agentops"
 agentops_cmd="${install_dir}/copilot-agentops"
 
 if [[ -e "${shadow_cmd}" || -L "${shadow_cmd}" ]]; then
@@ -48,6 +49,15 @@ else
 fi
 
 if [[ "${keep_agentops}" != true ]]; then
+  if [[ -e "${agentops_cli_cmd}" || -L "${agentops_cli_cmd}" ]]; then
+    rm -f "${agentops_cli_cmd}"
+    echo "Removed explicit agentops command:"
+    echo "  ${agentops_cli_cmd}"
+  else
+    echo "No agentops command found at:"
+    echo "  ${agentops_cli_cmd}"
+  fi
+
   if [[ -e "${agentops_cmd}" || -L "${agentops_cmd}" ]]; then
     rm -f "${agentops_cmd}"
     echo "Removed explicit copilot-agentops command:"

@@ -6,6 +6,10 @@ receivers:
       grpc:
         endpoint: 0.0.0.0:4317
 
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
 processors:
   memory_limiter:
     check_interval: 5s
@@ -26,8 +30,14 @@ processors:
         action: delete
       - key: gen_ai.tool.output
         action: delete
+      - key: gen_ai.tool.call.arguments
+        action: delete
+      - key: gen_ai.tool.call.result
+        action: delete
       - key: github.copilot.message
         action: delete
+      - key: code.filepath
+        action: hash
       - key: url.full
         action: delete
       - key: http.request.body.content
@@ -42,6 +52,7 @@ exporters:
     connection_string: ${env:APPLICATIONINSIGHTS_CONNECTION_STRING}
 
 service:
+  extensions: [health_check]
   pipelines:
     traces:
       receivers: [otlp]

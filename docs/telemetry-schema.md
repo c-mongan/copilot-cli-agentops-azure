@@ -1,8 +1,26 @@
 # Telemetry Schema
 
-Expected Copilot CLI attributes are based on OpenTelemetry GenAI semantic conventions and Copilot CLI telemetry documentation.
+Expected Copilot attributes are based on OpenTelemetry GenAI semantic conventions plus the current GitHub Copilot CLI, VS Code Copilot Chat, and Copilot SDK telemetry surfaces.
 
-Copilot CLI OpenTelemetry is opt-in. It turns on when `COPILOT_OTEL_ENABLED=true`, when `OTEL_EXPORTER_OTLP_ENDPOINT` is set, or when `COPILOT_OTEL_FILE_EXPORTER_PATH` is set. Keep `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=false` unless a trusted debugging session explicitly needs prompt, response, or tool argument content.
+Copilot OpenTelemetry is opt-in. Copilot CLI turns on when `COPILOT_OTEL_ENABLED=true`, when `OTEL_EXPORTER_OTLP_ENDPOINT` is set, or when `COPILOT_OTEL_FILE_EXPORTER_PATH` is set. VS Code Copilot Chat uses the `github.copilot.chat.otel.*` settings. Copilot SDK apps can pass a telemetry config with an OTLP endpoint. Keep content capture off unless a trusted debugging session explicitly needs prompt, response, or tool argument content.
+
+AgentOps supports two ingestion modes:
+
+- Wrapper mode: `copilot-agentops` or optional plain-`copilot` shadowing starts the collector, adds AgentOps labels, and calls the real Copilot CLI.
+- Bring-your-own-OTel mode: VS Code Copilot Chat, Copilot CLI, Copilot SDK, or another GenAI-compatible agent sends OTLP directly to the AgentOps collector.
+
+Use this helper to generate native Copilot settings and env vars:
+
+```bash
+agentops otel-setup
+agentops otel-setup --shell powershell
+```
+
+Use this helper to check whether recent incoming spans have enough schema coverage for dashboards and evals:
+
+```bash
+agentops compat-check --last 2h
+```
 
 Important fields:
 
@@ -20,6 +38,57 @@ Important fields:
 - `github.copilot.skill.name`
 - `github.copilot.hook.type`
 - `error.type`
+
+Important metrics:
+
+- `gen_ai.client.operation.duration`
+- `gen_ai.client.token.usage`
+- `gen_ai.client.operation.time_to_first_chunk`
+- `gen_ai.client.operation.time_per_output_chunk`
+- `github.copilot.tool.call.count`
+- `github.copilot.tool.call.duration`
+- `github.copilot.agent.turn.count`
+- `copilot_chat.tool.call.count`
+- `copilot_chat.tool.call.duration`
+- `copilot_chat.agent.invocation.duration`
+- `copilot_chat.agent.turn.count`
+- `copilot_chat.session.count`
+- `copilot_chat.time_to_first_token`
+- `copilot_chat.edit.acceptance.count`
+- `copilot_chat.chat_edit.outcome.count`
+- `copilot_chat.lines_of_code.count`
+- `copilot_chat.edit.survival.four_gram`
+- `copilot_chat.edit.survival.no_revert`
+- `copilot_chat.user.action.count`
+- `copilot_chat.user.feedback.count`
+- `copilot_chat.agent.edit_response.count`
+- `copilot_chat.agent.summarization.count`
+- `copilot_chat.pull_request.count`
+- `copilot_chat.cloud.session.count`
+- `copilot_chat.cloud.pr_ready.count`
+
+Important events and span events:
+
+- `gen_ai.client.inference.operation.details`
+- `copilot_chat.session.start`
+- `copilot_chat.tool.call`
+- `copilot_chat.agent.turn`
+- `copilot_chat.edit.feedback`
+- `copilot_chat.edit.hunk.action`
+- `copilot_chat.inline.done`
+- `copilot_chat.edit.survival`
+- `copilot_chat.user.feedback`
+- `copilot_chat.cloud.session.invoke`
+- `github.copilot.hook.start`
+- `github.copilot.hook.end`
+- `github.copilot.hook.error`
+- `github.copilot.session.truncation`
+- `github.copilot.session.compaction_start`
+- `github.copilot.session.compaction_complete`
+- `github.copilot.skill.invoked`
+- `github.copilot.session.shutdown`
+- `github.copilot.session.abort`
+- `exception`
 
 AgentOps shim fields:
 
@@ -59,6 +128,8 @@ AgentOps shim fields:
 
 The shim records only privacy-safe run dimensions and counts from Copilot CLI flags. It does not record prompt text, tool arguments, allow/deny pattern values, URLs, paths, attachment names, plugin directories, session IDs, or secret variable names. For MCP lineage, it records MCP config basenames, configured server names, disabled server names, and explicitly selected GitHub MCP tool/toolset names when those values are provided by CLI flags or readable MCP config files.
 
+The collector strips content-capture attributes before Azure export, including `gen_ai.input.messages`, `gen_ai.output.messages`, `gen_ai.system_instructions`, `gen_ai.tool.definitions`, `gen_ai.tool.call.arguments`, `gen_ai.tool.call.result`, legacy `gen_ai.prompt`/`gen_ai.completion`, request/response bodies, raw URLs, and file paths.
+
 MCP tool server attribution is exact when tool names use documented namespaced forms such as `mcp__<server>__<tool>` or `<server>/<tool>`. It is inferred when a session has exactly one configured MCP server and a non-built-in tool span has no server prefix.
 
 ## Token Rollups
@@ -70,6 +141,14 @@ Do not blindly sum token and cost fields across every span in a trace. Copilot C
 - `execute_tool` spans for tool calls, usually without token usage.
 
 For session-level grouping, prefer non-empty `gen_ai.conversation.id`, then `github.copilot.interaction_id`, then a deterministic agent/turn/hour fallback.
+
+For broad Copilot/GenAI discovery, use a compatibility filter that accepts native VS Code and CLI service names as well as Copilot-specific properties:
+
+```kql
+Properties has "github.copilot"
+or Properties has "gen_ai.operation.name"
+or AppRoleName in ("github-copilot", "copilot-chat", "github-copilot-cli")
+```
 
 For session-level token panels, prefer summing `chat` spans when they exist and falling back to the `invoke_agent` aggregate when they do not. Use `kql/13-token-rollup-audit.kql` or:
 

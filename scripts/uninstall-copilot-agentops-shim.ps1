@@ -6,6 +6,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 $shadowCmd = Join-Path $InstallDir "copilot.cmd"
+$agentopsCliCmd = Join-Path $InstallDir "agentops.cmd"
 $agentopsCmd = Join-Path $InstallDir "copilot-agentops.cmd"
 
 if (Test-Path $shadowCmd) {
@@ -18,6 +19,15 @@ if (Test-Path $shadowCmd) {
 }
 
 if (-not $KeepAgentopsCommand) {
+  if (Test-Path $agentopsCliCmd) {
+    Remove-Item $agentopsCliCmd -Force
+    Write-Host "Removed explicit agentops command:"
+    Write-Host "  $agentopsCliCmd"
+  } else {
+    Write-Host "No agentops command found at:"
+    Write-Host "  $agentopsCliCmd"
+  }
+
   if (Test-Path $agentopsCmd) {
     Remove-Item $agentopsCmd -Force
     Write-Host "Removed explicit copilot-agentops command:"

@@ -112,7 +112,7 @@
       },
       "options": {
         "mode": "markdown",
-        "content": "## Data Quality\nField discovery and token rollup checks for validating dashboard assumptions against real Copilot CLI telemetry."
+        "content": "## Data Quality\nField discovery, token rollup, collector health, and smoke-ingestion checks for validating dashboard assumptions against real Copilot CLI telemetry."
       }
     },
     {
@@ -194,12 +194,71 @@
     {
       "id": 20,
       "type": "table",
+      "title": "Collector health and smoke ingestion",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 15
+      },
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "azure-monitor-oob"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "Azure Log Analytics",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor-oob"
+          },
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
+            ],
+            "resultFormat": "table",
+            "query": "// Collector health and smoke-ingestion check for Copilot CLI AgentOps.\n// Use with the collector health endpoint and `agentops smoke` to verify the full path.\nlet lookback = 24h;\nlet copilot =\nAppDependencies\n| where TimeGenerated > ago(lookback)\n| where Properties has \"github.copilot\" and Properties has \"github-copilot-cli\"\n| summarize\n    LastCopilotSpan=max(TimeGenerated),\n    CopilotSpans=count(),\n    SmokeSpans=countif(Properties has \"agentops.smoke_id\");\nlet collectorLogs =\nAppTraces\n| where TimeGenerated > ago(lookback)\n| where Message has_any (\"otelcol\", \"azuremonitor\", \"exporter\", \"dropped\", \"retry\", \"queue\", \"refused\", \"timeout\")\n| summarize\n    LastCollectorLog=max(TimeGenerated),\n    CollectorErrors=countif(SeverityLevel >= 3 or Message has_any (\"error\", \"failed\", \"dropped\", \"refused\", \"timeout\")),\n    CollectorWarnings=countif(SeverityLevel == 2 or Message has \"warn\");\ncopilot\n| extend joinKey=1\n| join kind=fullouter (collectorLogs | extend joinKey=1) on joinKey\n| project LastCopilotSpan, CopilotSpans, SmokeSpans, LastCollectorLog, CollectorErrors, CollectorWarnings\n| extend Health=case(isnull(LastCopilotSpan), \"no_copilot_spans\", CollectorErrors > 0, \"collector_errors\", \"healthy\")\n"
+          }
+        }
+      ]
+    },
+    {
+      "id": 30,
+      "type": "table",
       "title": "Observed property fields",
       "gridPos": {
         "h": 14,
         "w": 24,
         "x": 0,
-        "y": 15
+        "y": 23
       },
       "datasource": {
         "type": "grafana-azure-monitor-datasource",

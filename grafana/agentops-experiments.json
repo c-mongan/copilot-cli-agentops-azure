@@ -887,6 +887,65 @@
           }
         }
       ]
+    },
+    {
+      "id": 10,
+      "type": "table",
+      "title": "Anti-cheat and promotion blockers",
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 33
+      },
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "azure-monitor-oob"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "Azure Log Analytics",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor-oob"
+          },
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
+            ],
+            "resultFormat": "table",
+            "query": "AppDependencies | where $__timeFilter(TimeGenerated) | where Properties has 'github.copilot' and Properties has 'github-copilot-cli' | extend suite=tostring(Properties['agentops.benchmark.suite']), task_id=tostring(Properties['agentops.benchmark.task_id']), variant=tostring(Properties['agentops.benchmark.variant']), run_id=tostring(Properties['agentops.benchmark.run_id']), hypothesis_id=tostring(Properties['agentops.hypothesis.id']), operation=tostring(Properties['gen_ai.operation.name']), conversation=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(tostring(Properties['gen_ai.agent.id']), '_', tostring(Properties['github.copilot.turn_count']), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm'))), tool=tostring(Properties['gen_ai.tool.name']), error=tostring(Properties['error.type']) | where isnotempty(suite) or isnotempty(task_id) or isnotempty(variant) or isnotempty(run_id) or isnotempty(hypothesis_id) | where ('$benchmark_suite' == '$__all' or suite in (${benchmark_suite:singlequote})) | where ('$benchmark_task' == '$__all' or task_id in (${benchmark_task:singlequote})) | where ('$benchmark_variant' == '$__all' or variant in (${benchmark_variant:singlequote})) | where ('$benchmark_run' == '$__all' or run_id in (${benchmark_run:singlequote})) | where ('$hypothesis' == '$__all' or hypothesis_id in (${hypothesis:singlequote})) | extend Score=coalesce(todouble(Properties['agentops.benchmark.score']), todouble(Properties['agentops.eval.score']), todouble(Properties['agentops.score']), todouble(Properties['score'])), Passed=coalesce(tobool(Properties['agentops.benchmark.passed']), tobool(Properties['agentops.eval.passed']), Success), InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), OutputTokens=todouble(Properties['gen_ai.usage.output_tokens']), AICredits=todouble(Properties['github.copilot.cost']), EstUsd=todouble(Properties['github.copilot.cost']) * 0.01, Regression=coalesce(tobool(Properties['agentops.benchmark.regression']), tobool(Properties['agentops.regression'])), SafetyIssue=iff(tostring(Properties['agentops.safety.issue']) != '' or tostring(Properties['agentops.policy.blocked']) == 'true' or tostring(Properties) has 'content_filter' or tostring(Properties) has 'safety', true, false), FailureReason=coalesce(error, tostring(Properties['agentops.benchmark.failure_reason']), tostring(Properties['agentops.eval.failure_reason']), ResultCode) | summarize Spans=count(), Runs=dcount(run_id), ToolFailures=countif((operation == 'execute_tool' or isnotempty(tool)) and (Success == false or isnotempty(error))), SafetyIssues=countif(SafetyIssue), PolicyBlocks=countif(tostring(Properties['agentops.policy.blocked']) == 'true' or tostring(Properties) has 'policy'), ContentSignals=countif(tostring(Properties) has_any ('content.capture.enabled', 'gen_ai.prompt', 'gen_ai.completion')), MissingRunLabels=countif(isempty(run_id)), FailureReasons=make_set_if(FailureReason, isnotempty(FailureReason), 10), LastSeen=max(TimeGenerated) by suite, task_id, hypothesis_id, variant | extend AntiCheatStatus=case(SafetyIssues > 0 or ContentSignals > 0, 'blocked', PolicyBlocks > 0 or MissingRunLabels > 0, 'review', 'clean') | where AntiCheatStatus != 'clean' | order by AntiCheatStatus asc, SafetyIssues desc, ContentSignals desc, PolicyBlocks desc, MissingRunLabels desc"
+          }
+        }
+      ]
     }
   ],
   "refresh": "1m",

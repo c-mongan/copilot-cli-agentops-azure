@@ -4,6 +4,7 @@ const crypto = require('node:crypto');
 const childProcess = require('node:child_process');
 const fs = require('node:fs');
 const http = require('node:http');
+const https = require('node:https');
 const os = require('node:os');
 const path = require('node:path');
 const { createAlerts } = require('./alerts');
@@ -15,18 +16,117 @@ const { createTelemetry } = require('./telemetry');
 const root = path.resolve(__dirname, '..', '..');
 
 function usage() {
-  return `agentops <command>\n\nCommands:\n  status\n  latest [--file <jsonl>] [--last <duration>]\n  live|tail [--file <jsonl>] [--last <duration>] [--follow] [--interval <seconds>]\n  replay <session|latest> [--file <jsonl>] [--last <duration>]\n  explain latest [--file <jsonl>] [--last <duration>]\n  recommend latest [--file <jsonl>] [--last <duration>]\n  open [--file <jsonl>] [--last <duration>]\n  skills list|path|install [--copilot-home <path>] [--force] [--json]\n  doctor [--local-only]\n  scan [--json]\n  primitives [--last <duration>] [--root <path>]\n  import-jsonl <file>\n  validate-collector [endpoint]\n  validate-azure\n  enable-shadow\n  disable-shadow\n  uninstall\n  collector start|stop\n  saved-view add <name> --url <url> [--query-file <file>] [--description <text>] [--tag <tag>]\n  saved-view list|show|open <name>\n  link session <conversation>\n  link trace <operationId>\n  fields [--last <duration>]\n  context [--last <duration>]\n  token-rollup-audit [--last <duration>]\n  permission-friction [--last <duration>]\n  alert recommend [--last <duration>]\n  lineage [--last <duration>]\n  policy [--last <duration>]\n  mcp [--last <duration>]\n  benchmark list\n  benchmark run <suite> --variant <name> --repeat <n> [--hypothesis <id>] [--dry-run]\n  benchmark report <run-id> [--azure] [--last <duration>]\n  benchmark compare <before-run-id> <after-run-id> [--azure] [--last <duration>]\n`;
+  const commands = [
+    'status',
+    'latest [--file <jsonl>] [--last <duration>]',
+    'live|tail [--file <jsonl>] [--last <duration>] [--follow] [--interval <seconds>]',
+    'replay <session|latest> [--file <jsonl>] [--last <duration>]',
+    'explain latest [--file <jsonl>] [--last <duration>]',
+    'recommend latest [--file <jsonl>] [--last <duration>]',
+    'open [--file <jsonl>] [--last <duration>]',
+    'workflows list|show <name> [--json]',
+    'skills list|path|install [--copilot-home <path>] [--force] [--json]',
+    'doctor [--local-only]',
+    'scan [--json]',
+    'primitives [--last <duration>] [--root <path>]',
+    'import-jsonl <file>',
+    'configure show|set|import-azd [--json]',
+    'install [--shadow-copilot]',
+    'otel-setup [--endpoint <url>] [--service-name <name>] [--shell bash|powershell|json]',
+    'compat-check [--last <duration>]',
+    'validate-collector [endpoint]',
+    'validate-azure [--last <duration>] [--json]',
+    'init [--dry-run] [--force-skills] [--json]',
+    'smoke [--dry-run] [--endpoint <url>] [--id <smoke-id>] [--last <duration>] [--wait <duration>] [--poll <duration>] [--no-verify] [--json]',
+    'ask-context <latest|session-id> [--file <jsonl>] [--last <duration>] [--json]',
+    'enable-shadow',
+    'disable-shadow',
+    'uninstall',
+    'collector start|stop',
+    'saved-view add <name> --url <url> [--query-file <file>] [--description <text>] [--tag <tag>]',
+    'saved-view list|show|open <name>',
+    'link session <conversation>',
+    'link trace <operationId>',
+    'fields [--last <duration>]',
+    'context [--last <duration>]',
+    'token-rollup-audit [--last <duration>]',
+    'collector-health [--last <duration>]',
+    'permission-friction [--last <duration>]',
+    'alert recommend [--last <duration>]',
+    'lineage [--last <duration>]',
+    'policy [--last <duration>]',
+    'mcp [--last <duration>]',
+    'benchmark list',
+    'benchmark run <suite> --variant <name> --repeat <n> [--hypothesis <id>] [--dry-run]',
+    'benchmark report <run-id> [--azure] [--last <duration>]',
+    'benchmark compare <before-run-id> <after-run-id> [--azure] [--last <duration>]'
+  ];
+  return `agentops <command>\n\nCommands:\n  ${commands.join('\n  ')}\n`;
 }
 
-const configuredWorkspaceId = process.env.AGENTOPS_LOG_ANALYTICS_WORKSPACE_ID || process.env.LOG_ANALYTICS_WORKSPACE_ID || '';
+const defaultConfigPath = process.env.AGENTOPS_CONFIG_PATH || path.join(os.homedir(), '.agentops', 'config.json');
+const agentopsConfig = readAgentOpsConfig({ quiet: true }).values;
+const configuredWorkspaceId = process.env.AGENTOPS_LOG_ANALYTICS_WORKSPACE_ID || process.env.LOG_ANALYTICS_WORKSPACE_ID || agentopsConfig.workspaceId || '';
 const workspaceId = configuredWorkspaceId || '00000000-0000-0000-0000-000000000000';
-const grafanaBaseUrl = (process.env.AGENTOPS_GRAFANA_BASE_URL || 'https://your-grafana.grafana.azure.com').replace(/\/$/, '');
+const grafanaBaseUrl = (process.env.AGENTOPS_GRAFANA_BASE_URL || agentopsConfig.grafanaBaseUrl || 'https://your-grafana.grafana.azure.com').replace(/\/$/, '');
 const mainGrafanaDashboardUrl = `${grafanaBaseUrl}/d/copilot-agentops/copilot-cli-agentops`;
-const azureSubscriptionId = process.env.AGENTOPS_AZURE_SUBSCRIPTION_ID || process.env.AZURE_SUBSCRIPTION_ID || '00000000-0000-0000-0000-000000000000';
-const azureResourceGroup = process.env.AGENTOPS_AZURE_RESOURCE_GROUP || process.env.AZURE_RESOURCE_GROUP || 'rg-agentops-dev';
-const logAnalyticsWorkspaceName = process.env.AGENTOPS_LOG_ANALYTICS_WORKSPACE_NAME || 'law-agentops-dev';
-const portalLogsUrl = process.env.AGENTOPS_AZURE_PORTAL_LOGS_URL || `https://portal.azure.com/#@/resource/subscriptions/${azureSubscriptionId}/resourceGroups/${azureResourceGroup}/providers/Microsoft.OperationalInsights/workspaces/${logAnalyticsWorkspaceName}/logs`;
+const sessionsGrafanaDashboardUrl = `${grafanaBaseUrl}/d/agentops-sessions/agentops-sessions`;
+const grafanaDatasourceUid = process.env.AGENTOPS_GRAFANA_DATASOURCE_UID || agentopsConfig.grafanaDatasourceUid || 'azure-monitor-oob';
+const azureSubscriptionId = process.env.AGENTOPS_AZURE_SUBSCRIPTION_ID || process.env.AZURE_SUBSCRIPTION_ID || agentopsConfig.subscriptionId || '00000000-0000-0000-0000-000000000000';
+const azureResourceGroup = process.env.AGENTOPS_AZURE_RESOURCE_GROUP || process.env.AZURE_RESOURCE_GROUP || agentopsConfig.resourceGroup || 'rg-agentops-dev';
+const logAnalyticsWorkspaceName = process.env.AGENTOPS_LOG_ANALYTICS_WORKSPACE_NAME || agentopsConfig.workspaceName || 'law-agentops-dev';
+const portalLogsUrl = process.env.AGENTOPS_AZURE_PORTAL_LOGS_URL || agentopsConfig.portalLogsUrl || `https://portal.azure.com/#@/resource/subscriptions/${azureSubscriptionId}/resourceGroups/${azureResourceGroup}/providers/Microsoft.OperationalInsights/workspaces/${logAnalyticsWorkspaceName}/logs`;
 const baseFilter = 'Properties has "github.copilot" and Properties has "github-copilot-cli"';
+const copilotOtelFilter = '(Properties has "github.copilot" or Properties has "gen_ai.operation.name" or AppRoleName in ("github-copilot", "copilot-chat", "github-copilot-cli"))';
+const copilotMetricNames = [
+  'gen_ai.client.operation.duration',
+  'gen_ai.client.token.usage',
+  'gen_ai.client.operation.time_to_first_chunk',
+  'gen_ai.client.operation.time_per_output_chunk',
+  'github.copilot.tool.call.count',
+  'github.copilot.tool.call.duration',
+  'github.copilot.agent.turn.count',
+  'copilot_chat.tool.call.count',
+  'copilot_chat.tool.call.duration',
+  'copilot_chat.agent.invocation.duration',
+  'copilot_chat.agent.turn.count',
+  'copilot_chat.session.count',
+  'copilot_chat.time_to_first_token',
+  'copilot_chat.edit.acceptance.count',
+  'copilot_chat.chat_edit.outcome.count',
+  'copilot_chat.lines_of_code.count',
+  'copilot_chat.edit.survival.four_gram',
+  'copilot_chat.edit.survival.no_revert',
+  'copilot_chat.user.action.count',
+  'copilot_chat.user.feedback.count',
+  'copilot_chat.agent.edit_response.count',
+  'copilot_chat.agent.summarization.count',
+  'copilot_chat.pull_request.count',
+  'copilot_chat.cloud.session.count',
+  'copilot_chat.cloud.pr_ready.count'
+];
+const copilotEventNames = [
+  'gen_ai.client.inference.operation.details',
+  'copilot_chat.session.start',
+  'copilot_chat.tool.call',
+  'copilot_chat.agent.turn',
+  'copilot_chat.edit.feedback',
+  'copilot_chat.edit.hunk.action',
+  'copilot_chat.inline.done',
+  'copilot_chat.edit.survival',
+  'copilot_chat.user.feedback',
+  'copilot_chat.cloud.session.invoke',
+  'github.copilot.hook.start',
+  'github.copilot.hook.end',
+  'github.copilot.hook.error',
+  'github.copilot.session.truncation',
+  'github.copilot.session.compaction_start',
+  'github.copilot.session.compaction_complete',
+  'github.copilot.skill.invoked',
+  'github.copilot.session.shutdown',
+  'github.copilot.session.abort',
+  'exception'
+];
 const sessionKey = 'case(isnotempty(tostring(Properties["gen_ai.conversation.id"])), tostring(Properties["gen_ai.conversation.id"]), isnotempty(tostring(Properties["github.copilot.interaction_id"])), tostring(Properties["github.copilot.interaction_id"]), strcat(tostring(Properties["gen_ai.agent.id"]), "_", tostring(Properties["github.copilot.turn_count"]), "_", format_datetime(bin(TimeGenerated, 1h), "yyyyMMdd_HHmm")))';
 const directSessionKey = 'case(isnotempty(tostring(Properties["gen_ai.conversation.id"])), tostring(Properties["gen_ai.conversation.id"]), isnotempty(tostring(Properties["github.copilot.interaction_id"])), tostring(Properties["github.copilot.interaction_id"]), "")';
 const fallbackSessionKey = 'strcat(tostring(Properties["gen_ai.agent.id"]), "_", tostring(Properties["github.copilot.turn_count"]), "_", format_datetime(bin(TimeGenerated, 1h), "yyyyMMdd_HHmm"))';
@@ -58,6 +158,100 @@ function contextPressureQuery(last = '7d') {
 
 function tokenRollupAuditQuery(last = '7d') {
   return `AppDependencies\n| where TimeGenerated > ago(${last})\n| where ${baseFilter}\n| extend conversation=${sessionKey}, operation=tostring(Properties["gen_ai.operation.name"]), model=tostring(Properties["gen_ai.request.model"]), agent=tostring(Properties["gen_ai.agent.name"]), InputTokens=todouble(Properties["gen_ai.usage.input_tokens"]), OutputTokens=todouble(Properties["gen_ai.usage.output_tokens"]), CacheRead=todouble(Properties["gen_ai.usage.cache_read.input_tokens"]), CacheWrite=todouble(Properties["gen_ai.usage.cache_creation.input_tokens"]), Credits=todouble(Properties["github.copilot.cost"]), AIU=todouble(Properties["github.copilot.aiu"])\n| summarize Started=min(TimeGenerated), Ended=max(TimeGenerated), Spans=count(), ChatSpans=countif(operation == "chat"), AgentSpans=countif(operation == "invoke_agent"), AllSpanInputTokens=sum(InputTokens), AllSpanOutputTokens=sum(OutputTokens), ChatInputTokens=sumif(InputTokens, operation == "chat"), ChatOutputTokens=sumif(OutputTokens, operation == "chat"), AgentInputTokens=maxif(InputTokens, operation == "invoke_agent"), AgentOutputTokens=maxif(OutputTokens, operation == "invoke_agent"), ChatCredits=sumif(Credits, operation == "chat"), AgentCredits=maxif(Credits, operation == "invoke_agent"), ChatAIU=sumif(AIU, operation == "chat"), AgentAIU=maxif(AIU, operation == "invoke_agent"), Models=make_set(model, 5), Agents=make_set(agent, 5) by Session=conversation\n| extend RecommendedInputTokens=iff(ChatSpans > 0, ChatInputTokens, AgentInputTokens), RecommendedOutputTokens=iff(ChatSpans > 0, ChatOutputTokens, AgentOutputTokens), RecommendedCredits=iff(ChatSpans > 0, ChatCredits, AgentCredits), RecommendedAIU=iff(ChatSpans > 0, ChatAIU, AgentAIU)\n| extend TokenOvercountRatio=iff(RecommendedInputTokens > 0, round(AllSpanInputTokens / RecommendedInputTokens, 2), 0.0), RollupMode=iff(ChatSpans > 0, "chat_spans", "invoke_agent_fallback"), NeedsReview=AllSpanInputTokens > RecommendedInputTokens * 1.25\n| project Started, Ended, Session, RollupMode, NeedsReview, TokenOvercountRatio, AllSpanInputTokens, RecommendedInputTokens, AgentInputTokens, ChatInputTokens, AllSpanOutputTokens, RecommendedOutputTokens, AgentOutputTokens, ChatOutputTokens, RecommendedCredits, RecommendedAIU, Spans, ChatSpans, AgentSpans, Models, Agents\n| order by NeedsReview desc, TokenOvercountRatio desc, AllSpanInputTokens desc\n| take 100`;
+}
+
+function collectorHealthQuery(last = '24h') {
+  const lookback = validateKqlDuration(last);
+  return `let lookback = ${lookback};
+let copilot = AppDependencies
+| where TimeGenerated > ago(lookback)
+| where ${copilotOtelFilter}
+| summarize LastCopilotSpan=max(TimeGenerated), CopilotSpans=count(), SmokeSpans=countif(Properties has "agentops.smoke_id");
+let collectorLogs = AppTraces
+| where TimeGenerated > ago(lookback)
+| where Message has_any ("otelcol", "azuremonitor", "exporter", "dropped", "retry", "queue", "refused", "timeout")
+| summarize LastCollectorLog=max(TimeGenerated), CollectorErrors=countif(SeverityLevel >= 3 or Message has_any ("error", "failed", "dropped", "refused", "timeout")), CollectorWarnings=countif(SeverityLevel == 2 or Message has "warn");
+copilot
+| extend joinKey=1
+| join kind=fullouter (collectorLogs | extend joinKey=1) on joinKey
+| project LastCopilotSpan, CopilotSpans, SmokeSpans, LastCollectorLog, CollectorErrors, CollectorWarnings
+| extend Health=case(isnull(LastCopilotSpan), "no_copilot_spans", CollectorErrors > 0, "collector_errors", "healthy")`;
+}
+
+function otelCompatibilityQuery(last = '2h') {
+  const lookback = validateKqlDuration(last);
+  const metricNames = copilotMetricNames.map(name => `"${name}"`).join(', ');
+  const eventNames = copilotEventNames.map(name => `"${name}"`).join(', ');
+  return `let lookback = ${lookback};
+let expected_metrics = dynamic([${metricNames}]);
+let expected_events = dynamic([${eventNames}]);
+let span_summary = AppDependencies
+| where TimeGenerated > ago(lookback)
+| where ${copilotOtelFilter}
+| extend operation=tostring(Properties["gen_ai.operation.name"]),
+    service=coalesce(AppRoleName, tostring(Properties["service.name"])),
+    agent=tostring(Properties["gen_ai.agent.name"]),
+    conversation=tostring(Properties["gen_ai.conversation.id"]),
+    interaction=tostring(Properties["github.copilot.interaction_id"]),
+    model=tostring(Properties["gen_ai.request.model"]),
+    tool=tostring(Properties["gen_ai.tool.name"]),
+    input_tokens=todouble(Properties["gen_ai.usage.input_tokens"]),
+    output_tokens=todouble(Properties["gen_ai.usage.output_tokens"]),
+    cost=todouble(Properties["github.copilot.cost"]),
+    aiu=todouble(Properties["github.copilot.aiu"])
+| summarize
+    Spans=count(),
+    Services=make_set_if(service, isnotempty(service), 10),
+    Operations=make_set_if(operation, isnotempty(operation), 10),
+    Agents=make_set_if(agent, isnotempty(agent), 10),
+    HasOperation=countif(isnotempty(operation)),
+    HasSession=countif(isnotempty(conversation) or isnotempty(interaction)),
+    HasModel=countif(isnotempty(model)),
+    HasTool=countif(isnotempty(tool)),
+    HasTokenUsage=countif(isnotnull(input_tokens) or isnotnull(output_tokens)),
+    HasCostOrAIU=countif(isnotnull(cost) or isnotnull(aiu)),
+    LastSpan=max(TimeGenerated)
+| extend joinKey=1;
+let metric_summary = union isfuzzy=true AppMetrics
+| where TimeGenerated > ago(lookback)
+| where Name in (expected_metrics) or tostring(Properties) has_any ("gen_ai", "github.copilot", "copilot_chat")
+| summarize
+    Metrics=count(),
+    MetricNames=make_set(Name, 50),
+    HasGenAiMetrics=countif(Name startswith "gen_ai."),
+    HasCopilotCliMetrics=countif(Name startswith "github.copilot."),
+    HasVsCodeMetrics=countif(Name startswith "copilot_chat."),
+    LastMetric=max(TimeGenerated)
+| extend joinKey=1;
+let event_summary = union isfuzzy=true AppTraces, AppEvents
+| where TimeGenerated > ago(lookback)
+| extend event=coalesce(tostring(Properties["event.name"]), tostring(Properties["github.copilot.event.name"]), Name)
+| where event in (expected_events) or tostring(Properties) has_any ("github.copilot", "copilot_chat", "gen_ai.client.inference") or Message has_any ("github.copilot", "copilot_chat", "gen_ai.client.inference")
+| summarize
+    Events=count(),
+    EventNames=make_set_if(event, isnotempty(event), 50),
+    HasLifecycleEvents=countif(event has_any ("session", "hook", "skill", "exception")),
+    HasVsCodeEvents=countif(event startswith "copilot_chat."),
+    LastEvent=max(TimeGenerated)
+| extend joinKey=1;
+span_summary
+| join kind=fullouter metric_summary on joinKey
+| join kind=fullouter event_summary on joinKey
+| extend Status=case(Spans == 0, "missing",
+    HasOperation == 0 or HasSession == 0, "partial",
+    HasModel == 0 or HasTokenUsage == 0, "partial",
+    "ready")
+| extend Missing=pack_array(
+    iff(Spans == 0, "no Copilot/GenAI spans matched", ""),
+    iff(Spans > 0 and HasOperation == 0, "gen_ai.operation.name", ""),
+    iff(Spans > 0 and HasSession == 0, "gen_ai.conversation.id or github.copilot.interaction_id", ""),
+    iff(Spans > 0 and HasModel == 0, "gen_ai.request.model", ""),
+    iff(Spans > 0 and HasTokenUsage == 0, "gen_ai.usage.input_tokens/output_tokens", ""),
+    iff(Spans > 0 and HasCostOrAIU == 0, "github.copilot.cost or github.copilot.aiu", ""),
+    iff(coalesce(Metrics, 0) == 0, "no Copilot/GenAI metrics matched", ""),
+    iff(coalesce(Events, 0) == 0, "no Copilot/GenAI events matched", "")
+)
+| project Status, Spans=coalesce(Spans, 0), Metrics=coalesce(Metrics, 0), Events=coalesce(Events, 0), LastSpan, LastMetric, LastEvent, Services, Operations, Agents, MetricNames, EventNames, HasOperation, HasSession, HasModel, HasTool, HasTokenUsage, HasCostOrAIU, HasGenAiMetrics, HasCopilotCliMetrics, HasVsCodeMetrics, HasLifecycleEvents, HasVsCodeEvents, Missing`;
 }
 
 function kqlFileQuery(fileName, last = '7d') {
@@ -106,6 +300,19 @@ function validateKqlDuration(value) {
   return value;
 }
 
+function durationToMs(value, fallbackMs) {
+  if (value === undefined || value === null || value === '') return fallbackMs;
+  if (typeof value === 'number') return value;
+  const match = String(value).match(/^([0-9]+)(ms|s|m|h)$/);
+  if (!match) throw new Error('duration must look like 500ms, 10s, 2m, or 1h');
+  const amount = Number(match[1]);
+  const unit = match[2];
+  if (unit === 'ms') return amount;
+  if (unit === 's') return amount * 1000;
+  if (unit === 'm') return amount * 60 * 1000;
+  return amount * 60 * 60 * 1000;
+}
+
 function escapeKqlString(value) {
   return String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 }
@@ -113,6 +320,26 @@ function escapeKqlString(value) {
 function commandPlan(command, args = [], platform = process.platform) {
   const isWindows = platform === 'win32';
   const scriptPath = script => path.join(root, 'scripts', script);
+
+  if (command === 'install') {
+    const shadow = args.includes('--shadow-copilot') || args.includes('--shadow');
+    return isWindows
+      ? {
+          command: 'pwsh',
+          args: [
+            '-NoProfile',
+            '-ExecutionPolicy',
+            'Bypass',
+            '-File',
+            scriptPath('install-copilot-agentops-shim.ps1'),
+            ...(shadow ? ['-ShadowCopilot'] : [])
+          ]
+        }
+      : {
+          command: scriptPath('install-copilot-agentops-shim.sh'),
+          args: shadow ? ['--shadow-copilot'] : []
+        };
+  }
 
   if (command === 'enable-shadow') {
     return isWindows
@@ -226,8 +453,10 @@ function commandCandidates(commandName) {
 function installedShimStatus(installDir = defaultInstallDir) {
   const shadowName = process.platform === 'win32' ? 'copilot.cmd' : 'copilot';
   const agentopsName = process.platform === 'win32' ? 'copilot-agentops.cmd' : 'copilot-agentops';
+  const agentopsCliName = process.platform === 'win32' ? 'agentops.cmd' : 'agentops';
   const shadowPath = path.join(installDir, shadowName);
   const agentopsPath = path.join(installDir, agentopsName);
+  const agentopsCliPath = path.join(installDir, agentopsCliName);
   const copilotCommands = commandCandidates('copilot');
   const installDirFull = path.resolve(installDir);
   const firstCopilot = copilotCommands[0] || null;
@@ -237,6 +466,8 @@ function installedShimStatus(installDir = defaultInstallDir) {
 
   return {
     install_dir: installDir,
+    agentops_cli_installed: fs.existsSync(agentopsCliPath),
+    agentops_cli_path: agentopsCliPath,
     copilot_agentops_installed: fs.existsSync(agentopsPath),
     copilot_agentops_path: agentopsPath,
     shadow_installed: shadowInstalled,
@@ -360,6 +591,163 @@ function parseSkillsArgs(args) {
   };
 }
 
+function agentopsWorkflows() {
+  const cli = 'node agentops-cli/src/index.js';
+  return [
+    {
+      name: 'setup',
+      skill: 'agentops-setup',
+      description: 'Install the local shim, skills, and safe defaults.',
+      prompt: 'Use agentops-setup to check my AgentOps install and tell me the next command to run.',
+      commands: [
+        'az login',
+        `${cli} install --shadow-copilot`,
+        './setup-agentops.sh',
+        './setup-agentops.ps1',
+        `${cli} configure show`,
+        `${cli} configure import-azd`,
+        `${cli} init`,
+        `${cli} validate-azure`,
+        `${cli} smoke --dry-run`,
+        `${cli} smoke --wait 2m --poll 10s`,
+        `${cli} skills install`,
+        `${cli} status`,
+        `${cli} doctor --local-only`
+      ]
+    },
+    {
+      name: 'latest-run',
+      skill: 'agentops-live-triage',
+      description: 'Inspect the latest observed Copilot CLI run.',
+      prompt: 'Use agentops-live-triage to explain the latest run and recommend one next action.',
+      commands: [
+        'copilot -p "Reply with exactly: agentops smoke."',
+        `${cli} open`,
+        `${cli} latest --last 7d`,
+        `${cli} explain latest --last 7d`,
+        `${cli} recommend latest --last 7d`,
+        `${cli} live --last 2h`,
+        `${cli} replay latest --last 7d`,
+        `${cli} ask-context latest --last 2h`
+      ]
+    },
+    {
+      name: 'dashboard',
+      skill: 'agentops-dashboard-ops',
+      description: 'Open, rebuild, import, and deep-link Grafana dashboards.',
+      prompt: 'Use agentops-dashboard-ops to open the AgentOps dashboard and create a link for this session.',
+      commands: [
+        `${cli} open`,
+        `${cli} link session <conversation>`,
+        `${cli} link trace <operationId>`,
+        'node scripts/build-grafana-dashboard-pack.js',
+        'AZURE_RESOURCE_GROUP=rg-agentops-dev GRAFANA_NAME=graf-agentops-dev ./scripts/grafana-import-dashboard.sh'
+      ]
+    },
+    {
+      name: 'science-mode',
+      skill: 'agentops-benchmark-gate',
+      description: 'Run repeatable benchmark checks before keeping agent changes.',
+      prompt: 'Use agentops-benchmark-gate to compare my baseline and candidate benchmark runs.',
+      commands: [
+        `${cli} benchmark list`,
+        `${cli} benchmark run starter --variant baseline --repeat 1 --hypothesis safer-tool-policy --dry-run`,
+        `${cli} benchmark run starter --variant baseline --repeat 1 --hypothesis safer-tool-policy`,
+        `${cli} benchmark report <run-id>`,
+        `${cli} benchmark compare <baseline-run-id> <variant-run-id> --azure --last 24h`
+      ]
+    },
+    {
+      name: 'offline-test',
+      skill: 'agentops-live-triage',
+      description: 'Use local JSONL fixtures when Azure telemetry is not available.',
+      prompt: 'Use agentops-live-triage with the sample JSONL fixture to explain a local tool failure.',
+      commands: [
+        `${cli} latest --file tests/sample-otel/tool-failure.jsonl`,
+        `${cli} explain latest --file tests/sample-otel/tool-failure.jsonl`,
+        `${cli} recommend latest --file tests/sample-otel/tool-failure.jsonl`,
+        `${cli} live --file tests/sample-otel/tool-failure.jsonl`,
+        `${cli} replay latest --file tests/sample-otel/tool-failure.jsonl`
+      ]
+    },
+    {
+      name: 'analyst-mode',
+      skill: 'agentops-evidence-prompts',
+      description: 'Generate read-only KQL, links, saved views, and investigation prompts.',
+      prompt: 'Use agentops-evidence-prompts to investigate the last 24 hours and propose one safe improvement.',
+      commands: [
+        `${cli} fields --last 7d`,
+        `${cli} context --last 7d`,
+        `${cli} token-rollup-audit --last 14d`,
+        `${cli} collector-health --last 24h`,
+        `${cli} policy --last 7d`,
+        `${cli} mcp --last 7d`,
+        `${cli} lineage --last 24h`,
+        `${cli} permission-friction --last 7d`,
+        `${cli} alert recommend --last 14d`,
+        `${cli} ask-context latest --last 24h`,
+        `${cli} saved-view add latest-risk --session <conversation-id> --tag risk`,
+        `${cli} saved-view list`
+      ]
+    },
+    {
+      name: 'primitive-inventory',
+      skill: 'agentops-primitive-inventory',
+      description: 'Show which agents, skills, hooks, MCP tools, and other primitives are configured or observed.',
+      prompt: 'Use agentops-primitive-inventory to inventory this repo and explain any missing runtime signals.',
+      commands: [
+        `${cli} primitives --last 7d`,
+        `${cli} primitives --root /path/to/awesome-copilot --last 7d`
+      ]
+    },
+    {
+      name: 'operations',
+      skill: 'agentops-operations',
+      description: 'Check health, stop collector, disable shadowing, or uninstall safely.',
+      prompt: 'Use agentops-operations to check health and choose the safest cleanup command.',
+      commands: [
+        `${cli} status`,
+        `${cli} validate-collector`,
+        `${cli} collector-health --last 24h`,
+        `${cli} disable-shadow`,
+        `${cli} collector stop`,
+        `${cli} uninstall`
+      ]
+    }
+  ];
+}
+
+function parseWorkflowsArgs(args) {
+  return {
+    subcommand: args[0] || 'list',
+    name: args[1],
+    json: args.includes('--json')
+  };
+}
+
+function renderWorkflow(workflow) {
+  const lines = [
+    `${workflow.name}: ${workflow.description}`,
+    `Skill: ${workflow.skill}`,
+    `Ask Copilot: ${workflow.prompt}`,
+    '',
+    'Commands:'
+  ];
+  for (const command of workflow.commands) lines.push(`- ${command}`);
+  return `${lines.join('\n')}\n`;
+}
+
+function renderWorkflowsList(workflows = agentopsWorkflows()) {
+  const lines = ['AgentOps workflows', ''];
+  for (const workflow of workflows) {
+    lines.push(`- ${workflow.name}: ${workflow.description}`);
+    lines.push(`  Skill: ${workflow.skill}`);
+    lines.push(`  Ask: ${workflow.prompt}`);
+  }
+  lines.push('', 'Run `agentops workflows show <name>` to print the commands for one workflow.');
+  return `${lines.join('\n')}\n`;
+}
+
 function optionValue(args, names) {
   for (const name of names) {
     const index = args.indexOf(name);
@@ -381,6 +769,7 @@ function agentopsStatusSummary({ checks = doctor({ localOnly: true }) } = {}) {
   const contentCapture = checkByName(checks, 'content-capture-disabled');
   const httpLocal = checkByName(checks, 'collector-http-localhost');
   const grpcLocal = checkByName(checks, 'collector-grpc-localhost');
+  const agentopsCli = checkByName(checks, 'agentops-command');
   const agentopsShim = checkByName(checks, 'copilot-agentops-command');
   const shadowShim = checkByName(checks, 'plain-copilot-shadow');
 
@@ -394,6 +783,7 @@ function agentopsStatusSummary({ checks = doctor({ localOnly: true }) } = {}) {
     content_capture_off: Boolean(contentCapture?.ok),
     collector_localhost: Boolean(httpLocal?.ok && grpcLocal?.ok),
     shim: {
+      agentops_cli: agentopsCli?.status || 'unknown',
       agentops_command: agentopsShim?.status || 'unknown',
       shadow: shadowShim?.status || 'unknown',
       first_copilot_on_path: shadowShim?.first_copilot_on_path || null,
@@ -420,6 +810,7 @@ function renderStatus(summary = agentopsStatusSummary()) {
     ? 'Collector config: localhost for HTTP and gRPC.'
     : 'Collector config: not confirmed as localhost.');
 
+  const agentopsCli = summary.shim.agentops_cli === 'installed' ? 'installed' : 'not installed';
   const agentopsCommand = summary.shim.agentops_command === 'installed' ? 'installed' : 'not installed';
   const shadow = summary.shim.shadow === 'observed'
     ? 'plain copilot is routed through AgentOps'
@@ -428,7 +819,7 @@ function renderStatus(summary = agentopsStatusSummary()) {
       : summary.shim.shadow === 'not_installed'
         ? 'plain copilot shadow is not installed'
       : summary.shim.shadow.replace(/_/g, ' ');
-  lines.push(`Shim: copilot-agentops is ${agentopsCommand}; ${shadow}.`);
+  lines.push(`Shim: agentops is ${agentopsCli}; copilot-agentops is ${agentopsCommand}; ${shadow}.`);
 
   return `${lines.join('\n')}\n`;
 }
@@ -498,6 +889,12 @@ function doctor({ localOnly }) {
 
   const shim = installedShimStatus();
   checks.push({
+    name: 'agentops-command',
+    ok: true,
+    status: shim.agentops_cli_installed ? 'installed' : 'not_installed',
+    path: shim.agentops_cli_path
+  });
+  checks.push({
     name: 'copilot-agentops-command',
     ok: true,
     status: shim.copilot_agentops_installed ? 'installed' : 'not_installed',
@@ -517,6 +914,994 @@ function doctor({ localOnly }) {
   }
 
   return checks;
+}
+
+function normalizeAgentOpsConfig(raw = {}) {
+  return {
+    subscriptionId: raw.subscriptionId || raw.azureSubscriptionId || raw.AZURE_SUBSCRIPTION_ID || raw.AGENTOPS_AZURE_SUBSCRIPTION_ID || '',
+    resourceGroup: raw.resourceGroup || raw.azureResourceGroup || raw.AZURE_RESOURCE_GROUP || raw.AGENTOPS_AZURE_RESOURCE_GROUP || '',
+    workspaceId: raw.workspaceId || raw.logAnalyticsWorkspaceId || raw.LOG_ANALYTICS_WORKSPACE_ID || raw.AGENTOPS_LOG_ANALYTICS_WORKSPACE_ID || '',
+    workspaceName: raw.workspaceName || raw.logAnalyticsWorkspaceName || raw.AGENTOPS_LOG_ANALYTICS_WORKSPACE_NAME || '',
+    grafanaBaseUrl: (raw.grafanaBaseUrl || raw.grafanaUrl || raw.AGENTOPS_GRAFANA_BASE_URL || '').replace(/\/$/, ''),
+    grafanaName: raw.grafanaName || raw.GRAFANA_NAME || raw.AGENTOPS_GRAFANA_NAME || '',
+    grafanaDatasourceUid: raw.grafanaDatasourceUid || raw.datasourceUid || raw.AGENTOPS_GRAFANA_DATASOURCE_UID || '',
+    appInsightsName: raw.appInsightsName || raw.applicationInsightsName || raw.APPLICATIONINSIGHTS_NAME || raw.AGENTOPS_APPLICATIONINSIGHTS_NAME || '',
+    portalLogsUrl: raw.portalLogsUrl || raw.AGENTOPS_AZURE_PORTAL_LOGS_URL || ''
+  };
+}
+
+function compactConfig(config) {
+  return Object.fromEntries(Object.entries(normalizeAgentOpsConfig(config)).filter(([, value]) => value !== undefined && value !== null && value !== ''));
+}
+
+function readAgentOpsConfig(options = {}) {
+  const configPath = options.configPath || defaultConfigPath;
+  if (!fs.existsSync(configPath)) {
+    return { path: configPath, exists: false, values: {} };
+  }
+
+  try {
+    return {
+      path: configPath,
+      exists: true,
+      values: compactConfig(JSON.parse(fs.readFileSync(configPath, 'utf8')))
+    };
+  } catch (error) {
+    if (options.quiet) return { path: configPath, exists: true, values: {}, error: error.message };
+    throw new Error(`Could not read AgentOps config at ${configPath}: ${error.message}`);
+  }
+}
+
+function writeAgentOpsConfig(values, options = {}) {
+  const configPath = options.configPath || defaultConfigPath;
+  const existing = readAgentOpsConfig({ configPath, quiet: true }).values;
+  const next = compactConfig({ ...existing, ...values });
+  if (!options.dryRun) {
+    fs.mkdirSync(path.dirname(configPath), { recursive: true });
+    fs.writeFileSync(configPath, `${JSON.stringify(next, null, 2)}\n`);
+  }
+  return { path: configPath, exists: true, values: next, dryRun: Boolean(options.dryRun) };
+}
+
+function parseEnvAssignments(text) {
+  const values = {};
+  for (const line of String(text || '').split(/\r?\n/)) {
+    const match = line.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
+    if (!match) continue;
+    let value = match[2].trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    values[match[1]] = value.replace(/\\"/g, '"');
+  }
+  return values;
+}
+
+function configFromEnvValues(values = {}) {
+  return compactConfig({
+    subscriptionId: values.AGENTOPS_AZURE_SUBSCRIPTION_ID || values.AZURE_SUBSCRIPTION_ID,
+    resourceGroup: values.AGENTOPS_AZURE_RESOURCE_GROUP || values.AZURE_RESOURCE_GROUP,
+    workspaceId: values.AGENTOPS_LOG_ANALYTICS_WORKSPACE_ID || values.LOG_ANALYTICS_WORKSPACE_ID,
+    workspaceName: values.AGENTOPS_LOG_ANALYTICS_WORKSPACE_NAME || values.LOG_ANALYTICS_WORKSPACE_NAME,
+    grafanaBaseUrl: values.AGENTOPS_GRAFANA_BASE_URL,
+    grafanaName: values.AGENTOPS_GRAFANA_NAME || values.GRAFANA_NAME,
+    grafanaDatasourceUid: values.AGENTOPS_GRAFANA_DATASOURCE_UID,
+    appInsightsName: values.AGENTOPS_APPLICATIONINSIGHTS_NAME || values.APPLICATIONINSIGHTS_NAME,
+    portalLogsUrl: values.AGENTOPS_AZURE_PORTAL_LOGS_URL
+  });
+}
+
+function parseConfigureSetArgs(args) {
+  const map = {
+    '--subscription-id': 'subscriptionId',
+    '--resource-group': 'resourceGroup',
+    '--workspace-id': 'workspaceId',
+    '--workspace-name': 'workspaceName',
+    '--grafana-url': 'grafanaBaseUrl',
+    '--grafana-name': 'grafanaName',
+    '--datasource-uid': 'grafanaDatasourceUid',
+    '--app-insights-name': 'appInsightsName',
+    '--portal-logs-url': 'portalLogsUrl'
+  };
+  const values = {};
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === '--json' || arg === '--dry-run') continue;
+    const key = map[arg];
+    if (!key) throw new Error(`Unknown configure set option: ${arg}`);
+    if (!args[index + 1]) throw new Error(`${arg} requires a value`);
+    values[key] = args[index + 1];
+    index += 1;
+  }
+  return compactConfig(values);
+}
+
+function parseConfigureArgs(args) {
+  const subcommandIndex = args.findIndex(arg => !arg.startsWith('--'));
+  const subcommand = subcommandIndex === -1 ? 'show' : args[subcommandIndex];
+  const subcommandArgs = subcommandIndex === -1 ? args : args.slice(subcommandIndex + 1);
+  return {
+    subcommand,
+    json: args.includes('--json'),
+    dryRun: args.includes('--dry-run'),
+    values: subcommand === 'set' ? parseConfigureSetArgs(subcommandArgs) : {}
+  };
+}
+
+function parseOtelSetupArgs(args = []) {
+  const options = {
+    endpoint: 'http://127.0.0.1:4318',
+    serviceName: 'github-copilot',
+    shell: 'bash',
+    captureContent: false
+  };
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === '--endpoint') {
+      if (!args[index + 1]) throw new Error('--endpoint requires a URL');
+      options.endpoint = args[index + 1];
+      index += 1;
+    } else if (arg === '--service-name') {
+      if (!args[index + 1]) throw new Error('--service-name requires a value');
+      options.serviceName = args[index + 1];
+      index += 1;
+    } else if (arg === '--shell') {
+      if (!args[index + 1]) throw new Error('--shell requires bash, powershell, or json');
+      options.shell = args[index + 1];
+      index += 1;
+    } else if (arg === '--capture-content') {
+      options.captureContent = true;
+    } else {
+      throw new Error(`Unknown otel-setup option: ${arg}`);
+    }
+  }
+  if (!['bash', 'powershell', 'json'].includes(options.shell)) {
+    throw new Error('--shell must be bash, powershell, or json');
+  }
+  return options;
+}
+
+function shellQuote(value) {
+  return `'${String(value).replace(/'/g, "'\\''")}'`;
+}
+
+function buildOtelSetup(options = {}) {
+  const endpoint = options.endpoint || 'http://127.0.0.1:4318';
+  const serviceName = options.serviceName || 'github-copilot';
+  const captureContent = Boolean(options.captureContent);
+  const resourceAttributes = [
+    'agent.framework=github-copilot',
+    `agent.runtime=${serviceName}`,
+    'agentops.profile=bring-your-own-otel'
+  ].join(',');
+  const env = {
+    OTEL_EXPORTER_OTLP_ENDPOINT: endpoint,
+    OTEL_EXPORTER_OTLP_PROTOCOL: 'http/protobuf',
+    OTEL_SERVICE_NAME: serviceName,
+    OTEL_RESOURCE_ATTRIBUTES: resourceAttributes,
+    COPILOT_OTEL_ENABLED: 'true',
+    COPILOT_OTEL_ENDPOINT: endpoint,
+    COPILOT_OTEL_EXPORTER_TYPE: 'otlp-http',
+    COPILOT_OTEL_PROTOCOL: 'http',
+    COPILOT_OTEL_CAPTURE_CONTENT: captureContent ? 'true' : 'false',
+    OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT: captureContent ? 'true' : 'false'
+  };
+  const vscode = {
+    'github.copilot.chat.otel.enabled': true,
+    'github.copilot.chat.otel.exporterType': 'otlp-http',
+    'github.copilot.chat.otel.otlpEndpoint': endpoint,
+    'github.copilot.chat.otel.captureContent': captureContent,
+    'github.copilot.chat.otel.maxAttributeSizeChars': 0,
+    'github.copilot.chat.otel.dbSpanExporter.enabled': false
+  };
+  const fileExport = {
+    vscode: {
+      'github.copilot.chat.otel.enabled': true,
+      'github.copilot.chat.otel.exporterType': 'file',
+      'github.copilot.chat.otel.outfile': './copilot-otel.jsonl',
+      'github.copilot.chat.otel.captureContent': captureContent
+    },
+    env: {
+      COPILOT_OTEL_ENABLED: 'true',
+      COPILOT_OTEL_EXPORTER_TYPE: 'file',
+      COPILOT_OTEL_FILE_EXPORTER_PATH: './copilot-otel.jsonl',
+      OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT: captureContent ? 'true' : 'false',
+      COPILOT_OTEL_CAPTURE_CONTENT: captureContent ? 'true' : 'false'
+    }
+  };
+  const sdkTypescript = `import { CopilotClient } from "@github/copilot-sdk";
+
+const client = new CopilotClient({
+  telemetry: {
+    otlpEndpoint: "${endpoint}",
+    exporterType: "otlp-http",
+    sourceName: "github.copilot",
+    captureContent: ${captureContent}
+  }
+});`;
+
+  return { endpoint, serviceName, captureContent, env, vscode, fileExport, sdkTypescript };
+}
+
+function renderOtelSetup(setup, options = {}) {
+  if (options.shell === 'json') return `${JSON.stringify(setup, null, 2)}\n`;
+  const lines = [
+    'AgentOps bring-your-own-OTel setup',
+    '',
+    'VS Code settings.json:',
+    JSON.stringify(setup.vscode, null, 2),
+    '',
+    'Copilot CLI terminal environment:'
+  ];
+
+  if (options.shell === 'powershell') {
+    for (const [key, value] of Object.entries(setup.env)) {
+      lines.push(`$env:${key} = "${String(value).replace(/"/g, '`"')}"`);
+    }
+  } else {
+    for (const [key, value] of Object.entries(setup.env)) {
+      lines.push(`export ${key}=${shellQuote(value)}`);
+    }
+  }
+
+  lines.push(
+    '',
+    'Copilot SDK TypeScript:',
+    setup.sdkTypescript,
+    '',
+    'Optional JSONL file export for offline review:',
+    JSON.stringify(setup.fileExport, null, 2),
+    '',
+    'Then point Copilot at the AgentOps collector and run:',
+    './scripts/collector-azuremonitor-up.sh',
+    'agentops collector start',
+    'agentops compat-check --last 2h',
+    '',
+    'No installed CLI is required for ingestion; use kql/22-otel-compatibility.kql directly in Log Analytics if you want a pure manual check.'
+  );
+
+  return `${lines.join('\n')}\n`;
+}
+
+function agentopsConfigure(options = {}) {
+  const configPath = options.configPath || defaultConfigPath;
+  const subcommand = options.subcommand || 'show';
+  if (subcommand === 'show') {
+    return { action: 'show', ...readAgentOpsConfig({ configPath }) };
+  }
+  if (subcommand === 'set') {
+    if (Object.keys(options.values || {}).length === 0) throw new Error('configure set requires at least one value');
+    return { action: 'set', ...writeAgentOpsConfig(options.values, { configPath, dryRun: options.dryRun }) };
+  }
+  if (subcommand === 'import-azd') {
+    const spawnSync = options.spawnSync || childProcess.spawnSync;
+    const result = spawnSync('azd', ['env', 'get-values'], {
+      encoding: 'utf8',
+      maxBuffer: 1024 * 1024
+    });
+    if (result.error) {
+      return { action: 'import-azd', path: configPath, ok: false, error: result.error.message };
+    }
+    if (result.status !== 0) {
+      return { action: 'import-azd', path: configPath, ok: false, error: (result.stderr || result.stdout || `azd exited with status ${result.status}`).trim() };
+    }
+    const values = configFromEnvValues(parseEnvAssignments(result.stdout));
+    if (Object.keys(values).length === 0) {
+      return { action: 'import-azd', path: configPath, ok: false, error: 'azd env get-values did not include AgentOps configuration values' };
+    }
+    return { action: 'import-azd', ok: true, ...writeAgentOpsConfig(values, { configPath, dryRun: options.dryRun }) };
+  }
+  throw new Error('configure requires show, set, or import-azd');
+}
+
+function renderConfigure(result) {
+  const lines = ['AgentOps config', '', `Path: ${result.path}`];
+  if (result.error) lines.push(`Status: ${result.error}`);
+  if (result.dryRun) lines.push('Mode: dry-run');
+  const values = result.values || {};
+  const labels = [
+    ['subscriptionId', 'Subscription'],
+    ['resourceGroup', 'Resource group'],
+    ['workspaceId', 'Workspace ID'],
+    ['workspaceName', 'Workspace name'],
+    ['grafanaBaseUrl', 'Grafana URL'],
+    ['grafanaName', 'Grafana resource'],
+    ['grafanaDatasourceUid', 'Grafana datasource UID'],
+    ['appInsightsName', 'Application Insights'],
+    ['portalLogsUrl', 'Portal logs URL']
+  ];
+  for (const [key, label] of labels) {
+    lines.push(`${label}: ${values[key] || 'not set'}`);
+  }
+  lines.push('', 'Next:');
+  lines.push('- agentops validate-azure');
+  lines.push('- agentops smoke --wait 2m --poll 10s');
+  return `${lines.join('\n')}\n`;
+}
+
+function configuredCloudValues(options = {}) {
+  const env = options.env || process.env;
+  const config = options.config || readAgentOpsConfig({ configPath: options.configPath, quiet: true }).values;
+  const optionValueOr = (key, ...values) => {
+    if (Object.prototype.hasOwnProperty.call(options, key)) return options[key];
+    return values.find(value => value !== undefined && value !== null && value !== '') || '';
+  };
+  const configuredGrafanaBaseUrl = optionValueOr('grafanaBaseUrl', env.AGENTOPS_GRAFANA_BASE_URL, config.grafanaBaseUrl);
+  return {
+    subscriptionId: optionValueOr('subscriptionId', env.AGENTOPS_AZURE_SUBSCRIPTION_ID, env.AZURE_SUBSCRIPTION_ID, config.subscriptionId),
+    resourceGroup: optionValueOr('resourceGroup', env.AGENTOPS_AZURE_RESOURCE_GROUP, env.AZURE_RESOURCE_GROUP, config.resourceGroup, azureResourceGroup),
+    workspaceId: optionValueOr('workspaceId', env.AGENTOPS_LOG_ANALYTICS_WORKSPACE_ID, env.LOG_ANALYTICS_WORKSPACE_ID, config.workspaceId),
+    workspaceName: optionValueOr('workspaceName', env.AGENTOPS_LOG_ANALYTICS_WORKSPACE_NAME, config.workspaceName, logAnalyticsWorkspaceName),
+    grafanaBaseUrl: configuredGrafanaBaseUrl.replace(/\/$/, ''),
+    grafanaName: optionValueOr('grafanaName', env.AGENTOPS_GRAFANA_NAME, env.GRAFANA_NAME, config.grafanaName),
+    grafanaDatasourceUid: optionValueOr('grafanaDatasourceUid', env.AGENTOPS_GRAFANA_DATASOURCE_UID, config.grafanaDatasourceUid, grafanaDatasourceUid),
+    appInsightsName: optionValueOr('appInsightsName', env.APPLICATIONINSIGHTS_NAME, env.AGENTOPS_APPLICATIONINSIGHTS_NAME, config.appInsightsName, 'appi-agentops-dev')
+  };
+}
+
+function listGrafanaDashboardFiles(options = {}) {
+  const dir = options.grafanaDir || path.join(root, 'grafana');
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir)
+    .filter(file => file.endsWith('.json'))
+    .map(file => {
+      const fullPath = path.join(dir, file);
+      const dashboard = readJson(fullPath);
+      return {
+        file: path.relative(root, fullPath),
+        uid: dashboard.uid || path.basename(file, '.json'),
+        title: dashboard.title || path.basename(file, '.json')
+      };
+    })
+    .sort((left, right) => left.uid.localeCompare(right.uid));
+}
+
+function flattenGrafanaList(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.value)) return payload.value;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.dashboards)) return payload.dashboards;
+  if (Array.isArray(payload?.dataSources)) return payload.dataSources;
+  if (Array.isArray(payload?.datasources)) return payload.datasources;
+  return [];
+}
+
+function grafanaItemUid(item) {
+  return item?.uid || item?.dashboard?.uid || item?.model?.uid || item?.slug || item?.name || item?.title || '';
+}
+
+function grafanaDashboardImportCommand(cloud) {
+  const envPrefix = [
+    `AZURE_RESOURCE_GROUP=${cloud.resourceGroup}`,
+    cloud.grafanaName ? `GRAFANA_NAME=${cloud.grafanaName}` : null
+  ].filter(Boolean).join(' ');
+  return `${envPrefix} ./scripts/grafana-import-dashboard.sh`;
+}
+
+function isConfiguredValue(value, placeholderPattern) {
+  return Boolean(value) && !placeholderPattern.test(value);
+}
+
+function parseInitArgs(args) {
+  return {
+    dryRun: args.includes('--dry-run'),
+    forceSkills: args.includes('--force-skills') || args.includes('--force'),
+    json: args.includes('--json'),
+    noSkills: args.includes('--no-skills'),
+    copilotHome: optionValue(args, ['--copilot-home', '--home'])
+  };
+}
+
+function agentopsInit(options = {}) {
+  const checks = doctor({ localOnly: true });
+  const status = agentopsStatusSummary({ checks });
+  const cloud = configuredCloudValues(options);
+  const shim = installedShimStatus(options.installDir || defaultInstallDir);
+  const skills = options.noSkills
+    ? null
+    : installDefaultSkills({
+        copilotHome: options.copilotHome,
+        force: options.forceSkills,
+        dryRun: options.dryRun
+      });
+  const workspaceConfigured = isConfiguredValue(cloud.workspaceId, /^0{8}-0{4}-0{4}-0{4}-0{12}$/);
+  const grafanaConfigured = isConfiguredValue(cloud.grafanaBaseUrl, /your-grafana|<your-grafana>|^$/);
+  const next = [];
+
+  if (!shim.agentops_cli_installed) {
+    next.push('./install-agentops.sh');
+  }
+  if (!shim.plain_copilot_observed) {
+    next.push('node agentops-cli/src/index.js enable-shadow');
+  }
+  if (!workspaceConfigured) {
+    next.push('agentops configure set --workspace-id "<workspace-id>"');
+  }
+  if (!grafanaConfigured) {
+    next.push('agentops configure set --grafana-url "https://<your-grafana>.grafana.azure.com"');
+  }
+  next.push('node agentops-cli/src/index.js validate-azure');
+  next.push('node agentops-cli/src/index.js smoke --dry-run');
+  next.push('node agentops-cli/src/index.js smoke --wait 2m --poll 10s');
+  next.push('copilot -p "Reply with exactly: agentops smoke."');
+  next.push('node agentops-cli/src/index.js latest --last 2h');
+  next.push('node agentops-cli/src/index.js ask-context latest --last 2h');
+
+  return {
+    ok: status.ok && Boolean(shim.agentops_cli_installed) && Boolean(shim.copilot_agentops_installed) && workspaceConfigured && grafanaConfigured,
+    mode: options.dryRun ? 'dry-run' : 'local-init',
+    local_status: status,
+    skills,
+    shim,
+    cloud: {
+      resource_group: cloud.resourceGroup,
+      workspace_id_configured: workspaceConfigured,
+      grafana_url_configured: grafanaConfigured,
+      grafana_name_configured: Boolean(cloud.grafanaName),
+      app_insights_name: cloud.appInsightsName
+    },
+    next
+  };
+}
+
+function renderInit(result) {
+  const lines = [
+    'AgentOps init',
+    '',
+    `Mode: ${result.mode}.`,
+    `Local files: ${result.local_status.required_files.found} of ${result.local_status.required_files.total} found.`,
+    result.local_status.content_capture_off
+      ? 'Content capture: off.'
+      : 'Content capture: on; turn it off before sharing telemetry.',
+    result.local_status.collector_localhost
+      ? 'Collector config: localhost confirmed.'
+      : 'Collector config: localhost not confirmed.',
+    `Shim: agentops=${result.shim.agentops_cli_installed ? 'installed' : 'missing'}, copilot-agentops=${result.shim.copilot_agentops_installed ? 'installed' : 'missing'}, plain copilot=${result.shim.plain_copilot_observed ? 'observed' : 'not observed'}.`,
+    `Cloud config: workspace=${result.cloud.workspace_id_configured ? 'set' : 'missing'}, grafana=${result.cloud.grafana_url_configured ? 'set' : 'missing'}.`
+  ];
+
+  if (result.skills) {
+    lines.push(`Skills: ${plural(result.skills.installed, 'new skill')}; ${plural(result.skills.updated.length, 'updated skill')}; skipped ${plural(result.skills.skipped.length, 'existing skill')}.`);
+  }
+
+  lines.push('', 'Next commands:');
+  for (const command of result.next) lines.push(`- ${command}`);
+  return `${lines.join('\n')}\n`;
+}
+
+function smokeId(now = new Date()) {
+  const stamp = now.toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
+  return `agentops-smoke-${stamp}-${crypto.randomBytes(3).toString('hex')}`;
+}
+
+function smokeAzureQuery(id, last = '2h') {
+  const lookback = validateKqlDuration(last);
+  const escapedId = escapeKqlString(id);
+  return `AppDependencies\n| where TimeGenerated > ago(${lookback})\n| where Properties has "${escapedId}" or Name has "${escapedId}"\n| project TimeGenerated, Name, OperationId, Id, Success, ResultCode, Properties\n| order by TimeGenerated desc\n| take 20`;
+}
+
+function otlpSmokeTracePayload(id, nowMs = Date.now()) {
+  const traceId = crypto.randomBytes(16).toString('hex');
+  const spanId = crypto.randomBytes(8).toString('hex');
+  const start = BigInt(nowMs) * 1000000n;
+  const end = start + 100000000n;
+  const attr = (key, stringValue) => ({ key, value: { stringValue } });
+
+  return {
+    resourceSpans: [
+      {
+        resource: {
+          attributes: [
+            attr('service.name', 'github-copilot-cli'),
+            attr('service.namespace', 'copilot-agentops'),
+            attr('agent.framework', 'github-copilot'),
+            attr('agent.runtime', 'github-copilot-cli'),
+            attr('agentops.profile', 'safe-default'),
+            attr('agentops.smoke_id', id)
+          ]
+        },
+        scopeSpans: [
+          {
+            scope: { name: 'agentops.smoke', version: '0.1.0' },
+            spans: [
+              {
+                traceId,
+                spanId,
+                name: `agentops.smoke.${id}`,
+                kind: 1,
+                startTimeUnixNano: start.toString(),
+                endTimeUnixNano: end.toString(),
+                attributes: [
+                  attr('agentops.smoke_id', id),
+                  attr('gen_ai.operation.name', 'smoke_test'),
+                  { key: 'content.capture.enabled', value: { boolValue: false } }
+                ],
+                status: { code: 1 }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  };
+}
+
+function postJson(url, payload, options = {}) {
+  return new Promise(resolve => {
+    const parsed = new URL(url);
+    const body = JSON.stringify(payload);
+    const client = parsed.protocol === 'https:' ? https : http;
+    const req = client.request(parsed, {
+      method: 'POST',
+      timeout: options.timeoutMs || 2500,
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body)
+      }
+    }, res => {
+      let responseBody = '';
+      res.setEncoding('utf8');
+      res.on('data', chunk => responseBody += chunk);
+      res.on('end', () => resolve({
+        ok: res.statusCode >= 200 && res.statusCode < 300,
+        statusCode: res.statusCode,
+        body: responseBody
+      }));
+    });
+    req.on('timeout', () => {
+      req.destroy();
+      resolve({ ok: false, error: 'timeout' });
+    });
+    req.on('error', error => resolve({ ok: false, error: error.message }));
+    req.end(body);
+  });
+}
+
+function parseSmokeArgs(args) {
+  return {
+    dryRun: args.includes('--dry-run'),
+    endpoint: optionValue(args, ['--endpoint']),
+    id: optionValue(args, ['--id']),
+    last: parseLastArg(args, '2h'),
+    verify: !args.includes('--no-verify'),
+    waitMs: durationToMs(optionValue(args, ['--wait']), 60000),
+    pollMs: durationToMs(optionValue(args, ['--poll']), 10000),
+    json: args.includes('--json')
+  };
+}
+
+async function verifySmokeInAzure(id, options = {}) {
+  const last = validateKqlDuration(options.last || '2h');
+  const query = smokeAzureQuery(id, last);
+  const workspace = options.workspaceId || workspaceId;
+  const waitMs = durationToMs(options.waitMs ?? options.wait, 60000);
+  const pollMs = Math.max(1, durationToMs(options.pollMs ?? options.poll, 10000));
+  const sleepFn = options.sleep || (ms => new Promise(resolve => setTimeout(resolve, ms)));
+  const queryFn = options.runQuery || ((analyticsQuery, queryOptions) => runAzureLogAnalyticsQuery(analyticsQuery, queryOptions));
+  const started = Date.now();
+  const attempts = [];
+
+  while (true) {
+    let resolved;
+    try {
+      const queryResult = queryFn(query, {
+        workspaceId: workspace,
+        spawnSync: options.spawnSync
+      });
+      resolved = typeof queryResult?.then === 'function' ? await queryResult : queryResult;
+    } catch (error) {
+      resolved = { ok: false, rows: [], error: error.message };
+    }
+    const rows = Array.isArray(resolved?.rows) ? resolved.rows : [];
+    const attempt = {
+      ok: Boolean(resolved?.ok),
+      rows: rows.length,
+      error: resolved?.error || null
+    };
+    attempts.push(attempt);
+
+    if (attempt.ok && rows.length > 0) {
+      return {
+        ok: true,
+        status: 'found',
+        workspace_id: workspace,
+        query,
+        rows: rows.length,
+        attempts,
+        elapsed_ms: Date.now() - started
+      };
+    }
+
+    const elapsed = Date.now() - started;
+    if (waitMs === 0 || elapsed >= waitMs) break;
+    await sleepFn(Math.min(pollMs, waitMs - elapsed));
+  }
+
+  return {
+    ok: false,
+    status: attempts.some(attempt => attempt.ok) ? 'not_found' : 'query_failed',
+    workspace_id: workspace,
+    query,
+    rows: 0,
+    attempts,
+    elapsed_ms: Date.now() - started
+  };
+}
+
+async function agentopsSmoke(options = {}) {
+  const endpoint = (options.endpoint || 'http://127.0.0.1:4318').replace(/\/$/, '');
+  const id = options.id || smokeId(options.now);
+  const last = validateKqlDuration(options.last || '2h');
+  const query = smokeAzureQuery(id, last);
+  const waitMs = durationToMs(options.waitMs ?? options.wait, 60000);
+  const pollMs = durationToMs(options.pollMs ?? options.poll, 10000);
+  const verify = options.verify !== false;
+  const result = {
+    smoke_id: id,
+    endpoint,
+    dry_run: Boolean(options.dryRun),
+    verify,
+    wait_ms: waitMs,
+    poll_ms: pollMs,
+    workspace_id: options.workspaceId || workspaceId,
+    azure_query: query,
+    payload_preview: {
+      service: 'github-copilot-cli',
+      operation: 'smoke_test',
+      content_capture_enabled: false
+    }
+  };
+
+  if (options.dryRun) {
+    return {
+      ...result,
+      ok: true,
+      next: [
+        `POST ${endpoint}/v1/traces`,
+        'node agentops-cli/src/index.js validate-azure',
+        verify
+          ? `node agentops-cli/src/index.js smoke --id ${id} --wait ${Math.ceil(waitMs / 1000)}s --poll ${Math.ceil(pollMs / 1000)}s`
+          : `az monitor log-analytics query --workspace "${result.workspace_id}" --analytics-query "<azure_query>"`
+      ]
+    };
+  }
+
+  const post = options.postJson || postJson;
+  const response = await post(`${endpoint}/v1/traces`, otlpSmokeTracePayload(id, options.nowMs), options);
+  let verification = null;
+  if (response.ok && verify) {
+    verification = await verifySmokeInAzure(id, {
+      ...options,
+      last,
+      workspaceId: result.workspace_id,
+      waitMs,
+      pollMs
+    });
+  }
+  const ok = response.ok && (!verify || verification?.ok === true);
+  return {
+    ...result,
+    ok,
+    collector_response: response,
+    verification,
+    next: response.ok
+      ? (verification?.ok
+          ? [
+              `Verified ${verification.rows} smoke row${verification.rows === 1 ? '' : 's'} in Log Analytics.`,
+              'node agentops-cli/src/index.js latest --last 2h'
+            ]
+          : [
+              verify
+                ? `Smoke was sent, but Log Analytics did not return ${id} before the wait expired.`
+                : `Run this Azure query after ingestion latency settles: ${query}`,
+              'node agentops-cli/src/index.js validate-azure'
+            ])
+      : ['Start the collector with `node agentops-cli/src/index.js collector start` or `./scripts/collector-azuremonitor-up.sh`.']
+  };
+}
+
+function renderSmoke(result) {
+  const lines = [
+    'AgentOps smoke',
+    '',
+    `Smoke id: ${result.smoke_id}`,
+    `Endpoint: ${result.endpoint}`,
+    `Mode: ${result.dry_run ? 'dry-run' : 'sent'}`
+  ];
+
+  if (result.collector_response) {
+    lines.push(result.collector_response.ok
+      ? `Collector response: ${result.collector_response.statusCode || 'ok'}.`
+      : `Collector response: failed (${result.collector_response.error || result.collector_response.statusCode || 'unknown'}).`);
+  }
+
+  if (result.verification) {
+    lines.push(result.verification.ok
+      ? `Azure verification: found ${result.verification.rows} row${result.verification.rows === 1 ? '' : 's'} after ${result.verification.attempts.length} attempt${result.verification.attempts.length === 1 ? '' : 's'}.`
+      : `Azure verification: ${result.verification.status.replace(/_/g, ' ')} after ${result.verification.attempts.length} attempt${result.verification.attempts.length === 1 ? '' : 's'}.`);
+  } else if (!result.dry_run && result.verify === false) {
+    lines.push('Azure verification: skipped.');
+  }
+
+  lines.push('', 'Azure verification query:', result.azure_query, '', 'Next:');
+  for (const item of result.next || []) lines.push(`- ${item}`);
+  return `${lines.join('\n')}\n`;
+}
+
+function azAvailable(options = {}) {
+  if (options.azAvailable !== undefined) return Boolean(options.azAvailable);
+  if (options.spawnSync) return true;
+  return commandCandidates('az').length > 0;
+}
+
+function runAz(args, options = {}) {
+  const spawnSync = options.spawnSync || childProcess.spawnSync;
+  return spawnSync('az', args, {
+    encoding: 'utf8',
+    maxBuffer: 10 * 1024 * 1024
+  });
+}
+
+function parseJsonOutput(result) {
+  try {
+    return JSON.parse(result.stdout || '{}');
+  } catch {
+    return null;
+  }
+}
+
+function checkResult(name, ok, extra = {}) {
+  return { name, ok: Boolean(ok), ...extra };
+}
+
+function validateAzure(options = {}) {
+  const last = validateKqlDuration(options.last || '2h');
+  const cloud = configuredCloudValues(options);
+  const checks = [];
+  const next = [];
+  const hasAz = azAvailable(options);
+
+  checks.push(checkResult('az-cli', hasAz, hasAz ? {} : { detail: 'Azure CLI was not found on PATH.' }));
+
+  let account = null;
+  if (hasAz) {
+    const accountResult = runAz(['account', 'show', '-o', 'json'], options);
+    account = accountResult.status === 0 ? parseJsonOutput(accountResult) : null;
+    checks.push(checkResult('azure-account', accountResult.status === 0, {
+      detail: accountResult.status === 0 ? account?.name || account?.id || 'logged in' : (accountResult.stderr || accountResult.stdout || 'az account show failed').trim()
+    }));
+    if (cloud.subscriptionId && account?.id && account.id !== cloud.subscriptionId) {
+      checks.push(checkResult('azure-subscription', false, {
+        expected: cloud.subscriptionId,
+        actual: account.id,
+        detail: 'Active Azure subscription does not match AGENTOPS_AZURE_SUBSCRIPTION_ID/AZURE_SUBSCRIPTION_ID.'
+      }));
+      next.push(`az account set --subscription "${cloud.subscriptionId}"`);
+    } else if (cloud.subscriptionId) {
+      checks.push(checkResult('azure-subscription', true, { expected: cloud.subscriptionId, actual: account?.id || null }));
+    }
+  }
+
+  if (!cloud.resourceGroup) {
+    checks.push(checkResult('resource-group-configured', false, { detail: 'Set AZURE_RESOURCE_GROUP or AGENTOPS_AZURE_RESOURCE_GROUP.' }));
+    next.push('agentops configure set --resource-group rg-agentops-dev');
+  } else if (hasAz) {
+    const groupResult = runAz(['group', 'exists', '--name', cloud.resourceGroup, '-o', 'tsv'], options);
+    const exists = groupResult.status === 0 && String(groupResult.stdout || '').trim() === 'true';
+    checks.push(checkResult('resource-group', exists, { resource_group: cloud.resourceGroup }));
+    if (!exists) next.push('Run ./scripts/azure-readiness.sh and review the target resource group.');
+  }
+
+  const workspaceConfigured = isConfiguredValue(cloud.workspaceId, /^0{8}-0{4}-0{4}-0{4}-0{12}$/);
+  checks.push(checkResult('log-analytics-workspace-id', workspaceConfigured, {
+    workspace_id: workspaceConfigured ? cloud.workspaceId : null,
+    detail: workspaceConfigured ? 'configured' : 'Set AGENTOPS_LOG_ANALYTICS_WORKSPACE_ID or LOG_ANALYTICS_WORKSPACE_ID.'
+  }));
+  if (!workspaceConfigured) next.push('agentops configure set --workspace-id "<workspace-id>"');
+
+  if (hasAz && workspaceConfigured) {
+    const query = `AppDependencies | where TimeGenerated > ago(${last}) | where ${baseFilter} | summarize Rows=count()`;
+    const queryResult = runAzureLogAnalyticsQuery(query, {
+      spawnSync: options.spawnSync,
+      workspaceId: cloud.workspaceId
+    });
+    const rowCount = queryResult.rows?.[0]?.Rows ?? queryResult.rows?.[0]?.rows ?? null;
+    checks.push(checkResult('log-analytics-query', queryResult.ok, {
+      rows: rowCount,
+      detail: queryResult.ok ? 'query succeeded' : queryResult.error
+    }));
+  }
+
+  if (hasAz && cloud.resourceGroup && cloud.appInsightsName) {
+    const appResult = runAz([
+      'monitor',
+      'app-insights',
+      'component',
+      'show',
+      '--resource-group',
+      cloud.resourceGroup,
+      '--app',
+      cloud.appInsightsName,
+      '-o',
+      'json'
+    ], options);
+    checks.push(checkResult('application-insights', appResult.status === 0, {
+      app: cloud.appInsightsName,
+      detail: appResult.status === 0 ? 'found' : (appResult.stderr || appResult.stdout || 'not found').trim()
+    }));
+    if (appResult.status !== 0) next.push('Set APPLICATIONINSIGHTS_NAME to the deployed App Insights component name.');
+  }
+
+  const grafanaConfigured = isConfiguredValue(cloud.grafanaBaseUrl, /your-grafana|<your-grafana>|^$/);
+  checks.push(checkResult('grafana-base-url', grafanaConfigured, {
+    url: grafanaConfigured ? cloud.grafanaBaseUrl : null,
+    detail: grafanaConfigured ? 'configured' : 'Set AGENTOPS_GRAFANA_BASE_URL.'
+  }));
+  if (!grafanaConfigured) next.push('agentops configure set --grafana-url "https://<your-grafana>.grafana.azure.com"');
+
+  if (hasAz && cloud.grafanaName && cloud.resourceGroup) {
+    const grafanaResult = runAz(['grafana', 'show', '-n', cloud.grafanaName, '-g', cloud.resourceGroup, '-o', 'json'], options);
+    const grafanaFound = grafanaResult.status === 0;
+    checks.push(checkResult('grafana-resource', grafanaFound, {
+      grafana: cloud.grafanaName,
+      detail: grafanaFound ? 'found' : (grafanaResult.stderr || grafanaResult.stdout || 'not found').trim()
+    }));
+    if (!grafanaFound) {
+      next.push('Set GRAFANA_NAME or AGENTOPS_GRAFANA_NAME to the deployed Azure Managed Grafana resource name.');
+    } else {
+      const dataSourceResult = runAz(['grafana', 'data-source', 'list', '-n', cloud.grafanaName, '-g', cloud.resourceGroup, '-o', 'json'], options);
+      const dataSources = flattenGrafanaList(dataSourceResult.status === 0 ? parseJsonOutput(dataSourceResult) : null);
+      const datasourceFound = dataSources.some(item => grafanaItemUid(item) === cloud.grafanaDatasourceUid || item?.name === cloud.grafanaDatasourceUid);
+      checks.push(checkResult('grafana-datasource', dataSourceResult.status === 0 && datasourceFound, {
+        expected_uid: cloud.grafanaDatasourceUid,
+        observed: dataSources.map(grafanaItemUid).filter(Boolean).slice(0, 10),
+        detail: dataSourceResult.status !== 0
+          ? (dataSourceResult.stderr || dataSourceResult.stdout || 'could not list datasources').trim()
+          : datasourceFound
+            ? 'found'
+            : 'datasource UID not found'
+      }));
+      if (dataSourceResult.status !== 0 || !datasourceFound) {
+        next.push('Set AGENTOPS_GRAFANA_DATASOURCE_UID to the Azure Monitor datasource UID used by the dashboards.');
+      }
+
+      const expectedDashboards = options.expectedDashboards || listGrafanaDashboardFiles(options);
+      const dashboardResult = runAz(['grafana', 'dashboard', 'list', '-n', cloud.grafanaName, '-g', cloud.resourceGroup, '-o', 'json'], options);
+      const dashboards = flattenGrafanaList(dashboardResult.status === 0 ? parseJsonOutput(dashboardResult) : null);
+      const observedUids = new Set(dashboards.map(grafanaItemUid).filter(Boolean));
+      const missingDashboards = expectedDashboards.filter(dashboard => !observedUids.has(dashboard.uid));
+      checks.push(checkResult('grafana-dashboards', dashboardResult.status === 0 && missingDashboards.length === 0, {
+        expected: expectedDashboards.length,
+        missing: missingDashboards.map(dashboard => dashboard.uid),
+        detail: dashboardResult.status !== 0
+          ? (dashboardResult.stderr || dashboardResult.stdout || 'could not list dashboards').trim()
+          : missingDashboards.length === 0
+            ? 'all expected dashboards found'
+            : `${missingDashboards.length} expected dashboard${missingDashboards.length === 1 ? '' : 's'} missing`
+      }));
+      if (dashboardResult.status !== 0 || missingDashboards.length > 0) {
+        next.push(grafanaDashboardImportCommand(cloud));
+      }
+    }
+  } else if (!cloud.grafanaName) {
+    checks.push({ name: 'grafana-resource', ok: true, skipped: true, detail: 'Set GRAFANA_NAME or AGENTOPS_GRAFANA_NAME to validate the resource directly.' });
+    checks.push({ name: 'grafana-datasource', ok: true, skipped: true, detail: 'Skipped because Grafana resource name is not configured.' });
+    checks.push({ name: 'grafana-dashboards', ok: true, skipped: true, detail: 'Skipped because Grafana resource name is not configured.' });
+  }
+
+  if (next.length === 0) {
+    next.push('node agentops-cli/src/index.js smoke --dry-run');
+    next.push('node agentops-cli/src/index.js smoke --wait 2m --poll 10s');
+    next.push('copilot -p "Reply with exactly: agentops smoke."');
+    next.push('node agentops-cli/src/index.js latest --last 2h');
+  }
+
+  return {
+    ok: checks.every(check => check.ok),
+    last,
+    config: {
+      resource_group: cloud.resourceGroup,
+      workspace_id: workspaceConfigured ? cloud.workspaceId : null,
+      workspace_name: cloud.workspaceName,
+      grafana_base_url: grafanaConfigured ? cloud.grafanaBaseUrl : null,
+      grafana_name: cloud.grafanaName || null,
+      grafana_datasource_uid: cloud.grafanaDatasourceUid,
+      app_insights_name: cloud.appInsightsName
+    },
+    checks,
+    next
+  };
+}
+
+function renderValidateAzure(result) {
+  const lines = ['AgentOps Azure validation', ''];
+  for (const check of result.checks) {
+    const status = check.ok ? 'ok' : 'failed';
+    const skipped = check.skipped ? ' skipped' : '';
+    lines.push(`- ${check.name}: ${status}${skipped}${check.detail ? ` (${check.detail})` : ''}`);
+  }
+  lines.push('', result.ok ? 'Azure validation passed.' : 'Azure validation is incomplete.');
+  lines.push('Next:');
+  for (const item of result.next) lines.push(`- ${item}`);
+  return `${lines.join('\n')}\n`;
+}
+
+function askAgentOpsContext(options = {}) {
+  const last = validateKqlDuration(options.last || '24h');
+  const target = options.sessionId || 'latest';
+  let session = null;
+  let link = null;
+  let dataMissing = [];
+
+  if (target === 'latest') {
+    const summary = options.summary || latestSummaryFromArgs(options.args || [], last);
+    session = summary.session;
+    dataMissing = summary.data_missing || [];
+    if (session?.id && session.id !== 'unknown-session') {
+      link = buildLink('session', session.id, { last });
+    }
+  } else {
+    session = { id: target };
+    link = buildLink('session', target, { last });
+  }
+
+  const sessionId = session?.id || 'unknown-session';
+  const prompt = [
+    'Use the telemetry-investigator agent with read-only Azure MCP and Grafana MCP.',
+    '',
+    `Investigate AgentOps session ${sessionId} over the last ${last}.`,
+    `Grafana session URL: ${link?.grafana_url || sessionsGrafanaDashboardUrl}`,
+    `Log Analytics workspace: ${workspaceId}`,
+    '',
+    'Start from the KQL query in this context bundle. Return only evidence-backed findings.',
+    'For each recommendation include: evidence query or dashboard link, observed pattern, proposed file(s), expected metric movement, validation benchmark or query, and rollback condition.',
+    'Do not edit files yet. Do not request prompt, response, tool argument, tool result, secret, URL content, or file-content capture.'
+  ].join('\n');
+
+  return {
+    ok: Boolean(link),
+    session: sessionId,
+    last,
+    dashboard: link?.grafana_url || sessionsGrafanaDashboardUrl,
+    azure_portal_url: link?.azure_portal_url || portalLogsUrl,
+    workspace_id: workspaceId,
+    query: link?.query || latestSessionAzureQuery(last),
+    mcp_configs: [
+      'copilot/mcp.azure-monitor.sample.json',
+      'copilot/mcp.grafana.sample.json'
+    ],
+    prompt,
+    data_missing: dataMissing
+  };
+}
+
+function parseAskContextArgs(args) {
+  const sessionId = args[0] || 'latest';
+  return {
+    sessionId,
+    last: parseLastArg(args.slice(1), '24h'),
+    json: args.includes('--json'),
+    args: args.slice(1)
+  };
+}
+
+function renderAskContext(context) {
+  const lines = [
+    'AgentOps ask context',
+    '',
+    `Session: ${context.session}`,
+    `Dashboard: ${context.dashboard}`,
+    `Workspace: ${context.workspace_id}`,
+    `MCP configs: ${context.mcp_configs.join(', ')}`,
+    ''
+  ];
+
+  if (context.data_missing.length > 0) {
+    lines.push(`Data missing: ${context.data_missing.join(', ')}.`, '');
+  }
+
+  lines.push('KQL:', context.query, '', 'Prompt:', context.prompt);
+  return `${lines.join('\n')}\n`;
 }
 
 function importJsonl(filePath) {
@@ -950,6 +2335,7 @@ function renderExplanation(explanation = explainLatest()) {
 function openLinksSummary(summary = latestSessionSummary()) {
   return {
     main_dashboard_url: mainGrafanaDashboardUrl,
+    sessions_dashboard_url: sessionsGrafanaDashboardUrl,
     latest_session_url: summary.session?.grafana_url || null,
     missing_latest_reason: summary.session
       ? 'that session did not include a usable session id'
@@ -1031,7 +2417,8 @@ function renderOpenLinks(links = openLinksSummary()) {
   const lines = [
     'Grafana links',
     '',
-    `Main dashboard: ${links.main_dashboard_url}`
+    `Main dashboard: ${links.main_dashboard_url}`,
+    `Sessions dashboard: ${links.sessions_dashboard_url}`
   ];
 
   if (links.latest_session_url) {
@@ -1043,18 +2430,53 @@ function renderOpenLinks(links = openLinksSummary()) {
   return `${lines.join('\n')}\n`;
 }
 
-function validateCollector(endpoint = 'http://127.0.0.1:4318') {
-  return new Promise((resolve) => {
-    const url = new URL('/v1/traces', endpoint);
-    const req = http.request(url, { method: 'POST', timeout: 1500 }, res => {
-      resolve({ endpoint, reachable: true, statusCode: res.statusCode });
+function httpHealthCheck(url, options = {}) {
+  return new Promise(resolve => {
+    const parsed = new URL(url);
+    const client = parsed.protocol === 'https:' ? https : http;
+    const req = client.request(parsed, { method: 'GET', timeout: options.timeoutMs || 1500 }, res => {
+      let body = '';
+      res.setEncoding('utf8');
+      res.on('data', chunk => body += chunk);
+      res.on('end', () => resolve({
+        reachable: true,
+        statusCode: res.statusCode,
+        ok: res.statusCode >= 200 && res.statusCode < 300,
+        body: body.slice(0, 200)
+      }));
     });
     req.on('timeout', () => {
       req.destroy();
-      resolve({ endpoint, reachable: false, error: 'timeout' });
+      resolve({ reachable: false, ok: false, error: 'timeout' });
     });
-    req.on('error', error => resolve({ endpoint, reachable: false, error: error.message }));
+    req.on('error', error => resolve({ reachable: false, ok: false, error: error.message }));
     req.end();
+  });
+}
+
+function validateCollector(endpoint = 'http://127.0.0.1:4318', options = {}) {
+  return new Promise((resolve) => {
+    const url = new URL('/v1/traces', endpoint);
+    const client = url.protocol === 'https:' ? https : http;
+    const req = client.request(url, { method: 'POST', timeout: 1500 }, res => {
+      resolve({ endpoint, reachable: true, statusCode: res.statusCode, ok: res.statusCode < 500 });
+    });
+    req.on('timeout', () => {
+      req.destroy();
+      resolve({ endpoint, reachable: false, ok: false, error: 'timeout' });
+    });
+    req.on('error', error => resolve({ endpoint, reachable: false, ok: false, error: error.message }));
+    req.end();
+  }).then(async otlpHttp => {
+    const healthEndpoint = options.healthEndpoint || 'http://127.0.0.1:13133/';
+    const health = await httpHealthCheck(healthEndpoint, options);
+    return {
+      endpoint,
+      otlp_http: otlpHttp,
+      health_endpoint: healthEndpoint,
+      health,
+      ok: Boolean(otlpHttp.ok && health.ok)
+    };
   });
 }
 
@@ -1809,7 +3231,79 @@ function topFailureCategories(scoredSummaries) {
     .slice(0, 5);
 }
 
+function benchmarkCheatSignals(scoredSummaries, azureTelemetry = null) {
+  const signals = [];
+  const forbidden = scoredSummaries.reduce((total, summary) => total + numberValue(summary.forbiddenFilesChanged), 0);
+  const policyBlocks = scoredSummaries.reduce((total, summary) => total + numberValue(summary.policyBlocks), 0);
+  const contentCapture = scoredSummaries.filter(summary => summary.contentCaptureDetected === true).length;
+  const noChangeSuccesses = scoredSummaries.filter(summary => summary.success && numberValue(summary.filesChanged) === 0 && numberValue(summary.checksPassed) > 0);
+
+  if (forbidden > 0) {
+    signals.push({
+      severity: 'block',
+      signal: 'forbidden_files_changed',
+      count: forbidden,
+      action: 'reject candidate; inspect workspace diff and benchmark task boundaries'
+    });
+  }
+  if (policyBlocks > 0) {
+    signals.push({
+      severity: 'block',
+      signal: 'policy_blocks',
+      count: policyBlocks,
+      action: 'reject or rerun under the intended permission profile'
+    });
+  }
+  if (contentCapture > 0) {
+    signals.push({
+      severity: 'block',
+      signal: 'content_capture_detected',
+      count: contentCapture,
+      action: 'discard shared traces and rerun with content capture disabled'
+    });
+  }
+  if (azureTelemetry?.requested && azureTelemetry.ok === false) {
+    signals.push({
+      severity: 'review',
+      signal: 'missing_azure_telemetry',
+      count: 1,
+      action: 'do not promote from local-only evidence when live telemetry is required'
+    });
+  }
+  if (azureTelemetry?.unmatchedTasks?.length > 0) {
+    signals.push({
+      severity: 'review',
+      signal: 'unmatched_benchmark_tasks',
+      count: azureTelemetry.unmatchedTasks.length,
+      action: 'check OTEL_RESOURCE_ATTRIBUTES and Copilot wrapper wiring'
+    });
+  }
+  if (noChangeSuccesses.length > 0) {
+    signals.push({
+      severity: 'review',
+      signal: 'successful_task_without_file_changes',
+      count: noChangeSuccesses.length,
+      action: 'confirm the success command is not passing against pre-existing fixture state'
+    });
+  }
+
+  return {
+    status: signals.some(signal => signal.severity === 'block')
+      ? 'blocked'
+      : signals.length > 0
+        ? 'review'
+        : 'clean',
+    signals
+  };
+}
+
 function benchmarkRecommendation(report) {
+  if (report.antiCheat?.status === 'blocked') {
+    return {
+      action: 'reject',
+      message: 'reject: anti-cheat signals blocked promotion.'
+    };
+  }
   if (report.safetyViolationCount > 0) {
     return {
       action: 'reject',
@@ -1931,6 +3425,7 @@ function benchmarkReport(runId, summaries = null, options = {}) {
   };
 
   if (azureTelemetry) report.azureTelemetry = azureTelemetry;
+  report.antiCheat = benchmarkCheatSignals(scoredSummaries, azureTelemetry);
   report.recommendation = benchmarkRecommendation(report);
   report.promotion = benchmarkPromotionSummary(report);
   return report;
@@ -2155,6 +3650,23 @@ async function main(argv) {
     return;
   }
 
+  if (command === 'workflows') {
+    const options = parseWorkflowsArgs(args);
+    const workflows = agentopsWorkflows();
+    if (options.subcommand === 'list') {
+      process.stdout.write(options.json ? JSON.stringify({ workflows }, null, 2) + '\n' : renderWorkflowsList(workflows));
+      return;
+    }
+    if (options.subcommand === 'show') {
+      if (!options.name) throw new Error('workflows show requires a workflow name');
+      const workflow = workflows.find(item => item.name === options.name);
+      if (!workflow) throw new Error(`Unknown workflow: ${options.name}`);
+      process.stdout.write(options.json ? JSON.stringify(workflow, null, 2) + '\n' : renderWorkflow(workflow));
+      return;
+    }
+    throw new Error('workflows requires list or show');
+  }
+
   if (command === 'skills') {
     const options = parseSkillsArgs(args);
     if (options.subcommand === 'list') {
@@ -2197,18 +3709,65 @@ async function main(argv) {
     return;
   }
 
+  if (command === 'configure' || command === 'config') {
+    const options = parseConfigureArgs(args);
+    const result = agentopsConfigure(options);
+    process.stdout.write(options.json ? JSON.stringify(result, null, 2) + '\n' : renderConfigure(result));
+    process.exitCode = result.ok === false ? 1 : 0;
+    return;
+  }
+
+  if (command === 'otel-setup') {
+    const options = parseOtelSetupArgs(args);
+    const result = buildOtelSetup(options);
+    process.stdout.write(renderOtelSetup(result, options));
+    return;
+  }
+
+  if (command === 'compat-check') {
+    const last = parseLastArg(args, '2h');
+    process.stdout.write(JSON.stringify({ workspace_id: workspaceId, query: otelCompatibilityQuery(last) }, null, 2) + '\n');
+    return;
+  }
+
   if (command === 'validate-collector') {
     process.stdout.write(JSON.stringify(await validateCollector(args[0]), null, 2) + '\n');
     return;
   }
 
   if (command === 'validate-azure') {
-    process.stdout.write(JSON.stringify({ ok: false, next: 'Use azure-validate before deploying Azure resources.' }, null, 2) + '\n');
-    process.exitCode = 1;
+    const last = parseLastArg(args, '2h');
+    const result = validateAzure({ last });
+    process.stdout.write(args.includes('--json') ? JSON.stringify(result, null, 2) + '\n' : renderValidateAzure(result));
+    process.exitCode = result.ok ? 0 : 1;
     return;
   }
 
-  if (['enable-shadow', 'disable-shadow', 'uninstall'].includes(command)) {
+  if (command === 'init') {
+    const options = parseInitArgs(args);
+    const result = agentopsInit(options);
+    process.stdout.write(options.json ? JSON.stringify(result, null, 2) + '\n' : renderInit(result));
+    process.exitCode = 0;
+    return;
+  }
+
+  if (command === 'smoke') {
+    const options = parseSmokeArgs(args);
+    const result = await agentopsSmoke(options);
+    process.stdout.write(options.json ? JSON.stringify(result, null, 2) + '\n' : renderSmoke(result));
+    process.exitCode = result.ok ? 0 : 1;
+    return;
+  }
+
+  if (command === 'ask-context') {
+    const options = parseAskContextArgs(args);
+    const result = askAgentOpsContext(options);
+    process.stdout.write(options.json ? JSON.stringify(result, null, 2) + '\n' : renderAskContext(result));
+    process.exitCode = result.ok ? 0 : 1;
+    return;
+  }
+
+  if (['install', 'enable-shadow', 'disable-shadow', 'uninstall'].includes(command)) {
     runPlannedCommand(commandPlan(command, args));
     return;
   }
@@ -2277,6 +3836,12 @@ async function main(argv) {
     return;
   }
 
+  if (command === 'collector-health') {
+    const last = parseLastArg(args, '24h');
+    process.stdout.write(JSON.stringify({ workspace_id: workspaceId, query: collectorHealthQuery(last) }, null, 2) + '\n');
+    return;
+  }
+
   if (command === 'permission-friction') {
     const last = parseLastArg(args, '7d');
     process.stdout.write(JSON.stringify({ workspace_id: workspaceId, query: kqlFileQuery('17-permission-friction.kql', last) }, null, 2) + '\n');
@@ -2320,22 +3885,33 @@ if (require.main === module) {
 }
 
 module.exports = {
+  agentopsInit,
+  agentopsConfigure,
+  agentopsSmoke,
   agentopsStatusSummary,
+  agentopsWorkflows,
   alertRecommendationQuery,
   alertRecommendations,
+  askAgentOpsContext,
+  benchmarkCheatSignals,
   benchmarkAzureTelemetry,
   benchmarkAzureTelemetryQuery,
   benchmarkReport,
   benchmarkRunBaseDir,
   benchmarkRunPlan,
+  buildOtelSetup,
   buildLink,
   commandPlan,
   compareBenchmarkRuns,
+  collectorHealthQuery,
+  compactConfig,
   contextPressureQuery,
   copilotPrimitivesInventory,
   doctor,
+  durationToMs,
   explainLatest,
   fieldCatalogQuery,
+  configFromEnvValues,
   importJsonl,
   installedShimStatus,
   installDefaultSkills,
@@ -2344,6 +3920,7 @@ module.exports = {
   latestSessionAzureQuery,
   latestSessionSummary,
   latestSummaryFromArgs,
+  listGrafanaDashboardFiles,
   listDefaultSkills,
   listBenchmarks,
   loadBenchmarkSummaries,
@@ -2353,18 +3930,32 @@ module.exports = {
   parseBenchmarkCompareArgs,
   parseBenchmarkReportArgs,
   parseBenchmarkRunArgs,
+  parseConfigureArgs,
+  parseConfigureSetArgs,
+  parseEnvAssignments,
+  parseOtelSetupArgs,
   parseFrontmatter,
   parseSavedViewArgs,
+  parseSmokeArgs,
   replayTimeline,
   renderExplanation,
+  renderAskContext,
+  renderConfigure,
+  renderInit,
   renderLatest,
   renderLive,
   renderOpenLinks,
+  renderOtelSetup,
   renderRecommendation,
   renderReplay,
+  renderSmoke,
   renderSkillsInstall,
   renderStatus,
+  renderValidateAzure,
+  renderWorkflow,
+  renderWorkflowsList,
   recommendationForExplanation,
+  readAgentOpsConfig,
   readJsonlRows,
   readSavedViews,
   runAzureLogAnalyticsQuery,
@@ -2374,10 +3965,14 @@ module.exports = {
   sessionQuery,
   spanRowsFromSource,
   skillInstallTarget,
+  otelCompatibilityQuery,
   tokenRollupAuditQuery,
   enrichBenchmarkSummariesWithAzure,
   traceQuery,
+  validateAzure,
   validateKqlDuration,
   validateBenchmarkTask,
-  validateCollector
+  validateCollector,
+  verifySmokeInAzure,
+  writeAgentOpsConfig
 };

@@ -1,0 +1,145 @@
+let lookback = 2h;
+let copilot_otel_filter = (Properties has "github.copilot"
+    or Properties has "gen_ai.operation.name"
+    or AppRoleName in ("github-copilot", "copilot-chat", "github-copilot-cli"));
+let expected_metrics = dynamic([
+    "gen_ai.client.operation.duration",
+    "gen_ai.client.token.usage",
+    "gen_ai.client.operation.time_to_first_chunk",
+    "gen_ai.client.operation.time_per_output_chunk",
+    "github.copilot.tool.call.count",
+    "github.copilot.tool.call.duration",
+    "github.copilot.agent.turn.count",
+    "copilot_chat.tool.call.count",
+    "copilot_chat.tool.call.duration",
+    "copilot_chat.agent.invocation.duration",
+    "copilot_chat.agent.turn.count",
+    "copilot_chat.session.count",
+    "copilot_chat.time_to_first_token",
+    "copilot_chat.edit.acceptance.count",
+    "copilot_chat.chat_edit.outcome.count",
+    "copilot_chat.lines_of_code.count",
+    "copilot_chat.edit.survival.four_gram",
+    "copilot_chat.edit.survival.no_revert",
+    "copilot_chat.user.action.count",
+    "copilot_chat.user.feedback.count",
+    "copilot_chat.agent.edit_response.count",
+    "copilot_chat.agent.summarization.count",
+    "copilot_chat.pull_request.count",
+    "copilot_chat.cloud.session.count",
+    "copilot_chat.cloud.pr_ready.count"
+]);
+let expected_events = dynamic([
+    "gen_ai.client.inference.operation.details",
+    "copilot_chat.session.start",
+    "copilot_chat.tool.call",
+    "copilot_chat.agent.turn",
+    "copilot_chat.edit.feedback",
+    "copilot_chat.edit.hunk.action",
+    "copilot_chat.inline.done",
+    "copilot_chat.edit.survival",
+    "copilot_chat.user.feedback",
+    "copilot_chat.cloud.session.invoke",
+    "github.copilot.hook.start",
+    "github.copilot.hook.end",
+    "github.copilot.hook.error",
+    "github.copilot.session.truncation",
+    "github.copilot.session.compaction_start",
+    "github.copilot.session.compaction_complete",
+    "github.copilot.skill.invoked",
+    "github.copilot.session.shutdown",
+    "github.copilot.session.abort",
+    "exception"
+]);
+let span_summary = AppDependencies
+| where TimeGenerated > ago(lookback)
+| where copilot_otel_filter
+| extend operation=tostring(Properties["gen_ai.operation.name"]),
+    service=coalesce(AppRoleName, tostring(Properties["service.name"])),
+    agent=tostring(Properties["gen_ai.agent.name"]),
+    conversation=tostring(Properties["gen_ai.conversation.id"]),
+    interaction=tostring(Properties["github.copilot.interaction_id"]),
+    model=tostring(Properties["gen_ai.request.model"]),
+    tool=tostring(Properties["gen_ai.tool.name"]),
+    input_tokens=todouble(Properties["gen_ai.usage.input_tokens"]),
+    output_tokens=todouble(Properties["gen_ai.usage.output_tokens"]),
+    cost=todouble(Properties["github.copilot.cost"]),
+    aiu=todouble(Properties["github.copilot.aiu"])
+| summarize
+    Spans=count(),
+    Services=make_set_if(service, isnotempty(service), 10),
+    Operations=make_set_if(operation, isnotempty(operation), 10),
+    Agents=make_set_if(agent, isnotempty(agent), 10),
+    HasOperation=countif(isnotempty(operation)),
+    HasSession=countif(isnotempty(conversation) or isnotempty(interaction)),
+    HasModel=countif(isnotempty(model)),
+    HasTool=countif(isnotempty(tool)),
+    HasTokenUsage=countif(isnotnull(input_tokens) or isnotnull(output_tokens)),
+    HasCostOrAIU=countif(isnotnull(cost) or isnotnull(aiu)),
+    LastSpan=max(TimeGenerated)
+| extend joinKey=1;
+let metric_summary = union isfuzzy=true AppMetrics
+| where TimeGenerated > ago(lookback)
+| where Name in (expected_metrics) or tostring(Properties) has_any ("gen_ai", "github.copilot", "copilot_chat")
+| summarize
+    Metrics=count(),
+    MetricNames=make_set(Name, 50),
+    HasGenAiMetrics=countif(Name startswith "gen_ai."),
+    HasCopilotCliMetrics=countif(Name startswith "github.copilot."),
+    HasVsCodeMetrics=countif(Name startswith "copilot_chat."),
+    LastMetric=max(TimeGenerated)
+| extend joinKey=1;
+let event_summary = union isfuzzy=true AppTraces, AppEvents
+| where TimeGenerated > ago(lookback)
+| extend event=coalesce(tostring(Properties["event.name"]), tostring(Properties["github.copilot.event.name"]), Name)
+| where event in (expected_events)
+    or tostring(Properties) has_any ("github.copilot", "copilot_chat", "gen_ai.client.inference")
+    or Message has_any ("github.copilot", "copilot_chat", "gen_ai.client.inference")
+| summarize
+    Events=count(),
+    EventNames=make_set_if(event, isnotempty(event), 50),
+    HasLifecycleEvents=countif(event has_any ("session", "hook", "skill", "exception")),
+    HasVsCodeEvents=countif(event startswith "copilot_chat."),
+    LastEvent=max(TimeGenerated)
+| extend joinKey=1;
+span_summary
+| join kind=fullouter metric_summary on joinKey
+| join kind=fullouter event_summary on joinKey
+| extend Status=case(Spans == 0, "missing",
+    HasOperation == 0 or HasSession == 0, "partial",
+    HasModel == 0 or HasTokenUsage == 0, "partial",
+    "ready")
+| extend Missing=pack_array(
+    iff(Spans == 0, "no Copilot/GenAI spans matched", ""),
+    iff(Spans > 0 and HasOperation == 0, "gen_ai.operation.name", ""),
+    iff(Spans > 0 and HasSession == 0, "gen_ai.conversation.id or github.copilot.interaction_id", ""),
+    iff(Spans > 0 and HasModel == 0, "gen_ai.request.model", ""),
+    iff(Spans > 0 and HasTokenUsage == 0, "gen_ai.usage.input_tokens/output_tokens", ""),
+    iff(Spans > 0 and HasCostOrAIU == 0, "github.copilot.cost or github.copilot.aiu", ""),
+    iff(coalesce(Metrics, 0) == 0, "no Copilot/GenAI metrics matched", ""),
+    iff(coalesce(Events, 0) == 0, "no Copilot/GenAI events matched", "")
+)
+| project Status,
+    Spans=coalesce(Spans, 0),
+    Metrics=coalesce(Metrics, 0),
+    Events=coalesce(Events, 0),
+    LastSpan,
+    LastMetric,
+    LastEvent,
+    Services,
+    Operations,
+    Agents,
+    MetricNames,
+    EventNames,
+    HasOperation,
+    HasSession,
+    HasModel,
+    HasTool,
+    HasTokenUsage,
+    HasCostOrAIU,
+    HasGenAiMetrics,
+    HasCopilotCliMetrics,
+    HasVsCodeMetrics,
+    HasLifecycleEvents,
+    HasVsCodeEvents,
+    Missing

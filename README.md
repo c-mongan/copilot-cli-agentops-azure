@@ -20,24 +20,126 @@ Use this if you run GitHub Copilot CLI and want a simple answer to:
 
 You do not need to know OpenTelemetry, KQL, MCP, or Grafana to start. Those are just the plumbing underneath the simple install path described below.
 
-## 3. Install in the shortest safe path
+## 3. Use Copilot OTel without installing the wrapper
 
-Configure the Azure workspace and Grafana endpoint for your own stack, then install the local shim. The shim starts the Azure Monitor collector when needed, keeps content capture off, adds safe AgentOps labels, and then calls the real Copilot CLI.
+You can use the observability stack without installing the `agentops` command or the `copilot-agentops` shim. AgentOps is an OTLP receiver plus Azure/Grafana/KQL content on top. If your Copilot surface emits OpenTelemetry to the local collector, the stack can observe it.
+
+This is the most native path for VS Code Copilot Chat:
+
+```json
+{
+  "github.copilot.chat.otel.enabled": true,
+  "github.copilot.chat.otel.exporterType": "otlp-http",
+  "github.copilot.chat.otel.otlpEndpoint": "http://127.0.0.1:4318",
+  "github.copilot.chat.otel.captureContent": false
+}
+```
+
+For Copilot CLI terminal sessions, set:
+
+```bash
+export OTEL_EXPORTER_OTLP_ENDPOINT='http://127.0.0.1:4318'
+export OTEL_EXPORTER_OTLP_PROTOCOL='http/protobuf'
+export COPILOT_OTEL_ENABLED='true'
+export COPILOT_OTEL_EXPORTER_TYPE='otlp-http'
+export OTEL_SERVICE_NAME='github-copilot'
+export OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT='false'
+```
+
+For a Copilot SDK app:
+
+```ts
+import { CopilotClient } from "@github/copilot-sdk";
+
+const client = new CopilotClient({
+  telemetry: {
+    otlpEndpoint: "http://127.0.0.1:4318",
+    exporterType: "otlp-http",
+    sourceName: "github.copilot",
+    captureContent: false
+  }
+});
+```
+
+The optional helper command prints all three snippets with your endpoint:
+
+```bash
+node agentops-cli/src/index.js otel-setup
+agentops otel-setup
+agentops otel-setup --shell powershell
+agentops otel-setup --endpoint "http://localhost:4318" --service-name copilot-chat
+```
+
+It also prints the equivalent JSONL file-export settings for offline review, which is useful when a user wants to share telemetry without running a collector.
+
+Then start the collector and check whether the incoming telemetry has the fields AgentOps dashboards and evals need:
+
+```bash
+./scripts/collector-azuremonitor-up.sh
+node agentops-cli/src/index.js compat-check --last 2h
+agentops collector start
+agentops compat-check --last 2h
+```
+
+If you do not want to run the CLI at all, use `kql/22-otel-compatibility.kql` directly in Log Analytics after starting the collector. The wrapper is still useful because it starts the collector, adds safe AgentOps labels, installs skills, and runs smoke validation. It is not required for telemetry ingestion.
+
+Current Copilot OTel coverage:
+
+- VS Code Copilot Chat: traces, metrics, and events are accepted through OTLP HTTP or gRPC. AgentOps recognizes `copilot-chat`, `github-copilot`, and CLI wrapper spans, including foreground agents, background CLI sessions, subagents, tool calls, edit acceptance, user feedback, cloud sessions, and PR-ready metrics.
+- Copilot CLI: traces, metrics, and span events are accepted through OTLP HTTP or JSONL file export. AgentOps recognizes `invoke_agent`, `chat`, `execute_tool`, token/cost/AIU fields, hook events, truncation/compaction events, skill events, shutdown/abort events, and tool-call metrics.
+- Copilot SDK: OTLP HTTP and file export are supported through the SDK telemetry config. Trace context propagation is preserved when the SDK/CLI emit W3C trace context.
+- Privacy: the collector receives all three signal pipelines, but strips prompt messages, responses, system instructions, tool definitions, tool arguments, tool results, URL bodies, and file paths before Azure export.
+
+Docs used for this support matrix:
+
+- [VS Code: Monitor agent usage with OpenTelemetry](https://code.visualstudio.com/docs/copilot/guides/monitoring-agents)
+- [VS Code: GitHub Copilot settings reference](https://code.visualstudio.com/docs/copilot/reference/copilot-settings#_observability-settings)
+- [GitHub Docs: Copilot CLI OpenTelemetry monitoring](https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-command-reference#opentelemetry-monitoring)
+- [GitHub Docs: Copilot SDK OpenTelemetry](https://docs.github.com/en/copilot/how-tos/copilot-sdk/observability/opentelemetry)
+
+## 4. Install in the shortest safe path
+
+Install the local shim, then save the Azure workspace and Grafana endpoint once with `agentops configure`. The shim starts the Azure Monitor collector when needed, keeps content capture off, adds safe AgentOps labels, and then calls the real Copilot CLI.
 
 macOS/Linux:
 
 ```bash
 az login
-export AZURE_RESOURCE_GROUP=rg-agentops-dev
-export AGENTOPS_LOG_ANALYTICS_WORKSPACE_ID="<workspace-id>"
-export AGENTOPS_GRAFANA_BASE_URL="https://<your-grafana>.grafana.azure.com"
-./install-agentops.sh
+./setup-agentops.sh
 export PATH="$HOME/.local/bin:$PATH"
+agentops configure set \
+  --resource-group rg-agentops-dev \
+  --workspace-id "<workspace-id>" \
+  --grafana-url "https://<your-grafana>.grafana.azure.com" \
+  --grafana-name "<grafana-resource-name>" \
+  --app-insights-name "<app-insights-name>"
+agentops status
+agentops init --dry-run
+agentops validate-azure
+agentops smoke --dry-run
+agentops smoke --wait 2m --poll 10s
 copilot --help
-node agentops-cli/src/index.js status
 ```
 
-The installer also adds the bundled AgentOps skills to your default Copilot skills directory. That means you can ask Copilot for the common workflows instead of remembering every CLI command:
+The setup script is just the shortest local wrapper. The product-style CLI installer is:
+
+```bash
+node agentops-cli/src/index.js install --shadow-copilot
+```
+
+After the package is installed or published, that becomes:
+
+```bash
+agentops install --shadow-copilot
+```
+
+If you deployed with `azd` and the environment contains the expected outputs, use this instead of manually entering values:
+
+```bash
+agentops configure import-azd
+```
+
+The installer adds `agentops`, `copilot-agentops`, optional plain-`copilot` shadowing, and the bundled AgentOps skills to your default Copilot skills directory. That means you can ask Copilot for the common workflows instead of remembering every CLI command:
 
 ```text
 Use agentops-live-triage to explain my latest Copilot run and recommend one next action.
@@ -49,19 +151,35 @@ If you only want to refresh the skills later:
 
 ```bash
 node agentops-cli/src/index.js skills install
+agentops skills install
+```
+
+If you are unsure which command maps to a README workflow:
+
+```bash
+node agentops-cli/src/index.js workflows list
+node agentops-cli/src/index.js workflows show setup
+agentops workflows show setup
 ```
 
 PowerShell:
 
 ```powershell
 az login
-$env:AZURE_RESOURCE_GROUP = "rg-agentops-dev"
-$env:AGENTOPS_LOG_ANALYTICS_WORKSPACE_ID = "<workspace-id>"
-$env:AGENTOPS_GRAFANA_BASE_URL = "https://<your-grafana>.grafana.azure.com"
-./install-agentops.ps1
+./setup-agentops.ps1
 $env:PATH = "$HOME/.local/bin;$env:PATH"
+agentops configure set `
+  --resource-group rg-agentops-dev `
+  --workspace-id "<workspace-id>" `
+  --grafana-url "https://<your-grafana>.grafana.azure.com" `
+  --grafana-name "<grafana-resource-name>" `
+  --app-insights-name "<app-insights-name>"
+agentops status
+agentops init --dry-run
+agentops validate-azure
+agentops smoke --dry-run
+agentops smoke --wait 2m --poll 10s
 copilot --help
-node agentops-cli/src/index.js status
 ```
 
 Secure defaults to keep:
@@ -77,21 +195,26 @@ To stop routing plain `copilot` through AgentOps while keeping the explicit `cop
 
 ```bash
 node agentops-cli/src/index.js disable-shadow
+agentops disable-shadow
 ```
+
+If the Azure Monitor collector cannot start, plain `copilot` warns and continues without AgentOps telemetry instead of blocking Copilot.
 
 To remove the installed shims:
 
 ```bash
 node agentops-cli/src/index.js uninstall
+agentops uninstall
 ```
 
 To stop the local Azure Monitor collector:
 
 ```bash
 node agentops-cli/src/index.js collector stop
+agentops collector stop
 ```
 
-## 4. See your latest Copilot run
+## 5. See your latest Copilot run
 
 Run Copilot normally after install:
 
@@ -113,7 +236,7 @@ Open the dashboard links from the CLI:
 node agentops-cli/src/index.js open
 ```
 
-Then choose **Last 2 hours** in Grafana and open the newest row in **Sessions**. That row is your latest observed Copilot run.
+The command prints the overview dashboard and the run-first Sessions dashboard. Choose **Last 2 hours** in Grafana and open the newest row in **Sessions**. That row is your latest observed Copilot run.
 
 Useful things to look for first:
 
@@ -146,6 +269,13 @@ node agentops-cli/src/index.js replay <conversation-id> --last 24h
 node agentops-cli/src/index.js lineage --last 24h
 ```
 
+Generate a copyable investigation bundle for Copilot or another MCP-aware coding agent:
+
+```bash
+node agentops-cli/src/index.js ask-context latest --last 2h
+node agentops-cli/src/index.js ask-context <conversation-id> --last 24h
+```
+
 Inventory Copilot primitives configured in this repo and covered by telemetry:
 
 ```bash
@@ -163,7 +293,7 @@ node agentops-cli/src/index.js live --file tests/sample-otel/tool-failure.jsonl
 node agentops-cli/src/index.js replay latest --file tests/sample-otel/tool-failure.jsonl
 ```
 
-## 5. Open the dashboard
+## 6. Open the dashboard
 
 Open your overview dashboard after setting `AGENTOPS_GRAFANA_BASE_URL`:
 
@@ -200,7 +330,7 @@ GRAFANA_NAME=graf-agentops-dev \
 ./scripts/grafana-import-dashboard.sh
 ```
 
-## 6. Optional: science mode
+## 7. Optional: science mode
 
 Science mode means you compare one Copilot setup against another using repeatable tasks.
 
@@ -245,7 +375,7 @@ Do not turn on content capture for science mode. The default metadata is enough 
 
 For deeper repeatable checks, see [docs/testing-and-next-steps.md](docs/testing-and-next-steps.md).
 
-## 7. Optional: Azure MCP analyst mode
+## 8. Optional: Azure MCP analyst mode
 
 Analyst mode is for people who want Copilot or an MCP client to inspect telemetry for them.
 
@@ -261,12 +391,18 @@ Useful implemented CLI helpers for analysts:
 
 ```bash
 node agentops-cli/src/index.js status
+node agentops-cli/src/index.js init --dry-run
+node agentops-cli/src/index.js validate-azure
+node agentops-cli/src/index.js smoke --dry-run
+node agentops-cli/src/index.js smoke --wait 2m --poll 10s
 node agentops-cli/src/index.js open
 node agentops-cli/src/index.js link session <conversation>
 node agentops-cli/src/index.js link trace <operationId>
+node agentops-cli/src/index.js ask-context latest --last 24h
 node agentops-cli/src/index.js fields --last 7d
 node agentops-cli/src/index.js context --last 7d
 node agentops-cli/src/index.js token-rollup-audit --last 14d
+node agentops-cli/src/index.js collector-health --last 24h
 node agentops-cli/src/index.js primitives --last 7d
 node agentops-cli/src/index.js policy --last 7d
 node agentops-cli/src/index.js mcp --last 7d
@@ -279,7 +415,7 @@ node agentops-cli/src/index.js saved-view list
 
 These commands print Grafana links or Azure Log Analytics queries. You can use them without learning KQL first, and an analyst can inspect the generated query when needed.
 
-## 8. Optional: internals
+## 9. Optional: internals
 
 AgentOps is a local-first telemetry loop:
 

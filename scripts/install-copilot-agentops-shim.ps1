@@ -8,10 +8,17 @@ $ErrorActionPreference = "Stop"
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = Split-Path -Parent $scriptDir
 $agentopsScript = Join-Path $repoRoot "scripts/copilot-agentops.ps1"
+$agentopsCli = Join-Path $repoRoot "agentops-cli/src/index.js"
 $pwsh = Get-Command pwsh -ErrorAction SilentlyContinue
 $powershell = if ($pwsh) { $pwsh.Source } else { "powershell.exe" }
 
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
+
+$agentopsCliCmd = Join-Path $InstallDir "agentops.cmd"
+@"
+@echo off
+node "$agentopsCli" %*
+"@ | Set-Content -Path $agentopsCliCmd -Encoding ASCII
 
 $agentopsCmd = Join-Path $InstallDir "copilot-agentops.cmd"
 @"
@@ -49,6 +56,7 @@ set "COPILOT_CLI_BIN=$($realCopilot.Source)"
 }
 
 Write-Host "Installed:"
+Write-Host "  $agentopsCliCmd"
 Write-Host "  $agentopsCmd"
 
 if ($ShadowCopilot) {

@@ -11,7 +11,7 @@ usage() {
 Usage:
   ./scripts/install-copilot-agentops-shim.sh [--shadow-copilot]
 
-Installs copilot-agentops into ~/.local/bin.
+Installs agentops and copilot-agentops into ~/.local/bin.
 
 Options:
   --shadow-copilot  Also install ~/.local/bin/copilot so plain `copilot` starts
@@ -38,7 +38,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 mkdir -p "${install_dir}"
-chmod +x "${repo_root}/scripts/copilot-agentops" "${repo_root}/scripts/collector-azuremonitor-up.sh" "${repo_root}/copilot/copilot-observe"
+chmod +x "${repo_root}/agentops-cli/src/index.js" "${repo_root}/scripts/copilot-agentops" "${repo_root}/scripts/collector-azuremonitor-up.sh" "${repo_root}/copilot/copilot-observe"
+ln -sf "${repo_root}/agentops-cli/src/index.js" "${install_dir}/agentops"
 ln -sf "${repo_root}/scripts/copilot-agentops" "${install_dir}/copilot-agentops"
 
 if command -v node >/dev/null 2>&1; then
@@ -71,6 +72,7 @@ fi
 
 cat <<MSG
 Installed:
+  ${install_dir}/agentops
   ${install_dir}/copilot-agentops
 MSG
 

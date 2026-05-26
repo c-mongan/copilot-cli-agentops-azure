@@ -1,10 +1,11 @@
 services:
   otelcol:
-    image: otel/opentelemetry-collector-contrib:latest
+    image: ${AGENTOPS_OTELCOL_IMAGE:-otel/opentelemetry-collector-contrib:0.151.0}
     command: ["--config=/etc/otelcol/config.yaml"]
     ports:
       - "127.0.0.1:4318:4318"
       - "127.0.0.1:4317:4317"
+      - "127.0.0.1:13133:13133"
     environment:
       AZURE_MONITOR_OTLP_TRACES_ENDPOINT: ${AZURE_MONITOR_OTLP_TRACES_ENDPOINT:-}
       AZURE_MONITOR_OTLP_METRICS_ENDPOINT: ${AZURE_MONITOR_OTLP_METRICS_ENDPOINT:-}

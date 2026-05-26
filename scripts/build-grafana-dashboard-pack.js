@@ -498,11 +498,12 @@ function qualityDashboard() {
 
 function dataQualityDashboard() {
   const panels = [
-    textPanel(1, 0, 0, 24, 2, '## Data Quality\nField discovery and token rollup checks for validating dashboard assumptions against real Copilot CLI telemetry.'),
+    textPanel(1, 0, 0, 24, 2, '## Data Quality\nField discovery, token rollup, collector health, and smoke-ingestion checks for validating dashboard assumptions against real Copilot CLI telemetry.'),
     tablePanel(10, 'Token rollup audit', 0, 2, 24, 13, fs.readFileSync(path.join(repoRoot, 'kql', '13-token-rollup-audit.kql'), 'utf8'), [
       byNameUnit('TokenOvercountRatio', 'short', 2),
     ]),
-    tablePanel(20, 'Observed property fields', 0, 15, 24, 14, `AppDependencies | where $__timeFilter(TimeGenerated) | where ${baseFilter} | extend fields = bag_keys(Properties) | mv-expand field = fields to typeof(string) | extend value = tostring(Properties[field]) | summarize observed=count(), example_values=make_set_if(value, isnotempty(value), 5) by field | order by observed desc, field asc`),
+    tablePanel(20, 'Collector health and smoke ingestion', 0, 15, 24, 8, fs.readFileSync(path.join(repoRoot, 'kql', '21-collector-health.kql'), 'utf8')),
+    tablePanel(30, 'Observed property fields', 0, 23, 24, 14, `AppDependencies | where $__timeFilter(TimeGenerated) | where ${baseFilter} | extend fields = bag_keys(Properties) | mv-expand field = fields to typeof(string) | extend value = tostring(Properties[field]) | summarize observed=count(), example_values=make_set_if(value, isnotempty(value), 5) by field | order by observed desc, field asc`),
   ];
   return baseDashboard('agentops-data-quality', 'AgentOps Data Quality', panels, false);
 }
@@ -537,6 +538,10 @@ function benchmarkRegressionsQuery() {
   return `let variants = ${benchmarkRollupQuery()}; let baseline = variants | where tolower(variant) in ('baseline', 'control', 'main', 'default') | summarize BaselineScore=avg(AverageScore), BaselinePassRate=avg(PassRate), BaselineToolFailures=sum(ToolFailures), BaselineCost=avg(EstUsd), BaselineTokenUse=avg(TokenUse) by suite, task_id, hypothesis_id; variants | join kind=leftouter baseline on suite, task_id, hypothesis_id | extend ScoreDelta=round(AverageScore - BaselineScore, 3), PassRateDelta=round(PassRate - BaselinePassRate, 1), CostDelta=round(EstUsd - BaselineCost, 4), TokenDelta=round(TokenUse - BaselineTokenUse, 0) | where ExplicitRegressions > 0 or ScoreDelta < 0 or PassRateDelta < 0 or ToolFailures > BaselineToolFailures | project suite, task_id, hypothesis_id, variant, run_id, ExplicitRegressions, PassRate, PassRateDelta, AverageScore, ScoreDelta, ToolFailures, BaselineToolFailures, TokenUse, TokenDelta, EstUsd, CostDelta, FailureReasons | order by ExplicitRegressions desc, ScoreDelta asc, PassRateDelta asc, ToolFailures desc`;
 }
 
+function benchmarkAntiCheatQuery() {
+  return `${benchmarkBaseWhere()} | summarize Spans=count(), Runs=dcount(run_id), ToolFailures=countif((operation == 'execute_tool' or isnotempty(tool)) and (Success == false or isnotempty(error))), SafetyIssues=countif(SafetyIssue), PolicyBlocks=countif(tostring(Properties['agentops.policy.blocked']) == 'true' or tostring(Properties) has 'policy'), ContentSignals=countif(tostring(Properties) has_any ('content.capture.enabled', 'gen_ai.prompt', 'gen_ai.completion')), MissingRunLabels=countif(isempty(run_id)), FailureReasons=make_set_if(FailureReason, isnotempty(FailureReason), 10), LastSeen=max(TimeGenerated) by suite, task_id, hypothesis_id, variant | extend AntiCheatStatus=case(SafetyIssues > 0 or ContentSignals > 0, 'blocked', PolicyBlocks > 0 or MissingRunLabels > 0, 'review', 'clean') | where AntiCheatStatus != 'clean' | order by AntiCheatStatus asc, SafetyIssues desc, ContentSignals desc, PolicyBlocks desc, MissingRunLabels desc`;
+}
+
 function experimentsDashboard() {
   const panels = [
     tablePanel(1, 'Did the change help?', 0, 0, 24, 9, benchmarkHelpQuery(), [
@@ -564,6 +569,7 @@ function experimentsDashboard() {
       byNameUnit('CostDelta', 'currencyUSD', 4),
     ]),
     tablePanel(9, 'Top failure reasons', 0, 23, 24, 10, `${benchmarkBaseWhere()} | where Success == false or isnotempty(error) or isnotempty(FailureReason) | summarize Failures=count(), Runs=dcount(run_id), Sessions=dcount(conversation), Examples=make_set(Name, 5), LastSeen=max(TimeGenerated) by suite, task_id, hypothesis_id, variant, FailureReason | order by Failures desc, LastSeen desc | take 100`),
+    tablePanel(10, 'Anti-cheat and promotion blockers', 0, 33, 24, 9, benchmarkAntiCheatQuery()),
   ];
   const dashboard = baseDashboard('agentops-experiments', 'AgentOps Experiments', panels, false);
   dashboard.templating = benchmarkVariables();

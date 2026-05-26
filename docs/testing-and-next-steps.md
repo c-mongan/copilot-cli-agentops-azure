@@ -33,6 +33,8 @@ Start Docker Desktop or OrbStack, then run:
 ```bash
 docker compose -f collector/docker-compose.yaml up -d
 node agentops-cli/src/index.js validate-collector
+node agentops-cli/src/index.js smoke --dry-run
+node agentops-cli/src/index.js collector-health --last 24h
 docker compose -f collector/docker-compose.yaml logs --tail=50
 ```
 
@@ -67,10 +69,11 @@ Docker is the current tested path for collector-backed Azure export. Start the A
 Send a privacy-safe OTLP trace through the local collector:
 
 ```bash
+node agentops-cli/src/index.js smoke --wait 2m --poll 10s
 ./scripts/otlp-smoke-trace.sh
 ```
 
-The script prints a `smokeId`. The Azure Monitor exporter maps this synthetic client span into `AppDependencies`:
+The CLI smoke command sends a synthetic client span and polls Log Analytics for the same `smokeId`. The shell script is still available for low-level collector testing. The Azure Monitor exporter maps the synthetic span into `AppDependencies`:
 
 ```bash
 az monitor log-analytics query \
@@ -108,6 +111,7 @@ docker compose -f collector/docker-compose.azuremonitor.yaml down
 For daily use, install the AgentOps shim and use `copilot-agentops` instead of starting the collector manually:
 
 ```bash
+node agentops-cli/src/index.js install --shadow-copilot
 ./scripts/install-copilot-agentops-shim.sh
 export PATH="$HOME/.local/bin:$PATH"
 copilot-agentops --help
@@ -123,7 +127,48 @@ copilot-agentops --help
 
 The shim checks whether the Azure Monitor collector is already running. If it is not, it retrieves the Application Insights connection string at runtime, starts the collector, and then launches Copilot CLI through `copilot-observe` with content capture disabled.
 
+If the Azure Monitor collector cannot start because the configured Azure resources are missing or unavailable, the shim warns and launches the real Copilot CLI without AgentOps telemetry.
+
 The wrapper preserves user-supplied OpenTelemetry settings where possible. It sets safe defaults for `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_SERVICE_NAME`, `COPILOT_OTEL_SOURCE_NAME`, and `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT`, then prepends AgentOps metadata to existing `OTEL_RESOURCE_ATTRIBUTES` instead of replacing them.
+
+## Native Copilot OTel Without The Wrapper
+
+The installed `agentops` command and shim are optional for telemetry ingestion. VS Code Copilot Chat, Copilot CLI, and Copilot SDK apps can send OTLP directly to the AgentOps collector.
+
+Generate copyable setup snippets:
+
+```bash
+node agentops-cli/src/index.js otel-setup
+node agentops-cli/src/index.js otel-setup --shell powershell
+```
+
+Minimum VS Code settings:
+
+```json
+{
+  "github.copilot.chat.otel.enabled": true,
+  "github.copilot.chat.otel.exporterType": "otlp-http",
+  "github.copilot.chat.otel.otlpEndpoint": "http://127.0.0.1:4318",
+  "github.copilot.chat.otel.captureContent": false
+}
+```
+
+Minimum Copilot CLI environment:
+
+```bash
+export OTEL_EXPORTER_OTLP_ENDPOINT='http://127.0.0.1:4318'
+export COPILOT_OTEL_ENABLED='true'
+export COPILOT_OTEL_EXPORTER_TYPE='otlp-http'
+export OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT='false'
+```
+
+After running a Copilot interaction, check whether the incoming data has the fields used by dashboards and evals:
+
+```bash
+node agentops-cli/src/index.js compat-check --last 2h
+```
+
+Use `./scripts/collector-azuremonitor-up.sh` to start the collector without installing the CLI. Use `kql/22-otel-compatibility.kql` for the compatibility check directly in Log Analytics when you do not want to run any CLI helper. A `ready` result means the stack found operation, session, model, and token fields. The query also reports matching Copilot/GenAI metrics and events from `AppMetrics`, `AppTraces`, and `AppEvents`. A `partial` result means ingestion works, but some dashboards or anti-cheat/eval rollups may be limited.
 
 To bind this to the normal `copilot` command, install the shadow shim:
 
@@ -168,11 +213,16 @@ az monitor log-analytics query \
 Use the live and replay commands when you want immediate local session visibility without prompt, response, tool argument, or file-content capture:
 
 ```bash
+node agentops-cli/src/index.js configure show
+node agentops-cli/src/index.js init --dry-run
+node agentops-cli/src/index.js validate-azure
+node agentops-cli/src/index.js smoke --wait 2m --poll 10s
 node agentops-cli/src/index.js live --last 2h
 node agentops-cli/src/index.js replay latest --last 2h
 node agentops-cli/src/index.js lineage --last 24h
 node agentops-cli/src/index.js primitives --last 7d
 node agentops-cli/src/index.js recommend latest --last 2h
+node agentops-cli/src/index.js ask-context latest --last 2h
 ```
 
 Use the fixture path when Azure telemetry is unavailable:
