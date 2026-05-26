@@ -367,6 +367,23 @@ function escapeKqlString(value) {
 function commandPlan(command, args = [], platform = process.platform) {
   const isWindows = platform === 'win32';
   const scriptPath = script => path.join(root, 'scripts', script);
+  const compactEnv = values => Object.fromEntries(Object.entries(values).filter(([, value]) => value !== undefined && value !== null && value !== ''));
+  const cloudEnv = () => {
+    const cloud = configuredCloudValues();
+    return compactEnv({
+      AZURE_SUBSCRIPTION_ID: cloud.subscriptionId,
+      AZURE_RESOURCE_GROUP: cloud.resourceGroup,
+      APPLICATIONINSIGHTS_NAME: cloud.appInsightsName,
+      AGENTOPS_AZURE_SUBSCRIPTION_ID: cloud.subscriptionId,
+      AGENTOPS_AZURE_RESOURCE_GROUP: cloud.resourceGroup,
+      AGENTOPS_LOG_ANALYTICS_WORKSPACE_ID: cloud.workspaceId,
+      AGENTOPS_LOG_ANALYTICS_WORKSPACE_NAME: cloud.workspaceName,
+      AGENTOPS_GRAFANA_BASE_URL: cloud.grafanaBaseUrl,
+      AGENTOPS_GRAFANA_NAME: cloud.grafanaName,
+      AGENTOPS_GRAFANA_DATASOURCE_UID: cloud.grafanaDatasourceUid,
+      AGENTOPS_APPLICATIONINSIGHTS_NAME: cloud.appInsightsName
+    });
+  };
 
   if (command === 'install') {
     const shadow = args.includes('--shadow-copilot') || args.includes('--shadow');
@@ -410,11 +427,11 @@ function commandPlan(command, args = [], platform = process.platform) {
     const action = args[0];
     if (action === 'start') {
       return isWindows
-        ? { command: 'pwsh', args: ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath('collector-azuremonitor-up.ps1')] }
-        : { command: scriptPath('collector-azuremonitor-up.sh'), args: [] };
+        ? { command: 'pwsh', args: ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath('collector-azuremonitor-up.ps1')], env: cloudEnv() }
+        : { command: scriptPath('collector-azuremonitor-up.sh'), args: [], env: cloudEnv() };
     }
     if (action === 'stop') {
-      return { command: 'docker', args: ['compose', '-f', path.join(root, 'collector', 'docker-compose.azuremonitor.yaml'), 'down'] };
+      return { command: 'docker', args: ['compose', '-f', path.join(root, 'collector', 'docker-compose.azuremonitor.yaml'), 'down'], env: cloudEnv() };
     }
     throw new Error('collector requires start or stop');
   }
@@ -428,7 +445,7 @@ function runPlannedCommand(plan) {
     executable = 'powershell.exe';
   }
 
-  const result = childProcess.spawnSync(executable, plan.args, { stdio: 'inherit' });
+  const result = childProcess.spawnSync(executable, plan.args, { stdio: 'inherit', env: { ...process.env, ...(plan.env || {}) } });
   if (result.error) throw result.error;
   process.exitCode = result.status === null ? 1 : result.status;
 }

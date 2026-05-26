@@ -1586,6 +1586,8 @@ test('command plan exposes shadow and collector lifecycle commands', () => {
   assert.equal(stop.command, 'docker');
   assert.deepEqual(stop.args.slice(0, 3), ['compose', '-f', path.join(root, 'collector', 'docker-compose.azuremonitor.yaml')]);
   assert.equal(stop.args.at(-1), 'down');
+  assert.equal(stop.env.AZURE_RESOURCE_GROUP, 'rg-agentops-dev');
+  assert.equal(stop.env.APPLICATIONINSIGHTS_NAME, 'appi-agentops-dev');
 });
 
 test('windows command plan prefers PowerShell Core wrappers', () => {
@@ -1603,6 +1605,11 @@ test('windows command plan prefers PowerShell Core wrappers', () => {
   assert.equal(disable.command, 'pwsh');
   assert.ok(disable.args.includes('-KeepAgentopsCommand'));
   assert.match(disable.args.at(-2), /uninstall-copilot-agentops-shim\.ps1$/);
+
+  const collector = commandPlan('collector', ['start'], 'win32');
+  assert.equal(collector.command, 'pwsh');
+  assert.match(collector.args.at(-1), /collector-azuremonitor-up\.ps1$/);
+  assert.equal(collector.env.AZURE_RESOURCE_GROUP, 'rg-agentops-dev');
 });
 
 test('policy and mcp KQL queries expose documented Copilot dimensions', () => {

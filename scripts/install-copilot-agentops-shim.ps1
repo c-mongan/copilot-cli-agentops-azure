@@ -28,9 +28,9 @@ $agentopsCmd = Join-Path $InstallDir "copilot-agentops.cmd"
 
 $node = Get-Command node -ErrorAction SilentlyContinue
 if ($node) {
-  & $node.Source (Join-Path $repoRoot "agentops-cli/src/index.js") skills install
+  & $node.Source (Join-Path $repoRoot "agentops-cli/src/index.js") plugin install
 } else {
-  Write-Warning "node was not found, so AgentOps Copilot skills were not installed. Install Node.js, then run: node $(Join-Path $repoRoot 'agentops-cli/src/index.js') skills install"
+  Write-Warning "node was not found, so AgentOps Copilot plugin files were not installed. Install Node.js, then run: node $(Join-Path $repoRoot 'agentops-cli/src/index.js') plugin install"
 }
 
 if ($ShadowCopilot) {
