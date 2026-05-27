@@ -1,0 +1,24 @@
+// Collector health and smoke-ingestion check for Copilot CLI AgentOps.
+// Use with the collector health endpoint and `agentops smoke` to verify the full path.
+let lookback = 24h;
+let copilot =
+AppDependencies
+| where TimeGenerated > ago(lookback)
+| where (Properties has "github.copilot" or Properties has "gen_ai.operation.name" or Properties has "agentops." or AppRoleName in ("github-copilot", "copilot-chat", "github-copilot-cli", "codex", "openai-codex", "openai-codex-cli") or tostring(Properties["service.name"]) in ("github-copilot", "copilot-chat", "github-copilot-cli", "codex", "openai-codex", "openai-codex-cli") or tostring(Properties["agent.runtime"]) in ("codex", "openai-codex-cli"))
+| summarize
+    LastCopilotSpan=max(TimeGenerated),
+    CopilotSpans=count(),
+    SmokeSpans=countif(Properties has "agentops.smoke_id");
+let collectorLogs =
+AppTraces
+| where TimeGenerated > ago(lookback)
+| where Message has_any ("otelcol", "azuremonitor", "exporter", "dropped", "retry", "queue", "refused", "timeout")
+| summarize
+    LastCollectorLog=max(TimeGenerated),
+    CollectorErrors=countif(SeverityLevel >= 3 or Message has_any ("error", "failed", "dropped", "refused", "timeout")),
+    CollectorWarnings=countif(SeverityLevel == 2 or Message has "warn");
+copilot
+| extend joinKey=1
+| join kind=fullouter (collectorLogs | extend joinKey=1) on joinKey
+| project LastCopilotSpan, CopilotSpans, SmokeSpans, LastCollectorLog, CollectorErrors, CollectorWarnings
+| extend Health=case(isnull(LastCopilotSpan), "no_copilot_spans", CollectorErrors > 0, "collector_errors", "healthy")

@@ -1,0 +1,1035 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [
+    {
+      "title": "Overview",
+      "url": "/d/copilot-agentops",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
+      "title": "Sessions",
+      "url": "/d/agentops-sessions",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
+      "title": "Session Detail",
+      "url": "/d/agentops-session-detail",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
+      "title": "Live Replay",
+      "url": "/d/agentops-live-replay",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
+      "title": "Traces / Spans",
+      "url": "/d/agentops-traces-spans",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
+      "title": "Tools & MCP",
+      "url": "/d/agentops-tools-mcp",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
+      "title": "Runtime Events",
+      "url": "/d/agentops-runtime-events",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
+      "title": "Attribution",
+      "url": "/d/agentops-attribution",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
+      "title": "Safety & Policy",
+      "url": "/d/agentops-safety-policy",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
+      "title": "Permission Friction",
+      "url": "/d/agentops-permission-friction",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
+      "title": "Alert Tuning",
+      "url": "/d/agentops-alert-tuning",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
+      "title": "Quality",
+      "url": "/d/agentops-quality",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
+      "title": "Experiments",
+      "url": "/d/agentops-experiments",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
+      "title": "Data Quality",
+      "url": "/d/agentops-data-quality",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
+      "title": "Azure Portal - Log Analytics",
+      "url": "https://portal.azure.com/#@/resource/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev/logs",
+      "type": "link",
+      "icon": "external link",
+      "targetBlank": true
+    }
+  ],
+  "liveNow": false,
+  "panels": [
+    {
+      "id": 1,
+      "type": "text",
+      "gridPos": {
+        "h": 3,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "## Live Replay\nWatch one agent run as a session timeline. Single-agent runs show one lane; orchestrator runs become a tree when delegation or parent-child span fields are present. Content capture remains signal-only by default."
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Events",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 3
+      },
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "azure-monitor-oob"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "Azure Log Analytics",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor-oob"
+          },
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
+            ],
+            "resultFormat": "time_series",
+            "query": "union isfuzzy=true (AppDependencies | where $__timeFilter(TimeGenerated) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or Properties has 'agentops.' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['agent.runtime']) in ('codex', 'openai-codex-cli')) | extend direct_session=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), ''), fallback_session=strcat(iff(isnotempty(tostring(Properties['gen_ai.agent.id'])), tostring(Properties['gen_ai.agent.id']), iff(isnotempty(tostring(Properties['service.name'])), tostring(Properties['service.name']), iff(isnotempty(AppRoleName), AppRoleName, 'agent'))), '_', iff(isnotempty(tostring(Properties['github.copilot.turn_count'])), tostring(Properties['github.copilot.turn_count']), iff(isnotempty(OperationId), OperationId, 'session')), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm')) | join kind=leftouter (AppDependencies | where $__timeFilter(TimeGenerated) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or Properties has 'agentops.' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['agent.runtime']) in ('codex', 'openai-codex-cli')) | extend direct_session=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), '') | where isnotempty(direct_session) | summarize operation_session=take_any(direct_session) by OperationId) on OperationId | extend conversation=iff(isnotempty(operation_session), operation_session, iff(isnotempty(direct_session), direct_session, fallback_session)) | extend operation=tostring(Properties['gen_ai.operation.name']), agent=tostring(Properties['gen_ai.agent.name']), agentops_agent=coalesce(tostring(Properties['agentops.agent.name']), tostring(Properties['agentops.cli.agent']), tostring(Properties['gen_ai.agent.name'])), model=tostring(Properties['gen_ai.request.model']), tool=tostring(Properties['gen_ai.tool.name']), repo=tostring(Properties['agentops.repo.hash']), skill=coalesce(tostring(Properties['agentops.skill.name']), tostring(Properties['github.copilot.skill.name'])), mcp_server=coalesce(tostring(Properties['agentops.mcp.server']), tostring(Properties['agentops.mcp.config.servers']), extract('^mcp__([^_]+)__', 1, tostring(Properties['gen_ai.tool.name'])), extract('^([^/]+)/', 1, tostring(Properties['gen_ai.tool.name'])), iff(tostring(Properties['gen_ai.tool.name']) startswith 'azure-mcp-', 'azure-mcp', '')), script=coalesce(tostring(Properties['agentops.script.name']), tostring(Properties['agentops.hook.name']), tostring(Properties['github.copilot.hook.name']), tostring(Properties['github.copilot.hook.type'])), error=tostring(Properties['error.type'])  | extend InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), OutputTokens=todouble(Properties['gen_ai.usage.output_tokens']), Credits=todouble(Properties['github.copilot.cost']), AIU=todouble(Properties['github.copilot.aiu']) | extend parent_agent=tostring(Properties['agentops.parent_agent.name']), delegation_id=tostring(Properties['agentops.delegation.id']) | extend mcp_tool=case(tool startswith 'mcp__', extract('^mcp__.+?__(.+)$', 1, tool), tool contains '/', tostring(split(tool, '/')[1]), tool startswith 'azure-mcp-', substring(tool, strlen('azure-mcp-')), tostring(Properties['agentops.mcp.tool'])) | extend EventType=case(operation == 'invoke_agent', 'agent', operation == 'chat', 'llm', operation == 'execute_tool' or isnotempty(tool), 'tool', 'span') | extend Event=operation, Actor=coalesce(agentops_agent, agent, tostring(Properties['service.name']), AppRoleName), Lane=case(isnotempty(parent_agent), strcat(parent_agent, ' > ', coalesce(agentops_agent, agent, 'agent')), isnotempty(agentops_agent), agentops_agent, isnotempty(agent), agent, 'agent') | project TimeGenerated, Session=conversation, EventType, Event, Lane, Actor, ParentAgent=parent_agent, DelegationId=delegation_id, OperationId, SpanId=Id, ParentId, Name, agentops_agent, agent, model, mcp_server, mcp_tool, tool, skill, script, repo, DurationMs, Success, error, InputTokens, OutputTokens, Credits, AIU, ContentCapture=bool(false), Detail=ResultCode), (union isfuzzy=true AppTraces, AppDependencies, AppEvents | where $__timeFilter(TimeGenerated) | where tostring(Properties) has_any ('github.copilot', 'gen_ai.operation.name', 'agentops.', 'copilot_chat', 'codex') or Message has_any ('github.copilot', 'AgentOps', 'copilot_chat', 'codex') or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') | extend conversation=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(iff(isnotempty(tostring(Properties['gen_ai.agent.id'])), tostring(Properties['gen_ai.agent.id']), iff(isnotempty(tostring(Properties['service.name'])), tostring(Properties['service.name']), iff(isnotempty(AppRoleName), AppRoleName, 'agent'))), '_', iff(isnotempty(tostring(Properties['github.copilot.turn_count'])), tostring(Properties['github.copilot.turn_count']), iff(isnotempty(OperationId), OperationId, 'session')), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm'))), operation=tostring(Properties['gen_ai.operation.name']), agent=tostring(Properties['gen_ai.agent.name']), agentops_agent=coalesce(tostring(Properties['agentops.agent.name']), tostring(Properties['agentops.cli.agent']), tostring(Properties['gen_ai.agent.name'])), model=tostring(Properties['gen_ai.request.model']), tool=tostring(Properties['gen_ai.tool.name']), repo=tostring(Properties['agentops.repo.hash']), skill=coalesce(tostring(Properties['agentops.skill.name']), tostring(Properties['github.copilot.skill.name'])), mcp_server=coalesce(tostring(Properties['agentops.mcp.server']), tostring(Properties['agentops.mcp.config.servers']), extract('^mcp__([^_]+)__', 1, tostring(Properties['gen_ai.tool.name'])), extract('^([^/]+)/', 1, tostring(Properties['gen_ai.tool.name'])), iff(tostring(Properties['gen_ai.tool.name']) startswith 'azure-mcp-', 'azure-mcp', '')), script=coalesce(tostring(Properties['agentops.script.name']), tostring(Properties['agentops.hook.name']), tostring(Properties['github.copilot.hook.name']), tostring(Properties['github.copilot.hook.type'])), error=tostring(Properties['error.type'])  | extend Event=coalesce(tostring(Properties['agentops.event.name']), tostring(Properties['event.name']), tostring(Properties['github.copilot.event.name']), Name) | extend parent_agent=tostring(Properties['agentops.parent_agent.name']), delegation_id=tostring(Properties['agentops.delegation.id']), content_signal=tostring(Properties['agentops.content_capture.signal']) =~ 'true' or tostring(Properties) has_any ('gen_ai.prompt', 'gen_ai.completion', 'gen_ai.input.messages', 'gen_ai.output.messages', 'gen_ai.tool.call.arguments', 'gen_ai.tool.call.result') | extend EventType=case(Event has 'delegation', 'delegation', Event has 'hook' or isnotempty(script), 'script_hook', Event has 'skill' or isnotempty(skill), 'skill', Event has 'policy' or Event has 'blocked', 'policy', Event has 'truncation' or Event has 'compaction', 'context', content_signal, 'content', Event == 'exception' or isnotempty(error), 'error', 'event') | where EventType != 'event' or tostring(Properties) has_any ('agentops.event', 'github.copilot.session', 'github.copilot.hook', 'github.copilot.skill') | extend Actor=coalesce(agentops_agent, agent, tostring(Properties['service.name']), AppRoleName), Lane=case(isnotempty(parent_agent), strcat(parent_agent, ' > ', coalesce(agentops_agent, agent, 'agent')), isnotempty(agentops_agent), agentops_agent, isnotempty(agent), agent, 'runtime') | project TimeGenerated, Session=conversation, EventType, Event, Lane, Actor, ParentAgent=parent_agent, DelegationId=delegation_id, OperationId, SpanId=Id, ParentId, Name=coalesce(Event, Message), agentops_agent, agent, model, mcp_server, mcp_tool=tostring(Properties['agentops.mcp.tool']), tool=coalesce(tool, script, skill), skill, script, repo, DurationMs=real(null), Success=iff(tostring(Properties['github.copilot.success']) == 'false' or isnotempty(error), false, true), error, InputTokens=real(null), OutputTokens=real(null), Credits=real(null), AIU=real(null), ContentCapture=content_signal, Detail=Message) | where ('${conversation:raw}' == 'All' or '${conversation:raw}' == '__all' or '${conversation:raw}' == '$__all' or '${conversation:raw}' contains ',' or '${conversation:raw}' == '' or Session == '${conversation:raw}') | where ('${agentops_agent:raw}' == 'All' or '${agentops_agent:raw}' == '__all' or '${agentops_agent:raw}' == '$__all' or '${agentops_agent:raw}' contains ',' or '${agentops_agent:raw}' == '' or agentops_agent == '${agentops_agent:raw}') | where ('${mcp_server:raw}' == 'All' or '${mcp_server:raw}' == '__all' or '${mcp_server:raw}' == '$__all' or '${mcp_server:raw}' contains ',' or '${mcp_server:raw}' == '' or mcp_server == '${mcp_server:raw}') | where ('${tool:raw}' == 'All' or '${tool:raw}' == '__all' or '${tool:raw}' == '$__all' or '${tool:raw}' contains ',' or '${tool:raw}' == '' or tool == '${tool:raw}') | summarize Events=count() by TimeGenerated=bin(TimeGenerated, $__interval) | order by TimeGenerated asc"
+          }
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Tool Calls",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 3
+      },
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "azure-monitor-oob"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "Azure Log Analytics",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor-oob"
+          },
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
+            ],
+            "resultFormat": "time_series",
+            "query": "union isfuzzy=true (AppDependencies | where $__timeFilter(TimeGenerated) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or Properties has 'agentops.' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['agent.runtime']) in ('codex', 'openai-codex-cli')) | extend direct_session=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), ''), fallback_session=strcat(iff(isnotempty(tostring(Properties['gen_ai.agent.id'])), tostring(Properties['gen_ai.agent.id']), iff(isnotempty(tostring(Properties['service.name'])), tostring(Properties['service.name']), iff(isnotempty(AppRoleName), AppRoleName, 'agent'))), '_', iff(isnotempty(tostring(Properties['github.copilot.turn_count'])), tostring(Properties['github.copilot.turn_count']), iff(isnotempty(OperationId), OperationId, 'session')), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm')) | join kind=leftouter (AppDependencies | where $__timeFilter(TimeGenerated) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or Properties has 'agentops.' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['agent.runtime']) in ('codex', 'openai-codex-cli')) | extend direct_session=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), '') | where isnotempty(direct_session) | summarize operation_session=take_any(direct_session) by OperationId) on OperationId | extend conversation=iff(isnotempty(operation_session), operation_session, iff(isnotempty(direct_session), direct_session, fallback_session)) | extend operation=tostring(Properties['gen_ai.operation.name']), agent=tostring(Properties['gen_ai.agent.name']), agentops_agent=coalesce(tostring(Properties['agentops.agent.name']), tostring(Properties['agentops.cli.agent']), tostring(Properties['gen_ai.agent.name'])), model=tostring(Properties['gen_ai.request.model']), tool=tostring(Properties['gen_ai.tool.name']), repo=tostring(Properties['agentops.repo.hash']), skill=coalesce(tostring(Properties['agentops.skill.name']), tostring(Properties['github.copilot.skill.name'])), mcp_server=coalesce(tostring(Properties['agentops.mcp.server']), tostring(Properties['agentops.mcp.config.servers']), extract('^mcp__([^_]+)__', 1, tostring(Properties['gen_ai.tool.name'])), extract('^([^/]+)/', 1, tostring(Properties['gen_ai.tool.name'])), iff(tostring(Properties['gen_ai.tool.name']) startswith 'azure-mcp-', 'azure-mcp', '')), script=coalesce(tostring(Properties['agentops.script.name']), tostring(Properties['agentops.hook.name']), tostring(Properties['github.copilot.hook.name']), tostring(Properties['github.copilot.hook.type'])), error=tostring(Properties['error.type'])  | extend InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), OutputTokens=todouble(Properties['gen_ai.usage.output_tokens']), Credits=todouble(Properties['github.copilot.cost']), AIU=todouble(Properties['github.copilot.aiu']) | extend parent_agent=tostring(Properties['agentops.parent_agent.name']), delegation_id=tostring(Properties['agentops.delegation.id']) | extend mcp_tool=case(tool startswith 'mcp__', extract('^mcp__.+?__(.+)$', 1, tool), tool contains '/', tostring(split(tool, '/')[1]), tool startswith 'azure-mcp-', substring(tool, strlen('azure-mcp-')), tostring(Properties['agentops.mcp.tool'])) | extend EventType=case(operation == 'invoke_agent', 'agent', operation == 'chat', 'llm', operation == 'execute_tool' or isnotempty(tool), 'tool', 'span') | extend Event=operation, Actor=coalesce(agentops_agent, agent, tostring(Properties['service.name']), AppRoleName), Lane=case(isnotempty(parent_agent), strcat(parent_agent, ' > ', coalesce(agentops_agent, agent, 'agent')), isnotempty(agentops_agent), agentops_agent, isnotempty(agent), agent, 'agent') | project TimeGenerated, Session=conversation, EventType, Event, Lane, Actor, ParentAgent=parent_agent, DelegationId=delegation_id, OperationId, SpanId=Id, ParentId, Name, agentops_agent, agent, model, mcp_server, mcp_tool, tool, skill, script, repo, DurationMs, Success, error, InputTokens, OutputTokens, Credits, AIU, ContentCapture=bool(false), Detail=ResultCode), (union isfuzzy=true AppTraces, AppDependencies, AppEvents | where $__timeFilter(TimeGenerated) | where tostring(Properties) has_any ('github.copilot', 'gen_ai.operation.name', 'agentops.', 'copilot_chat', 'codex') or Message has_any ('github.copilot', 'AgentOps', 'copilot_chat', 'codex') or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') | extend conversation=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(iff(isnotempty(tostring(Properties['gen_ai.agent.id'])), tostring(Properties['gen_ai.agent.id']), iff(isnotempty(tostring(Properties['service.name'])), tostring(Properties['service.name']), iff(isnotempty(AppRoleName), AppRoleName, 'agent'))), '_', iff(isnotempty(tostring(Properties['github.copilot.turn_count'])), tostring(Properties['github.copilot.turn_count']), iff(isnotempty(OperationId), OperationId, 'session')), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm'))), operation=tostring(Properties['gen_ai.operation.name']), agent=tostring(Properties['gen_ai.agent.name']), agentops_agent=coalesce(tostring(Properties['agentops.agent.name']), tostring(Properties['agentops.cli.agent']), tostring(Properties['gen_ai.agent.name'])), model=tostring(Properties['gen_ai.request.model']), tool=tostring(Properties['gen_ai.tool.name']), repo=tostring(Properties['agentops.repo.hash']), skill=coalesce(tostring(Properties['agentops.skill.name']), tostring(Properties['github.copilot.skill.name'])), mcp_server=coalesce(tostring(Properties['agentops.mcp.server']), tostring(Properties['agentops.mcp.config.servers']), extract('^mcp__([^_]+)__', 1, tostring(Properties['gen_ai.tool.name'])), extract('^([^/]+)/', 1, tostring(Properties['gen_ai.tool.name'])), iff(tostring(Properties['gen_ai.tool.name']) startswith 'azure-mcp-', 'azure-mcp', '')), script=coalesce(tostring(Properties['agentops.script.name']), tostring(Properties['agentops.hook.name']), tostring(Properties['github.copilot.hook.name']), tostring(Properties['github.copilot.hook.type'])), error=tostring(Properties['error.type'])  | extend Event=coalesce(tostring(Properties['agentops.event.name']), tostring(Properties['event.name']), tostring(Properties['github.copilot.event.name']), Name) | extend parent_agent=tostring(Properties['agentops.parent_agent.name']), delegation_id=tostring(Properties['agentops.delegation.id']), content_signal=tostring(Properties['agentops.content_capture.signal']) =~ 'true' or tostring(Properties) has_any ('gen_ai.prompt', 'gen_ai.completion', 'gen_ai.input.messages', 'gen_ai.output.messages', 'gen_ai.tool.call.arguments', 'gen_ai.tool.call.result') | extend EventType=case(Event has 'delegation', 'delegation', Event has 'hook' or isnotempty(script), 'script_hook', Event has 'skill' or isnotempty(skill), 'skill', Event has 'policy' or Event has 'blocked', 'policy', Event has 'truncation' or Event has 'compaction', 'context', content_signal, 'content', Event == 'exception' or isnotempty(error), 'error', 'event') | where EventType != 'event' or tostring(Properties) has_any ('agentops.event', 'github.copilot.session', 'github.copilot.hook', 'github.copilot.skill') | extend Actor=coalesce(agentops_agent, agent, tostring(Properties['service.name']), AppRoleName), Lane=case(isnotempty(parent_agent), strcat(parent_agent, ' > ', coalesce(agentops_agent, agent, 'agent')), isnotempty(agentops_agent), agentops_agent, isnotempty(agent), agent, 'runtime') | project TimeGenerated, Session=conversation, EventType, Event, Lane, Actor, ParentAgent=parent_agent, DelegationId=delegation_id, OperationId, SpanId=Id, ParentId, Name=coalesce(Event, Message), agentops_agent, agent, model, mcp_server, mcp_tool=tostring(Properties['agentops.mcp.tool']), tool=coalesce(tool, script, skill), skill, script, repo, DurationMs=real(null), Success=iff(tostring(Properties['github.copilot.success']) == 'false' or isnotempty(error), false, true), error, InputTokens=real(null), OutputTokens=real(null), Credits=real(null), AIU=real(null), ContentCapture=content_signal, Detail=Message) | where ('${conversation:raw}' == 'All' or '${conversation:raw}' == '__all' or '${conversation:raw}' == '$__all' or '${conversation:raw}' contains ',' or '${conversation:raw}' == '' or Session == '${conversation:raw}') | where ('${agentops_agent:raw}' == 'All' or '${agentops_agent:raw}' == '__all' or '${agentops_agent:raw}' == '$__all' or '${agentops_agent:raw}' contains ',' or '${agentops_agent:raw}' == '' or agentops_agent == '${agentops_agent:raw}') | where ('${mcp_server:raw}' == 'All' or '${mcp_server:raw}' == '__all' or '${mcp_server:raw}' == '$__all' or '${mcp_server:raw}' contains ',' or '${mcp_server:raw}' == '' or mcp_server == '${mcp_server:raw}') | where ('${tool:raw}' == 'All' or '${tool:raw}' == '__all' or '${tool:raw}' == '$__all' or '${tool:raw}' contains ',' or '${tool:raw}' == '' or tool == '${tool:raw}') | summarize ToolCalls=countif(EventType == 'tool' or isnotempty(tool)) by TimeGenerated=bin(TimeGenerated, $__interval) | order by TimeGenerated asc"
+          }
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Failures",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 3
+      },
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "azure-monitor-oob"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "Azure Log Analytics",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor-oob"
+          },
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
+            ],
+            "resultFormat": "time_series",
+            "query": "union isfuzzy=true (AppDependencies | where $__timeFilter(TimeGenerated) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or Properties has 'agentops.' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['agent.runtime']) in ('codex', 'openai-codex-cli')) | extend direct_session=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), ''), fallback_session=strcat(iff(isnotempty(tostring(Properties['gen_ai.agent.id'])), tostring(Properties['gen_ai.agent.id']), iff(isnotempty(tostring(Properties['service.name'])), tostring(Properties['service.name']), iff(isnotempty(AppRoleName), AppRoleName, 'agent'))), '_', iff(isnotempty(tostring(Properties['github.copilot.turn_count'])), tostring(Properties['github.copilot.turn_count']), iff(isnotempty(OperationId), OperationId, 'session')), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm')) | join kind=leftouter (AppDependencies | where $__timeFilter(TimeGenerated) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or Properties has 'agentops.' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['agent.runtime']) in ('codex', 'openai-codex-cli')) | extend direct_session=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), '') | where isnotempty(direct_session) | summarize operation_session=take_any(direct_session) by OperationId) on OperationId | extend conversation=iff(isnotempty(operation_session), operation_session, iff(isnotempty(direct_session), direct_session, fallback_session)) | extend operation=tostring(Properties['gen_ai.operation.name']), agent=tostring(Properties['gen_ai.agent.name']), agentops_agent=coalesce(tostring(Properties['agentops.agent.name']), tostring(Properties['agentops.cli.agent']), tostring(Properties['gen_ai.agent.name'])), model=tostring(Properties['gen_ai.request.model']), tool=tostring(Properties['gen_ai.tool.name']), repo=tostring(Properties['agentops.repo.hash']), skill=coalesce(tostring(Properties['agentops.skill.name']), tostring(Properties['github.copilot.skill.name'])), mcp_server=coalesce(tostring(Properties['agentops.mcp.server']), tostring(Properties['agentops.mcp.config.servers']), extract('^mcp__([^_]+)__', 1, tostring(Properties['gen_ai.tool.name'])), extract('^([^/]+)/', 1, tostring(Properties['gen_ai.tool.name'])), iff(tostring(Properties['gen_ai.tool.name']) startswith 'azure-mcp-', 'azure-mcp', '')), script=coalesce(tostring(Properties['agentops.script.name']), tostring(Properties['agentops.hook.name']), tostring(Properties['github.copilot.hook.name']), tostring(Properties['github.copilot.hook.type'])), error=tostring(Properties['error.type'])  | extend InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), OutputTokens=todouble(Properties['gen_ai.usage.output_tokens']), Credits=todouble(Properties['github.copilot.cost']), AIU=todouble(Properties['github.copilot.aiu']) | extend parent_agent=tostring(Properties['agentops.parent_agent.name']), delegation_id=tostring(Properties['agentops.delegation.id']) | extend mcp_tool=case(tool startswith 'mcp__', extract('^mcp__.+?__(.+)$', 1, tool), tool contains '/', tostring(split(tool, '/')[1]), tool startswith 'azure-mcp-', substring(tool, strlen('azure-mcp-')), tostring(Properties['agentops.mcp.tool'])) | extend EventType=case(operation == 'invoke_agent', 'agent', operation == 'chat', 'llm', operation == 'execute_tool' or isnotempty(tool), 'tool', 'span') | extend Event=operation, Actor=coalesce(agentops_agent, agent, tostring(Properties['service.name']), AppRoleName), Lane=case(isnotempty(parent_agent), strcat(parent_agent, ' > ', coalesce(agentops_agent, agent, 'agent')), isnotempty(agentops_agent), agentops_agent, isnotempty(agent), agent, 'agent') | project TimeGenerated, Session=conversation, EventType, Event, Lane, Actor, ParentAgent=parent_agent, DelegationId=delegation_id, OperationId, SpanId=Id, ParentId, Name, agentops_agent, agent, model, mcp_server, mcp_tool, tool, skill, script, repo, DurationMs, Success, error, InputTokens, OutputTokens, Credits, AIU, ContentCapture=bool(false), Detail=ResultCode), (union isfuzzy=true AppTraces, AppDependencies, AppEvents | where $__timeFilter(TimeGenerated) | where tostring(Properties) has_any ('github.copilot', 'gen_ai.operation.name', 'agentops.', 'copilot_chat', 'codex') or Message has_any ('github.copilot', 'AgentOps', 'copilot_chat', 'codex') or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') | extend conversation=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(iff(isnotempty(tostring(Properties['gen_ai.agent.id'])), tostring(Properties['gen_ai.agent.id']), iff(isnotempty(tostring(Properties['service.name'])), tostring(Properties['service.name']), iff(isnotempty(AppRoleName), AppRoleName, 'agent'))), '_', iff(isnotempty(tostring(Properties['github.copilot.turn_count'])), tostring(Properties['github.copilot.turn_count']), iff(isnotempty(OperationId), OperationId, 'session')), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm'))), operation=tostring(Properties['gen_ai.operation.name']), agent=tostring(Properties['gen_ai.agent.name']), agentops_agent=coalesce(tostring(Properties['agentops.agent.name']), tostring(Properties['agentops.cli.agent']), tostring(Properties['gen_ai.agent.name'])), model=tostring(Properties['gen_ai.request.model']), tool=tostring(Properties['gen_ai.tool.name']), repo=tostring(Properties['agentops.repo.hash']), skill=coalesce(tostring(Properties['agentops.skill.name']), tostring(Properties['github.copilot.skill.name'])), mcp_server=coalesce(tostring(Properties['agentops.mcp.server']), tostring(Properties['agentops.mcp.config.servers']), extract('^mcp__([^_]+)__', 1, tostring(Properties['gen_ai.tool.name'])), extract('^([^/]+)/', 1, tostring(Properties['gen_ai.tool.name'])), iff(tostring(Properties['gen_ai.tool.name']) startswith 'azure-mcp-', 'azure-mcp', '')), script=coalesce(tostring(Properties['agentops.script.name']), tostring(Properties['agentops.hook.name']), tostring(Properties['github.copilot.hook.name']), tostring(Properties['github.copilot.hook.type'])), error=tostring(Properties['error.type'])  | extend Event=coalesce(tostring(Properties['agentops.event.name']), tostring(Properties['event.name']), tostring(Properties['github.copilot.event.name']), Name) | extend parent_agent=tostring(Properties['agentops.parent_agent.name']), delegation_id=tostring(Properties['agentops.delegation.id']), content_signal=tostring(Properties['agentops.content_capture.signal']) =~ 'true' or tostring(Properties) has_any ('gen_ai.prompt', 'gen_ai.completion', 'gen_ai.input.messages', 'gen_ai.output.messages', 'gen_ai.tool.call.arguments', 'gen_ai.tool.call.result') | extend EventType=case(Event has 'delegation', 'delegation', Event has 'hook' or isnotempty(script), 'script_hook', Event has 'skill' or isnotempty(skill), 'skill', Event has 'policy' or Event has 'blocked', 'policy', Event has 'truncation' or Event has 'compaction', 'context', content_signal, 'content', Event == 'exception' or isnotempty(error), 'error', 'event') | where EventType != 'event' or tostring(Properties) has_any ('agentops.event', 'github.copilot.session', 'github.copilot.hook', 'github.copilot.skill') | extend Actor=coalesce(agentops_agent, agent, tostring(Properties['service.name']), AppRoleName), Lane=case(isnotempty(parent_agent), strcat(parent_agent, ' > ', coalesce(agentops_agent, agent, 'agent')), isnotempty(agentops_agent), agentops_agent, isnotempty(agent), agent, 'runtime') | project TimeGenerated, Session=conversation, EventType, Event, Lane, Actor, ParentAgent=parent_agent, DelegationId=delegation_id, OperationId, SpanId=Id, ParentId, Name=coalesce(Event, Message), agentops_agent, agent, model, mcp_server, mcp_tool=tostring(Properties['agentops.mcp.tool']), tool=coalesce(tool, script, skill), skill, script, repo, DurationMs=real(null), Success=iff(tostring(Properties['github.copilot.success']) == 'false' or isnotempty(error), false, true), error, InputTokens=real(null), OutputTokens=real(null), Credits=real(null), AIU=real(null), ContentCapture=content_signal, Detail=Message) | where ('${conversation:raw}' == 'All' or '${conversation:raw}' == '__all' or '${conversation:raw}' == '$__all' or '${conversation:raw}' contains ',' or '${conversation:raw}' == '' or Session == '${conversation:raw}') | where ('${agentops_agent:raw}' == 'All' or '${agentops_agent:raw}' == '__all' or '${agentops_agent:raw}' == '$__all' or '${agentops_agent:raw}' contains ',' or '${agentops_agent:raw}' == '' or agentops_agent == '${agentops_agent:raw}') | where ('${mcp_server:raw}' == 'All' or '${mcp_server:raw}' == '__all' or '${mcp_server:raw}' == '$__all' or '${mcp_server:raw}' contains ',' or '${mcp_server:raw}' == '' or mcp_server == '${mcp_server:raw}') | where ('${tool:raw}' == 'All' or '${tool:raw}' == '__all' or '${tool:raw}' == '$__all' or '${tool:raw}' contains ',' or '${tool:raw}' == '' or tool == '${tool:raw}') | summarize Failures=countif(Success == false or isnotempty(error)) by TimeGenerated=bin(TimeGenerated, $__interval) | order by TimeGenerated asc"
+          }
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Content Signals",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 3
+      },
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "azure-monitor-oob"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "yellow",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "Azure Log Analytics",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor-oob"
+          },
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
+            ],
+            "resultFormat": "time_series",
+            "query": "union isfuzzy=true (AppDependencies | where $__timeFilter(TimeGenerated) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or Properties has 'agentops.' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['agent.runtime']) in ('codex', 'openai-codex-cli')) | extend direct_session=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), ''), fallback_session=strcat(iff(isnotempty(tostring(Properties['gen_ai.agent.id'])), tostring(Properties['gen_ai.agent.id']), iff(isnotempty(tostring(Properties['service.name'])), tostring(Properties['service.name']), iff(isnotempty(AppRoleName), AppRoleName, 'agent'))), '_', iff(isnotempty(tostring(Properties['github.copilot.turn_count'])), tostring(Properties['github.copilot.turn_count']), iff(isnotempty(OperationId), OperationId, 'session')), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm')) | join kind=leftouter (AppDependencies | where $__timeFilter(TimeGenerated) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or Properties has 'agentops.' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['agent.runtime']) in ('codex', 'openai-codex-cli')) | extend direct_session=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), '') | where isnotempty(direct_session) | summarize operation_session=take_any(direct_session) by OperationId) on OperationId | extend conversation=iff(isnotempty(operation_session), operation_session, iff(isnotempty(direct_session), direct_session, fallback_session)) | extend operation=tostring(Properties['gen_ai.operation.name']), agent=tostring(Properties['gen_ai.agent.name']), agentops_agent=coalesce(tostring(Properties['agentops.agent.name']), tostring(Properties['agentops.cli.agent']), tostring(Properties['gen_ai.agent.name'])), model=tostring(Properties['gen_ai.request.model']), tool=tostring(Properties['gen_ai.tool.name']), repo=tostring(Properties['agentops.repo.hash']), skill=coalesce(tostring(Properties['agentops.skill.name']), tostring(Properties['github.copilot.skill.name'])), mcp_server=coalesce(tostring(Properties['agentops.mcp.server']), tostring(Properties['agentops.mcp.config.servers']), extract('^mcp__([^_]+)__', 1, tostring(Properties['gen_ai.tool.name'])), extract('^([^/]+)/', 1, tostring(Properties['gen_ai.tool.name'])), iff(tostring(Properties['gen_ai.tool.name']) startswith 'azure-mcp-', 'azure-mcp', '')), script=coalesce(tostring(Properties['agentops.script.name']), tostring(Properties['agentops.hook.name']), tostring(Properties['github.copilot.hook.name']), tostring(Properties['github.copilot.hook.type'])), error=tostring(Properties['error.type'])  | extend InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), OutputTokens=todouble(Properties['gen_ai.usage.output_tokens']), Credits=todouble(Properties['github.copilot.cost']), AIU=todouble(Properties['github.copilot.aiu']) | extend parent_agent=tostring(Properties['agentops.parent_agent.name']), delegation_id=tostring(Properties['agentops.delegation.id']) | extend mcp_tool=case(tool startswith 'mcp__', extract('^mcp__.+?__(.+)$', 1, tool), tool contains '/', tostring(split(tool, '/')[1]), tool startswith 'azure-mcp-', substring(tool, strlen('azure-mcp-')), tostring(Properties['agentops.mcp.tool'])) | extend EventType=case(operation == 'invoke_agent', 'agent', operation == 'chat', 'llm', operation == 'execute_tool' or isnotempty(tool), 'tool', 'span') | extend Event=operation, Actor=coalesce(agentops_agent, agent, tostring(Properties['service.name']), AppRoleName), Lane=case(isnotempty(parent_agent), strcat(parent_agent, ' > ', coalesce(agentops_agent, agent, 'agent')), isnotempty(agentops_agent), agentops_agent, isnotempty(agent), agent, 'agent') | project TimeGenerated, Session=conversation, EventType, Event, Lane, Actor, ParentAgent=parent_agent, DelegationId=delegation_id, OperationId, SpanId=Id, ParentId, Name, agentops_agent, agent, model, mcp_server, mcp_tool, tool, skill, script, repo, DurationMs, Success, error, InputTokens, OutputTokens, Credits, AIU, ContentCapture=bool(false), Detail=ResultCode), (union isfuzzy=true AppTraces, AppDependencies, AppEvents | where $__timeFilter(TimeGenerated) | where tostring(Properties) has_any ('github.copilot', 'gen_ai.operation.name', 'agentops.', 'copilot_chat', 'codex') or Message has_any ('github.copilot', 'AgentOps', 'copilot_chat', 'codex') or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') | extend conversation=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(iff(isnotempty(tostring(Properties['gen_ai.agent.id'])), tostring(Properties['gen_ai.agent.id']), iff(isnotempty(tostring(Properties['service.name'])), tostring(Properties['service.name']), iff(isnotempty(AppRoleName), AppRoleName, 'agent'))), '_', iff(isnotempty(tostring(Properties['github.copilot.turn_count'])), tostring(Properties['github.copilot.turn_count']), iff(isnotempty(OperationId), OperationId, 'session')), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm'))), operation=tostring(Properties['gen_ai.operation.name']), agent=tostring(Properties['gen_ai.agent.name']), agentops_agent=coalesce(tostring(Properties['agentops.agent.name']), tostring(Properties['agentops.cli.agent']), tostring(Properties['gen_ai.agent.name'])), model=tostring(Properties['gen_ai.request.model']), tool=tostring(Properties['gen_ai.tool.name']), repo=tostring(Properties['agentops.repo.hash']), skill=coalesce(tostring(Properties['agentops.skill.name']), tostring(Properties['github.copilot.skill.name'])), mcp_server=coalesce(tostring(Properties['agentops.mcp.server']), tostring(Properties['agentops.mcp.config.servers']), extract('^mcp__([^_]+)__', 1, tostring(Properties['gen_ai.tool.name'])), extract('^([^/]+)/', 1, tostring(Properties['gen_ai.tool.name'])), iff(tostring(Properties['gen_ai.tool.name']) startswith 'azure-mcp-', 'azure-mcp', '')), script=coalesce(tostring(Properties['agentops.script.name']), tostring(Properties['agentops.hook.name']), tostring(Properties['github.copilot.hook.name']), tostring(Properties['github.copilot.hook.type'])), error=tostring(Properties['error.type'])  | extend Event=coalesce(tostring(Properties['agentops.event.name']), tostring(Properties['event.name']), tostring(Properties['github.copilot.event.name']), Name) | extend parent_agent=tostring(Properties['agentops.parent_agent.name']), delegation_id=tostring(Properties['agentops.delegation.id']), content_signal=tostring(Properties['agentops.content_capture.signal']) =~ 'true' or tostring(Properties) has_any ('gen_ai.prompt', 'gen_ai.completion', 'gen_ai.input.messages', 'gen_ai.output.messages', 'gen_ai.tool.call.arguments', 'gen_ai.tool.call.result') | extend EventType=case(Event has 'delegation', 'delegation', Event has 'hook' or isnotempty(script), 'script_hook', Event has 'skill' or isnotempty(skill), 'skill', Event has 'policy' or Event has 'blocked', 'policy', Event has 'truncation' or Event has 'compaction', 'context', content_signal, 'content', Event == 'exception' or isnotempty(error), 'error', 'event') | where EventType != 'event' or tostring(Properties) has_any ('agentops.event', 'github.copilot.session', 'github.copilot.hook', 'github.copilot.skill') | extend Actor=coalesce(agentops_agent, agent, tostring(Properties['service.name']), AppRoleName), Lane=case(isnotempty(parent_agent), strcat(parent_agent, ' > ', coalesce(agentops_agent, agent, 'agent')), isnotempty(agentops_agent), agentops_agent, isnotempty(agent), agent, 'runtime') | project TimeGenerated, Session=conversation, EventType, Event, Lane, Actor, ParentAgent=parent_agent, DelegationId=delegation_id, OperationId, SpanId=Id, ParentId, Name=coalesce(Event, Message), agentops_agent, agent, model, mcp_server, mcp_tool=tostring(Properties['agentops.mcp.tool']), tool=coalesce(tool, script, skill), skill, script, repo, DurationMs=real(null), Success=iff(tostring(Properties['github.copilot.success']) == 'false' or isnotempty(error), false, true), error, InputTokens=real(null), OutputTokens=real(null), Credits=real(null), AIU=real(null), ContentCapture=content_signal, Detail=Message) | where ('${conversation:raw}' == 'All' or '${conversation:raw}' == '__all' or '${conversation:raw}' == '$__all' or '${conversation:raw}' contains ',' or '${conversation:raw}' == '' or Session == '${conversation:raw}') | where ('${agentops_agent:raw}' == 'All' or '${agentops_agent:raw}' == '__all' or '${agentops_agent:raw}' == '$__all' or '${agentops_agent:raw}' contains ',' or '${agentops_agent:raw}' == '' or agentops_agent == '${agentops_agent:raw}') | where ('${mcp_server:raw}' == 'All' or '${mcp_server:raw}' == '__all' or '${mcp_server:raw}' == '$__all' or '${mcp_server:raw}' contains ',' or '${mcp_server:raw}' == '' or mcp_server == '${mcp_server:raw}') | where ('${tool:raw}' == 'All' or '${tool:raw}' == '__all' or '${tool:raw}' == '$__all' or '${tool:raw}' contains ',' or '${tool:raw}' == '' or tool == '${tool:raw}') | summarize Signals=countif(ContentCapture) by TimeGenerated=bin(TimeGenerated, $__interval) | order by TimeGenerated asc"
+          }
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "table",
+      "title": "Run tree by agent / delegation lane",
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 7
+      },
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "azure-monitor-oob"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Session"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open session detail",
+                    "url": "/d/agentops-session-detail?var-conversation=${__data.fields.Session}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "DurationMs"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "ms"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "EstUsd"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyUSD"
+              },
+              {
+                "id": "decimals",
+                "value": 4
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "Azure Log Analytics",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor-oob"
+          },
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
+            ],
+            "resultFormat": "table",
+            "query": "union isfuzzy=true (AppDependencies | where $__timeFilter(TimeGenerated) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or Properties has 'agentops.' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['agent.runtime']) in ('codex', 'openai-codex-cli')) | extend direct_session=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), ''), fallback_session=strcat(iff(isnotempty(tostring(Properties['gen_ai.agent.id'])), tostring(Properties['gen_ai.agent.id']), iff(isnotempty(tostring(Properties['service.name'])), tostring(Properties['service.name']), iff(isnotempty(AppRoleName), AppRoleName, 'agent'))), '_', iff(isnotempty(tostring(Properties['github.copilot.turn_count'])), tostring(Properties['github.copilot.turn_count']), iff(isnotempty(OperationId), OperationId, 'session')), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm')) | join kind=leftouter (AppDependencies | where $__timeFilter(TimeGenerated) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or Properties has 'agentops.' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['agent.runtime']) in ('codex', 'openai-codex-cli')) | extend direct_session=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), '') | where isnotempty(direct_session) | summarize operation_session=take_any(direct_session) by OperationId) on OperationId | extend conversation=iff(isnotempty(operation_session), operation_session, iff(isnotempty(direct_session), direct_session, fallback_session)) | extend operation=tostring(Properties['gen_ai.operation.name']), agent=tostring(Properties['gen_ai.agent.name']), agentops_agent=coalesce(tostring(Properties['agentops.agent.name']), tostring(Properties['agentops.cli.agent']), tostring(Properties['gen_ai.agent.name'])), model=tostring(Properties['gen_ai.request.model']), tool=tostring(Properties['gen_ai.tool.name']), repo=tostring(Properties['agentops.repo.hash']), skill=coalesce(tostring(Properties['agentops.skill.name']), tostring(Properties['github.copilot.skill.name'])), mcp_server=coalesce(tostring(Properties['agentops.mcp.server']), tostring(Properties['agentops.mcp.config.servers']), extract('^mcp__([^_]+)__', 1, tostring(Properties['gen_ai.tool.name'])), extract('^([^/]+)/', 1, tostring(Properties['gen_ai.tool.name'])), iff(tostring(Properties['gen_ai.tool.name']) startswith 'azure-mcp-', 'azure-mcp', '')), script=coalesce(tostring(Properties['agentops.script.name']), tostring(Properties['agentops.hook.name']), tostring(Properties['github.copilot.hook.name']), tostring(Properties['github.copilot.hook.type'])), error=tostring(Properties['error.type'])  | extend InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), OutputTokens=todouble(Properties['gen_ai.usage.output_tokens']), Credits=todouble(Properties['github.copilot.cost']), AIU=todouble(Properties['github.copilot.aiu']) | extend parent_agent=tostring(Properties['agentops.parent_agent.name']), delegation_id=tostring(Properties['agentops.delegation.id']) | extend mcp_tool=case(tool startswith 'mcp__', extract('^mcp__.+?__(.+)$', 1, tool), tool contains '/', tostring(split(tool, '/')[1]), tool startswith 'azure-mcp-', substring(tool, strlen('azure-mcp-')), tostring(Properties['agentops.mcp.tool'])) | extend EventType=case(operation == 'invoke_agent', 'agent', operation == 'chat', 'llm', operation == 'execute_tool' or isnotempty(tool), 'tool', 'span') | extend Event=operation, Actor=coalesce(agentops_agent, agent, tostring(Properties['service.name']), AppRoleName), Lane=case(isnotempty(parent_agent), strcat(parent_agent, ' > ', coalesce(agentops_agent, agent, 'agent')), isnotempty(agentops_agent), agentops_agent, isnotempty(agent), agent, 'agent') | project TimeGenerated, Session=conversation, EventType, Event, Lane, Actor, ParentAgent=parent_agent, DelegationId=delegation_id, OperationId, SpanId=Id, ParentId, Name, agentops_agent, agent, model, mcp_server, mcp_tool, tool, skill, script, repo, DurationMs, Success, error, InputTokens, OutputTokens, Credits, AIU, ContentCapture=bool(false), Detail=ResultCode), (union isfuzzy=true AppTraces, AppDependencies, AppEvents | where $__timeFilter(TimeGenerated) | where tostring(Properties) has_any ('github.copilot', 'gen_ai.operation.name', 'agentops.', 'copilot_chat', 'codex') or Message has_any ('github.copilot', 'AgentOps', 'copilot_chat', 'codex') or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') | extend conversation=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(iff(isnotempty(tostring(Properties['gen_ai.agent.id'])), tostring(Properties['gen_ai.agent.id']), iff(isnotempty(tostring(Properties['service.name'])), tostring(Properties['service.name']), iff(isnotempty(AppRoleName), AppRoleName, 'agent'))), '_', iff(isnotempty(tostring(Properties['github.copilot.turn_count'])), tostring(Properties['github.copilot.turn_count']), iff(isnotempty(OperationId), OperationId, 'session')), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm'))), operation=tostring(Properties['gen_ai.operation.name']), agent=tostring(Properties['gen_ai.agent.name']), agentops_agent=coalesce(tostring(Properties['agentops.agent.name']), tostring(Properties['agentops.cli.agent']), tostring(Properties['gen_ai.agent.name'])), model=tostring(Properties['gen_ai.request.model']), tool=tostring(Properties['gen_ai.tool.name']), repo=tostring(Properties['agentops.repo.hash']), skill=coalesce(tostring(Properties['agentops.skill.name']), tostring(Properties['github.copilot.skill.name'])), mcp_server=coalesce(tostring(Properties['agentops.mcp.server']), tostring(Properties['agentops.mcp.config.servers']), extract('^mcp__([^_]+)__', 1, tostring(Properties['gen_ai.tool.name'])), extract('^([^/]+)/', 1, tostring(Properties['gen_ai.tool.name'])), iff(tostring(Properties['gen_ai.tool.name']) startswith 'azure-mcp-', 'azure-mcp', '')), script=coalesce(tostring(Properties['agentops.script.name']), tostring(Properties['agentops.hook.name']), tostring(Properties['github.copilot.hook.name']), tostring(Properties['github.copilot.hook.type'])), error=tostring(Properties['error.type'])  | extend Event=coalesce(tostring(Properties['agentops.event.name']), tostring(Properties['event.name']), tostring(Properties['github.copilot.event.name']), Name) | extend parent_agent=tostring(Properties['agentops.parent_agent.name']), delegation_id=tostring(Properties['agentops.delegation.id']), content_signal=tostring(Properties['agentops.content_capture.signal']) =~ 'true' or tostring(Properties) has_any ('gen_ai.prompt', 'gen_ai.completion', 'gen_ai.input.messages', 'gen_ai.output.messages', 'gen_ai.tool.call.arguments', 'gen_ai.tool.call.result') | extend EventType=case(Event has 'delegation', 'delegation', Event has 'hook' or isnotempty(script), 'script_hook', Event has 'skill' or isnotempty(skill), 'skill', Event has 'policy' or Event has 'blocked', 'policy', Event has 'truncation' or Event has 'compaction', 'context', content_signal, 'content', Event == 'exception' or isnotempty(error), 'error', 'event') | where EventType != 'event' or tostring(Properties) has_any ('agentops.event', 'github.copilot.session', 'github.copilot.hook', 'github.copilot.skill') | extend Actor=coalesce(agentops_agent, agent, tostring(Properties['service.name']), AppRoleName), Lane=case(isnotempty(parent_agent), strcat(parent_agent, ' > ', coalesce(agentops_agent, agent, 'agent')), isnotempty(agentops_agent), agentops_agent, isnotempty(agent), agent, 'runtime') | project TimeGenerated, Session=conversation, EventType, Event, Lane, Actor, ParentAgent=parent_agent, DelegationId=delegation_id, OperationId, SpanId=Id, ParentId, Name=coalesce(Event, Message), agentops_agent, agent, model, mcp_server, mcp_tool=tostring(Properties['agentops.mcp.tool']), tool=coalesce(tool, script, skill), skill, script, repo, DurationMs=real(null), Success=iff(tostring(Properties['github.copilot.success']) == 'false' or isnotempty(error), false, true), error, InputTokens=real(null), OutputTokens=real(null), Credits=real(null), AIU=real(null), ContentCapture=content_signal, Detail=Message) | where ('${conversation:raw}' == 'All' or '${conversation:raw}' == '__all' or '${conversation:raw}' == '$__all' or '${conversation:raw}' contains ',' or '${conversation:raw}' == '' or Session == '${conversation:raw}') | where ('${agentops_agent:raw}' == 'All' or '${agentops_agent:raw}' == '__all' or '${agentops_agent:raw}' == '$__all' or '${agentops_agent:raw}' contains ',' or '${agentops_agent:raw}' == '' or agentops_agent == '${agentops_agent:raw}') | where ('${mcp_server:raw}' == 'All' or '${mcp_server:raw}' == '__all' or '${mcp_server:raw}' == '$__all' or '${mcp_server:raw}' contains ',' or '${mcp_server:raw}' == '' or mcp_server == '${mcp_server:raw}') | where ('${tool:raw}' == 'All' or '${tool:raw}' == '__all' or '${tool:raw}' == '$__all' or '${tool:raw}' contains ',' or '${tool:raw}' == '' or tool == '${tool:raw}') | summarize Started=min(TimeGenerated), Ended=max(TimeGenerated), Events=count(), LlmCalls=countif(EventType == 'llm'), ToolCalls=countif(EventType == 'tool' or isnotempty(tool)), McpCalls=countif(isnotempty(mcp_server)), ScriptHookEvents=countif(EventType == 'script_hook' or isnotempty(script)), SkillEvents=countif(EventType == 'skill' or isnotempty(skill)), Delegations=countif(EventType == 'delegation' or isnotempty(DelegationId)), Failures=countif(Success == false or isnotempty(error)), DurationMs=sum(DurationMs), InputTokens=sum(InputTokens), OutputTokens=sum(OutputTokens), AICredits=sum(Credits), Tools=make_set_if(tool, isnotempty(tool), 10), MCPServers=make_set_if(mcp_server, isnotempty(mcp_server), 10), Scripts=make_set_if(script, isnotempty(script), 10), Skills=make_set_if(skill, isnotempty(skill), 10), Errors=make_set_if(error, isnotempty(error), 10) by Session, Lane, Actor, ParentAgent, DelegationId | extend EstUsd=round(AICredits * 0.01, 4) | order by Started asc"
+          }
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "type": "table",
+      "title": "Live timeline",
+      "gridPos": {
+        "h": 13,
+        "w": 24,
+        "x": 0,
+        "y": 16
+      },
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "azure-monitor-oob"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Session"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open session detail",
+                    "url": "/d/agentops-session-detail?var-conversation=${__data.fields.Session}",
+                    "targetBlank": false
+                  },
+                  {
+                    "title": "Open traces / spans",
+                    "url": "/d/agentops-traces-spans?var-conversation=${__data.fields.Session}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "DurationMs"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "ms"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Credits"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "Azure Log Analytics",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor-oob"
+          },
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
+            ],
+            "resultFormat": "table",
+            "query": "union isfuzzy=true (AppDependencies | where $__timeFilter(TimeGenerated) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or Properties has 'agentops.' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['agent.runtime']) in ('codex', 'openai-codex-cli')) | extend direct_session=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), ''), fallback_session=strcat(iff(isnotempty(tostring(Properties['gen_ai.agent.id'])), tostring(Properties['gen_ai.agent.id']), iff(isnotempty(tostring(Properties['service.name'])), tostring(Properties['service.name']), iff(isnotempty(AppRoleName), AppRoleName, 'agent'))), '_', iff(isnotempty(tostring(Properties['github.copilot.turn_count'])), tostring(Properties['github.copilot.turn_count']), iff(isnotempty(OperationId), OperationId, 'session')), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm')) | join kind=leftouter (AppDependencies | where $__timeFilter(TimeGenerated) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or Properties has 'agentops.' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['agent.runtime']) in ('codex', 'openai-codex-cli')) | extend direct_session=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), '') | where isnotempty(direct_session) | summarize operation_session=take_any(direct_session) by OperationId) on OperationId | extend conversation=iff(isnotempty(operation_session), operation_session, iff(isnotempty(direct_session), direct_session, fallback_session)) | extend operation=tostring(Properties['gen_ai.operation.name']), agent=tostring(Properties['gen_ai.agent.name']), agentops_agent=coalesce(tostring(Properties['agentops.agent.name']), tostring(Properties['agentops.cli.agent']), tostring(Properties['gen_ai.agent.name'])), model=tostring(Properties['gen_ai.request.model']), tool=tostring(Properties['gen_ai.tool.name']), repo=tostring(Properties['agentops.repo.hash']), skill=coalesce(tostring(Properties['agentops.skill.name']), tostring(Properties['github.copilot.skill.name'])), mcp_server=coalesce(tostring(Properties['agentops.mcp.server']), tostring(Properties['agentops.mcp.config.servers']), extract('^mcp__([^_]+)__', 1, tostring(Properties['gen_ai.tool.name'])), extract('^([^/]+)/', 1, tostring(Properties['gen_ai.tool.name'])), iff(tostring(Properties['gen_ai.tool.name']) startswith 'azure-mcp-', 'azure-mcp', '')), script=coalesce(tostring(Properties['agentops.script.name']), tostring(Properties['agentops.hook.name']), tostring(Properties['github.copilot.hook.name']), tostring(Properties['github.copilot.hook.type'])), error=tostring(Properties['error.type'])  | extend InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), OutputTokens=todouble(Properties['gen_ai.usage.output_tokens']), Credits=todouble(Properties['github.copilot.cost']), AIU=todouble(Properties['github.copilot.aiu']) | extend parent_agent=tostring(Properties['agentops.parent_agent.name']), delegation_id=tostring(Properties['agentops.delegation.id']) | extend mcp_tool=case(tool startswith 'mcp__', extract('^mcp__.+?__(.+)$', 1, tool), tool contains '/', tostring(split(tool, '/')[1]), tool startswith 'azure-mcp-', substring(tool, strlen('azure-mcp-')), tostring(Properties['agentops.mcp.tool'])) | extend EventType=case(operation == 'invoke_agent', 'agent', operation == 'chat', 'llm', operation == 'execute_tool' or isnotempty(tool), 'tool', 'span') | extend Event=operation, Actor=coalesce(agentops_agent, agent, tostring(Properties['service.name']), AppRoleName), Lane=case(isnotempty(parent_agent), strcat(parent_agent, ' > ', coalesce(agentops_agent, agent, 'agent')), isnotempty(agentops_agent), agentops_agent, isnotempty(agent), agent, 'agent') | project TimeGenerated, Session=conversation, EventType, Event, Lane, Actor, ParentAgent=parent_agent, DelegationId=delegation_id, OperationId, SpanId=Id, ParentId, Name, agentops_agent, agent, model, mcp_server, mcp_tool, tool, skill, script, repo, DurationMs, Success, error, InputTokens, OutputTokens, Credits, AIU, ContentCapture=bool(false), Detail=ResultCode), (union isfuzzy=true AppTraces, AppDependencies, AppEvents | where $__timeFilter(TimeGenerated) | where tostring(Properties) has_any ('github.copilot', 'gen_ai.operation.name', 'agentops.', 'copilot_chat', 'codex') or Message has_any ('github.copilot', 'AgentOps', 'copilot_chat', 'codex') or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') | extend conversation=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(iff(isnotempty(tostring(Properties['gen_ai.agent.id'])), tostring(Properties['gen_ai.agent.id']), iff(isnotempty(tostring(Properties['service.name'])), tostring(Properties['service.name']), iff(isnotempty(AppRoleName), AppRoleName, 'agent'))), '_', iff(isnotempty(tostring(Properties['github.copilot.turn_count'])), tostring(Properties['github.copilot.turn_count']), iff(isnotempty(OperationId), OperationId, 'session')), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm'))), operation=tostring(Properties['gen_ai.operation.name']), agent=tostring(Properties['gen_ai.agent.name']), agentops_agent=coalesce(tostring(Properties['agentops.agent.name']), tostring(Properties['agentops.cli.agent']), tostring(Properties['gen_ai.agent.name'])), model=tostring(Properties['gen_ai.request.model']), tool=tostring(Properties['gen_ai.tool.name']), repo=tostring(Properties['agentops.repo.hash']), skill=coalesce(tostring(Properties['agentops.skill.name']), tostring(Properties['github.copilot.skill.name'])), mcp_server=coalesce(tostring(Properties['agentops.mcp.server']), tostring(Properties['agentops.mcp.config.servers']), extract('^mcp__([^_]+)__', 1, tostring(Properties['gen_ai.tool.name'])), extract('^([^/]+)/', 1, tostring(Properties['gen_ai.tool.name'])), iff(tostring(Properties['gen_ai.tool.name']) startswith 'azure-mcp-', 'azure-mcp', '')), script=coalesce(tostring(Properties['agentops.script.name']), tostring(Properties['agentops.hook.name']), tostring(Properties['github.copilot.hook.name']), tostring(Properties['github.copilot.hook.type'])), error=tostring(Properties['error.type'])  | extend Event=coalesce(tostring(Properties['agentops.event.name']), tostring(Properties['event.name']), tostring(Properties['github.copilot.event.name']), Name) | extend parent_agent=tostring(Properties['agentops.parent_agent.name']), delegation_id=tostring(Properties['agentops.delegation.id']), content_signal=tostring(Properties['agentops.content_capture.signal']) =~ 'true' or tostring(Properties) has_any ('gen_ai.prompt', 'gen_ai.completion', 'gen_ai.input.messages', 'gen_ai.output.messages', 'gen_ai.tool.call.arguments', 'gen_ai.tool.call.result') | extend EventType=case(Event has 'delegation', 'delegation', Event has 'hook' or isnotempty(script), 'script_hook', Event has 'skill' or isnotempty(skill), 'skill', Event has 'policy' or Event has 'blocked', 'policy', Event has 'truncation' or Event has 'compaction', 'context', content_signal, 'content', Event == 'exception' or isnotempty(error), 'error', 'event') | where EventType != 'event' or tostring(Properties) has_any ('agentops.event', 'github.copilot.session', 'github.copilot.hook', 'github.copilot.skill') | extend Actor=coalesce(agentops_agent, agent, tostring(Properties['service.name']), AppRoleName), Lane=case(isnotempty(parent_agent), strcat(parent_agent, ' > ', coalesce(agentops_agent, agent, 'agent')), isnotempty(agentops_agent), agentops_agent, isnotempty(agent), agent, 'runtime') | project TimeGenerated, Session=conversation, EventType, Event, Lane, Actor, ParentAgent=parent_agent, DelegationId=delegation_id, OperationId, SpanId=Id, ParentId, Name=coalesce(Event, Message), agentops_agent, agent, model, mcp_server, mcp_tool=tostring(Properties['agentops.mcp.tool']), tool=coalesce(tool, script, skill), skill, script, repo, DurationMs=real(null), Success=iff(tostring(Properties['github.copilot.success']) == 'false' or isnotempty(error), false, true), error, InputTokens=real(null), OutputTokens=real(null), Credits=real(null), AIU=real(null), ContentCapture=content_signal, Detail=Message) | where ('${conversation:raw}' == 'All' or '${conversation:raw}' == '__all' or '${conversation:raw}' == '$__all' or '${conversation:raw}' contains ',' or '${conversation:raw}' == '' or Session == '${conversation:raw}') | where ('${agentops_agent:raw}' == 'All' or '${agentops_agent:raw}' == '__all' or '${agentops_agent:raw}' == '$__all' or '${agentops_agent:raw}' contains ',' or '${agentops_agent:raw}' == '' or agentops_agent == '${agentops_agent:raw}') | where ('${mcp_server:raw}' == 'All' or '${mcp_server:raw}' == '__all' or '${mcp_server:raw}' == '$__all' or '${mcp_server:raw}' contains ',' or '${mcp_server:raw}' == '' or mcp_server == '${mcp_server:raw}') | where ('${tool:raw}' == 'All' or '${tool:raw}' == '__all' or '${tool:raw}' == '$__all' or '${tool:raw}' contains ',' or '${tool:raw}' == '' or tool == '${tool:raw}') | project TimeGenerated, Session, Lane, EventType, Event, Name, OperationId, SpanId, ParentId, Actor, ParentAgent, DelegationId, model, mcp_server, mcp_tool, tool, skill, script, DurationMs, Success, error, InputTokens, OutputTokens, Credits, AIU, ContentCapture, Detail | order by TimeGenerated asc | take 600"
+          }
+        }
+      ]
+    },
+    {
+      "id": 30,
+      "type": "table",
+      "title": "Tool / MCP waterfall",
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 29
+      },
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "azure-monitor-oob"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Session"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open traces / spans",
+                    "url": "/d/agentops-traces-spans?var-conversation=${__data.fields.Session}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "DurationMs"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "ms"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "Azure Log Analytics",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor-oob"
+          },
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
+            ],
+            "resultFormat": "table",
+            "query": "union isfuzzy=true (AppDependencies | where $__timeFilter(TimeGenerated) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or Properties has 'agentops.' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['agent.runtime']) in ('codex', 'openai-codex-cli')) | extend direct_session=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), ''), fallback_session=strcat(iff(isnotempty(tostring(Properties['gen_ai.agent.id'])), tostring(Properties['gen_ai.agent.id']), iff(isnotempty(tostring(Properties['service.name'])), tostring(Properties['service.name']), iff(isnotempty(AppRoleName), AppRoleName, 'agent'))), '_', iff(isnotempty(tostring(Properties['github.copilot.turn_count'])), tostring(Properties['github.copilot.turn_count']), iff(isnotempty(OperationId), OperationId, 'session')), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm')) | join kind=leftouter (AppDependencies | where $__timeFilter(TimeGenerated) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or Properties has 'agentops.' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['agent.runtime']) in ('codex', 'openai-codex-cli')) | extend direct_session=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), '') | where isnotempty(direct_session) | summarize operation_session=take_any(direct_session) by OperationId) on OperationId | extend conversation=iff(isnotempty(operation_session), operation_session, iff(isnotempty(direct_session), direct_session, fallback_session)) | extend operation=tostring(Properties['gen_ai.operation.name']), agent=tostring(Properties['gen_ai.agent.name']), agentops_agent=coalesce(tostring(Properties['agentops.agent.name']), tostring(Properties['agentops.cli.agent']), tostring(Properties['gen_ai.agent.name'])), model=tostring(Properties['gen_ai.request.model']), tool=tostring(Properties['gen_ai.tool.name']), repo=tostring(Properties['agentops.repo.hash']), skill=coalesce(tostring(Properties['agentops.skill.name']), tostring(Properties['github.copilot.skill.name'])), mcp_server=coalesce(tostring(Properties['agentops.mcp.server']), tostring(Properties['agentops.mcp.config.servers']), extract('^mcp__([^_]+)__', 1, tostring(Properties['gen_ai.tool.name'])), extract('^([^/]+)/', 1, tostring(Properties['gen_ai.tool.name'])), iff(tostring(Properties['gen_ai.tool.name']) startswith 'azure-mcp-', 'azure-mcp', '')), script=coalesce(tostring(Properties['agentops.script.name']), tostring(Properties['agentops.hook.name']), tostring(Properties['github.copilot.hook.name']), tostring(Properties['github.copilot.hook.type'])), error=tostring(Properties['error.type'])  | extend InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), OutputTokens=todouble(Properties['gen_ai.usage.output_tokens']), Credits=todouble(Properties['github.copilot.cost']), AIU=todouble(Properties['github.copilot.aiu']) | extend parent_agent=tostring(Properties['agentops.parent_agent.name']), delegation_id=tostring(Properties['agentops.delegation.id']) | extend mcp_tool=case(tool startswith 'mcp__', extract('^mcp__.+?__(.+)$', 1, tool), tool contains '/', tostring(split(tool, '/')[1]), tool startswith 'azure-mcp-', substring(tool, strlen('azure-mcp-')), tostring(Properties['agentops.mcp.tool'])) | extend EventType=case(operation == 'invoke_agent', 'agent', operation == 'chat', 'llm', operation == 'execute_tool' or isnotempty(tool), 'tool', 'span') | extend Event=operation, Actor=coalesce(agentops_agent, agent, tostring(Properties['service.name']), AppRoleName), Lane=case(isnotempty(parent_agent), strcat(parent_agent, ' > ', coalesce(agentops_agent, agent, 'agent')), isnotempty(agentops_agent), agentops_agent, isnotempty(agent), agent, 'agent') | project TimeGenerated, Session=conversation, EventType, Event, Lane, Actor, ParentAgent=parent_agent, DelegationId=delegation_id, OperationId, SpanId=Id, ParentId, Name, agentops_agent, agent, model, mcp_server, mcp_tool, tool, skill, script, repo, DurationMs, Success, error, InputTokens, OutputTokens, Credits, AIU, ContentCapture=bool(false), Detail=ResultCode), (union isfuzzy=true AppTraces, AppDependencies, AppEvents | where $__timeFilter(TimeGenerated) | where tostring(Properties) has_any ('github.copilot', 'gen_ai.operation.name', 'agentops.', 'copilot_chat', 'codex') or Message has_any ('github.copilot', 'AgentOps', 'copilot_chat', 'codex') or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') | extend conversation=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(iff(isnotempty(tostring(Properties['gen_ai.agent.id'])), tostring(Properties['gen_ai.agent.id']), iff(isnotempty(tostring(Properties['service.name'])), tostring(Properties['service.name']), iff(isnotempty(AppRoleName), AppRoleName, 'agent'))), '_', iff(isnotempty(tostring(Properties['github.copilot.turn_count'])), tostring(Properties['github.copilot.turn_count']), iff(isnotempty(OperationId), OperationId, 'session')), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm'))), operation=tostring(Properties['gen_ai.operation.name']), agent=tostring(Properties['gen_ai.agent.name']), agentops_agent=coalesce(tostring(Properties['agentops.agent.name']), tostring(Properties['agentops.cli.agent']), tostring(Properties['gen_ai.agent.name'])), model=tostring(Properties['gen_ai.request.model']), tool=tostring(Properties['gen_ai.tool.name']), repo=tostring(Properties['agentops.repo.hash']), skill=coalesce(tostring(Properties['agentops.skill.name']), tostring(Properties['github.copilot.skill.name'])), mcp_server=coalesce(tostring(Properties['agentops.mcp.server']), tostring(Properties['agentops.mcp.config.servers']), extract('^mcp__([^_]+)__', 1, tostring(Properties['gen_ai.tool.name'])), extract('^([^/]+)/', 1, tostring(Properties['gen_ai.tool.name'])), iff(tostring(Properties['gen_ai.tool.name']) startswith 'azure-mcp-', 'azure-mcp', '')), script=coalesce(tostring(Properties['agentops.script.name']), tostring(Properties['agentops.hook.name']), tostring(Properties['github.copilot.hook.name']), tostring(Properties['github.copilot.hook.type'])), error=tostring(Properties['error.type'])  | extend Event=coalesce(tostring(Properties['agentops.event.name']), tostring(Properties['event.name']), tostring(Properties['github.copilot.event.name']), Name) | extend parent_agent=tostring(Properties['agentops.parent_agent.name']), delegation_id=tostring(Properties['agentops.delegation.id']), content_signal=tostring(Properties['agentops.content_capture.signal']) =~ 'true' or tostring(Properties) has_any ('gen_ai.prompt', 'gen_ai.completion', 'gen_ai.input.messages', 'gen_ai.output.messages', 'gen_ai.tool.call.arguments', 'gen_ai.tool.call.result') | extend EventType=case(Event has 'delegation', 'delegation', Event has 'hook' or isnotempty(script), 'script_hook', Event has 'skill' or isnotempty(skill), 'skill', Event has 'policy' or Event has 'blocked', 'policy', Event has 'truncation' or Event has 'compaction', 'context', content_signal, 'content', Event == 'exception' or isnotempty(error), 'error', 'event') | where EventType != 'event' or tostring(Properties) has_any ('agentops.event', 'github.copilot.session', 'github.copilot.hook', 'github.copilot.skill') | extend Actor=coalesce(agentops_agent, agent, tostring(Properties['service.name']), AppRoleName), Lane=case(isnotempty(parent_agent), strcat(parent_agent, ' > ', coalesce(agentops_agent, agent, 'agent')), isnotempty(agentops_agent), agentops_agent, isnotempty(agent), agent, 'runtime') | project TimeGenerated, Session=conversation, EventType, Event, Lane, Actor, ParentAgent=parent_agent, DelegationId=delegation_id, OperationId, SpanId=Id, ParentId, Name=coalesce(Event, Message), agentops_agent, agent, model, mcp_server, mcp_tool=tostring(Properties['agentops.mcp.tool']), tool=coalesce(tool, script, skill), skill, script, repo, DurationMs=real(null), Success=iff(tostring(Properties['github.copilot.success']) == 'false' or isnotempty(error), false, true), error, InputTokens=real(null), OutputTokens=real(null), Credits=real(null), AIU=real(null), ContentCapture=content_signal, Detail=Message) | where ('${conversation:raw}' == 'All' or '${conversation:raw}' == '__all' or '${conversation:raw}' == '$__all' or '${conversation:raw}' contains ',' or '${conversation:raw}' == '' or Session == '${conversation:raw}') | where ('${agentops_agent:raw}' == 'All' or '${agentops_agent:raw}' == '__all' or '${agentops_agent:raw}' == '$__all' or '${agentops_agent:raw}' contains ',' or '${agentops_agent:raw}' == '' or agentops_agent == '${agentops_agent:raw}') | where ('${mcp_server:raw}' == 'All' or '${mcp_server:raw}' == '__all' or '${mcp_server:raw}' == '$__all' or '${mcp_server:raw}' contains ',' or '${mcp_server:raw}' == '' or mcp_server == '${mcp_server:raw}') | where ('${tool:raw}' == 'All' or '${tool:raw}' == '__all' or '${tool:raw}' == '$__all' or '${tool:raw}' contains ',' or '${tool:raw}' == '' or tool == '${tool:raw}') | where EventType == 'tool' or isnotempty(tool) or isnotempty(mcp_server) | project TimeGenerated, Session, Lane, mcp_server, mcp_tool, tool, model, DurationMs, Success, error, Detail | order by TimeGenerated asc | take 300"
+          }
+        }
+      ]
+    },
+    {
+      "id": 31,
+      "type": "table",
+      "title": "Agents, skills, scripts, hooks",
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 29
+      },
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "azure-monitor-oob"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "Azure Log Analytics",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor-oob"
+          },
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
+            ],
+            "resultFormat": "table",
+            "query": "union isfuzzy=true (AppDependencies | where $__timeFilter(TimeGenerated) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or Properties has 'agentops.' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['agent.runtime']) in ('codex', 'openai-codex-cli')) | extend direct_session=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), ''), fallback_session=strcat(iff(isnotempty(tostring(Properties['gen_ai.agent.id'])), tostring(Properties['gen_ai.agent.id']), iff(isnotempty(tostring(Properties['service.name'])), tostring(Properties['service.name']), iff(isnotempty(AppRoleName), AppRoleName, 'agent'))), '_', iff(isnotempty(tostring(Properties['github.copilot.turn_count'])), tostring(Properties['github.copilot.turn_count']), iff(isnotempty(OperationId), OperationId, 'session')), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm')) | join kind=leftouter (AppDependencies | where $__timeFilter(TimeGenerated) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or Properties has 'agentops.' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['agent.runtime']) in ('codex', 'openai-codex-cli')) | extend direct_session=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), '') | where isnotempty(direct_session) | summarize operation_session=take_any(direct_session) by OperationId) on OperationId | extend conversation=iff(isnotempty(operation_session), operation_session, iff(isnotempty(direct_session), direct_session, fallback_session)) | extend operation=tostring(Properties['gen_ai.operation.name']), agent=tostring(Properties['gen_ai.agent.name']), agentops_agent=coalesce(tostring(Properties['agentops.agent.name']), tostring(Properties['agentops.cli.agent']), tostring(Properties['gen_ai.agent.name'])), model=tostring(Properties['gen_ai.request.model']), tool=tostring(Properties['gen_ai.tool.name']), repo=tostring(Properties['agentops.repo.hash']), skill=coalesce(tostring(Properties['agentops.skill.name']), tostring(Properties['github.copilot.skill.name'])), mcp_server=coalesce(tostring(Properties['agentops.mcp.server']), tostring(Properties['agentops.mcp.config.servers']), extract('^mcp__([^_]+)__', 1, tostring(Properties['gen_ai.tool.name'])), extract('^([^/]+)/', 1, tostring(Properties['gen_ai.tool.name'])), iff(tostring(Properties['gen_ai.tool.name']) startswith 'azure-mcp-', 'azure-mcp', '')), script=coalesce(tostring(Properties['agentops.script.name']), tostring(Properties['agentops.hook.name']), tostring(Properties['github.copilot.hook.name']), tostring(Properties['github.copilot.hook.type'])), error=tostring(Properties['error.type'])  | extend InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), OutputTokens=todouble(Properties['gen_ai.usage.output_tokens']), Credits=todouble(Properties['github.copilot.cost']), AIU=todouble(Properties['github.copilot.aiu']) | extend parent_agent=tostring(Properties['agentops.parent_agent.name']), delegation_id=tostring(Properties['agentops.delegation.id']) | extend mcp_tool=case(tool startswith 'mcp__', extract('^mcp__.+?__(.+)$', 1, tool), tool contains '/', tostring(split(tool, '/')[1]), tool startswith 'azure-mcp-', substring(tool, strlen('azure-mcp-')), tostring(Properties['agentops.mcp.tool'])) | extend EventType=case(operation == 'invoke_agent', 'agent', operation == 'chat', 'llm', operation == 'execute_tool' or isnotempty(tool), 'tool', 'span') | extend Event=operation, Actor=coalesce(agentops_agent, agent, tostring(Properties['service.name']), AppRoleName), Lane=case(isnotempty(parent_agent), strcat(parent_agent, ' > ', coalesce(agentops_agent, agent, 'agent')), isnotempty(agentops_agent), agentops_agent, isnotempty(agent), agent, 'agent') | project TimeGenerated, Session=conversation, EventType, Event, Lane, Actor, ParentAgent=parent_agent, DelegationId=delegation_id, OperationId, SpanId=Id, ParentId, Name, agentops_agent, agent, model, mcp_server, mcp_tool, tool, skill, script, repo, DurationMs, Success, error, InputTokens, OutputTokens, Credits, AIU, ContentCapture=bool(false), Detail=ResultCode), (union isfuzzy=true AppTraces, AppDependencies, AppEvents | where $__timeFilter(TimeGenerated) | where tostring(Properties) has_any ('github.copilot', 'gen_ai.operation.name', 'agentops.', 'copilot_chat', 'codex') or Message has_any ('github.copilot', 'AgentOps', 'copilot_chat', 'codex') or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') | extend conversation=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(iff(isnotempty(tostring(Properties['gen_ai.agent.id'])), tostring(Properties['gen_ai.agent.id']), iff(isnotempty(tostring(Properties['service.name'])), tostring(Properties['service.name']), iff(isnotempty(AppRoleName), AppRoleName, 'agent'))), '_', iff(isnotempty(tostring(Properties['github.copilot.turn_count'])), tostring(Properties['github.copilot.turn_count']), iff(isnotempty(OperationId), OperationId, 'session')), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm'))), operation=tostring(Properties['gen_ai.operation.name']), agent=tostring(Properties['gen_ai.agent.name']), agentops_agent=coalesce(tostring(Properties['agentops.agent.name']), tostring(Properties['agentops.cli.agent']), tostring(Properties['gen_ai.agent.name'])), model=tostring(Properties['gen_ai.request.model']), tool=tostring(Properties['gen_ai.tool.name']), repo=tostring(Properties['agentops.repo.hash']), skill=coalesce(tostring(Properties['agentops.skill.name']), tostring(Properties['github.copilot.skill.name'])), mcp_server=coalesce(tostring(Properties['agentops.mcp.server']), tostring(Properties['agentops.mcp.config.servers']), extract('^mcp__([^_]+)__', 1, tostring(Properties['gen_ai.tool.name'])), extract('^([^/]+)/', 1, tostring(Properties['gen_ai.tool.name'])), iff(tostring(Properties['gen_ai.tool.name']) startswith 'azure-mcp-', 'azure-mcp', '')), script=coalesce(tostring(Properties['agentops.script.name']), tostring(Properties['agentops.hook.name']), tostring(Properties['github.copilot.hook.name']), tostring(Properties['github.copilot.hook.type'])), error=tostring(Properties['error.type'])  | extend Event=coalesce(tostring(Properties['agentops.event.name']), tostring(Properties['event.name']), tostring(Properties['github.copilot.event.name']), Name) | extend parent_agent=tostring(Properties['agentops.parent_agent.name']), delegation_id=tostring(Properties['agentops.delegation.id']), content_signal=tostring(Properties['agentops.content_capture.signal']) =~ 'true' or tostring(Properties) has_any ('gen_ai.prompt', 'gen_ai.completion', 'gen_ai.input.messages', 'gen_ai.output.messages', 'gen_ai.tool.call.arguments', 'gen_ai.tool.call.result') | extend EventType=case(Event has 'delegation', 'delegation', Event has 'hook' or isnotempty(script), 'script_hook', Event has 'skill' or isnotempty(skill), 'skill', Event has 'policy' or Event has 'blocked', 'policy', Event has 'truncation' or Event has 'compaction', 'context', content_signal, 'content', Event == 'exception' or isnotempty(error), 'error', 'event') | where EventType != 'event' or tostring(Properties) has_any ('agentops.event', 'github.copilot.session', 'github.copilot.hook', 'github.copilot.skill') | extend Actor=coalesce(agentops_agent, agent, tostring(Properties['service.name']), AppRoleName), Lane=case(isnotempty(parent_agent), strcat(parent_agent, ' > ', coalesce(agentops_agent, agent, 'agent')), isnotempty(agentops_agent), agentops_agent, isnotempty(agent), agent, 'runtime') | project TimeGenerated, Session=conversation, EventType, Event, Lane, Actor, ParentAgent=parent_agent, DelegationId=delegation_id, OperationId, SpanId=Id, ParentId, Name=coalesce(Event, Message), agentops_agent, agent, model, mcp_server, mcp_tool=tostring(Properties['agentops.mcp.tool']), tool=coalesce(tool, script, skill), skill, script, repo, DurationMs=real(null), Success=iff(tostring(Properties['github.copilot.success']) == 'false' or isnotempty(error), false, true), error, InputTokens=real(null), OutputTokens=real(null), Credits=real(null), AIU=real(null), ContentCapture=content_signal, Detail=Message) | where ('${conversation:raw}' == 'All' or '${conversation:raw}' == '__all' or '${conversation:raw}' == '$__all' or '${conversation:raw}' contains ',' or '${conversation:raw}' == '' or Session == '${conversation:raw}') | where ('${agentops_agent:raw}' == 'All' or '${agentops_agent:raw}' == '__all' or '${agentops_agent:raw}' == '$__all' or '${agentops_agent:raw}' contains ',' or '${agentops_agent:raw}' == '' or agentops_agent == '${agentops_agent:raw}') | where ('${mcp_server:raw}' == 'All' or '${mcp_server:raw}' == '__all' or '${mcp_server:raw}' == '$__all' or '${mcp_server:raw}' contains ',' or '${mcp_server:raw}' == '' or mcp_server == '${mcp_server:raw}') | where ('${tool:raw}' == 'All' or '${tool:raw}' == '__all' or '${tool:raw}' == '$__all' or '${tool:raw}' contains ',' or '${tool:raw}' == '' or tool == '${tool:raw}') | where isnotempty(Actor) or isnotempty(skill) or isnotempty(script) or EventType in ('delegation', 'skill', 'script_hook') | summarize Events=count(), Sessions=dcount(Session), LastSeen=max(TimeGenerated), Tools=make_set_if(tool, isnotempty(tool), 10), MCPServers=make_set_if(mcp_server, isnotempty(mcp_server), 10), Skills=make_set_if(skill, isnotempty(skill), 10), Scripts=make_set_if(script, isnotempty(script), 10), Failures=countif(Success == false or isnotempty(error)) by Lane, Actor, ParentAgent, DelegationId | order by LastSeen desc, Events desc | take 100"
+          }
+        }
+      ]
+    },
+    {
+      "id": 40,
+      "type": "timeseries",
+      "title": "Calls, duration, and cost over time",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 38
+      },
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "azure-monitor-oob"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "Azure Log Analytics",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor-oob"
+          },
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
+            ],
+            "resultFormat": "time_series",
+            "query": "union isfuzzy=true (AppDependencies | where $__timeFilter(TimeGenerated) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or Properties has 'agentops.' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['agent.runtime']) in ('codex', 'openai-codex-cli')) | extend direct_session=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), ''), fallback_session=strcat(iff(isnotempty(tostring(Properties['gen_ai.agent.id'])), tostring(Properties['gen_ai.agent.id']), iff(isnotempty(tostring(Properties['service.name'])), tostring(Properties['service.name']), iff(isnotempty(AppRoleName), AppRoleName, 'agent'))), '_', iff(isnotempty(tostring(Properties['github.copilot.turn_count'])), tostring(Properties['github.copilot.turn_count']), iff(isnotempty(OperationId), OperationId, 'session')), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm')) | join kind=leftouter (AppDependencies | where $__timeFilter(TimeGenerated) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or Properties has 'agentops.' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['agent.runtime']) in ('codex', 'openai-codex-cli')) | extend direct_session=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), '') | where isnotempty(direct_session) | summarize operation_session=take_any(direct_session) by OperationId) on OperationId | extend conversation=iff(isnotempty(operation_session), operation_session, iff(isnotempty(direct_session), direct_session, fallback_session)) | extend operation=tostring(Properties['gen_ai.operation.name']), agent=tostring(Properties['gen_ai.agent.name']), agentops_agent=coalesce(tostring(Properties['agentops.agent.name']), tostring(Properties['agentops.cli.agent']), tostring(Properties['gen_ai.agent.name'])), model=tostring(Properties['gen_ai.request.model']), tool=tostring(Properties['gen_ai.tool.name']), repo=tostring(Properties['agentops.repo.hash']), skill=coalesce(tostring(Properties['agentops.skill.name']), tostring(Properties['github.copilot.skill.name'])), mcp_server=coalesce(tostring(Properties['agentops.mcp.server']), tostring(Properties['agentops.mcp.config.servers']), extract('^mcp__([^_]+)__', 1, tostring(Properties['gen_ai.tool.name'])), extract('^([^/]+)/', 1, tostring(Properties['gen_ai.tool.name'])), iff(tostring(Properties['gen_ai.tool.name']) startswith 'azure-mcp-', 'azure-mcp', '')), script=coalesce(tostring(Properties['agentops.script.name']), tostring(Properties['agentops.hook.name']), tostring(Properties['github.copilot.hook.name']), tostring(Properties['github.copilot.hook.type'])), error=tostring(Properties['error.type'])  | extend InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), OutputTokens=todouble(Properties['gen_ai.usage.output_tokens']), Credits=todouble(Properties['github.copilot.cost']), AIU=todouble(Properties['github.copilot.aiu']) | extend parent_agent=tostring(Properties['agentops.parent_agent.name']), delegation_id=tostring(Properties['agentops.delegation.id']) | extend mcp_tool=case(tool startswith 'mcp__', extract('^mcp__.+?__(.+)$', 1, tool), tool contains '/', tostring(split(tool, '/')[1]), tool startswith 'azure-mcp-', substring(tool, strlen('azure-mcp-')), tostring(Properties['agentops.mcp.tool'])) | extend EventType=case(operation == 'invoke_agent', 'agent', operation == 'chat', 'llm', operation == 'execute_tool' or isnotempty(tool), 'tool', 'span') | extend Event=operation, Actor=coalesce(agentops_agent, agent, tostring(Properties['service.name']), AppRoleName), Lane=case(isnotempty(parent_agent), strcat(parent_agent, ' > ', coalesce(agentops_agent, agent, 'agent')), isnotempty(agentops_agent), agentops_agent, isnotempty(agent), agent, 'agent') | project TimeGenerated, Session=conversation, EventType, Event, Lane, Actor, ParentAgent=parent_agent, DelegationId=delegation_id, OperationId, SpanId=Id, ParentId, Name, agentops_agent, agent, model, mcp_server, mcp_tool, tool, skill, script, repo, DurationMs, Success, error, InputTokens, OutputTokens, Credits, AIU, ContentCapture=bool(false), Detail=ResultCode), (union isfuzzy=true AppTraces, AppDependencies, AppEvents | where $__timeFilter(TimeGenerated) | where tostring(Properties) has_any ('github.copilot', 'gen_ai.operation.name', 'agentops.', 'copilot_chat', 'codex') or Message has_any ('github.copilot', 'AgentOps', 'copilot_chat', 'codex') or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') | extend conversation=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(iff(isnotempty(tostring(Properties['gen_ai.agent.id'])), tostring(Properties['gen_ai.agent.id']), iff(isnotempty(tostring(Properties['service.name'])), tostring(Properties['service.name']), iff(isnotempty(AppRoleName), AppRoleName, 'agent'))), '_', iff(isnotempty(tostring(Properties['github.copilot.turn_count'])), tostring(Properties['github.copilot.turn_count']), iff(isnotempty(OperationId), OperationId, 'session')), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm'))), operation=tostring(Properties['gen_ai.operation.name']), agent=tostring(Properties['gen_ai.agent.name']), agentops_agent=coalesce(tostring(Properties['agentops.agent.name']), tostring(Properties['agentops.cli.agent']), tostring(Properties['gen_ai.agent.name'])), model=tostring(Properties['gen_ai.request.model']), tool=tostring(Properties['gen_ai.tool.name']), repo=tostring(Properties['agentops.repo.hash']), skill=coalesce(tostring(Properties['agentops.skill.name']), tostring(Properties['github.copilot.skill.name'])), mcp_server=coalesce(tostring(Properties['agentops.mcp.server']), tostring(Properties['agentops.mcp.config.servers']), extract('^mcp__([^_]+)__', 1, tostring(Properties['gen_ai.tool.name'])), extract('^([^/]+)/', 1, tostring(Properties['gen_ai.tool.name'])), iff(tostring(Properties['gen_ai.tool.name']) startswith 'azure-mcp-', 'azure-mcp', '')), script=coalesce(tostring(Properties['agentops.script.name']), tostring(Properties['agentops.hook.name']), tostring(Properties['github.copilot.hook.name']), tostring(Properties['github.copilot.hook.type'])), error=tostring(Properties['error.type'])  | extend Event=coalesce(tostring(Properties['agentops.event.name']), tostring(Properties['event.name']), tostring(Properties['github.copilot.event.name']), Name) | extend parent_agent=tostring(Properties['agentops.parent_agent.name']), delegation_id=tostring(Properties['agentops.delegation.id']), content_signal=tostring(Properties['agentops.content_capture.signal']) =~ 'true' or tostring(Properties) has_any ('gen_ai.prompt', 'gen_ai.completion', 'gen_ai.input.messages', 'gen_ai.output.messages', 'gen_ai.tool.call.arguments', 'gen_ai.tool.call.result') | extend EventType=case(Event has 'delegation', 'delegation', Event has 'hook' or isnotempty(script), 'script_hook', Event has 'skill' or isnotempty(skill), 'skill', Event has 'policy' or Event has 'blocked', 'policy', Event has 'truncation' or Event has 'compaction', 'context', content_signal, 'content', Event == 'exception' or isnotempty(error), 'error', 'event') | where EventType != 'event' or tostring(Properties) has_any ('agentops.event', 'github.copilot.session', 'github.copilot.hook', 'github.copilot.skill') | extend Actor=coalesce(agentops_agent, agent, tostring(Properties['service.name']), AppRoleName), Lane=case(isnotempty(parent_agent), strcat(parent_agent, ' > ', coalesce(agentops_agent, agent, 'agent')), isnotempty(agentops_agent), agentops_agent, isnotempty(agent), agent, 'runtime') | project TimeGenerated, Session=conversation, EventType, Event, Lane, Actor, ParentAgent=parent_agent, DelegationId=delegation_id, OperationId, SpanId=Id, ParentId, Name=coalesce(Event, Message), agentops_agent, agent, model, mcp_server, mcp_tool=tostring(Properties['agentops.mcp.tool']), tool=coalesce(tool, script, skill), skill, script, repo, DurationMs=real(null), Success=iff(tostring(Properties['github.copilot.success']) == 'false' or isnotempty(error), false, true), error, InputTokens=real(null), OutputTokens=real(null), Credits=real(null), AIU=real(null), ContentCapture=content_signal, Detail=Message) | where ('${conversation:raw}' == 'All' or '${conversation:raw}' == '__all' or '${conversation:raw}' == '$__all' or '${conversation:raw}' contains ',' or '${conversation:raw}' == '' or Session == '${conversation:raw}') | where ('${agentops_agent:raw}' == 'All' or '${agentops_agent:raw}' == '__all' or '${agentops_agent:raw}' == '$__all' or '${agentops_agent:raw}' contains ',' or '${agentops_agent:raw}' == '' or agentops_agent == '${agentops_agent:raw}') | where ('${mcp_server:raw}' == 'All' or '${mcp_server:raw}' == '__all' or '${mcp_server:raw}' == '$__all' or '${mcp_server:raw}' contains ',' or '${mcp_server:raw}' == '' or mcp_server == '${mcp_server:raw}') | where ('${tool:raw}' == 'All' or '${tool:raw}' == '__all' or '${tool:raw}' == '$__all' or '${tool:raw}' contains ',' or '${tool:raw}' == '' or tool == '${tool:raw}') | summarize Events=count(), ToolCalls=countif(EventType == 'tool' or isnotempty(tool)), DurationMs=sum(DurationMs), EstUsd=sum(Credits) * 0.01, InputTokens=sum(InputTokens), OutputTokens=sum(OutputTokens) by TimeGenerated=bin(TimeGenerated, $__interval) | order by TimeGenerated asc"
+          }
+        }
+      ]
+    },
+    {
+      "id": 41,
+      "type": "table",
+      "title": "Safety and policy signals",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 38
+      },
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "azure-monitor-oob"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "Azure Log Analytics",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor-oob"
+          },
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
+            ],
+            "resultFormat": "table",
+            "query": "union isfuzzy=true (AppDependencies | where $__timeFilter(TimeGenerated) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or Properties has 'agentops.' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['agent.runtime']) in ('codex', 'openai-codex-cli')) | extend direct_session=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), ''), fallback_session=strcat(iff(isnotempty(tostring(Properties['gen_ai.agent.id'])), tostring(Properties['gen_ai.agent.id']), iff(isnotempty(tostring(Properties['service.name'])), tostring(Properties['service.name']), iff(isnotempty(AppRoleName), AppRoleName, 'agent'))), '_', iff(isnotempty(tostring(Properties['github.copilot.turn_count'])), tostring(Properties['github.copilot.turn_count']), iff(isnotempty(OperationId), OperationId, 'session')), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm')) | join kind=leftouter (AppDependencies | where $__timeFilter(TimeGenerated) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or Properties has 'agentops.' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['agent.runtime']) in ('codex', 'openai-codex-cli')) | extend direct_session=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), '') | where isnotempty(direct_session) | summarize operation_session=take_any(direct_session) by OperationId) on OperationId | extend conversation=iff(isnotempty(operation_session), operation_session, iff(isnotempty(direct_session), direct_session, fallback_session)) | extend operation=tostring(Properties['gen_ai.operation.name']), agent=tostring(Properties['gen_ai.agent.name']), agentops_agent=coalesce(tostring(Properties['agentops.agent.name']), tostring(Properties['agentops.cli.agent']), tostring(Properties['gen_ai.agent.name'])), model=tostring(Properties['gen_ai.request.model']), tool=tostring(Properties['gen_ai.tool.name']), repo=tostring(Properties['agentops.repo.hash']), skill=coalesce(tostring(Properties['agentops.skill.name']), tostring(Properties['github.copilot.skill.name'])), mcp_server=coalesce(tostring(Properties['agentops.mcp.server']), tostring(Properties['agentops.mcp.config.servers']), extract('^mcp__([^_]+)__', 1, tostring(Properties['gen_ai.tool.name'])), extract('^([^/]+)/', 1, tostring(Properties['gen_ai.tool.name'])), iff(tostring(Properties['gen_ai.tool.name']) startswith 'azure-mcp-', 'azure-mcp', '')), script=coalesce(tostring(Properties['agentops.script.name']), tostring(Properties['agentops.hook.name']), tostring(Properties['github.copilot.hook.name']), tostring(Properties['github.copilot.hook.type'])), error=tostring(Properties['error.type'])  | extend InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), OutputTokens=todouble(Properties['gen_ai.usage.output_tokens']), Credits=todouble(Properties['github.copilot.cost']), AIU=todouble(Properties['github.copilot.aiu']) | extend parent_agent=tostring(Properties['agentops.parent_agent.name']), delegation_id=tostring(Properties['agentops.delegation.id']) | extend mcp_tool=case(tool startswith 'mcp__', extract('^mcp__.+?__(.+)$', 1, tool), tool contains '/', tostring(split(tool, '/')[1]), tool startswith 'azure-mcp-', substring(tool, strlen('azure-mcp-')), tostring(Properties['agentops.mcp.tool'])) | extend EventType=case(operation == 'invoke_agent', 'agent', operation == 'chat', 'llm', operation == 'execute_tool' or isnotempty(tool), 'tool', 'span') | extend Event=operation, Actor=coalesce(agentops_agent, agent, tostring(Properties['service.name']), AppRoleName), Lane=case(isnotempty(parent_agent), strcat(parent_agent, ' > ', coalesce(agentops_agent, agent, 'agent')), isnotempty(agentops_agent), agentops_agent, isnotempty(agent), agent, 'agent') | project TimeGenerated, Session=conversation, EventType, Event, Lane, Actor, ParentAgent=parent_agent, DelegationId=delegation_id, OperationId, SpanId=Id, ParentId, Name, agentops_agent, agent, model, mcp_server, mcp_tool, tool, skill, script, repo, DurationMs, Success, error, InputTokens, OutputTokens, Credits, AIU, ContentCapture=bool(false), Detail=ResultCode), (union isfuzzy=true AppTraces, AppDependencies, AppEvents | where $__timeFilter(TimeGenerated) | where tostring(Properties) has_any ('github.copilot', 'gen_ai.operation.name', 'agentops.', 'copilot_chat', 'codex') or Message has_any ('github.copilot', 'AgentOps', 'copilot_chat', 'codex') or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') | extend conversation=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(iff(isnotempty(tostring(Properties['gen_ai.agent.id'])), tostring(Properties['gen_ai.agent.id']), iff(isnotempty(tostring(Properties['service.name'])), tostring(Properties['service.name']), iff(isnotempty(AppRoleName), AppRoleName, 'agent'))), '_', iff(isnotempty(tostring(Properties['github.copilot.turn_count'])), tostring(Properties['github.copilot.turn_count']), iff(isnotempty(OperationId), OperationId, 'session')), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm'))), operation=tostring(Properties['gen_ai.operation.name']), agent=tostring(Properties['gen_ai.agent.name']), agentops_agent=coalesce(tostring(Properties['agentops.agent.name']), tostring(Properties['agentops.cli.agent']), tostring(Properties['gen_ai.agent.name'])), model=tostring(Properties['gen_ai.request.model']), tool=tostring(Properties['gen_ai.tool.name']), repo=tostring(Properties['agentops.repo.hash']), skill=coalesce(tostring(Properties['agentops.skill.name']), tostring(Properties['github.copilot.skill.name'])), mcp_server=coalesce(tostring(Properties['agentops.mcp.server']), tostring(Properties['agentops.mcp.config.servers']), extract('^mcp__([^_]+)__', 1, tostring(Properties['gen_ai.tool.name'])), extract('^([^/]+)/', 1, tostring(Properties['gen_ai.tool.name'])), iff(tostring(Properties['gen_ai.tool.name']) startswith 'azure-mcp-', 'azure-mcp', '')), script=coalesce(tostring(Properties['agentops.script.name']), tostring(Properties['agentops.hook.name']), tostring(Properties['github.copilot.hook.name']), tostring(Properties['github.copilot.hook.type'])), error=tostring(Properties['error.type'])  | extend Event=coalesce(tostring(Properties['agentops.event.name']), tostring(Properties['event.name']), tostring(Properties['github.copilot.event.name']), Name) | extend parent_agent=tostring(Properties['agentops.parent_agent.name']), delegation_id=tostring(Properties['agentops.delegation.id']), content_signal=tostring(Properties['agentops.content_capture.signal']) =~ 'true' or tostring(Properties) has_any ('gen_ai.prompt', 'gen_ai.completion', 'gen_ai.input.messages', 'gen_ai.output.messages', 'gen_ai.tool.call.arguments', 'gen_ai.tool.call.result') | extend EventType=case(Event has 'delegation', 'delegation', Event has 'hook' or isnotempty(script), 'script_hook', Event has 'skill' or isnotempty(skill), 'skill', Event has 'policy' or Event has 'blocked', 'policy', Event has 'truncation' or Event has 'compaction', 'context', content_signal, 'content', Event == 'exception' or isnotempty(error), 'error', 'event') | where EventType != 'event' or tostring(Properties) has_any ('agentops.event', 'github.copilot.session', 'github.copilot.hook', 'github.copilot.skill') | extend Actor=coalesce(agentops_agent, agent, tostring(Properties['service.name']), AppRoleName), Lane=case(isnotempty(parent_agent), strcat(parent_agent, ' > ', coalesce(agentops_agent, agent, 'agent')), isnotempty(agentops_agent), agentops_agent, isnotempty(agent), agent, 'runtime') | project TimeGenerated, Session=conversation, EventType, Event, Lane, Actor, ParentAgent=parent_agent, DelegationId=delegation_id, OperationId, SpanId=Id, ParentId, Name=coalesce(Event, Message), agentops_agent, agent, model, mcp_server, mcp_tool=tostring(Properties['agentops.mcp.tool']), tool=coalesce(tool, script, skill), skill, script, repo, DurationMs=real(null), Success=iff(tostring(Properties['github.copilot.success']) == 'false' or isnotempty(error), false, true), error, InputTokens=real(null), OutputTokens=real(null), Credits=real(null), AIU=real(null), ContentCapture=content_signal, Detail=Message) | where ('${conversation:raw}' == 'All' or '${conversation:raw}' == '__all' or '${conversation:raw}' == '$__all' or '${conversation:raw}' contains ',' or '${conversation:raw}' == '' or Session == '${conversation:raw}') | where ('${agentops_agent:raw}' == 'All' or '${agentops_agent:raw}' == '__all' or '${agentops_agent:raw}' == '$__all' or '${agentops_agent:raw}' contains ',' or '${agentops_agent:raw}' == '' or agentops_agent == '${agentops_agent:raw}') | where ('${mcp_server:raw}' == 'All' or '${mcp_server:raw}' == '__all' or '${mcp_server:raw}' == '$__all' or '${mcp_server:raw}' contains ',' or '${mcp_server:raw}' == '' or mcp_server == '${mcp_server:raw}') | where ('${tool:raw}' == 'All' or '${tool:raw}' == '__all' or '${tool:raw}' == '$__all' or '${tool:raw}' contains ',' or '${tool:raw}' == '' or tool == '${tool:raw}') | where ContentCapture or EventType in ('policy', 'content', 'error') or isnotempty(error) | project TimeGenerated, Session, Lane, EventType, Event, ContentCapture, Success, error, Detail | order by TimeGenerated desc | take 100"
+          }
+        }
+      ]
+    }
+  ],
+  "refresh": "1m",
+  "schemaVersion": 39,
+  "tags": [
+    "agentops",
+    "copilot-cli",
+    "llm-observability"
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "workspaceResource",
+        "type": "constant",
+        "query": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev",
+        "current": {
+          "selected": false,
+          "text": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev",
+          "value": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
+        },
+        "hide": 2
+      },
+      {
+        "name": "conversation",
+        "label": "Session",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-azure-monitor-datasource",
+          "uid": "azure-monitor-oob"
+        },
+        "queryType": "Azure Log Analytics",
+        "query": {
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
+            ],
+            "query": "AppDependencies | where $__timeFilter(TimeGenerated) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or Properties has 'agentops.' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['agent.runtime']) in ('codex', 'openai-codex-cli')) | extend direct_session=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), ''), fallback_session=strcat(iff(isnotempty(tostring(Properties['gen_ai.agent.id'])), tostring(Properties['gen_ai.agent.id']), iff(isnotempty(tostring(Properties['service.name'])), tostring(Properties['service.name']), iff(isnotempty(AppRoleName), AppRoleName, 'agent'))), '_', iff(isnotempty(tostring(Properties['github.copilot.turn_count'])), tostring(Properties['github.copilot.turn_count']), iff(isnotempty(OperationId), OperationId, 'session')), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm')) | join kind=leftouter (AppDependencies | where $__timeFilter(TimeGenerated) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or Properties has 'agentops.' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['agent.runtime']) in ('codex', 'openai-codex-cli')) | extend direct_session=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), '') | where isnotempty(direct_session) | summarize operation_session=take_any(direct_session) by OperationId) on OperationId | extend conversation=iff(isnotempty(operation_session), operation_session, iff(isnotempty(direct_session), direct_session, fallback_session)) | where isnotempty(conversation) | distinct conversation | order by conversation desc"
+          }
+        },
+        "refresh": 2,
+        "includeAll": true,
+        "multi": false,
+        "allValue": "__all",
+        "current": {
+          "selected": false,
+          "text": "All",
+          "value": "__all"
+        }
+      },
+      {
+        "name": "agentops_agent",
+        "label": "Custom Agent",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-azure-monitor-datasource",
+          "uid": "azure-monitor-oob"
+        },
+        "queryType": "Azure Log Analytics",
+        "query": {
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
+            ],
+            "query": "AppDependencies | where $__timeFilter(TimeGenerated) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or Properties has 'agentops.' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['agent.runtime']) in ('codex', 'openai-codex-cli')) | extend agentops_agent=coalesce(tostring(Properties['agentops.agent.name']), tostring(Properties['agentops.cli.agent']), tostring(Properties['gen_ai.agent.name'])) | where isnotempty(agentops_agent) | distinct agentops_agent | order by agentops_agent asc"
+          }
+        },
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "allValue": "__all",
+        "current": {
+          "selected": false,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "__all"
+          ]
+        }
+      },
+      {
+        "name": "mcp_server",
+        "label": "MCP Server",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-azure-monitor-datasource",
+          "uid": "azure-monitor-oob"
+        },
+        "queryType": "Azure Log Analytics",
+        "query": {
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
+            ],
+            "query": "union isfuzzy=true AppDependencies, AppTraces, AppEvents | where $__timeFilter(TimeGenerated) | where tostring(Properties) has_any ('agentops.mcp', 'mcp__', 'azure-mcp-', 'github.copilot.tool.parameters.mcp_tool_name') | extend tool=tostring(Properties['gen_ai.tool.name']) | extend mcp_server=coalesce(tostring(Properties['agentops.mcp.server']), tostring(Properties['agentops.mcp.config.servers']), extract('^mcp__([^_]+)__', 1, tool), extract('^([^/]+)/', 1, tool), iff(tool startswith 'azure-mcp-', 'azure-mcp', '')) | where isnotempty(mcp_server) | distinct mcp_server | order by mcp_server asc"
+          }
+        },
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "allValue": "__all",
+        "current": {
+          "selected": false,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "__all"
+          ]
+        }
+      },
+      {
+        "name": "tool",
+        "label": "Tool",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-azure-monitor-datasource",
+          "uid": "azure-monitor-oob"
+        },
+        "queryType": "Azure Log Analytics",
+        "query": {
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
+            ],
+            "query": "AppDependencies | where $__timeFilter(TimeGenerated) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or Properties has 'agentops.' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['agent.runtime']) in ('codex', 'openai-codex-cli')) | extend tool=tostring(Properties['gen_ai.tool.name']) | where isnotempty(tool) | distinct tool | order by tool asc"
+          }
+        },
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "allValue": "__all",
+        "current": {
+          "selected": false,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "__all"
+          ]
+        }
+      }
+    ]
+  },
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "AgentOps Live Replay",
+  "uid": "agentops-live-replay",
+  "version": 1,
+  "weekStart": ""
+}

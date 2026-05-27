@@ -1,0 +1,104 @@
+// Builds KQL queries that recommend alert thresholds based on recent telemetry.
+function createAlerts({ workspaceId, baseFilter, sessionKey, validateKqlDuration }) {
+  function alertRecommendationQuery(last = '14d') {
+    const lookback = validateKqlDuration(last);
+    return `let lookback = ${lookback};
+let hourly =
+AppDependencies
+| where TimeGenerated > ago(lookback)
+| where ${baseFilter}
+| extend conversation=${sessionKey},
+    operation=tostring(Properties["gen_ai.operation.name"]),
+    tool=tostring(Properties["gen_ai.tool.name"]),
+    error=tostring(Properties["error.type"]),
+    AIU=todouble(Properties["github.copilot.aiu"]),
+    Credits=todouble(Properties["github.copilot.cost"])
+| summarize
+    started=min(TimeGenerated),
+    spans=count(),
+    failures=countif(Success == false or tostring(Success) =~ "false" or isnotempty(error)),
+    tool_failures=countif((operation == "execute_tool" or isnotempty(tool)) and (Success == false or tostring(Success) =~ "false" or isnotempty(error))),
+    aiu=sum(AIU),
+    credits=sum(Credits)
+  by conversation, bin(TimeGenerated, 1h);
+let content =
+union isfuzzy=true AppDependencies, AppTraces
+| where TimeGenerated > ago(lookback)
+| where tostring(Properties) has_any ("gen_ai.input.messages", "gen_ai.output.messages", "gen_ai.prompt", "gen_ai.completion", "github.copilot.message")
+| summarize content_capture_signals=count() by bin(TimeGenerated, 1h);
+let session_rollup =
+hourly
+| summarize
+    hours=count(),
+    p50_aiu=percentile(aiu, 50),
+    p95_aiu=percentile(aiu, 95),
+    p99_aiu=percentile(aiu, 99),
+    max_aiu=max(aiu),
+    p95_failures=percentile(failures, 95),
+    max_failures=max(failures),
+    p95_tool_failures=percentile(tool_failures, 95),
+    max_tool_failures=max(tool_failures),
+    p95_credits=percentile(credits, 95),
+    max_credits=max(credits);
+let content_rollup =
+content
+| summarize content_capture_hours=countif(content_capture_signals > 0), max_content_capture_signals=max(content_capture_signals);
+union
+(session_rollup
+| extend suggested_threshold = case(p99_aiu * 1.25 > p95_aiu * 2, p99_aiu * 1.25, p95_aiu * 2)
+| project rule="high-aiu", current_threshold=50000000000.0, suggested_threshold, p50=p50_aiu, p95=p95_aiu, p99=p99_aiu, max_observed=max_aiu, supporting_hours=hours),
+(session_rollup
+| extend suggested_threshold = case(p95_failures > 1, p95_failures, 1.0)
+| project rule="failed-spans", current_threshold=0.0, suggested_threshold, p50=real(null), p95=p95_failures, p99=real(null), max_observed=max_failures, supporting_hours=hours),
+(content_rollup
+| project rule="content-capture", current_threshold=0.0, suggested_threshold=0.0, p50=real(null), p95=real(null), p99=real(null), max_observed=coalesce(max_content_capture_signals, 0), supporting_hours=content_capture_hours)`;
+  }
+
+  function alertRecommendations(last = '14d') {
+    const lookback = validateKqlDuration(last);
+    return {
+      workspace_id: workspaceId,
+      last: lookback,
+      mode: 'proposal-only',
+      evidence_query: alertRecommendationQuery(lookback),
+      rules: [
+        {
+          name: 'high-aiu',
+          bicep_resource: 'highAiuAlert',
+          signal: 'hourly session AIU above tuned p95/p99 history',
+          current_threshold: 50000000000,
+          suggested_threshold: 'max(p99_aiu * 1.25, p95_aiu * 2)',
+          validation_query: 'Run alert recommend and inspect p95_aiu, p99_aiu, max_aiu before changing infra/bicep/alerts.bicep.',
+          rollout: 'Keep enableAlerts=false until the threshold has at least 14 days of clean history.'
+        },
+        {
+          name: 'failed-spans',
+          bicep_resource: 'failureAlert',
+          signal: 'failed spans or failed tools in a one-hour window',
+          current_threshold: 0,
+          suggested_threshold: 'start at max(1, p95_failures) for noisy dev stacks; keep 0 for production safety gates',
+          validation_query: 'Compare max_failures, p95_failures, max_tool_failures, and p95_tool_failures over the selected lookback.',
+          rollout: 'Attach no action group until false positives are reviewed in the Permission Friction dashboard.'
+        },
+        {
+          name: 'content-capture',
+          bicep_resource: 'contentCaptureAlert',
+          signal: 'prompt, completion, message, or Copilot content fields detected',
+          current_threshold: 0,
+          suggested_threshold: 0,
+          validation_query: 'max_content_capture_signals must remain 0 before sharing telemetry.',
+          rollout: 'This rule should stay strict; investigate immediately if it fires.'
+        }
+      ]
+    };
+  }
+
+  return {
+    alertRecommendationQuery,
+    alertRecommendations
+  };
+}
+
+module.exports = {
+  createAlerts
+};

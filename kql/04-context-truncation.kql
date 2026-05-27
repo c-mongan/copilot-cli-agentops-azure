@@ -1,0 +1,6 @@
+union isfuzzy=true AppTraces, AppDependencies
+| where TimeGenerated > ago(14d)
+| where tostring(Properties) has "github.copilot.session.truncation" or tostring(Properties) has "github.copilot.session.compaction" or tostring(Properties) has "github.copilot.tokens_removed" or Message has "github.copilot.session"
+| extend pre_tokens=toint(Properties["github.copilot.pre_tokens"]), post_tokens=toint(Properties["github.copilot.post_tokens"]), tokens_removed=toint(Properties["github.copilot.tokens_removed"]), messages_removed=toint(Properties["github.copilot.messages_removed"]), performed_by=tostring(Properties["github.copilot.performed_by"])
+| project TimeGenerated, Name, Message, pre_tokens, post_tokens, tokens_removed, messages_removed, performed_by, Properties
+| order by TimeGenerated desc

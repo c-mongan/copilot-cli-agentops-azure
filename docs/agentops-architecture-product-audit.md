@@ -1,0 +1,1294 @@
+# AgentOps Architecture And Product Audit
+
+Date: 2026-05-24
+
+Scope: current repository state at the time of audit.
+
+Related SVG: `docs/agentops-architecture-dataflow.svg`.
+
+## Executive Verdict
+
+This repository is a credible, privacy-first AgentOps control plane for GitHub Copilot CLI. It already has the important bones:
+
+- A local Copilot wrapper that enables OpenTelemetry and adds privacy-safe AgentOps labels.
+- A local OpenTelemetry Collector path for debug and an Azure Monitor exporter path for production telemetry.
+- Azure infrastructure for Log Analytics, Application Insights, Azure Monitor Workspace, Managed Grafana, Key Vault, and disabled proposal-only alert rules.
+- A CLI that can summarize latest runs, replay sessions, generate KQL, create links, install skills, run benchmark gates, and recommend next actions.
+- A Copilot plugin shape with agents, skills, hooks, and read-only MCP configs for Azure Monitor and Grafana investigation.
+- A Grafana dashboard pack that is already organized around sessions, traces, runtime events, MCP/tools, safety/policy, quality, experiments, and data quality.
+
+The short answer to the product questions:
+
+- Is it easy to use and set up for anyone using Copilot? Better than before. The installer now creates a direct `agentops` command, `copilot-agentops`, optional plain `copilot` shadowing, bundled skills, local setup checks, Azure validation, and closed-loop smoke verification. It still assumes users have or can create the Azure resources.
+- Do we have really good observability? Good metadata observability, yes. The latest slice adds collector health, smoke-ingestion checks, Grafana datasource/dashboard validation, and anti-cheat blockers. World-class agent observability still needs a purpose-built investigation UI and stronger eval isolation.
+- Does it make it simple to use? Simpler. The CLI now covers first-run setup, Azure/Grafana validation, smoke verification, latest-run summaries, ask-context bundles, and benchmark gates. The remaining complexity is cloud provisioning/binding and dashboard import automation.
+- Is it native to Copilot? Locally, almost. The shadow shim, bundled skills, custom agents, hooks, and MCP config all point in the right direction. The missing piece is a single Copilot-facing install/configure/check loop that hides infrastructure details until needed.
+- Can a coding agent monitor another agent through MCP? The architecture supports this concept. The repo includes read-only Azure Monitor MCP and Grafana MCP configs plus telemetry-investigator/optimizer agents. The current implementation is an evidence and prompt workflow, not yet a seamless page-context-aware "Ask AgentOps about this run" product.
+- Can it detect cheating in evals? Only at a starter level. The benchmark runner checks success commands, expected files, forbidden files, safety signals, content capture, tool failures, policy blocks, tokens, and cost. It does not yet provide robust anti-cheat isolation, hidden tests, network controls, rubric scoring, or semantic quality evaluation.
+
+My product judgment: keep the current metadata-first/privacy-first foundation. Do not add prompt/content capture as the default. To become a world-class Copilot AgentOps product, the next major move should be a session-first UI and setup wizard, not more scattered KQL. The user should land on "what happened, why, what changed, what should I do next" within one minute of running `copilot`.
+
+## Assumptions
+
+- The target runtime is GitHub Copilot CLI, not a separate Copilot SDK application. I found no `@github/copilot-sdk` or `CopilotClient` marker in the Node package manifest.
+- "Native to Copilot" means the user can keep using `copilot`, Copilot skills, Copilot agents, hooks, and MCP rather than opening a separate developer workflow first.
+- "Observability" means metadata-safe tracing, session reconstruction, tool/MCP attribution, safety/policy posture, cost/token analysis, eval comparisons, and agent-improvement workflows.
+- "Cheating" means undesirable eval behavior such as modifying forbidden files, bypassing tests, using leaked ground truth, enabling content capture, broadening permissions silently, or improving metrics without improving the intended task outcome.
+- This audit does not prove Azure resources are deployed or dashboards render against live data. It evaluates code, docs, generated assets, and local CLI behavior.
+
+## Current Repo Inventory
+
+Observed by `node agentops-cli/src/index.js scan` and `node agentops-cli/src/index.js primitives --last 7d`:
+
+- 5 custom agent profiles:
+  - `plugin/agents/telemetry-investigator.agent.md`
+  - `plugin/agents/agent-optimizer.agent.md`
+  - `plugin/agents/hook-policy-reviewer.agent.md`
+  - `plugin/agents/skill-doctor.agent.md`
+  - `plugin/agents/subagent-architect.agent.md`
+- 13 bundled Copilot skills:
+  - setup, operations, live triage, retrospective, evidence prompts, KQL telemetry, MCP triage, flow lineage, dashboard ops, subagent tree analysis, benchmark gate, primitive inventory, agent profile tuning.
+- 5 hook event types:
+  - `preToolUse`
+  - `postToolUseFailure`
+  - `agentStop`
+  - `subagentStop`
+  - `notification`
+- 2 MCP server configs discovered by primitive inventory:
+  - `azure-mcp`
+  - `agent-grafana`
+- 1 plugin manifest:
+  - `plugin/plugin.json`
+- 1 benchmark suite:
+  - `benchmarks/starter/suite.json`
+- 12 Grafana dashboards in the dashboard pack:
+  - overview
+  - sessions
+  - session detail
+  - traces/spans
+  - tools/MCP
+  - runtime events
+  - safety/policy
+  - permission friction
+  - alert tuning
+  - quality
+  - experiments
+  - data quality
+- 21 KQL files covering discovery, runs, failures, tokens/cost, context pressure, skill usage, hooks, permission friction, lineage, MCP, policy, primitives, and alert tuning.
+
+Local `doctor --local-only` reports OK in this environment:
+
+- Required files found.
+- Content capture disabled.
+- Local collector config uses localhost for HTTP and gRPC.
+- Agents and skills are present.
+- `copilot-agentops` is installed.
+- Plain `copilot` is currently routed through the AgentOps shadow shim.
+- Real Copilot CLI path is `/opt/homebrew/bin/copilot`.
+
+## Top-Level ASCII Architecture
+
+```text
+                                       +--------------------------------------+
+                                       | Human / coding agent using Copilot   |
+                                       |                                      |
+                                       | Normal command: copilot ...          |
+                                       | Optional command: copilot-agentops   |
+                                       | Skills: "Use agentops-live-triage"   |
+                                       +------------------+-------------------+
+                                                          |
+                                                          v
++---------------------------------------------------------+----------------------------------------------------------+
+|                                               Local Developer Machine                                             |
+|                                                                                                                    |
+|  +-------------------------+      +-------------------------+      +-------------------------+                    |
+|  | ~/.local/bin/copilot    | ---> | scripts/copilot-agentops| ---> | copilot/copilot-observe |                    |
+|  | shadow shim             |      | collector bootstrap     |      | OTel env + attributes   |                    |
+|  +-------------------------+      +-----------+-------------+      +-----------+-------------+                    |
+|                                                |                                |                                  |
+|                                                | starts or verifies             | execs real Copilot               |
+|                                                v                                v                                  |
+|                                      +---------------------+         +-------------------------+                    |
+|                                      | Docker Compose      |         | Real GitHub Copilot CLI |                    |
+|                                      | otelcol             | <------ | emits OTel              |                    |
+|                                      +----------+----------+         +-------------------------+                    |
+|                                                 | OTLP http/grpc                                                     |
+|                                                 v                                                                  |
+|                                      +---------------------+                                                       |
+|                                      | OTel Collector      |                                                       |
+|                                      | privacy processors  |                                                       |
+|                                      | Azure exporter      |                                                       |
+|                                      +----------+----------+                                                       |
+|                                                 |                                                                  |
+|  +----------------------------------------------+--------------------------------------------------------------+  |
+|  |                                                                                                             |  |
+|  | AgentOps local UX                                                                                          |  |
+|  |                                                                                                             |  |
+|  | +----------------------+   +-------------------------+   +----------------------------------------------+  |  |
+|  | | agentops CLI         |   | plugin agents/skills    |   | hooks                                         |  |  |
+|  | | latest/live/replay   |   | telemetry investigator  |   | preToolUse policy, failure hints, gates      |  |  |
+|  | | benchmark/link/KQL   |   | optimizer, skill doctor |   | notification sidecar event                   |  |  |
+|  | +----------------------+   +-------------------------+   +----------------------------------------------+  |  |
+|  +-------------------------------------------------------------------------------------------------------------+  |
++---------------------------------------------------------+----------------------------------------------------------+
+                                                          |
+                                                          | Azure Monitor exporter
+                                                          v
++---------------------------------------------------------+----------------------------------------------------------+
+|                                                   Azure Cloud                                                      |
+|                                                                                                                    |
+| +--------------------+      +----------------------+      +----------------------+      +----------------------+  |
+| | Application        | ---> | Log Analytics        | ---> | Azure Managed        | ---> | Dashboard users /    |  |
+| | Insights workspace |      | AppDependencies,     |      | Grafana dashboard   |      | investigators        |  |
+| | based component    |      | AppTraces, AppEvents |      | pack                |      |                      |  |
+| +--------------------+      +----------+-----------+      +----------+-----------+      +----------------------+  |
+|                                        |                             ^                                           |
+|                                        | KQL                         | dashboard import                          |
+|                                        v                             |                                           |
+|                             +----------------------+                 |                                           |
+|                             | Azure Monitor alerts |                 |                                           |
+|                             | disabled/proposal    |                 |                                           |
+|                             +----------------------+                 |                                           |
+|                                        |                                                                         |
+|                                        v                                                                         |
+|                             +----------------------+                                                          |
+|                             | future actioner      |                                                          |
+|                             | placeholder Function |                                                          |
+|                             +----------------------+                                                          |
++---------------------------------------------------------+----------------------------------------------------------+
+                                                          ^
+                                                          |
+                         +--------------------------------+----------------------------------+
+                         | MCP meta-agent path                                               |
+                         |                                                                    |
+                         | Copilot agent -> Azure Monitor MCP / Grafana MCP -> telemetry KQL  |
+                         | -> evidence-backed recommendation -> patch plan / benchmark gate   |
+                         +--------------------------------------------------------------------+
+```
+
+## Detailed Data Flow
+
+```text
+1. User runs Copilot
+   |
+   |  a. Explicit path:
+   |       copilot-agentops <args>
+   |
+   |  b. Native-feeling path:
+   |       copilot <args>
+   |       ~/.local/bin/copilot shadow shim sets COPILOT_CLI_BIN to real Copilot path.
+   v
+
+2. scripts/copilot-agentops
+   |
+   |  Checks whether Docker Compose collector service `otelcol` is running.
+   |  If not running, calls scripts/collector-azuremonitor-up.sh.
+   |  If collector startup fails, warns and falls back to real Copilot with no telemetry.
+   v
+
+3. scripts/collector-azuremonitor-up.sh
+   |
+   |  Reads Azure context from env:
+   |    AZURE_SUBSCRIPTION_ID
+   |    AZURE_RESOURCE_GROUP
+   |    APPLICATIONINSIGHTS_NAME
+   |
+   |  Uses az CLI to retrieve Application Insights connection string.
+   |  Starts collector/docker-compose.azuremonitor.yaml.
+   |  Does not write connection string to repo.
+   v
+
+4. copilot/copilot-observe
+   |
+   |  Sets Copilot OTel defaults:
+   |    COPILOT_OTEL_ENABLED=true
+   |    COPILOT_OTEL_EXPORTER_TYPE=otlp-http
+   |    OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318
+   |    OTEL_SERVICE_NAME=github-copilot-cli
+   |    OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=false
+   |    COPILOT_OTEL_SOURCE_NAME=github.copilot
+   |
+   |  Computes privacy-safe repo metadata:
+   |    repo URL -> SHA-256 hash
+   |    git branch
+   |    short commit
+   |
+   |  Parses Copilot CLI flags into counts and booleans:
+   |    mode, model, agent, output format, remote, stream, ACP
+   |    allow-all / allow-tool / deny-tool / allow-url / deny-url
+   |    attachment count
+   |    plugin-dir count
+   |    additional MCP config count
+   |    disabled MCP server count
+   |    GitHub MCP selected tool/toolset counts
+   |
+   |  Reads MCP config basenames and server names where provided.
+   |  Prepends all of this to OTEL_RESOURCE_ATTRIBUTES.
+   v
+
+5. Real Copilot CLI
+   |
+   |  Emits OTel spans/logs/events using Copilot and GenAI semantic fields.
+   |  Important operations expected:
+   |    invoke_agent
+   |    chat
+   |    execute_tool
+   |
+   |  Important dimensions expected:
+   |    gen_ai.conversation.id
+   |    github.copilot.interaction_id
+   |    gen_ai.agent.id/name/version
+   |    gen_ai.request.model
+   |    gen_ai.tool.name
+   |    token/cost/AIU fields
+   |    hook and skill events
+   |    errors and status
+   v
+
+6. Local OpenTelemetry Collector
+   |
+   |  Receives OTLP on localhost-mapped ports:
+   |    http 127.0.0.1:4318
+   |    grpc 127.0.0.1:4317
+   |
+   |  Applies memory limiter, privacy-safe attributes processor, batching.
+   |
+   |  Deletes prompt/message/tool-content fields:
+   |    gen_ai.system_instructions
+   |    gen_ai.input.messages
+   |    gen_ai.output.messages
+   |    gen_ai.prompt
+   |    gen_ai.completion
+   |    gen_ai.tool.input
+   |    gen_ai.tool.output
+   |    github.copilot.message
+   |    url.full
+   |    http request/response body content
+   |
+   |  Local debug and Azure Monitor configs also hash code.filepath.
+   v
+
+7. Azure Monitor / Application Insights / Log Analytics
+   |
+   |  Azure Monitor exporter maps telemetry mainly into:
+   |    AppDependencies for spans/dependencies
+   |    AppTraces for traces/log-style events
+   |    AppEvents for synthetic smoke event checks
+   |
+   |  KQL convention in this repo:
+   |    AppDependencies
+   |    | where Properties has "github.copilot"
+   |    | where Properties has "github-copilot-cli"
+   |
+   |  Session key convention:
+   |    prefer gen_ai.conversation.id
+   |    else github.copilot.interaction_id
+   |    else gen_ai.agent.id + turn_count + hourly time bucket
+   v
+
+8. Query and product surfaces
+   |
+   |  agentops CLI:
+   |    status, doctor, scan
+   |    latest, live, replay, explain, recommend
+   |    fields, context, token-rollup-audit
+   |    lineage, policy, mcp, permission-friction
+   |    link session/trace
+   |    saved-view
+   |    benchmark list/run/report/compare
+   |
+   |  Grafana dashboard pack:
+   |    sessions -> detail -> traces/runtime/policy/tools/quality
+   |
+   |  Copilot plugin:
+   |    agents + skills + hooks + MCP configs
+   |
+   |  Meta-agent loop:
+   |    Copilot agent reads telemetry through MCP/CLI/KQL,
+   |    proposes a minimal change,
+   |    validates with benchmark or query,
+   |    gives rollback condition.
+```
+
+## Component Map
+
+### Setup And Installation Plane
+
+Primary files:
+
+- `setup-agentops.sh`
+- `setup-agentops.ps1`
+- `install-agentops.sh`
+- `install-agentops.ps1`
+- `scripts/install-copilot-agentops-shim.sh`
+- `scripts/install-copilot-agentops-shim.ps1`
+- `scripts/uninstall-copilot-agentops-shim.sh`
+- `scripts/uninstall-copilot-agentops-shim.ps1`
+- `agentops-cli/src/index.js`
+
+What works well:
+
+- `agentops install --shadow-copilot` is now the product-style installer command.
+- `setup-agentops.sh` is a short path that installs the shim and then shows status, init dry-run output, and the latest-run workflow.
+- The installer can install explicit `agentops` and `copilot-agentops` commands.
+- The installer can optionally shadow plain `copilot`, which is the most Copilot-native path.
+- The shadow shim records the real Copilot path in `COPILOT_CLI_BIN` to avoid recursive calls.
+- The installer also installs bundled AgentOps skills into the default Copilot home.
+- `agentops status` gives a beginner-readable privacy/setup summary.
+- `agentops doctor --local-only` has good basic checks.
+- Uninstall and disable-shadow paths are present.
+
+Current friction:
+
+- The install path assumes Node.js, Azure CLI, Docker, Copilot CLI, Azure resources, and Grafana endpoint knowledge.
+- The happy path requires users to know or obtain:
+  - `AZURE_RESOURCE_GROUP`
+  - `AGENTOPS_LOG_ANALYTICS_WORKSPACE_ID`
+  - `AGENTOPS_GRAFANA_BASE_URL`
+  - sometimes `APPLICATIONINSIGHTS_NAME`
+- The CLI is usually invoked as `node agentops-cli/src/index.js`, even though `package.json` exposes a bin name. That feels less native than `agentops`.
+- Cloud readiness is still split across docs and scripts, but `agentops validate-azure` now performs a read-only Azure CLI/resource/query preflight.
+- Grafana import assumes the Azure Managed Grafana CLI extension, dashboard data source UID, Grafana RBAC, and workspace access are correct.
+
+Product recommendation:
+
+- Continue expanding `agentops init` into the single guided command:
+  - detects Copilot, Node, Docker, az, subscription, resource group, and existing resources
+  - deploys or binds to Azure resources
+  - imports dashboards
+  - validates collector ingestion
+  - installs shadow shim and skills
+  - runs a smoke Copilot task
+  - opens or prints the exact session link
+- Add `agentops doctor --cloud` with actual Azure checks:
+  - App Insights exists
+  - connection string can be retrieved
+  - Log Analytics workspace ID matches App Insights workspace
+  - Grafana exists
+  - Grafana datasource UID resolves
+  - dashboards exist
+  - current identity has query access
+  - collector can export a smoke trace
+
+### Copilot Wrapper And Attribute Enrichment Plane
+
+Primary files:
+
+- `scripts/copilot-agentops`
+- `scripts/copilot-agentops.ps1`
+- `copilot/copilot-observe`
+- `copilot/copilot-observe.ps1`
+- `docs/telemetry-schema.md`
+
+What works well:
+
+- The wrapper keeps content capture off by default.
+- It hashes repository URL before export.
+- It captures git branch and short commit.
+- It captures safe run dimensions and counts rather than raw values:
+  - allow/deny counts
+  - attachment count
+  - plugin-dir count
+  - MCP config file basenames and server names
+  - disabled MCP server names
+  - selected GitHub MCP tool/toolset names
+- It detects risky broad modes like `--allow-all` and `--yolo`.
+- It preserves user-provided OTel resource attributes by prepending AgentOps labels.
+- It tracks experiment/profile/pack version:
+  - `AGENTOPS_PROFILE`
+  - `AGENTOPS_EXPERIMENT`
+  - `AGENTOPS_PACK_VERSION`
+
+Key implementation detail:
+
+The wrapper does not create spans itself. It relies on Copilot CLI OTel output and enriches that output through resource attributes. This is simple and low-risk, but it means AgentOps quality depends heavily on Copilot's emitted fields and Azure Monitor mapping.
+
+Current gaps:
+
+- The Bash and PowerShell wrappers must stay in sync manually.
+- Flag parsing is hand-rolled. It covers many important Copilot flags, but future Copilot CLI changes can silently drift.
+- Metadata is mostly resource attributes, so depending on exporter behavior, every span may carry the same per-run attributes. That is fine for analysis but can increase cardinality and storage cost.
+- It does not emit an explicit AgentOps "run started" or "run completed" span if Copilot emits no usable spans.
+- It does not emit collector startup/fallback telemetry. If collector startup fails, the user sees a warning, but the observability system has no durable "telemetry missed" event.
+
+Product recommendation:
+
+- Add a wrapper-owned minimal run envelope:
+  - `agentops.run.start`
+  - `agentops.run.end`
+  - `agentops.wrapper.fallback_unobserved`
+  - `agentops.collector.start_failed`
+- Add contract tests using real Copilot OTel fixture snapshots when available.
+- Generate Bash/PowerShell flag metadata from one source of truth if this grows further.
+
+### Collector And Privacy Plane
+
+Primary files:
+
+- `collector/otelcol.local.yaml`
+- `collector/otelcol.azuremonitor.yaml`
+- `collector/docker-compose.yaml`
+- `collector/docker-compose.azuremonitor.yaml`
+- `scripts/collector-azuremonitor-up.sh`
+- `scripts/collector-azuremonitor-up.ps1`
+- `docs/secure-by-default.md`
+
+What works well:
+
+- Local debug collector binds directly to `127.0.0.1`.
+- Docker Compose maps the Azure collector ports to `127.0.0.1`, even though the collector process listens on `0.0.0.0` inside the container.
+- The privacy processor deletes known high-risk GenAI and HTTP content fields.
+- Application Insights connection string is fetched at runtime and not committed.
+- Content capture is off in wrapper defaults and checked by `doctor`.
+- The design deliberately avoids capturing prompts, code, tool args, tool outputs, URLs, and file contents.
+
+Important nuance:
+
+Both local and Azure Monitor collector configs now hash `code.filepath`. The remaining privacy risk is future sensitive attributes that do not match the current denylist.
+
+Current gaps:
+
+- The collector image is now pinned by default through `AGENTOPS_OTELCOL_IMAGE`, but the chosen pin still needs an intentional release cadence.
+- Collector health now has a local health endpoint and a Data Quality dashboard panel, but exporter queue/drop/backpressure metrics are still thin.
+- `validate-collector` checks OTLP reachability plus the health endpoint; Azure export is proven by `agentops smoke --wait ...`.
+- `doctor` checks the local collector YAML for localhost endpoints but does not validate `collector/otelcol.azuremonitor.yaml`.
+- Privacy filters are a denylist. A future Copilot field could carry sensitive content under a new key and pass through.
+
+Product recommendation:
+
+- Keep collector image pins fresh through releases.
+- Validate Azure collector config in `doctor`.
+- Expand collector health telemetry beyond smoke/log signals into exporter queue/drop/backpressure metrics.
+- Add a stricter allowlist mode for exported attributes, or at least a field-catalog content detector that blocks known sensitive key families.
+
+### Azure Infrastructure Plane
+
+Primary files:
+
+- `azure.yaml`
+- `.azure/deployment-plan.md`
+- `infra/bicep/main.bicep`
+- `infra/bicep/log-analytics.bicep`
+- `infra/bicep/app-insights.bicep`
+- `infra/bicep/azure-monitor-workspace.bicep`
+- `infra/bicep/grafana.bicep`
+- `infra/bicep/key-vault.bicep`
+- `infra/bicep/alerts.bicep`
+- `infra/bicep/actioner-function.bicep`
+- `scripts/azure-readiness.sh`
+- `scripts/azure-what-if.sh`
+- `scripts/azure-prereqs.sh`
+
+Provisioned resources:
+
+- Log Analytics workspace.
+- Workspace-based Application Insights component.
+- Azure Monitor workspace.
+- Azure Managed Grafana with system-assigned identity.
+- Key Vault.
+- Optional Function App actioner placeholder.
+- Optional disabled Azure Monitor scheduled query rules.
+
+What works well:
+
+- Bicep is modular and readable.
+- Alerts are disabled by default, which is the right behavior before thresholds are tuned.
+- There is a guarded prerequisites script requiring `AGENTOPS_APPROVE_AZURE_CHANGES=yes`.
+- There is a `what-if` script before deployment.
+- `azure.yaml` includes a postprovision hook to import dashboards.
+
+Current gaps:
+
+- Managed Grafana RBAC and Log Analytics data source access are not fully automated in the Bicep shown.
+- Dashboard JSON assumes a data source UID of `azure-monitor-oob` unless overridden.
+- Public network access is enabled for Application Insights query/ingestion, Grafana, and Key Vault. That may be acceptable for a dev scaffold, but enterprise users will ask about private networking.
+- Key Vault is deployed but not strongly integrated into the current flow.
+- Actioner Function is only a placeholder.
+- There is no environment-specific policy for dev/test/prod retention, alert actions, or RBAC.
+
+Product recommendation:
+
+- Automate Grafana data source/RBAC or validate it explicitly.
+- Add named deployment outputs that can be consumed directly by `agentops init`.
+- Add a secure enterprise mode:
+  - private endpoints where appropriate
+  - managed identity data access
+  - Grafana viewer/editor role assignment guidance
+  - Key Vault-backed tokens if Grafana MCP needs long-lived service tokens
+- Implement or remove the actioner from the core story until it is real.
+
+### Query, CLI, And Analysis Plane
+
+Primary files:
+
+- `agentops-cli/src/index.js`
+- `agentops-cli/src/telemetry.js`
+- `agentops-cli/src/recommendations.js`
+- `agentops-cli/src/primitives.js`
+- `agentops-cli/src/alerts.js`
+- `agentops-cli/src/saved-views.js`
+- `agentops-cli/test/index.test.js`
+- `kql/*.kql`
+
+Core CLI commands:
+
+```text
+status
+doctor
+scan
+latest
+live / tail
+replay
+explain latest
+recommend latest
+open
+workflows list/show
+skills list/path/install
+primitives
+fields
+context
+token-rollup-audit
+permission-friction
+lineage
+policy
+mcp
+alert recommend
+saved-view add/list/show/open
+link session/trace
+benchmark list/run/report/compare
+validate-collector
+validate-azure
+enable-shadow / disable-shadow / uninstall / collector start/stop
+```
+
+What works well:
+
+- The CLI is the strongest product surface right now.
+- It gives plain-English latest-run output.
+- It can work offline from JSONL fixtures.
+- It can query Azure with `az monitor log-analytics query`.
+- It has KQL injection protection for lookback durations.
+- It handles session grouping when tool spans are missing direct conversation IDs.
+- It avoids double-counting parent `invoke_agent` token usage when child `chat` spans exist.
+- It generates evidence-backed recommendations with:
+  - dashboard/query evidence
+  - observed pattern
+  - proposed files
+  - expected metric movement
+  - validation
+  - rollback condition
+- It includes saved views, links, primitive inventory, and benchmark compare.
+- Tests are broad for the CLI.
+
+Current gaps:
+
+- `validate-azure` now does read-only Azure preflight checks, including Grafana datasource and dashboard UID validation, but it does not create/fix resources.
+- Live Azure query depends on local `az` login and workspace ID.
+- Some KQL files are investigation scripts with more than one final tabular expression. That is fine for manual use, but dashboard panels usually need one predictable result shape.
+- The CLI does not yet expose a stable machine-readable "run health score" command outside benchmark reports.
+- Recommendations are rule-based heuristics, not evidence ranking over recurring patterns.
+- `open` prints links but does not open the in-app/browser target.
+
+Product recommendation:
+
+- Keep `agentops` as the default installed command in docs and skills.
+- Extend `agentops smoke` so it can optionally run Copilot and print the exact session URL after closed-loop ingestion verification.
+- Add `agentops health --json` as the contract for a UI/setup wizard.
+- Add recurring-pattern analysis:
+  - same tool failing across sessions
+  - same agent causing high context pressure
+  - same MCP server correlated with failures
+  - same policy false-positive pattern
+- Add an internal JSON schema for recommendation outputs.
+
+### Grafana UI Plane
+
+Primary files:
+
+- `scripts/build-grafana-dashboard-pack.js`
+- `scripts/grafana-import-dashboard.sh`
+- `grafana/agentops-*.json`
+- `docs/grafana-llm-observability-ui.md`
+- `docs/observability-product-patterns-roadmap.md`
+
+Dashboard pack:
+
+- `agentops-dashboard.json` - overview.
+- `agentops-sessions.json` - session explorer.
+- `agentops-session-detail.json` - single-session investigation.
+- `agentops-traces-spans.json` - raw span explorer.
+- `agentops-tools-mcp.json` - tool and MCP attribution.
+- `agentops-runtime-events.json` - hooks, skills, lifecycle, context, errors.
+- `agentops-safety-policy.json` - content capture, allow-all, policy, MCP posture.
+- `agentops-permission-friction.json` - permission and policy friction.
+- `agentops-alert-tuning.json` - threshold evidence for disabled alerts.
+- `agentops-quality.json` - slow/costly/failing sessions and tuning candidates.
+- `agentops-experiments.json` - benchmark/eval comparison.
+- `agentops-data-quality.json` - field catalog and token rollup audit.
+
+What works well:
+
+- The dashboard structure is already session-first, not only aggregate metrics.
+- It has drill links from sessions to detail, traces, and runtime events.
+- It exposes safety and content-capture signals.
+- It includes token rollup/data quality checks.
+- It includes experiments/evals panels.
+- It uses Grafana variables for model, operation, agent, repo, tool, risk, and session.
+- It is practical because Azure Managed Grafana can import dashboards now.
+
+Current gaps:
+
+- Grafana dashboards are not the same as an "amazing UI." They are operationally useful but not a polished product.
+- The user still sees Grafana mechanics:
+  - variables
+  - dashboard UIDs
+  - data source assumptions
+  - table-heavy layouts
+  - raw KQL behaviors
+- There is no first-class span waterfall with collapsible parent/child tree.
+- There is no integrated "ask AgentOps about this session" side panel.
+- There is no workflow that turns a dashboard-selected session into a Copilot MCP prompt automatically.
+- No visual encoding for "agent cheated" beyond benchmark/safety fields.
+- No annotation system yet for:
+  - agent profile changes
+  - skill changes
+  - hook changes
+  - model changes
+  - benchmark versions
+  - deployments
+
+Product recommendation:
+
+Short term: make the dashboard pack feel finished.
+
+- Add a landing dashboard that starts with Sessions, not metrics.
+- Add a single "Session Health" table with:
+  - status
+  - risk
+  - root agent
+  - model
+  - tool failures
+  - policy blocks
+  - content capture
+  - context pressure
+  - eval/benchmark tags
+  - "recommended next action"
+- Add data links that preserve time range and all filters.
+- Add annotation events for config changes and benchmark runs.
+
+Long term: build a purpose-built AgentOps UI.
+
+The product should feel closer to:
+
+```text
+AgentOps
+  Runs
+  Run Detail
+  Trace Waterfall
+  Tools And MCP
+  Evaluations
+  Policy And Safety
+  Data Quality
+  Settings
+  Ask AgentOps
+```
+
+The purpose-built UI should show:
+
+- A trace waterfall with agent/subagent/LLM/tool/hook lanes.
+- A side-by-side run comparison.
+- A promptless metadata timeline.
+- A policy decision strip.
+- MCP server/tool posture.
+- Eval scorecard and anti-cheat warnings.
+- Built-in "ask a coding agent about this run" context export.
+- One-click generation of a benchmark or validation query from a run.
+
+### Plugin, Agents, Skills, Hooks, And MCP Plane
+
+Primary files:
+
+- `plugin/plugin.json`
+- `plugin/.mcp.json`
+- `plugin/hooks.json`
+- `plugin/agents/*.agent.md`
+- `plugin/skills/*/SKILL.md`
+- `plugin/scripts/*.js`
+- `copilot/mcp.azure-monitor.sample.json`
+- `copilot/mcp.grafana.sample.json`
+- `docs/copilot-mcp-agentops-prompts.md`
+
+What works well:
+
+- The plugin manifest clearly packages agents, skills, hooks, and MCP.
+- Agents are targeted to GitHub Copilot and are purpose-specific:
+  - telemetry investigator
+  - agent optimizer
+  - hook policy reviewer
+  - skill doctor
+  - subagent architect
+- Skills map directly to user workflows:
+  - setup
+  - latest run triage
+  - benchmark gate
+  - dashboard ops
+  - MCP tool triage
+  - lineage
+  - retrospective
+  - primitive inventory
+- Agents and skills repeatedly enforce the right safety model:
+  - query telemetry first
+  - use read-only MCP
+  - do not enable content capture
+  - propose changes by default
+  - include evidence, validation, rollback
+- Hooks provide deterministic guardrails:
+  - block obvious risky commands and `.env` writes
+  - offer failure recovery hints
+  - allow stop/notification hooks to exist as extension points
+- MCP config is read-only for Azure Monitor and tokenized for Grafana.
+
+Current gaps:
+
+- `agent-stop-quality-gate.js` currently parses input and exits 0. It is a placeholder, not a quality gate.
+- `emit-sidecar-event.js` writes a minimal event to stdout but does not export telemetry directly.
+- `pre-tool-policy.js` blocks a small set of risky strings. It is useful but not comprehensive.
+- Hook behavior depends on the exact shape of Copilot hook stdin, which needs real compatibility validation.
+- The MCP meta-agent loop is documented and scaffolded, but not fully productized.
+- There is no automatic wiring from a Grafana session to a Copilot prompt with the relevant query, dashboard link, and session ID.
+
+Product recommendation:
+
+- Make `agentops-evidence-prompts` generate a concrete investigation bundle:
+  - session ID
+  - time range
+  - Grafana URL
+  - KQL query
+  - last known recommendation
+  - benchmark run ID if present
+- Make the stop quality gate real but non-blocking at first:
+  - detect unresolved tool failures
+  - detect content-capture signals
+  - detect missing benchmark validation after config changes
+  - emit a warning/recommendation, not a hard failure
+- Add hook telemetry that does not require prompt/tool content:
+  - hook type
+  - decision
+  - reason category
+  - duration
+  - timeout/failure
+
+### Benchmark, Evaluation, And "Cheating" Plane
+
+Primary files:
+
+- `benchmarks/starter/suite.json`
+- `benchmarks/starter/tasks/create-note.json`
+- `agentops-cli/src/index.js` benchmark functions
+- `agentops-cli/test/fixtures/benchmark-runs/summaries.json`
+- `grafana/agentops-experiments.json`
+- `plugin/skills/agentops-benchmark-gate/SKILL.md`
+
+What works well:
+
+- Benchmark runs execute in a copied temp fixture, not the repository.
+- Each repeat uses isolated `COPILOT_HOME`.
+- Run metadata is added to OTel resource attributes:
+  - run ID
+  - suite
+  - task ID
+  - variant
+  - repeat
+  - hypothesis
+- The runner records stdout/stderr under temp run folders.
+- It checks:
+  - Copilot exit status
+  - success commands
+  - expected files
+  - forbidden files
+  - timeout
+- It scores reports and emits keep/investigate/reject.
+- It can enrich local summaries with Azure telemetry:
+  - spans
+  - tool calls
+  - failures
+  - token usage
+  - cache tokens
+  - cost
+  - AIU
+  - models/tools/conversations
+- It rejects safety violations, content capture, forbidden file changes, and severe quality regressions.
+
+Current anti-cheat limitations:
+
+- The starter task uses `--allow-all`, which is acceptable for an isolated tiny fixture but should not be the default posture for serious evals.
+- There is no hidden test concept.
+- There is no network isolation.
+- There is no read-only seed data protection beyond forbidden file checks.
+- There is no semantic rubric scoring.
+- There is no defense against an agent changing the test commands if the eval harness files are available to it.
+- There is no artifact diff viewer in the UI.
+- There is no "agent used external answer source" detector.
+- There is no "agent optimized for benchmark but harmed real-world telemetry" comparison beyond the report heuristics.
+
+Product recommendation:
+
+Build a real Eval Center:
+
+- Test suites with public and hidden checks.
+- Policy profiles:
+  - read-only
+  - least privilege
+  - allow selected tools
+  - no network
+  - no secrets
+- Anti-cheat controls:
+  - immutable test harness
+  - hidden assertions
+  - forbidden path globbing
+  - network/process restrictions where possible
+  - content-capture detector
+  - policy bypass detector
+  - diff and artifact review
+- Scorecards:
+  - task success
+  - semantic quality
+  - safety
+  - cost
+  - latency
+  - tool failure rate
+  - context pressure
+  - reproducibility
+- Promotion gates:
+  - compare baseline vs candidate
+  - require no safety regression
+  - require acceptable token/cost delta
+  - require live telemetry validation after merge/adoption
+
+### Alerts And Actioner Plane
+
+Primary files:
+
+- `infra/bicep/alerts.bicep`
+- `agentops-cli/src/alerts.js`
+- `kql/18-alert-threshold-recommendations.kql`
+- `alerts/README.md`
+- `actioner/README.md`
+
+What works well:
+
+- Alerts are proposal-only and disabled by default.
+- Alert recommendation logic uses historical p95/p99 evidence.
+- Content-capture alert is strict at threshold 0.
+- Failure and high-AIU alerts exist as infrastructure.
+- No action groups are attached by default.
+
+Current gaps:
+
+- No alert action routing is implemented.
+- No alert history product surface beyond dashboard/query support.
+- No on-call/noise policy.
+- No automatic threshold tuning loop.
+- No "open run from alert" flow beyond constructing KQL/dashboard links.
+
+Product recommendation:
+
+- Keep alert rules disabled until real history exists.
+- Implement actioner only for deterministic notifications/artifacts:
+  - create an issue/work item with KQL, session URL, and safe metadata
+  - never auto-edit repo or resources
+  - never call broad LLM tools without explicit approval
+- Add an alert detail workflow:
+  - why it fired
+  - affected sessions
+  - top contributing agents/tools/models
+  - recommended threshold
+  - validation query
+
+## Sessionization And Data Model
+
+The session model is one of the most important parts of this repo.
+
+Preferred session key:
+
+```text
+gen_ai.conversation.id
+```
+
+Fallbacks:
+
+```text
+github.copilot.interaction_id
+gen_ai.agent.id + github.copilot.turn_count + hourly bucket
+```
+
+Why this matters:
+
+- Tool spans can sometimes lack a direct conversation ID.
+- The KQL joins spans by `OperationId` to recover conversation from sibling/root spans.
+- Dashboards, CLI latest/replay, lineage, MCP usage, and benchmarks all depend on stable session grouping.
+
+Token rollup rule:
+
+```text
+If chat spans exist:
+  use sum(chat span tokens/cost/AIU)
+Else:
+  use invoke_agent aggregate tokens/cost/AIU
+```
+
+This avoids double-counting parent and child usage.
+
+Important data tables:
+
+```text
+AppDependencies
+  Main span/dependency table for Copilot CLI OTel.
+
+AppTraces
+  Runtime/log event table for hooks, skills, lifecycle, policy, exceptions.
+
+AppEvents
+  Used by synthetic Application Insights smoke test.
+```
+
+Important fields:
+
+```text
+gen_ai.operation.name
+gen_ai.agent.id
+gen_ai.agent.name
+gen_ai.agent.version
+gen_ai.conversation.id
+github.copilot.interaction_id
+gen_ai.request.model
+gen_ai.tool.name
+gen_ai.usage.input_tokens
+gen_ai.usage.output_tokens
+gen_ai.usage.cache_read.input_tokens
+gen_ai.usage.cache_creation.input_tokens
+github.copilot.cost
+github.copilot.aiu
+github.copilot.turn_count
+github.copilot.skill.name
+github.copilot.hook.type
+error.type
+agentops.repo.hash
+agentops.profile
+agentops.experiment
+agentops.pack.version
+agentops.cli.*
+agentops.mcp.*
+agentops.benchmark.*
+```
+
+## Product Experience Assessment
+
+### First-Time Setup
+
+Current experience:
+
+```text
+az login
+node agentops-cli/src/index.js install --shadow-copilot
+./setup-agentops.sh
+export PATH="$HOME/.local/bin:$PATH"
+agentops configure set --resource-group ... --workspace-id ... --grafana-url ...
+copilot --help
+agentops status
+```
+
+This is good for a developer preview. It is not yet consumer-grade for a broad Copilot audience.
+
+Why it is promising:
+
+- Short path exists.
+- Safe defaults are clear.
+- Shadow mode makes normal `copilot` observed.
+- Skills let users ask Copilot for workflows.
+- Fallback behavior does not block Copilot if telemetry setup fails.
+
+Why it is still hard:
+
+- Users must already have Azure resources or know how to provision them.
+- Dashboard import and data source setup can fail independently.
+- Troubleshooting spans CLI, Docker, az, Application Insights, Log Analytics, and Grafana.
+- The command names expose implementation details.
+
+Target experience:
+
+```text
+agentops init
+agentops smoke
+copilot -p "Reply with exactly: agentops smoke."
+agentops latest
+```
+
+Then:
+
+```text
+Use agentops-live-triage to explain my latest run.
+```
+
+### Daily Copilot Use
+
+Current experience:
+
+- If shadow shim is first on PATH, plain `copilot` is observed.
+- If collector is missing, wrapper tries to start it.
+- If collector fails to start, Copilot still runs without observation.
+- The user can query latest run with CLI or ask installed skills.
+
+This is close to native.
+
+Missing native feel:
+
+- A successful run should print or expose a small optional AgentOps link.
+- There should be a `copilot` skill prompt that can find the latest run without needing users to remember CLI commands.
+- The UI should open directly to the latest run after smoke.
+
+### Investigator Experience
+
+Current experience:
+
+- CLI can generate KQL and links.
+- Grafana dashboards support drilldown.
+- MCP configs let Copilot agents query Azure/Grafana in read-only mode.
+- Prompt templates are clear.
+
+This is strong for technical users.
+
+Missing world-class behavior:
+
+- The agent needs explicit session context.
+- The dashboard does not have an embedded agent assistant.
+- Recommendations are not integrated into the UI as first-class artifacts.
+- Saved investigations are local JSON only.
+
+Target experience:
+
+```text
+Open session -> click Ask AgentOps -> question includes:
+  session id
+  time range
+  dashboard URL
+  KQL query
+  selected span/tool/policy event
+  recent benchmark labels
+
+Agent returns:
+  evidence
+  root cause candidates
+  proposed minimal patch
+  validation benchmark/query
+  rollback condition
+```
+
+## Observability Scorecard
+
+Scores are based on current repo implementation, not the intended roadmap.
+
+```text
+Area                                      Current Rating   Notes
+----------------------------------------  ---------------  ----------------------------------------------
+Copilot OTel capture                      Strong           Wrapper turns it on and enriches attributes.
+Privacy defaults                          Strong           Content capture off, sensitive fields deleted.
+Session reconstruction                    Strong           Conversation fallback and OperationId recovery.
+Tool failure visibility                   Strong           CLI, KQL, dashboards, recommendation path.
+MCP/tool attribution                      Good             Exact for namespaced tools; inferred otherwise.
+Token/cost analysis                       Strong           Rollup audit avoids double-counting.
+Context pressure analysis                 Good             Queries and dashboards exist.
+Policy/safety telemetry                   Good             Hooks and dashboards exist, policy is basic.
+Runtime hook/skill events                 Medium           Query support exists, actual hook telemetry is thin.
+Grafana UI                                Good scaffold    Useful dashboards, not polished product UI.
+Setup simplicity                          Medium           Good scripts, too many prerequisites/variables.
+Azure validation                          Medium-good      Read-only CLI preflight includes Grafana datasource/dashboard checks; auto-remediation is incomplete.
+Collector health                          Medium           Local health endpoint, KQL, and dashboard panel exist; exporter/drop/backpressure metrics are still thin.
+Eval/benchmark support                    Medium           Nice starter gate, not robust eval platform.
+Cheating detection                        Medium           Anti-cheat blockers exist; hidden tests, isolation, and semantic eval are still missing.
+Meta-agent via MCP                        Medium-good      Good scaffolding, not seamless UI-integrated loop.
+Enterprise readiness                      Medium-low       Needs RBAC/private networking/packaging hardening.
+```
+
+## What Is Already Differentiated
+
+The most differentiated idea is not just "Copilot telemetry in Grafana." It is this loop:
+
+```text
+observe Copilot run
+-> reconstruct session
+-> classify failure/cost/context/policy pattern
+-> ask Copilot agent to inspect telemetry through read-only MCP
+-> propose a minimal agent/skill/hook/MCP change
+-> validate with benchmark or KQL
+-> promote, investigate, or reject
+```
+
+That loop is the right product direction. It is meta in a useful way: a coding agent can monitor and improve another coding agent, but only through safe telemetry and explicit validation.
+
+## What Needs To Be True For "World-Class"
+
+### 1. One-Minute First Value
+
+Success criterion:
+
+```text
+A new Copilot CLI user can run one setup command, one smoke command, and see the latest run without reading KQL/Grafana docs.
+```
+
+Implemented first slice:
+
+- `agentops init --dry-run` for setup readiness, bundled skill install planning, and first-run next steps.
+- `agentops validate-azure` for read-only Azure CLI, subscription, resource group, workspace, App Insights, query, Grafana resource, datasource, and dashboard UID checks.
+- `agentops smoke --dry-run` plus live OTLP POST and Log Analytics polling for a privacy-safe synthetic trace.
+- `agentops ask-context` for a copyable telemetry-investigator context bundle.
+- direct installed `agentops` command through the installer.
+- collector health endpoint, collector-health KQL, and Data Quality dashboard panel.
+- benchmark anti-cheat blocker signals and an Experiments dashboard panel.
+
+Remaining work:
+
+- automatic dashboard import after validation detects missing dashboards
+- smoke command that can also launch a real Copilot prompt and print the exact latest-run URL
+- guided cloud deploy/bind inside `agentops init`
+
+### 2. Run-Centric UI
+
+Success criterion:
+
+```text
+The default UI answers: what happened, why did it fail or cost money, what changed, what should I do next?
+```
+
+Required work:
+
+- Session explorer as first screen.
+- Trace waterfall.
+- Policy/safety strip.
+- Tool/MCP waterfall.
+- Context/tokens panel.
+- Recommendation panel.
+- Eval/benchmark linkage.
+- Ask AgentOps panel.
+
+### 3. Agent Improvement Loop
+
+Success criterion:
+
+```text
+Every suggested agent/skill/hook/MCP change has telemetry evidence, predicted metric movement, validation, and rollback.
+```
+
+Required work:
+
+- Persist recommendations.
+- Link recommendations to files and benchmark runs.
+- Track before/after telemetry.
+- Add annotation events for config changes.
+
+### 4. Robust Eval Center
+
+Success criterion:
+
+```text
+Users can compare baseline vs candidate agents and detect safety, quality, cost, and anti-cheat regressions before promotion.
+```
+
+Required work:
+
+- Hidden tests.
+- Rubric/semantic scoring.
+- Network and permission profiles.
+- Immutable harness.
+- Artifact diffing.
+- Scorecard UI.
+- Promotion policy.
+
+### 5. Trustworthy Data Quality
+
+Success criterion:
+
+```text
+The product tells users when telemetry is missing, malformed, double-counted, dropped, or unsafe to share.
+```
+
+Implemented:
+
+- Field catalog.
+- Token rollup audit.
+- Collector health.
+- Content-capture detector.
+
+Required work:
+
+- Exporter failure visibility.
+- Schema versioning.
+- Real Copilot fixture regression tests.
+
+## Recommended Roadmap
+
+### P0 - Make The Current Pack Reliable
+
+- Add `doctor` checks for Azure collector config parity and pinned collector image.
+- Make `agentops validate-azure` optionally import missing dashboards after explicit confirmation.
+- Make `agentops smoke` optionally launch a real Copilot smoke prompt and deep-link to the resulting latest run.
+- Add cloud doctor checks that reuse the same Grafana datasource/dashboard checks without requiring a separate command.
+- Add a wrapper-owned run envelope/fallback event.
+
+### P1 - Make It Native To Copilot
+
+- Expand `agentops init` beyond local readiness/skill install into cloud bind/deploy, dashboard import, and first smoke run.
+- Make skill install and shadow install part of one guided flow.
+- Wire the "latest run" context bundle command into the Copilot skill path.
+- Add a Copilot skill that calls the right CLI commands and returns session URL plus one recommendation.
+- Add first-run docs that do not require users to learn Azure Monitor vocabulary.
+
+### P2 - Make Observability Feel Amazing
+
+- Polish dashboard pack:
+  - session-first landing
+  - richer run detail
+  - timeline/waterfall
+  - recommendation panels
+  - annotations
+  - better saved views
+- Add "Ask AgentOps" prompt generation from session/trace links.
+- Add collector health and data quality dashboards.
+- Add run comparison views.
+
+### P3 - Build Eval And Anti-Cheat
+
+- Expand benchmark schemas.
+- Add hidden checks.
+- Add semantic evaluator adapters.
+- Add permission profiles.
+- Add artifact diff reports.
+- Add candidate promotion gates.
+- Add dashboards for eval scorecards and regressions.
+
+### P4 - Productize For Teams
+
+- Package CLI with npm/Homebrew/GitHub releases.
+- Add multi-workspace/team config.
+- Add Azure RBAC automation and validation.
+- Add enterprise network/security modes.
+- Add shared saved views/recommendations storage.
+- Add alert actioner implementation.
+
+## Highest-Impact Fixes
+
+If I had to choose only five next tasks:
+
+1. Add dashboard import remediation to `agentops validate-azure`.
+2. Add a real Copilot smoke-run mode that prints the exact latest-run URL.
+3. Add a run envelope/fallback telemetry event from the wrapper.
+4. Build a polished session-first dashboard landing page with recommendation and ask-AgentOps context.
+5. Expand benchmark/eval support with hidden checks, permission profiles, and artifact diffing.
+
+## Bottom Line
+
+This is a strong v0.1/v0.2-style foundation. It is unusually thoughtful about privacy, Copilot primitives, MCP, and evidence-backed recommendations. The core architecture is coherent.
+
+It is not yet a world-class AgentOps product because cloud provisioning, dashboard remediation, the run-centric UI, and robust eval isolation still need product integration. The next leap is one setup/bind command, one session-centric UI, one meta-agent investigation flow, and one credible eval/anti-cheat system.
+
+The direction is right. Do not dilute it by capturing raw prompts or building generic observability dashboards. Double down on metadata-safe agent run understanding, Copilot-native workflows, and benchmark-backed improvement loops.

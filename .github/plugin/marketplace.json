@@ -1,0 +1,34 @@
+{
+  "name": "copilot-agentops-azure",
+  "owner": {
+    "name": "Conor Mongan"
+  },
+  "plugins": [
+    {
+      "name": "copilot-agentops-azure",
+      "source": "./plugin",
+      "description": "Azure-native observability and self-improvement loop for GitHub Copilot CLI custom agents, subagents, skills, hooks, MCP, and OpenTelemetry.",
+      "version": "0.1.0",
+      "author": {
+        "name": "Conor Mongan"
+      },
+      "license": "MIT",
+      "keywords": [
+        "copilot-cli",
+        "azure",
+        "opentelemetry",
+        "agentops",
+        "mcp",
+        "observability",
+        "custom-agents",
+        "subagents"
+      ],
+      "category": "observability",
+      "tags": [
+        "agentops",
+        "azure-monitor",
+        "grafana"
+      ]
+    }
+  ]
+}

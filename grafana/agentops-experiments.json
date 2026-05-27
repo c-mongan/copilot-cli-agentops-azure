@@ -1,0 +1,1215 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [
+    {
+      "title": "Overview",
+      "url": "/d/copilot-agentops",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
+      "title": "Sessions",
+      "url": "/d/agentops-sessions",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
+      "title": "Session Detail",
+      "url": "/d/agentops-session-detail",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
+      "title": "Live Replay",
+      "url": "/d/agentops-live-replay",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
+      "title": "Traces / Spans",
+      "url": "/d/agentops-traces-spans",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
+      "title": "Tools & MCP",
+      "url": "/d/agentops-tools-mcp",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
+      "title": "Runtime Events",
+      "url": "/d/agentops-runtime-events",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
+      "title": "Attribution",
+      "url": "/d/agentops-attribution",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
+      "title": "Safety & Policy",
+      "url": "/d/agentops-safety-policy",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
+      "title": "Permission Friction",
+      "url": "/d/agentops-permission-friction",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
+      "title": "Alert Tuning",
+      "url": "/d/agentops-alert-tuning",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
+      "title": "Quality",
+      "url": "/d/agentops-quality",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
+      "title": "Experiments",
+      "url": "/d/agentops-experiments",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
+      "title": "Data Quality",
+      "url": "/d/agentops-data-quality",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
+      "title": "Azure Portal - Log Analytics",
+      "url": "https://portal.azure.com/#@/resource/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev/logs",
+      "type": "link",
+      "icon": "external link",
+      "targetBlank": true
+    }
+  ],
+  "liveNow": false,
+  "panels": [
+    {
+      "id": 1,
+      "type": "table",
+      "title": "Did the change help?",
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "azure-monitor-oob"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "PassRate"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "PassRateDelta"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "AverageScore"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "decimals",
+                "value": 3
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "ScoreDelta"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "decimals",
+                "value": 3
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "TokenUse"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "TokenDelta"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "EstUsd"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyUSD"
+              },
+              {
+                "id": "decimals",
+                "value": 4
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "CostDelta"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyUSD"
+              },
+              {
+                "id": "decimals",
+                "value": 4
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "Azure Log Analytics",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor-oob"
+          },
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
+            ],
+            "resultFormat": "table",
+            "query": "let variants = AppDependencies | where $__timeFilter(TimeGenerated) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or Properties has 'agentops.' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['agent.runtime']) in ('codex', 'openai-codex-cli')) | extend suite=tostring(Properties['agentops.benchmark.suite']), task_id=tostring(Properties['agentops.benchmark.task_id']), variant=tostring(Properties['agentops.benchmark.variant']), run_id=tostring(Properties['agentops.benchmark.run_id']), hypothesis_id=tostring(Properties['agentops.hypothesis.id']), operation=tostring(Properties['gen_ai.operation.name']), conversation=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(iff(isnotempty(tostring(Properties['gen_ai.agent.id'])), tostring(Properties['gen_ai.agent.id']), iff(isnotempty(tostring(Properties['service.name'])), tostring(Properties['service.name']), iff(isnotempty(AppRoleName), AppRoleName, 'agent'))), '_', iff(isnotempty(tostring(Properties['github.copilot.turn_count'])), tostring(Properties['github.copilot.turn_count']), iff(isnotempty(OperationId), OperationId, 'session')), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm'))), tool=tostring(Properties['gen_ai.tool.name']), error=tostring(Properties['error.type']) | where isnotempty(suite) or isnotempty(task_id) or isnotempty(variant) or isnotempty(run_id) or isnotempty(hypothesis_id) | where ('${benchmark_suite:text}' == 'All' or '${benchmark_suite}' == '__all' or '${benchmark_suite}' == '$__all' or '${benchmark_suite}' contains ',' or '${benchmark_suite:csv}' == '*' or '${benchmark_suite:csv}' == '__all' or '${benchmark_suite:csv}' == '$__all' or '${benchmark_suite:csv}' contains '__all' or '${benchmark_suite:csv}' contains '$__all' or '${benchmark_suite:csv}' contains ',' or '${benchmark_suite:csv}' == '' or suite in (${benchmark_suite:singlequote})) | where ('${benchmark_task:text}' == 'All' or '${benchmark_task}' == '__all' or '${benchmark_task}' == '$__all' or '${benchmark_task}' contains ',' or '${benchmark_task:csv}' == '*' or '${benchmark_task:csv}' == '__all' or '${benchmark_task:csv}' == '$__all' or '${benchmark_task:csv}' contains '__all' or '${benchmark_task:csv}' contains '$__all' or '${benchmark_task:csv}' contains ',' or '${benchmark_task:csv}' == '' or task_id in (${benchmark_task:singlequote})) | where ('${benchmark_variant:text}' == 'All' or '${benchmark_variant}' == '__all' or '${benchmark_variant}' == '$__all' or '${benchmark_variant}' contains ',' or '${benchmark_variant:csv}' == '*' or '${benchmark_variant:csv}' == '__all' or '${benchmark_variant:csv}' == '$__all' or '${benchmark_variant:csv}' contains '__all' or '${benchmark_variant:csv}' contains '$__all' or '${benchmark_variant:csv}' contains ',' or '${benchmark_variant:csv}' == '' or variant in (${benchmark_variant:singlequote})) | where ('${benchmark_run:text}' == 'All' or '${benchmark_run}' == '__all' or '${benchmark_run}' == '$__all' or '${benchmark_run}' contains ',' or '${benchmark_run:csv}' == '*' or '${benchmark_run:csv}' == '__all' or '${benchmark_run:csv}' == '$__all' or '${benchmark_run:csv}' contains '__all' or '${benchmark_run:csv}' contains '$__all' or '${benchmark_run:csv}' contains ',' or '${benchmark_run:csv}' == '' or run_id in (${benchmark_run:singlequote})) | where ('${hypothesis:text}' == 'All' or '${hypothesis}' == '__all' or '${hypothesis}' == '$__all' or '${hypothesis}' contains ',' or '${hypothesis:csv}' == '*' or '${hypothesis:csv}' == '__all' or '${hypothesis:csv}' == '$__all' or '${hypothesis:csv}' contains '__all' or '${hypothesis:csv}' contains '$__all' or '${hypothesis:csv}' contains ',' or '${hypothesis:csv}' == '' or hypothesis_id in (${hypothesis:singlequote})) | extend Passed=coalesce(tobool(Properties['agentops.benchmark.passed']), tobool(Properties['agentops.eval.passed']), Success), InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), OutputTokens=todouble(Properties['gen_ai.usage.output_tokens']), AICredits=todouble(Properties['github.copilot.cost']), EstUsd=todouble(Properties['github.copilot.cost']) * 0.01, Regression=coalesce(tobool(Properties['agentops.benchmark.regression']), tobool(Properties['agentops.regression'])), SafetyIssue=iff(tostring(Properties['agentops.safety.issue']) != '' or tostring(Properties['agentops.policy.blocked']) == 'true' or tostring(Properties) has 'content_filter' or tostring(Properties) has 'safety', true, false), FailureReason=coalesce(error, tostring(Properties['agentops.benchmark.failure_reason']), tostring(Properties['agentops.eval.failure_reason']), ResultCode) | extend Score=coalesce(todouble(Properties['agentops.benchmark.score']), todouble(Properties['agentops.eval.score']), todouble(Properties['agentops.score']), todouble(Properties['score']), iff(Passed == true, 100.0, iff(Passed == false, 0.0, real(null)))) | summarize Started=min(TimeGenerated), Ended=max(TimeGenerated), Spans=count(), Sessions=dcount(conversation), Runs=dcount(run_id), ToolCalls=countif(operation == 'execute_tool' or isnotempty(tool)), ToolFailures=countif((operation == 'execute_tool' or isnotempty(tool)) and (Success == false or isnotempty(error))), Failures=countif(Success == false or isnotempty(error)), PassSamples=countif(isnotnull(Passed)), Passes=countif(Passed == true), ScoreSamples=countif(isnotnull(Score)), AverageScore=avg(Score), InputTokens=sum(InputTokens), OutputTokens=sum(OutputTokens), EstUsd=sum(EstUsd), SafetyIssues=countif(SafetyIssue), ExplicitRegressions=countif(Regression == true), FailureReasons=make_set_if(FailureReason, isnotempty(FailureReason), 10) by suite, task_id, hypothesis_id, variant, run_id | extend TokenUse=coalesce(InputTokens, 0.0) + coalesce(OutputTokens, 0.0), PassRate=iff(PassSamples > 0, round(100.0 * Passes / PassSamples, 1), real(null)); let baseline = variants | where tolower(variant) in ('baseline', 'control', 'main', 'default') | summarize BaselineScore=avg(AverageScore), BaselinePassRate=avg(PassRate), BaselineToolFailures=sum(ToolFailures), BaselineCost=avg(EstUsd), BaselineTokenUse=avg(TokenUse) by suite, task_id, hypothesis_id; variants | join kind=leftouter baseline on suite, task_id, hypothesis_id | extend IsBaseline=tolower(variant) in ('baseline', 'control', 'main', 'default') | extend ScoreDelta=iff(IsBaseline, 0.0, round(AverageScore - BaselineScore, 3)), PassRateDelta=iff(IsBaseline, 0.0, round(PassRate - BaselinePassRate, 1)), CostDelta=iff(IsBaseline, 0.0, round(EstUsd - BaselineCost, 4)), TokenDelta=iff(IsBaseline, 0.0, round(TokenUse - BaselineTokenUse, 0)) | extend Verdict=case(IsBaseline, 'baseline', isnotnull(ScoreDelta) and ScoreDelta > 0, 'helped', isnotnull(ScoreDelta) and ScoreDelta < 0, 'regressed', isnotnull(PassRateDelta) and PassRateDelta > 0, 'helped', isnotnull(PassRateDelta) and PassRateDelta < 0, 'regressed', ToolFailures < BaselineToolFailures, 'helped', ToolFailures > BaselineToolFailures, 'regressed', isnotnull(BaselineScore) or isnotnull(BaselinePassRate), 'flat', 'needs_score') | project suite, task_id, hypothesis_id, variant, run_id, Verdict, PassRate, PassRateDelta, AverageScore, ScoreDelta, ToolFailures, SafetyIssues, ExplicitRegressions, TokenUse, TokenDelta, EstUsd, CostDelta, Spans, Sessions, Runs, Started, Ended | order by suite asc, task_id asc, hypothesis_id asc, Verdict asc, ScoreDelta desc, PassRateDelta desc"
+          }
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Pass rate",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 9
+      },
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "azure-monitor-oob"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "Azure Log Analytics",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor-oob"
+          },
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
+            ],
+            "resultFormat": "time_series",
+            "query": "AppDependencies | where $__timeFilter(TimeGenerated) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or Properties has 'agentops.' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['agent.runtime']) in ('codex', 'openai-codex-cli')) | extend suite=tostring(Properties['agentops.benchmark.suite']), task_id=tostring(Properties['agentops.benchmark.task_id']), variant=tostring(Properties['agentops.benchmark.variant']), run_id=tostring(Properties['agentops.benchmark.run_id']), hypothesis_id=tostring(Properties['agentops.hypothesis.id']), operation=tostring(Properties['gen_ai.operation.name']), conversation=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(iff(isnotempty(tostring(Properties['gen_ai.agent.id'])), tostring(Properties['gen_ai.agent.id']), iff(isnotempty(tostring(Properties['service.name'])), tostring(Properties['service.name']), iff(isnotempty(AppRoleName), AppRoleName, 'agent'))), '_', iff(isnotempty(tostring(Properties['github.copilot.turn_count'])), tostring(Properties['github.copilot.turn_count']), iff(isnotempty(OperationId), OperationId, 'session')), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm'))), tool=tostring(Properties['gen_ai.tool.name']), error=tostring(Properties['error.type']) | where isnotempty(suite) or isnotempty(task_id) or isnotempty(variant) or isnotempty(run_id) or isnotempty(hypothesis_id) | where ('${benchmark_suite:text}' == 'All' or '${benchmark_suite}' == '__all' or '${benchmark_suite}' == '$__all' or '${benchmark_suite}' contains ',' or '${benchmark_suite:csv}' == '*' or '${benchmark_suite:csv}' == '__all' or '${benchmark_suite:csv}' == '$__all' or '${benchmark_suite:csv}' contains '__all' or '${benchmark_suite:csv}' contains '$__all' or '${benchmark_suite:csv}' contains ',' or '${benchmark_suite:csv}' == '' or suite in (${benchmark_suite:singlequote})) | where ('${benchmark_task:text}' == 'All' or '${benchmark_task}' == '__all' or '${benchmark_task}' == '$__all' or '${benchmark_task}' contains ',' or '${benchmark_task:csv}' == '*' or '${benchmark_task:csv}' == '__all' or '${benchmark_task:csv}' == '$__all' or '${benchmark_task:csv}' contains '__all' or '${benchmark_task:csv}' contains '$__all' or '${benchmark_task:csv}' contains ',' or '${benchmark_task:csv}' == '' or task_id in (${benchmark_task:singlequote})) | where ('${benchmark_variant:text}' == 'All' or '${benchmark_variant}' == '__all' or '${benchmark_variant}' == '$__all' or '${benchmark_variant}' contains ',' or '${benchmark_variant:csv}' == '*' or '${benchmark_variant:csv}' == '__all' or '${benchmark_variant:csv}' == '$__all' or '${benchmark_variant:csv}' contains '__all' or '${benchmark_variant:csv}' contains '$__all' or '${benchmark_variant:csv}' contains ',' or '${benchmark_variant:csv}' == '' or variant in (${benchmark_variant:singlequote})) | where ('${benchmark_run:text}' == 'All' or '${benchmark_run}' == '__all' or '${benchmark_run}' == '$__all' or '${benchmark_run}' contains ',' or '${benchmark_run:csv}' == '*' or '${benchmark_run:csv}' == '__all' or '${benchmark_run:csv}' == '$__all' or '${benchmark_run:csv}' contains '__all' or '${benchmark_run:csv}' contains '$__all' or '${benchmark_run:csv}' contains ',' or '${benchmark_run:csv}' == '' or run_id in (${benchmark_run:singlequote})) | where ('${hypothesis:text}' == 'All' or '${hypothesis}' == '__all' or '${hypothesis}' == '$__all' or '${hypothesis}' contains ',' or '${hypothesis:csv}' == '*' or '${hypothesis:csv}' == '__all' or '${hypothesis:csv}' == '$__all' or '${hypothesis:csv}' contains '__all' or '${hypothesis:csv}' contains '$__all' or '${hypothesis:csv}' contains ',' or '${hypothesis:csv}' == '' or hypothesis_id in (${hypothesis:singlequote})) | extend Passed=coalesce(tobool(Properties['agentops.benchmark.passed']), tobool(Properties['agentops.eval.passed']), Success), InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), OutputTokens=todouble(Properties['gen_ai.usage.output_tokens']), AICredits=todouble(Properties['github.copilot.cost']), EstUsd=todouble(Properties['github.copilot.cost']) * 0.01, Regression=coalesce(tobool(Properties['agentops.benchmark.regression']), tobool(Properties['agentops.regression'])), SafetyIssue=iff(tostring(Properties['agentops.safety.issue']) != '' or tostring(Properties['agentops.policy.blocked']) == 'true' or tostring(Properties) has 'content_filter' or tostring(Properties) has 'safety', true, false), FailureReason=coalesce(error, tostring(Properties['agentops.benchmark.failure_reason']), tostring(Properties['agentops.eval.failure_reason']), ResultCode) | extend Score=coalesce(todouble(Properties['agentops.benchmark.score']), todouble(Properties['agentops.eval.score']), todouble(Properties['agentops.score']), todouble(Properties['score']), iff(Passed == true, 100.0, iff(Passed == false, 0.0, real(null)))) | summarize Samples=countif(isnotnull(Passed)), Passes=countif(Passed == true) by TimeGenerated=bin(TimeGenerated, $__interval), variant | extend PassRate=iff(Samples > 0, 100.0 * Passes / Samples, real(null)) | project TimeGenerated, variant, PassRate | order by TimeGenerated asc"
+          }
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Average score",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 9
+      },
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "azure-monitor-oob"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "Azure Log Analytics",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor-oob"
+          },
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
+            ],
+            "resultFormat": "time_series",
+            "query": "AppDependencies | where $__timeFilter(TimeGenerated) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or Properties has 'agentops.' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['agent.runtime']) in ('codex', 'openai-codex-cli')) | extend suite=tostring(Properties['agentops.benchmark.suite']), task_id=tostring(Properties['agentops.benchmark.task_id']), variant=tostring(Properties['agentops.benchmark.variant']), run_id=tostring(Properties['agentops.benchmark.run_id']), hypothesis_id=tostring(Properties['agentops.hypothesis.id']), operation=tostring(Properties['gen_ai.operation.name']), conversation=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(iff(isnotempty(tostring(Properties['gen_ai.agent.id'])), tostring(Properties['gen_ai.agent.id']), iff(isnotempty(tostring(Properties['service.name'])), tostring(Properties['service.name']), iff(isnotempty(AppRoleName), AppRoleName, 'agent'))), '_', iff(isnotempty(tostring(Properties['github.copilot.turn_count'])), tostring(Properties['github.copilot.turn_count']), iff(isnotempty(OperationId), OperationId, 'session')), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm'))), tool=tostring(Properties['gen_ai.tool.name']), error=tostring(Properties['error.type']) | where isnotempty(suite) or isnotempty(task_id) or isnotempty(variant) or isnotempty(run_id) or isnotempty(hypothesis_id) | where ('${benchmark_suite:text}' == 'All' or '${benchmark_suite}' == '__all' or '${benchmark_suite}' == '$__all' or '${benchmark_suite}' contains ',' or '${benchmark_suite:csv}' == '*' or '${benchmark_suite:csv}' == '__all' or '${benchmark_suite:csv}' == '$__all' or '${benchmark_suite:csv}' contains '__all' or '${benchmark_suite:csv}' contains '$__all' or '${benchmark_suite:csv}' contains ',' or '${benchmark_suite:csv}' == '' or suite in (${benchmark_suite:singlequote})) | where ('${benchmark_task:text}' == 'All' or '${benchmark_task}' == '__all' or '${benchmark_task}' == '$__all' or '${benchmark_task}' contains ',' or '${benchmark_task:csv}' == '*' or '${benchmark_task:csv}' == '__all' or '${benchmark_task:csv}' == '$__all' or '${benchmark_task:csv}' contains '__all' or '${benchmark_task:csv}' contains '$__all' or '${benchmark_task:csv}' contains ',' or '${benchmark_task:csv}' == '' or task_id in (${benchmark_task:singlequote})) | where ('${benchmark_variant:text}' == 'All' or '${benchmark_variant}' == '__all' or '${benchmark_variant}' == '$__all' or '${benchmark_variant}' contains ',' or '${benchmark_variant:csv}' == '*' or '${benchmark_variant:csv}' == '__all' or '${benchmark_variant:csv}' == '$__all' or '${benchmark_variant:csv}' contains '__all' or '${benchmark_variant:csv}' contains '$__all' or '${benchmark_variant:csv}' contains ',' or '${benchmark_variant:csv}' == '' or variant in (${benchmark_variant:singlequote})) | where ('${benchmark_run:text}' == 'All' or '${benchmark_run}' == '__all' or '${benchmark_run}' == '$__all' or '${benchmark_run}' contains ',' or '${benchmark_run:csv}' == '*' or '${benchmark_run:csv}' == '__all' or '${benchmark_run:csv}' == '$__all' or '${benchmark_run:csv}' contains '__all' or '${benchmark_run:csv}' contains '$__all' or '${benchmark_run:csv}' contains ',' or '${benchmark_run:csv}' == '' or run_id in (${benchmark_run:singlequote})) | where ('${hypothesis:text}' == 'All' or '${hypothesis}' == '__all' or '${hypothesis}' == '$__all' or '${hypothesis}' contains ',' or '${hypothesis:csv}' == '*' or '${hypothesis:csv}' == '__all' or '${hypothesis:csv}' == '$__all' or '${hypothesis:csv}' contains '__all' or '${hypothesis:csv}' contains '$__all' or '${hypothesis:csv}' contains ',' or '${hypothesis:csv}' == '' or hypothesis_id in (${hypothesis:singlequote})) | extend Passed=coalesce(tobool(Properties['agentops.benchmark.passed']), tobool(Properties['agentops.eval.passed']), Success), InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), OutputTokens=todouble(Properties['gen_ai.usage.output_tokens']), AICredits=todouble(Properties['github.copilot.cost']), EstUsd=todouble(Properties['github.copilot.cost']) * 0.01, Regression=coalesce(tobool(Properties['agentops.benchmark.regression']), tobool(Properties['agentops.regression'])), SafetyIssue=iff(tostring(Properties['agentops.safety.issue']) != '' or tostring(Properties['agentops.policy.blocked']) == 'true' or tostring(Properties) has 'content_filter' or tostring(Properties) has 'safety', true, false), FailureReason=coalesce(error, tostring(Properties['agentops.benchmark.failure_reason']), tostring(Properties['agentops.eval.failure_reason']), ResultCode) | extend Score=coalesce(todouble(Properties['agentops.benchmark.score']), todouble(Properties['agentops.eval.score']), todouble(Properties['agentops.score']), todouble(Properties['score']), iff(Passed == true, 100.0, iff(Passed == false, 0.0, real(null)))) | summarize AverageScore=avg(Score) by TimeGenerated=bin(TimeGenerated, $__interval), variant | order by TimeGenerated asc"
+          }
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Tool failures",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 9
+      },
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "azure-monitor-oob"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "Azure Log Analytics",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor-oob"
+          },
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
+            ],
+            "resultFormat": "time_series",
+            "query": "AppDependencies | where $__timeFilter(TimeGenerated) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or Properties has 'agentops.' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['agent.runtime']) in ('codex', 'openai-codex-cli')) | extend suite=tostring(Properties['agentops.benchmark.suite']), task_id=tostring(Properties['agentops.benchmark.task_id']), variant=tostring(Properties['agentops.benchmark.variant']), run_id=tostring(Properties['agentops.benchmark.run_id']), hypothesis_id=tostring(Properties['agentops.hypothesis.id']), operation=tostring(Properties['gen_ai.operation.name']), conversation=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(iff(isnotempty(tostring(Properties['gen_ai.agent.id'])), tostring(Properties['gen_ai.agent.id']), iff(isnotempty(tostring(Properties['service.name'])), tostring(Properties['service.name']), iff(isnotempty(AppRoleName), AppRoleName, 'agent'))), '_', iff(isnotempty(tostring(Properties['github.copilot.turn_count'])), tostring(Properties['github.copilot.turn_count']), iff(isnotempty(OperationId), OperationId, 'session')), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm'))), tool=tostring(Properties['gen_ai.tool.name']), error=tostring(Properties['error.type']) | where isnotempty(suite) or isnotempty(task_id) or isnotempty(variant) or isnotempty(run_id) or isnotempty(hypothesis_id) | where ('${benchmark_suite:text}' == 'All' or '${benchmark_suite}' == '__all' or '${benchmark_suite}' == '$__all' or '${benchmark_suite}' contains ',' or '${benchmark_suite:csv}' == '*' or '${benchmark_suite:csv}' == '__all' or '${benchmark_suite:csv}' == '$__all' or '${benchmark_suite:csv}' contains '__all' or '${benchmark_suite:csv}' contains '$__all' or '${benchmark_suite:csv}' contains ',' or '${benchmark_suite:csv}' == '' or suite in (${benchmark_suite:singlequote})) | where ('${benchmark_task:text}' == 'All' or '${benchmark_task}' == '__all' or '${benchmark_task}' == '$__all' or '${benchmark_task}' contains ',' or '${benchmark_task:csv}' == '*' or '${benchmark_task:csv}' == '__all' or '${benchmark_task:csv}' == '$__all' or '${benchmark_task:csv}' contains '__all' or '${benchmark_task:csv}' contains '$__all' or '${benchmark_task:csv}' contains ',' or '${benchmark_task:csv}' == '' or task_id in (${benchmark_task:singlequote})) | where ('${benchmark_variant:text}' == 'All' or '${benchmark_variant}' == '__all' or '${benchmark_variant}' == '$__all' or '${benchmark_variant}' contains ',' or '${benchmark_variant:csv}' == '*' or '${benchmark_variant:csv}' == '__all' or '${benchmark_variant:csv}' == '$__all' or '${benchmark_variant:csv}' contains '__all' or '${benchmark_variant:csv}' contains '$__all' or '${benchmark_variant:csv}' contains ',' or '${benchmark_variant:csv}' == '' or variant in (${benchmark_variant:singlequote})) | where ('${benchmark_run:text}' == 'All' or '${benchmark_run}' == '__all' or '${benchmark_run}' == '$__all' or '${benchmark_run}' contains ',' or '${benchmark_run:csv}' == '*' or '${benchmark_run:csv}' == '__all' or '${benchmark_run:csv}' == '$__all' or '${benchmark_run:csv}' contains '__all' or '${benchmark_run:csv}' contains '$__all' or '${benchmark_run:csv}' contains ',' or '${benchmark_run:csv}' == '' or run_id in (${benchmark_run:singlequote})) | where ('${hypothesis:text}' == 'All' or '${hypothesis}' == '__all' or '${hypothesis}' == '$__all' or '${hypothesis}' contains ',' or '${hypothesis:csv}' == '*' or '${hypothesis:csv}' == '__all' or '${hypothesis:csv}' == '$__all' or '${hypothesis:csv}' contains '__all' or '${hypothesis:csv}' contains '$__all' or '${hypothesis:csv}' contains ',' or '${hypothesis:csv}' == '' or hypothesis_id in (${hypothesis:singlequote})) | extend Passed=coalesce(tobool(Properties['agentops.benchmark.passed']), tobool(Properties['agentops.eval.passed']), Success), InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), OutputTokens=todouble(Properties['gen_ai.usage.output_tokens']), AICredits=todouble(Properties['github.copilot.cost']), EstUsd=todouble(Properties['github.copilot.cost']) * 0.01, Regression=coalesce(tobool(Properties['agentops.benchmark.regression']), tobool(Properties['agentops.regression'])), SafetyIssue=iff(tostring(Properties['agentops.safety.issue']) != '' or tostring(Properties['agentops.policy.blocked']) == 'true' or tostring(Properties) has 'content_filter' or tostring(Properties) has 'safety', true, false), FailureReason=coalesce(error, tostring(Properties['agentops.benchmark.failure_reason']), tostring(Properties['agentops.eval.failure_reason']), ResultCode) | extend Score=coalesce(todouble(Properties['agentops.benchmark.score']), todouble(Properties['agentops.eval.score']), todouble(Properties['agentops.score']), todouble(Properties['score']), iff(Passed == true, 100.0, iff(Passed == false, 0.0, real(null)))) | where operation == 'execute_tool' or isnotempty(tool) | summarize ToolFailures=countif(Success == false or isnotempty(error)) by TimeGenerated=bin(TimeGenerated, $__interval), variant | order by TimeGenerated asc"
+          }
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Token use",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 9
+      },
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "azure-monitor-oob"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "yellow",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "Azure Log Analytics",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor-oob"
+          },
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
+            ],
+            "resultFormat": "time_series",
+            "query": "AppDependencies | where $__timeFilter(TimeGenerated) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or Properties has 'agentops.' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['agent.runtime']) in ('codex', 'openai-codex-cli')) | extend suite=tostring(Properties['agentops.benchmark.suite']), task_id=tostring(Properties['agentops.benchmark.task_id']), variant=tostring(Properties['agentops.benchmark.variant']), run_id=tostring(Properties['agentops.benchmark.run_id']), hypothesis_id=tostring(Properties['agentops.hypothesis.id']), operation=tostring(Properties['gen_ai.operation.name']), conversation=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(iff(isnotempty(tostring(Properties['gen_ai.agent.id'])), tostring(Properties['gen_ai.agent.id']), iff(isnotempty(tostring(Properties['service.name'])), tostring(Properties['service.name']), iff(isnotempty(AppRoleName), AppRoleName, 'agent'))), '_', iff(isnotempty(tostring(Properties['github.copilot.turn_count'])), tostring(Properties['github.copilot.turn_count']), iff(isnotempty(OperationId), OperationId, 'session')), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm'))), tool=tostring(Properties['gen_ai.tool.name']), error=tostring(Properties['error.type']) | where isnotempty(suite) or isnotempty(task_id) or isnotempty(variant) or isnotempty(run_id) or isnotempty(hypothesis_id) | where ('${benchmark_suite:text}' == 'All' or '${benchmark_suite}' == '__all' or '${benchmark_suite}' == '$__all' or '${benchmark_suite}' contains ',' or '${benchmark_suite:csv}' == '*' or '${benchmark_suite:csv}' == '__all' or '${benchmark_suite:csv}' == '$__all' or '${benchmark_suite:csv}' contains '__all' or '${benchmark_suite:csv}' contains '$__all' or '${benchmark_suite:csv}' contains ',' or '${benchmark_suite:csv}' == '' or suite in (${benchmark_suite:singlequote})) | where ('${benchmark_task:text}' == 'All' or '${benchmark_task}' == '__all' or '${benchmark_task}' == '$__all' or '${benchmark_task}' contains ',' or '${benchmark_task:csv}' == '*' or '${benchmark_task:csv}' == '__all' or '${benchmark_task:csv}' == '$__all' or '${benchmark_task:csv}' contains '__all' or '${benchmark_task:csv}' contains '$__all' or '${benchmark_task:csv}' contains ',' or '${benchmark_task:csv}' == '' or task_id in (${benchmark_task:singlequote})) | where ('${benchmark_variant:text}' == 'All' or '${benchmark_variant}' == '__all' or '${benchmark_variant}' == '$__all' or '${benchmark_variant}' contains ',' or '${benchmark_variant:csv}' == '*' or '${benchmark_variant:csv}' == '__all' or '${benchmark_variant:csv}' == '$__all' or '${benchmark_variant:csv}' contains '__all' or '${benchmark_variant:csv}' contains '$__all' or '${benchmark_variant:csv}' contains ',' or '${benchmark_variant:csv}' == '' or variant in (${benchmark_variant:singlequote})) | where ('${benchmark_run:text}' == 'All' or '${benchmark_run}' == '__all' or '${benchmark_run}' == '$__all' or '${benchmark_run}' contains ',' or '${benchmark_run:csv}' == '*' or '${benchmark_run:csv}' == '__all' or '${benchmark_run:csv}' == '$__all' or '${benchmark_run:csv}' contains '__all' or '${benchmark_run:csv}' contains '$__all' or '${benchmark_run:csv}' contains ',' or '${benchmark_run:csv}' == '' or run_id in (${benchmark_run:singlequote})) | where ('${hypothesis:text}' == 'All' or '${hypothesis}' == '__all' or '${hypothesis}' == '$__all' or '${hypothesis}' contains ',' or '${hypothesis:csv}' == '*' or '${hypothesis:csv}' == '__all' or '${hypothesis:csv}' == '$__all' or '${hypothesis:csv}' contains '__all' or '${hypothesis:csv}' contains '$__all' or '${hypothesis:csv}' contains ',' or '${hypothesis:csv}' == '' or hypothesis_id in (${hypothesis:singlequote})) | extend Passed=coalesce(tobool(Properties['agentops.benchmark.passed']), tobool(Properties['agentops.eval.passed']), Success), InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), OutputTokens=todouble(Properties['gen_ai.usage.output_tokens']), AICredits=todouble(Properties['github.copilot.cost']), EstUsd=todouble(Properties['github.copilot.cost']) * 0.01, Regression=coalesce(tobool(Properties['agentops.benchmark.regression']), tobool(Properties['agentops.regression'])), SafetyIssue=iff(tostring(Properties['agentops.safety.issue']) != '' or tostring(Properties['agentops.policy.blocked']) == 'true' or tostring(Properties) has 'content_filter' or tostring(Properties) has 'safety', true, false), FailureReason=coalesce(error, tostring(Properties['agentops.benchmark.failure_reason']), tostring(Properties['agentops.eval.failure_reason']), ResultCode) | extend Score=coalesce(todouble(Properties['agentops.benchmark.score']), todouble(Properties['agentops.eval.score']), todouble(Properties['agentops.score']), todouble(Properties['score']), iff(Passed == true, 100.0, iff(Passed == false, 0.0, real(null)))) | summarize TokenUse=sum(coalesce(InputTokens, 0.0) + coalesce(OutputTokens, 0.0)) by TimeGenerated=bin(TimeGenerated, $__interval), variant | order by TimeGenerated asc"
+          }
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Cost",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 13
+      },
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "azure-monitor-oob"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "yellow",
+                "value": null
+              }
+            ]
+          },
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "Azure Log Analytics",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor-oob"
+          },
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
+            ],
+            "resultFormat": "time_series",
+            "query": "AppDependencies | where $__timeFilter(TimeGenerated) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or Properties has 'agentops.' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['agent.runtime']) in ('codex', 'openai-codex-cli')) | extend suite=tostring(Properties['agentops.benchmark.suite']), task_id=tostring(Properties['agentops.benchmark.task_id']), variant=tostring(Properties['agentops.benchmark.variant']), run_id=tostring(Properties['agentops.benchmark.run_id']), hypothesis_id=tostring(Properties['agentops.hypothesis.id']), operation=tostring(Properties['gen_ai.operation.name']), conversation=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(iff(isnotempty(tostring(Properties['gen_ai.agent.id'])), tostring(Properties['gen_ai.agent.id']), iff(isnotempty(tostring(Properties['service.name'])), tostring(Properties['service.name']), iff(isnotempty(AppRoleName), AppRoleName, 'agent'))), '_', iff(isnotempty(tostring(Properties['github.copilot.turn_count'])), tostring(Properties['github.copilot.turn_count']), iff(isnotempty(OperationId), OperationId, 'session')), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm'))), tool=tostring(Properties['gen_ai.tool.name']), error=tostring(Properties['error.type']) | where isnotempty(suite) or isnotempty(task_id) or isnotempty(variant) or isnotempty(run_id) or isnotempty(hypothesis_id) | where ('${benchmark_suite:text}' == 'All' or '${benchmark_suite}' == '__all' or '${benchmark_suite}' == '$__all' or '${benchmark_suite}' contains ',' or '${benchmark_suite:csv}' == '*' or '${benchmark_suite:csv}' == '__all' or '${benchmark_suite:csv}' == '$__all' or '${benchmark_suite:csv}' contains '__all' or '${benchmark_suite:csv}' contains '$__all' or '${benchmark_suite:csv}' contains ',' or '${benchmark_suite:csv}' == '' or suite in (${benchmark_suite:singlequote})) | where ('${benchmark_task:text}' == 'All' or '${benchmark_task}' == '__all' or '${benchmark_task}' == '$__all' or '${benchmark_task}' contains ',' or '${benchmark_task:csv}' == '*' or '${benchmark_task:csv}' == '__all' or '${benchmark_task:csv}' == '$__all' or '${benchmark_task:csv}' contains '__all' or '${benchmark_task:csv}' contains '$__all' or '${benchmark_task:csv}' contains ',' or '${benchmark_task:csv}' == '' or task_id in (${benchmark_task:singlequote})) | where ('${benchmark_variant:text}' == 'All' or '${benchmark_variant}' == '__all' or '${benchmark_variant}' == '$__all' or '${benchmark_variant}' contains ',' or '${benchmark_variant:csv}' == '*' or '${benchmark_variant:csv}' == '__all' or '${benchmark_variant:csv}' == '$__all' or '${benchmark_variant:csv}' contains '__all' or '${benchmark_variant:csv}' contains '$__all' or '${benchmark_variant:csv}' contains ',' or '${benchmark_variant:csv}' == '' or variant in (${benchmark_variant:singlequote})) | where ('${benchmark_run:text}' == 'All' or '${benchmark_run}' == '__all' or '${benchmark_run}' == '$__all' or '${benchmark_run}' contains ',' or '${benchmark_run:csv}' == '*' or '${benchmark_run:csv}' == '__all' or '${benchmark_run:csv}' == '$__all' or '${benchmark_run:csv}' contains '__all' or '${benchmark_run:csv}' contains '$__all' or '${benchmark_run:csv}' contains ',' or '${benchmark_run:csv}' == '' or run_id in (${benchmark_run:singlequote})) | where ('${hypothesis:text}' == 'All' or '${hypothesis}' == '__all' or '${hypothesis}' == '$__all' or '${hypothesis}' contains ',' or '${hypothesis:csv}' == '*' or '${hypothesis:csv}' == '__all' or '${hypothesis:csv}' == '$__all' or '${hypothesis:csv}' contains '__all' or '${hypothesis:csv}' contains '$__all' or '${hypothesis:csv}' contains ',' or '${hypothesis:csv}' == '' or hypothesis_id in (${hypothesis:singlequote})) | extend Passed=coalesce(tobool(Properties['agentops.benchmark.passed']), tobool(Properties['agentops.eval.passed']), Success), InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), OutputTokens=todouble(Properties['gen_ai.usage.output_tokens']), AICredits=todouble(Properties['github.copilot.cost']), EstUsd=todouble(Properties['github.copilot.cost']) * 0.01, Regression=coalesce(tobool(Properties['agentops.benchmark.regression']), tobool(Properties['agentops.regression'])), SafetyIssue=iff(tostring(Properties['agentops.safety.issue']) != '' or tostring(Properties['agentops.policy.blocked']) == 'true' or tostring(Properties) has 'content_filter' or tostring(Properties) has 'safety', true, false), FailureReason=coalesce(error, tostring(Properties['agentops.benchmark.failure_reason']), tostring(Properties['agentops.eval.failure_reason']), ResultCode) | extend Score=coalesce(todouble(Properties['agentops.benchmark.score']), todouble(Properties['agentops.eval.score']), todouble(Properties['agentops.score']), todouble(Properties['score']), iff(Passed == true, 100.0, iff(Passed == false, 0.0, real(null)))) | summarize Cost=sum(EstUsd) by TimeGenerated=bin(TimeGenerated, $__interval), variant | order by TimeGenerated asc"
+          }
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "stat",
+      "title": "Safety issues",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 13
+      },
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "azure-monitor-oob"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "Azure Log Analytics",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor-oob"
+          },
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
+            ],
+            "resultFormat": "time_series",
+            "query": "AppDependencies | where $__timeFilter(TimeGenerated) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or Properties has 'agentops.' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['agent.runtime']) in ('codex', 'openai-codex-cli')) | extend suite=tostring(Properties['agentops.benchmark.suite']), task_id=tostring(Properties['agentops.benchmark.task_id']), variant=tostring(Properties['agentops.benchmark.variant']), run_id=tostring(Properties['agentops.benchmark.run_id']), hypothesis_id=tostring(Properties['agentops.hypothesis.id']), operation=tostring(Properties['gen_ai.operation.name']), conversation=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(iff(isnotempty(tostring(Properties['gen_ai.agent.id'])), tostring(Properties['gen_ai.agent.id']), iff(isnotempty(tostring(Properties['service.name'])), tostring(Properties['service.name']), iff(isnotempty(AppRoleName), AppRoleName, 'agent'))), '_', iff(isnotempty(tostring(Properties['github.copilot.turn_count'])), tostring(Properties['github.copilot.turn_count']), iff(isnotempty(OperationId), OperationId, 'session')), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm'))), tool=tostring(Properties['gen_ai.tool.name']), error=tostring(Properties['error.type']) | where isnotempty(suite) or isnotempty(task_id) or isnotempty(variant) or isnotempty(run_id) or isnotempty(hypothesis_id) | where ('${benchmark_suite:text}' == 'All' or '${benchmark_suite}' == '__all' or '${benchmark_suite}' == '$__all' or '${benchmark_suite}' contains ',' or '${benchmark_suite:csv}' == '*' or '${benchmark_suite:csv}' == '__all' or '${benchmark_suite:csv}' == '$__all' or '${benchmark_suite:csv}' contains '__all' or '${benchmark_suite:csv}' contains '$__all' or '${benchmark_suite:csv}' contains ',' or '${benchmark_suite:csv}' == '' or suite in (${benchmark_suite:singlequote})) | where ('${benchmark_task:text}' == 'All' or '${benchmark_task}' == '__all' or '${benchmark_task}' == '$__all' or '${benchmark_task}' contains ',' or '${benchmark_task:csv}' == '*' or '${benchmark_task:csv}' == '__all' or '${benchmark_task:csv}' == '$__all' or '${benchmark_task:csv}' contains '__all' or '${benchmark_task:csv}' contains '$__all' or '${benchmark_task:csv}' contains ',' or '${benchmark_task:csv}' == '' or task_id in (${benchmark_task:singlequote})) | where ('${benchmark_variant:text}' == 'All' or '${benchmark_variant}' == '__all' or '${benchmark_variant}' == '$__all' or '${benchmark_variant}' contains ',' or '${benchmark_variant:csv}' == '*' or '${benchmark_variant:csv}' == '__all' or '${benchmark_variant:csv}' == '$__all' or '${benchmark_variant:csv}' contains '__all' or '${benchmark_variant:csv}' contains '$__all' or '${benchmark_variant:csv}' contains ',' or '${benchmark_variant:csv}' == '' or variant in (${benchmark_variant:singlequote})) | where ('${benchmark_run:text}' == 'All' or '${benchmark_run}' == '__all' or '${benchmark_run}' == '$__all' or '${benchmark_run}' contains ',' or '${benchmark_run:csv}' == '*' or '${benchmark_run:csv}' == '__all' or '${benchmark_run:csv}' == '$__all' or '${benchmark_run:csv}' contains '__all' or '${benchmark_run:csv}' contains '$__all' or '${benchmark_run:csv}' contains ',' or '${benchmark_run:csv}' == '' or run_id in (${benchmark_run:singlequote})) | where ('${hypothesis:text}' == 'All' or '${hypothesis}' == '__all' or '${hypothesis}' == '$__all' or '${hypothesis}' contains ',' or '${hypothesis:csv}' == '*' or '${hypothesis:csv}' == '__all' or '${hypothesis:csv}' == '$__all' or '${hypothesis:csv}' contains '__all' or '${hypothesis:csv}' contains '$__all' or '${hypothesis:csv}' contains ',' or '${hypothesis:csv}' == '' or hypothesis_id in (${hypothesis:singlequote})) | extend Passed=coalesce(tobool(Properties['agentops.benchmark.passed']), tobool(Properties['agentops.eval.passed']), Success), InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), OutputTokens=todouble(Properties['gen_ai.usage.output_tokens']), AICredits=todouble(Properties['github.copilot.cost']), EstUsd=todouble(Properties['github.copilot.cost']) * 0.01, Regression=coalesce(tobool(Properties['agentops.benchmark.regression']), tobool(Properties['agentops.regression'])), SafetyIssue=iff(tostring(Properties['agentops.safety.issue']) != '' or tostring(Properties['agentops.policy.blocked']) == 'true' or tostring(Properties) has 'content_filter' or tostring(Properties) has 'safety', true, false), FailureReason=coalesce(error, tostring(Properties['agentops.benchmark.failure_reason']), tostring(Properties['agentops.eval.failure_reason']), ResultCode) | extend Score=coalesce(todouble(Properties['agentops.benchmark.score']), todouble(Properties['agentops.eval.score']), todouble(Properties['agentops.score']), todouble(Properties['score']), iff(Passed == true, 100.0, iff(Passed == false, 0.0, real(null)))) | summarize SafetyIssues=countif(SafetyIssue) by TimeGenerated=bin(TimeGenerated, $__interval), variant | order by TimeGenerated asc"
+          }
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "table",
+      "title": "Regressions",
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 12,
+        "y": 13
+      },
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "azure-monitor-oob"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "PassRate"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "PassRateDelta"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "AverageScore"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "decimals",
+                "value": 3
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "ScoreDelta"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "decimals",
+                "value": 3
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "EstUsd"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyUSD"
+              },
+              {
+                "id": "decimals",
+                "value": 4
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "CostDelta"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyUSD"
+              },
+              {
+                "id": "decimals",
+                "value": 4
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "Azure Log Analytics",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor-oob"
+          },
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
+            ],
+            "resultFormat": "table",
+            "query": "let variants = AppDependencies | where $__timeFilter(TimeGenerated) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or Properties has 'agentops.' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['agent.runtime']) in ('codex', 'openai-codex-cli')) | extend suite=tostring(Properties['agentops.benchmark.suite']), task_id=tostring(Properties['agentops.benchmark.task_id']), variant=tostring(Properties['agentops.benchmark.variant']), run_id=tostring(Properties['agentops.benchmark.run_id']), hypothesis_id=tostring(Properties['agentops.hypothesis.id']), operation=tostring(Properties['gen_ai.operation.name']), conversation=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(iff(isnotempty(tostring(Properties['gen_ai.agent.id'])), tostring(Properties['gen_ai.agent.id']), iff(isnotempty(tostring(Properties['service.name'])), tostring(Properties['service.name']), iff(isnotempty(AppRoleName), AppRoleName, 'agent'))), '_', iff(isnotempty(tostring(Properties['github.copilot.turn_count'])), tostring(Properties['github.copilot.turn_count']), iff(isnotempty(OperationId), OperationId, 'session')), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm'))), tool=tostring(Properties['gen_ai.tool.name']), error=tostring(Properties['error.type']) | where isnotempty(suite) or isnotempty(task_id) or isnotempty(variant) or isnotempty(run_id) or isnotempty(hypothesis_id) | where ('${benchmark_suite:text}' == 'All' or '${benchmark_suite}' == '__all' or '${benchmark_suite}' == '$__all' or '${benchmark_suite}' contains ',' or '${benchmark_suite:csv}' == '*' or '${benchmark_suite:csv}' == '__all' or '${benchmark_suite:csv}' == '$__all' or '${benchmark_suite:csv}' contains '__all' or '${benchmark_suite:csv}' contains '$__all' or '${benchmark_suite:csv}' contains ',' or '${benchmark_suite:csv}' == '' or suite in (${benchmark_suite:singlequote})) | where ('${benchmark_task:text}' == 'All' or '${benchmark_task}' == '__all' or '${benchmark_task}' == '$__all' or '${benchmark_task}' contains ',' or '${benchmark_task:csv}' == '*' or '${benchmark_task:csv}' == '__all' or '${benchmark_task:csv}' == '$__all' or '${benchmark_task:csv}' contains '__all' or '${benchmark_task:csv}' contains '$__all' or '${benchmark_task:csv}' contains ',' or '${benchmark_task:csv}' == '' or task_id in (${benchmark_task:singlequote})) | where ('${benchmark_variant:text}' == 'All' or '${benchmark_variant}' == '__all' or '${benchmark_variant}' == '$__all' or '${benchmark_variant}' contains ',' or '${benchmark_variant:csv}' == '*' or '${benchmark_variant:csv}' == '__all' or '${benchmark_variant:csv}' == '$__all' or '${benchmark_variant:csv}' contains '__all' or '${benchmark_variant:csv}' contains '$__all' or '${benchmark_variant:csv}' contains ',' or '${benchmark_variant:csv}' == '' or variant in (${benchmark_variant:singlequote})) | where ('${benchmark_run:text}' == 'All' or '${benchmark_run}' == '__all' or '${benchmark_run}' == '$__all' or '${benchmark_run}' contains ',' or '${benchmark_run:csv}' == '*' or '${benchmark_run:csv}' == '__all' or '${benchmark_run:csv}' == '$__all' or '${benchmark_run:csv}' contains '__all' or '${benchmark_run:csv}' contains '$__all' or '${benchmark_run:csv}' contains ',' or '${benchmark_run:csv}' == '' or run_id in (${benchmark_run:singlequote})) | where ('${hypothesis:text}' == 'All' or '${hypothesis}' == '__all' or '${hypothesis}' == '$__all' or '${hypothesis}' contains ',' or '${hypothesis:csv}' == '*' or '${hypothesis:csv}' == '__all' or '${hypothesis:csv}' == '$__all' or '${hypothesis:csv}' contains '__all' or '${hypothesis:csv}' contains '$__all' or '${hypothesis:csv}' contains ',' or '${hypothesis:csv}' == '' or hypothesis_id in (${hypothesis:singlequote})) | extend Passed=coalesce(tobool(Properties['agentops.benchmark.passed']), tobool(Properties['agentops.eval.passed']), Success), InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), OutputTokens=todouble(Properties['gen_ai.usage.output_tokens']), AICredits=todouble(Properties['github.copilot.cost']), EstUsd=todouble(Properties['github.copilot.cost']) * 0.01, Regression=coalesce(tobool(Properties['agentops.benchmark.regression']), tobool(Properties['agentops.regression'])), SafetyIssue=iff(tostring(Properties['agentops.safety.issue']) != '' or tostring(Properties['agentops.policy.blocked']) == 'true' or tostring(Properties) has 'content_filter' or tostring(Properties) has 'safety', true, false), FailureReason=coalesce(error, tostring(Properties['agentops.benchmark.failure_reason']), tostring(Properties['agentops.eval.failure_reason']), ResultCode) | extend Score=coalesce(todouble(Properties['agentops.benchmark.score']), todouble(Properties['agentops.eval.score']), todouble(Properties['agentops.score']), todouble(Properties['score']), iff(Passed == true, 100.0, iff(Passed == false, 0.0, real(null)))) | summarize Started=min(TimeGenerated), Ended=max(TimeGenerated), Spans=count(), Sessions=dcount(conversation), Runs=dcount(run_id), ToolCalls=countif(operation == 'execute_tool' or isnotempty(tool)), ToolFailures=countif((operation == 'execute_tool' or isnotempty(tool)) and (Success == false or isnotempty(error))), Failures=countif(Success == false or isnotempty(error)), PassSamples=countif(isnotnull(Passed)), Passes=countif(Passed == true), ScoreSamples=countif(isnotnull(Score)), AverageScore=avg(Score), InputTokens=sum(InputTokens), OutputTokens=sum(OutputTokens), EstUsd=sum(EstUsd), SafetyIssues=countif(SafetyIssue), ExplicitRegressions=countif(Regression == true), FailureReasons=make_set_if(FailureReason, isnotempty(FailureReason), 10) by suite, task_id, hypothesis_id, variant, run_id | extend TokenUse=coalesce(InputTokens, 0.0) + coalesce(OutputTokens, 0.0), PassRate=iff(PassSamples > 0, round(100.0 * Passes / PassSamples, 1), real(null)); let baseline = variants | where tolower(variant) in ('baseline', 'control', 'main', 'default') | summarize BaselineScore=avg(AverageScore), BaselinePassRate=avg(PassRate), BaselineToolFailures=sum(ToolFailures), BaselineCost=avg(EstUsd), BaselineTokenUse=avg(TokenUse) by suite, task_id, hypothesis_id; let rows = variants | join kind=leftouter baseline on suite, task_id, hypothesis_id | extend ScoreDelta=round(AverageScore - BaselineScore, 3), PassRateDelta=round(PassRate - BaselinePassRate, 1), CostDelta=round(EstUsd - BaselineCost, 4), TokenDelta=round(TokenUse - BaselineTokenUse, 0) | where ExplicitRegressions > 0 or ScoreDelta < 0 or PassRateDelta < 0 or ToolFailures > BaselineToolFailures | project suite, task_id, hypothesis_id, variant, run_id, ExplicitRegressions, PassRate, PassRateDelta, AverageScore, ScoreDelta, ToolFailures, BaselineToolFailures, TokenUse, TokenDelta, EstUsd, CostDelta, FailureReasons; union (rows | order by ExplicitRegressions desc, ScoreDelta asc, PassRateDelta asc, ToolFailures desc), (print suite='All clear', task_id='', hypothesis_id='', variant='', run_id='', ExplicitRegressions=0, PassRate=real(null), PassRateDelta=real(0), AverageScore=real(null), ScoreDelta=real(0), ToolFailures=0, BaselineToolFailures=0, TokenUse=real(0), TokenDelta=real(0), EstUsd=real(0), CostDelta=real(0), FailureReasons=dynamic(['No regressions observed']) | where toscalar(rows | count) == 0)"
+          }
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "type": "table",
+      "title": "Top failure reasons",
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 23
+      },
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "azure-monitor-oob"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "Azure Log Analytics",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor-oob"
+          },
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
+            ],
+            "resultFormat": "table",
+            "query": "AppDependencies | where $__timeFilter(TimeGenerated) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or Properties has 'agentops.' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['agent.runtime']) in ('codex', 'openai-codex-cli')) | extend suite=tostring(Properties['agentops.benchmark.suite']), task_id=tostring(Properties['agentops.benchmark.task_id']), variant=tostring(Properties['agentops.benchmark.variant']), run_id=tostring(Properties['agentops.benchmark.run_id']), hypothesis_id=tostring(Properties['agentops.hypothesis.id']), operation=tostring(Properties['gen_ai.operation.name']), conversation=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(iff(isnotempty(tostring(Properties['gen_ai.agent.id'])), tostring(Properties['gen_ai.agent.id']), iff(isnotempty(tostring(Properties['service.name'])), tostring(Properties['service.name']), iff(isnotempty(AppRoleName), AppRoleName, 'agent'))), '_', iff(isnotempty(tostring(Properties['github.copilot.turn_count'])), tostring(Properties['github.copilot.turn_count']), iff(isnotempty(OperationId), OperationId, 'session')), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm'))), tool=tostring(Properties['gen_ai.tool.name']), error=tostring(Properties['error.type']) | where isnotempty(suite) or isnotempty(task_id) or isnotempty(variant) or isnotempty(run_id) or isnotempty(hypothesis_id) | where ('${benchmark_suite:text}' == 'All' or '${benchmark_suite}' == '__all' or '${benchmark_suite}' == '$__all' or '${benchmark_suite}' contains ',' or '${benchmark_suite:csv}' == '*' or '${benchmark_suite:csv}' == '__all' or '${benchmark_suite:csv}' == '$__all' or '${benchmark_suite:csv}' contains '__all' or '${benchmark_suite:csv}' contains '$__all' or '${benchmark_suite:csv}' contains ',' or '${benchmark_suite:csv}' == '' or suite in (${benchmark_suite:singlequote})) | where ('${benchmark_task:text}' == 'All' or '${benchmark_task}' == '__all' or '${benchmark_task}' == '$__all' or '${benchmark_task}' contains ',' or '${benchmark_task:csv}' == '*' or '${benchmark_task:csv}' == '__all' or '${benchmark_task:csv}' == '$__all' or '${benchmark_task:csv}' contains '__all' or '${benchmark_task:csv}' contains '$__all' or '${benchmark_task:csv}' contains ',' or '${benchmark_task:csv}' == '' or task_id in (${benchmark_task:singlequote})) | where ('${benchmark_variant:text}' == 'All' or '${benchmark_variant}' == '__all' or '${benchmark_variant}' == '$__all' or '${benchmark_variant}' contains ',' or '${benchmark_variant:csv}' == '*' or '${benchmark_variant:csv}' == '__all' or '${benchmark_variant:csv}' == '$__all' or '${benchmark_variant:csv}' contains '__all' or '${benchmark_variant:csv}' contains '$__all' or '${benchmark_variant:csv}' contains ',' or '${benchmark_variant:csv}' == '' or variant in (${benchmark_variant:singlequote})) | where ('${benchmark_run:text}' == 'All' or '${benchmark_run}' == '__all' or '${benchmark_run}' == '$__all' or '${benchmark_run}' contains ',' or '${benchmark_run:csv}' == '*' or '${benchmark_run:csv}' == '__all' or '${benchmark_run:csv}' == '$__all' or '${benchmark_run:csv}' contains '__all' or '${benchmark_run:csv}' contains '$__all' or '${benchmark_run:csv}' contains ',' or '${benchmark_run:csv}' == '' or run_id in (${benchmark_run:singlequote})) | where ('${hypothesis:text}' == 'All' or '${hypothesis}' == '__all' or '${hypothesis}' == '$__all' or '${hypothesis}' contains ',' or '${hypothesis:csv}' == '*' or '${hypothesis:csv}' == '__all' or '${hypothesis:csv}' == '$__all' or '${hypothesis:csv}' contains '__all' or '${hypothesis:csv}' contains '$__all' or '${hypothesis:csv}' contains ',' or '${hypothesis:csv}' == '' or hypothesis_id in (${hypothesis:singlequote})) | extend Passed=coalesce(tobool(Properties['agentops.benchmark.passed']), tobool(Properties['agentops.eval.passed']), Success), InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), OutputTokens=todouble(Properties['gen_ai.usage.output_tokens']), AICredits=todouble(Properties['github.copilot.cost']), EstUsd=todouble(Properties['github.copilot.cost']) * 0.01, Regression=coalesce(tobool(Properties['agentops.benchmark.regression']), tobool(Properties['agentops.regression'])), SafetyIssue=iff(tostring(Properties['agentops.safety.issue']) != '' or tostring(Properties['agentops.policy.blocked']) == 'true' or tostring(Properties) has 'content_filter' or tostring(Properties) has 'safety', true, false), FailureReason=coalesce(error, tostring(Properties['agentops.benchmark.failure_reason']), tostring(Properties['agentops.eval.failure_reason']), ResultCode) | extend Score=coalesce(todouble(Properties['agentops.benchmark.score']), todouble(Properties['agentops.eval.score']), todouble(Properties['agentops.score']), todouble(Properties['score']), iff(Passed == true, 100.0, iff(Passed == false, 0.0, real(null)))) | where Success == false or isnotempty(error) or isnotempty(FailureReason) | summarize Failures=count(), Runs=dcount(run_id), Sessions=dcount(conversation), Examples=make_set(Name, 5), LastSeen=max(TimeGenerated) by suite, task_id, hypothesis_id, variant, FailureReason | order by Failures desc, LastSeen desc | take 100"
+          }
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "table",
+      "title": "Anti-cheat and promotion blockers",
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 33
+      },
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "azure-monitor-oob"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "Azure Log Analytics",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor-oob"
+          },
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
+            ],
+            "resultFormat": "table",
+            "query": "let rows = AppDependencies | where $__timeFilter(TimeGenerated) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or Properties has 'agentops.' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['agent.runtime']) in ('codex', 'openai-codex-cli')) | extend suite=tostring(Properties['agentops.benchmark.suite']), task_id=tostring(Properties['agentops.benchmark.task_id']), variant=tostring(Properties['agentops.benchmark.variant']), run_id=tostring(Properties['agentops.benchmark.run_id']), hypothesis_id=tostring(Properties['agentops.hypothesis.id']), operation=tostring(Properties['gen_ai.operation.name']), conversation=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(iff(isnotempty(tostring(Properties['gen_ai.agent.id'])), tostring(Properties['gen_ai.agent.id']), iff(isnotempty(tostring(Properties['service.name'])), tostring(Properties['service.name']), iff(isnotempty(AppRoleName), AppRoleName, 'agent'))), '_', iff(isnotempty(tostring(Properties['github.copilot.turn_count'])), tostring(Properties['github.copilot.turn_count']), iff(isnotempty(OperationId), OperationId, 'session')), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm'))), tool=tostring(Properties['gen_ai.tool.name']), error=tostring(Properties['error.type']) | where isnotempty(suite) or isnotempty(task_id) or isnotempty(variant) or isnotempty(run_id) or isnotempty(hypothesis_id) | where ('${benchmark_suite:text}' == 'All' or '${benchmark_suite}' == '__all' or '${benchmark_suite}' == '$__all' or '${benchmark_suite}' contains ',' or '${benchmark_suite:csv}' == '*' or '${benchmark_suite:csv}' == '__all' or '${benchmark_suite:csv}' == '$__all' or '${benchmark_suite:csv}' contains '__all' or '${benchmark_suite:csv}' contains '$__all' or '${benchmark_suite:csv}' contains ',' or '${benchmark_suite:csv}' == '' or suite in (${benchmark_suite:singlequote})) | where ('${benchmark_task:text}' == 'All' or '${benchmark_task}' == '__all' or '${benchmark_task}' == '$__all' or '${benchmark_task}' contains ',' or '${benchmark_task:csv}' == '*' or '${benchmark_task:csv}' == '__all' or '${benchmark_task:csv}' == '$__all' or '${benchmark_task:csv}' contains '__all' or '${benchmark_task:csv}' contains '$__all' or '${benchmark_task:csv}' contains ',' or '${benchmark_task:csv}' == '' or task_id in (${benchmark_task:singlequote})) | where ('${benchmark_variant:text}' == 'All' or '${benchmark_variant}' == '__all' or '${benchmark_variant}' == '$__all' or '${benchmark_variant}' contains ',' or '${benchmark_variant:csv}' == '*' or '${benchmark_variant:csv}' == '__all' or '${benchmark_variant:csv}' == '$__all' or '${benchmark_variant:csv}' contains '__all' or '${benchmark_variant:csv}' contains '$__all' or '${benchmark_variant:csv}' contains ',' or '${benchmark_variant:csv}' == '' or variant in (${benchmark_variant:singlequote})) | where ('${benchmark_run:text}' == 'All' or '${benchmark_run}' == '__all' or '${benchmark_run}' == '$__all' or '${benchmark_run}' contains ',' or '${benchmark_run:csv}' == '*' or '${benchmark_run:csv}' == '__all' or '${benchmark_run:csv}' == '$__all' or '${benchmark_run:csv}' contains '__all' or '${benchmark_run:csv}' contains '$__all' or '${benchmark_run:csv}' contains ',' or '${benchmark_run:csv}' == '' or run_id in (${benchmark_run:singlequote})) | where ('${hypothesis:text}' == 'All' or '${hypothesis}' == '__all' or '${hypothesis}' == '$__all' or '${hypothesis}' contains ',' or '${hypothesis:csv}' == '*' or '${hypothesis:csv}' == '__all' or '${hypothesis:csv}' == '$__all' or '${hypothesis:csv}' contains '__all' or '${hypothesis:csv}' contains '$__all' or '${hypothesis:csv}' contains ',' or '${hypothesis:csv}' == '' or hypothesis_id in (${hypothesis:singlequote})) | extend Passed=coalesce(tobool(Properties['agentops.benchmark.passed']), tobool(Properties['agentops.eval.passed']), Success), InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), OutputTokens=todouble(Properties['gen_ai.usage.output_tokens']), AICredits=todouble(Properties['github.copilot.cost']), EstUsd=todouble(Properties['github.copilot.cost']) * 0.01, Regression=coalesce(tobool(Properties['agentops.benchmark.regression']), tobool(Properties['agentops.regression'])), SafetyIssue=iff(tostring(Properties['agentops.safety.issue']) != '' or tostring(Properties['agentops.policy.blocked']) == 'true' or tostring(Properties) has 'content_filter' or tostring(Properties) has 'safety', true, false), FailureReason=coalesce(error, tostring(Properties['agentops.benchmark.failure_reason']), tostring(Properties['agentops.eval.failure_reason']), ResultCode) | extend Score=coalesce(todouble(Properties['agentops.benchmark.score']), todouble(Properties['agentops.eval.score']), todouble(Properties['agentops.score']), todouble(Properties['score']), iff(Passed == true, 100.0, iff(Passed == false, 0.0, real(null)))) | summarize Spans=count(), Runs=dcount(run_id), ToolFailures=countif((operation == 'execute_tool' or isnotempty(tool)) and (Success == false or isnotempty(error))), SafetyIssues=countif(SafetyIssue), PolicyBlocks=countif(tostring(Properties['agentops.policy.blocked']) == 'true' or tostring(Properties) has 'policy'), ContentSignals=countif(tostring(Properties['agentops.content_capture.signal']) =~ 'true' or tostring(Properties) has_any ('content.capture.enabled', 'gen_ai.prompt', 'gen_ai.completion')), MissingRunLabels=countif(isempty(run_id)), FailureReasons=make_set_if(FailureReason, isnotempty(FailureReason), 10), LastSeen=max(TimeGenerated) by suite, task_id, hypothesis_id, variant | extend AntiCheatStatus=case(SafetyIssues > 0 or ContentSignals > 0, 'blocked', PolicyBlocks > 0 or MissingRunLabels > 0, 'review', 'clean') | where AntiCheatStatus != 'clean'; union (rows | order by AntiCheatStatus asc, SafetyIssues desc, ContentSignals desc, PolicyBlocks desc, MissingRunLabels desc), (print suite='All clear', task_id='', hypothesis_id='', variant='', Spans=0, Runs=0, ToolFailures=0, SafetyIssues=0, PolicyBlocks=0, ContentSignals=0, MissingRunLabels=0, FailureReasons=dynamic(['No blockers observed']), LastSeen=now(), AntiCheatStatus='clean' | where toscalar(rows | count) == 0)"
+          }
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "type": "table",
+      "title": "Custom eval scores",
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 42
+      },
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "azure-monitor-oob"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "AverageScore"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "decimals",
+                "value": 3
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "MinScore"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "decimals",
+                "value": 3
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "MaxScore"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "decimals",
+                "value": 3
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "Azure Log Analytics",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor-oob"
+          },
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
+            ],
+            "resultFormat": "table",
+            "query": "AppDependencies | where $__timeFilter(TimeGenerated) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or Properties has 'agentops.' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['agent.runtime']) in ('codex', 'openai-codex-cli')) | extend direct_session=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), ''), fallback_session=strcat(iff(isnotempty(tostring(Properties['gen_ai.agent.id'])), tostring(Properties['gen_ai.agent.id']), iff(isnotempty(tostring(Properties['service.name'])), tostring(Properties['service.name']), iff(isnotempty(AppRoleName), AppRoleName, 'agent'))), '_', iff(isnotempty(tostring(Properties['github.copilot.turn_count'])), tostring(Properties['github.copilot.turn_count']), iff(isnotempty(OperationId), OperationId, 'session')), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm')) | join kind=leftouter (AppDependencies | where $__timeFilter(TimeGenerated) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or Properties has 'agentops.' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['agent.runtime']) in ('codex', 'openai-codex-cli')) | extend direct_session=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), '') | where isnotempty(direct_session) | summarize operation_session=take_any(direct_session) by OperationId) on OperationId | extend conversation=iff(isnotempty(operation_session), operation_session, iff(isnotempty(direct_session), direct_session, fallback_session)) | extend event=tostring(Properties['agentops.event.name']), event_kind=tostring(Properties['agentops.event.kind']), custom_event_id=tostring(Properties['agentops.custom_event_id']), operation=tostring(Properties['gen_ai.operation.name']), agent=tostring(Properties['gen_ai.agent.name']), agentops_agent=coalesce(tostring(Properties['agentops.agent.name']), tostring(Properties['agentops.cli.agent']), tostring(Properties['gen_ai.agent.name'])), workflow=tostring(Properties['agentops.workflow.name']), step=tostring(Properties['agentops.step.name']), outcome=tostring(Properties['agentops.outcome']), risk=tostring(Properties['agentops.risk']), score=todouble(Properties['agentops.score']), entity_type=tostring(Properties['agentops.entity.type']), entity_id_hash=tostring(Properties['agentops.entity.id_hash']), tags=tostring(Properties['agentops.tags']), custom_source=tostring(Properties['agentops.custom.source']), model=tostring(Properties['gen_ai.request.model']), tool=tostring(Properties['gen_ai.tool.name']), repo=tostring(Properties['agentops.repo.hash']), error=tostring(Properties['error.type']) | where isnotempty(event) | where event == 'agent.eval.scored' or isnotnull(score) | summarize Samples=count(), Sessions=dcount(conversation), AverageScore=avg(score), MinScore=min(score), MaxScore=max(score), LastSeen=max(TimeGenerated), Outcomes=make_set_if(outcome, isnotempty(outcome), 10), Sources=make_set_if(custom_source, isnotempty(custom_source), 10) by agentops_agent, workflow, step | order by LastSeen desc, AverageScore desc"
+          }
+        }
+      ]
+    }
+  ],
+  "refresh": "1m",
+  "schemaVersion": 39,
+  "tags": [
+    "agentops",
+    "copilot-cli",
+    "llm-observability"
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "workspaceResource",
+        "type": "constant",
+        "query": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev",
+        "current": {
+          "selected": false,
+          "text": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev",
+          "value": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
+        },
+        "hide": 2
+      },
+      {
+        "name": "benchmark_suite",
+        "label": "Suite",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-azure-monitor-datasource",
+          "uid": "azure-monitor-oob"
+        },
+        "queryType": "Azure Log Analytics",
+        "query": {
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
+            ],
+            "query": "AppDependencies | where TimeGenerated > ago(14d) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or Properties has 'agentops.' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['agent.runtime']) in ('codex', 'openai-codex-cli')) | where Properties has 'agentops.benchmark' or Properties has 'agentops.hypothesis.id' | extend suite=tostring(Properties['agentops.benchmark.suite']) | where isnotempty(suite) | distinct suite | order by suite asc"
+          }
+        },
+        "refresh": 2,
+        "includeAll": false,
+        "multi": false
+      },
+      {
+        "name": "benchmark_task",
+        "label": "Task",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-azure-monitor-datasource",
+          "uid": "azure-monitor-oob"
+        },
+        "queryType": "Azure Log Analytics",
+        "query": {
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
+            ],
+            "query": "AppDependencies | where TimeGenerated > ago(14d) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or Properties has 'agentops.' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['agent.runtime']) in ('codex', 'openai-codex-cli')) | where Properties has 'agentops.benchmark' or Properties has 'agentops.hypothesis.id' | extend task_id=tostring(Properties['agentops.benchmark.task_id']) | where isnotempty(task_id) | distinct task_id | order by task_id asc"
+          }
+        },
+        "refresh": 2,
+        "includeAll": false,
+        "multi": false
+      },
+      {
+        "name": "benchmark_variant",
+        "label": "Variant",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-azure-monitor-datasource",
+          "uid": "azure-monitor-oob"
+        },
+        "queryType": "Azure Log Analytics",
+        "query": {
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
+            ],
+            "query": "AppDependencies | where TimeGenerated > ago(14d) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or Properties has 'agentops.' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['agent.runtime']) in ('codex', 'openai-codex-cli')) | where Properties has 'agentops.benchmark' or Properties has 'agentops.hypothesis.id' | extend variant=tostring(Properties['agentops.benchmark.variant']) | where isnotempty(variant) | distinct variant | order by variant asc"
+          }
+        },
+        "refresh": 2,
+        "includeAll": false,
+        "multi": false
+      },
+      {
+        "name": "benchmark_run",
+        "label": "Run",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-azure-monitor-datasource",
+          "uid": "azure-monitor-oob"
+        },
+        "queryType": "Azure Log Analytics",
+        "query": {
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
+            ],
+            "query": "AppDependencies | where TimeGenerated > ago(14d) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or Properties has 'agentops.' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['agent.runtime']) in ('codex', 'openai-codex-cli')) | where Properties has 'agentops.benchmark' or Properties has 'agentops.hypothesis.id' | extend run_id=tostring(Properties['agentops.benchmark.run_id']) | where isnotempty(run_id) | distinct run_id | order by run_id desc"
+          }
+        },
+        "refresh": 2,
+        "includeAll": false,
+        "multi": false
+      },
+      {
+        "name": "hypothesis",
+        "label": "Hypothesis",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-azure-monitor-datasource",
+          "uid": "azure-monitor-oob"
+        },
+        "queryType": "Azure Log Analytics",
+        "query": {
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
+            ],
+            "query": "AppDependencies | where TimeGenerated > ago(14d) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or Properties has 'agentops.' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['agent.runtime']) in ('codex', 'openai-codex-cli')) | where Properties has 'agentops.benchmark' or Properties has 'agentops.hypothesis.id' | extend hypothesis_id=tostring(Properties['agentops.hypothesis.id']) | where isnotempty(hypothesis_id) | distinct hypothesis_id | order by hypothesis_id asc"
+          }
+        },
+        "refresh": 2,
+        "includeAll": false,
+        "multi": false
+      }
+    ]
+  },
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "AgentOps Experiments",
+  "uid": "agentops-experiments",
+  "version": 1,
+  "weekStart": ""
+}

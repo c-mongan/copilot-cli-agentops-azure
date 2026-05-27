@@ -1,0 +1,413 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+export COPILOT_OTEL_ENABLED="${COPILOT_OTEL_ENABLED:-true}"
+export COPILOT_OTEL_EXPORTER_TYPE="${COPILOT_OTEL_EXPORTER_TYPE:-otlp-http}"
+export OTEL_EXPORTER_OTLP_ENDPOINT="${OTEL_EXPORTER_OTLP_ENDPOINT:-http://127.0.0.1:4318}"
+export OTEL_SERVICE_NAME="${OTEL_SERVICE_NAME:-github-copilot-cli}"
+export OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT="${OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT:-false}"
+export COPILOT_OTEL_SOURCE_NAME="${COPILOT_OTEL_SOURCE_NAME:-github.copilot}"
+
+repo_url="$(git remote get-url origin 2>/dev/null || echo unknown)"
+repo_hash="$(printf '%s' "$repo_url" | shasum -a 256 | awk '{print $1}')"
+branch="$(git branch --show-current 2>/dev/null || echo unknown)"
+commit="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+agentops_version="${AGENTOPS_PACK_VERSION:-0.1.0}"
+profile="${AGENTOPS_PROFILE:-safe-default}"
+experiment="${AGENTOPS_EXPERIMENT:-baseline}"
+cli_mode="interactive"
+cli_model="${COPILOT_MODEL:-}"
+cli_remote="default"
+cli_output_format="text"
+cli_agent=""
+cli_effort=""
+cli_stream=""
+allow_all="false"
+allow_all_tools="false"
+allow_all_paths="false"
+allow_all_urls="false"
+acp_enabled="false"
+cwd_changed="false"
+session_id_provided="false"
+share_enabled="false"
+share_gist_enabled="false"
+allow_tool_count=0
+allow_url_count=0
+deny_tool_count=0
+deny_url_count=0
+available_tool_count=0
+excluded_tool_count=0
+secret_env_count=0
+attachment_count=0
+plugin_dir_count=0
+additional_mcp_config_count=0
+disabled_mcp_server_count=0
+github_mcp_tool_count=0
+github_mcp_toolset_count=0
+additional_mcp_config_names=()
+additional_mcp_config_servers=()
+disabled_mcp_servers=()
+github_mcp_tools=()
+github_mcp_toolsets=()
+copilot_args=("$@")
+copilot_arg_count=$#
+agent_file=""
+agent_file_hash=""
+capture_content_enabled="${AGENTOPS_CAPTURE_CONTENT:-false}"
+capture_content_scope="default-off"
+
+sanitize_attr_value() {
+	printf '%s' "$1" | tr ',=\n\r\t ' '______'
+}
+
+append_unique() {
+	local array_name="$1"
+	local raw_value="${2:-}"
+	[[ -z "${raw_value}" ]] && return
+	local value
+	value="$(sanitize_attr_value "$raw_value")"
+	eval "local existing=(\"\${${array_name}[@]:-}\")"
+	for item in "${existing[@]}"; do
+		[[ "$item" == "$value" ]] && return
+	done
+	eval "${array_name}+=(\"\$value\")"
+}
+
+join_attr_values() {
+	local array_name="$1"
+	eval "local values=(\"\${${array_name}[@]:-}\")"
+	local joined=""
+	for value in "${values[@]}"; do
+		if [[ -z "$joined" ]]; then
+			joined="$value"
+		else
+			joined="${joined}|${value}"
+		fi
+	done
+	printf '%s' "$joined"
+}
+
+list_contains_value() {
+	local list="${1:-}"
+	local candidate="${2:-}"
+	[[ -z "${list}" || -z "${candidate}" ]] && return 1
+	IFS=',| ' read -r -a values <<< "$list"
+	for value in "${values[@]}"; do
+		[[ -z "$value" ]] && continue
+		if [[ "$value" == "*" || "$value" == "$candidate" ]]; then
+			return 0
+		fi
+	done
+	return 1
+}
+
+lower_bool() {
+	printf '%s' "${1:-false}" | tr '[:upper:]' '[:lower:]'
+}
+
+track_mcp_config() {
+	local raw_path="${1#@}"
+	[[ -z "$raw_path" ]] && return
+	append_unique additional_mcp_config_names "$(basename "$raw_path")"
+	[[ -f "$raw_path" ]] || return
+	local servers
+	servers="$(node -e 'const fs=require("node:fs"); const file=process.argv[1]; const data=JSON.parse(fs.readFileSync(file,"utf8")); console.log(Object.keys(data.mcpServers || {}).join("\n"));' "$raw_path" 2>/dev/null || true)"
+	while IFS= read -r server; do
+		append_unique additional_mcp_config_servers "$server"
+	done <<< "$servers"
+}
+
+find_agent_file() {
+	local agent_name="${1:-}"
+	[[ -z "$agent_name" ]] && return
+	local candidates=()
+	if [[ -n "${COPILOT_HOME:-}" ]]; then
+		candidates+=("${COPILOT_HOME}/agents/${agent_name}.agent.md" "${COPILOT_HOME}/agents/${agent_name}.md")
+	fi
+	candidates+=(".copilot/agents/${agent_name}.agent.md" ".copilot/agents/${agent_name}.md" "agents/${agent_name}.agent.md" "agents/${agent_name}.md")
+	for candidate in "${candidates[@]}"; do
+		if [[ -f "$candidate" ]]; then
+			printf '%s' "$candidate"
+			return
+		fi
+	done
+}
+
+while [[ $# -gt 0 ]]; do
+	case "$1" in
+		--mode=*)
+			cli_mode="${1#--mode=}"
+			;;
+		--mode)
+			[[ $# -gt 1 ]] && cli_mode="$2"
+			shift
+			;;
+		--plan)
+			cli_mode="plan"
+			;;
+		--autopilot)
+			cli_mode="autopilot"
+			;;
+		--model=*)
+			cli_model="${1#--model=}"
+			;;
+		--model)
+			[[ $# -gt 1 ]] && cli_model="$2"
+			shift
+			;;
+		--effort=*|--reasoning-effort=*)
+			cli_effort="${1#*=}"
+			;;
+		--effort|--reasoning-effort)
+			[[ $# -gt 1 ]] && cli_effort="$2"
+			shift
+			;;
+		--output-format=*)
+			cli_output_format="${1#--output-format=}"
+			;;
+		--output-format)
+			[[ $# -gt 1 ]] && cli_output_format="$2"
+			shift
+			;;
+		--remote)
+			cli_remote="enabled"
+			;;
+		--no-remote)
+			cli_remote="disabled"
+			;;
+		--agent=*)
+			cli_agent="${1#--agent=}"
+			;;
+		--agent)
+			[[ $# -gt 1 ]] && cli_agent="$2"
+			shift
+			;;
+		--stream=*)
+			cli_stream="${1#--stream=}"
+			;;
+		--stream)
+			[[ $# -gt 1 ]] && cli_stream="$2"
+			shift
+			;;
+		--acp)
+			acp_enabled="true"
+			;;
+		-C)
+			cwd_changed="true"
+			[[ $# -gt 1 && "$2" != -* ]] && shift
+			;;
+		--session-id|--session-id=*)
+			session_id_provided="true"
+			[[ "$1" == "--session-id" && $# -gt 1 && "$2" != -* ]] && shift
+			;;
+		--share|--share=*)
+			share_enabled="true"
+			[[ "$1" == "--share" && $# -gt 1 && "$2" != -* ]] && shift
+			;;
+		--share-gist)
+			share_gist_enabled="true"
+			;;
+		--attachment=*)
+			attachment_count=$((attachment_count + 1))
+			;;
+		--attachment)
+			attachment_count=$((attachment_count + 1))
+			[[ $# -gt 1 && "$2" != -* ]] && shift
+			;;
+		--plugin-dir=*)
+			plugin_dir_count=$((plugin_dir_count + 1))
+			;;
+		--plugin-dir)
+			plugin_dir_count=$((plugin_dir_count + 1))
+			[[ $# -gt 1 && "$2" != -* ]] && shift
+			;;
+		--additional-mcp-config=*)
+			additional_mcp_config_count=$((additional_mcp_config_count + 1))
+			track_mcp_config "${1#--additional-mcp-config=}"
+			;;
+		--additional-mcp-config)
+			additional_mcp_config_count=$((additional_mcp_config_count + 1))
+			if [[ $# -gt 1 && "$2" != -* ]]; then
+				track_mcp_config "$2"
+				shift
+			fi
+			;;
+		--disable-mcp-server=*)
+			disabled_mcp_server_count=$((disabled_mcp_server_count + 1))
+			append_unique disabled_mcp_servers "${1#--disable-mcp-server=}"
+			;;
+		--disable-mcp-server)
+			disabled_mcp_server_count=$((disabled_mcp_server_count + 1))
+			if [[ $# -gt 1 && "$2" != -* ]]; then
+				append_unique disabled_mcp_servers "$2"
+				shift
+			fi
+			;;
+		--add-github-mcp-tool=*)
+			github_mcp_tool_count=$((github_mcp_tool_count + 1))
+			append_unique github_mcp_tools "${1#--add-github-mcp-tool=}"
+			;;
+		--add-github-mcp-tool)
+			github_mcp_tool_count=$((github_mcp_tool_count + 1))
+			if [[ $# -gt 1 && "$2" != -* ]]; then
+				append_unique github_mcp_tools "$2"
+				shift
+			fi
+			;;
+		--add-github-mcp-toolset=*)
+			github_mcp_toolset_count=$((github_mcp_toolset_count + 1))
+			append_unique github_mcp_toolsets "${1#--add-github-mcp-toolset=}"
+			;;
+		--add-github-mcp-toolset)
+			github_mcp_toolset_count=$((github_mcp_toolset_count + 1))
+			if [[ $# -gt 1 && "$2" != -* ]]; then
+				append_unique github_mcp_toolsets "$2"
+				shift
+			fi
+			;;
+		--enable-all-github-mcp-tools)
+			github_mcp_tool_count=$((github_mcp_tool_count + 1))
+			;;
+		--disable-builtin-mcps)
+			disabled_mcp_server_count=$((disabled_mcp_server_count + 1))
+			;;
+		--allow-all|--yolo)
+			allow_all="true"
+			allow_all_tools="true"
+			allow_all_paths="true"
+			allow_all_urls="true"
+			;;
+		--allow-all-tools)
+			allow_all_tools="true"
+			;;
+		--allow-all-paths)
+			allow_all_paths="true"
+			;;
+		--allow-all-urls)
+			allow_all_urls="true"
+			;;
+		--allow-tool=*)
+			allow_tool_count=$((allow_tool_count + 1))
+			;;
+		--allow-url=*)
+			allow_url_count=$((allow_url_count + 1))
+			;;
+		--allow-tool)
+			allow_tool_count=$((allow_tool_count + 1))
+			[[ $# -gt 1 && "$2" != -* ]] && shift
+			;;
+		--allow-url)
+			allow_url_count=$((allow_url_count + 1))
+			[[ $# -gt 1 && "$2" != -* ]] && shift
+			;;
+		--deny-tool=*)
+			deny_tool_count=$((deny_tool_count + 1))
+			;;
+		--deny-url=*)
+			deny_url_count=$((deny_url_count + 1))
+			;;
+		--deny-tool)
+			deny_tool_count=$((deny_tool_count + 1))
+			[[ $# -gt 1 && "$2" != -* ]] && shift
+			;;
+		--deny-url)
+			deny_url_count=$((deny_url_count + 1))
+			[[ $# -gt 1 && "$2" != -* ]] && shift
+			;;
+		--available-tools=*)
+			available_tool_count=$((available_tool_count + 1))
+			;;
+		--available-tools)
+			available_tool_count=$((available_tool_count + 1))
+			[[ $# -gt 1 && "$2" != -* ]] && shift
+			;;
+		--excluded-tools=*)
+			excluded_tool_count=$((excluded_tool_count + 1))
+			;;
+		--excluded-tools)
+			excluded_tool_count=$((excluded_tool_count + 1))
+			[[ $# -gt 1 && "$2" != -* ]] && shift
+			;;
+		--secret-env-vars=*)
+			secret_env_count=$((secret_env_count + 1))
+			;;
+		--secret-env-vars)
+			secret_env_count=$((secret_env_count + 1))
+			[[ $# -gt 1 && "$2" != -* ]] && shift
+			;;
+	esac
+	shift
+done
+
+agentops_resource_attributes="service.namespace=copilot-agentops,service.name=github-copilot-cli,agent.framework=github-copilot,agent.runtime=github-copilot-cli,agentops.profile=${profile},agentops.experiment=${experiment},agentops.pack.version=${agentops_version},agentops.repo.hash=${repo_hash},git.branch=${branch},git.commit=${commit},agentops.cli.mode=${cli_mode},agentops.cli.remote=${cli_remote},agentops.cli.output_format=${cli_output_format},agentops.cli.allow_all=${allow_all},agentops.cli.allow_all_tools=${allow_all_tools},agentops.cli.allow_all_paths=${allow_all_paths},agentops.cli.allow_all_urls=${allow_all_urls},agentops.cli.acp=${acp_enabled},agentops.cli.cwd_changed=${cwd_changed},agentops.cli.session_id_provided=${session_id_provided},agentops.cli.share=${share_enabled},agentops.cli.share_gist=${share_gist_enabled},agentops.cli.allow_tool.count=${allow_tool_count},agentops.cli.allow_url.count=${allow_url_count},agentops.cli.deny_tool.count=${deny_tool_count},agentops.cli.deny_url.count=${deny_url_count},agentops.cli.available_tools.count=${available_tool_count},agentops.cli.excluded_tools.count=${excluded_tool_count},agentops.cli.secret_env_vars.count=${secret_env_count},agentops.cli.attachment.count=${attachment_count},agentops.cli.plugin_dir.count=${plugin_dir_count},agentops.cli.additional_mcp_config.count=${additional_mcp_config_count},agentops.cli.disabled_mcp_server.count=${disabled_mcp_server_count},agentops.cli.github_mcp_tool.count=${github_mcp_tool_count},agentops.cli.github_mcp_toolset.count=${github_mcp_toolset_count}"
+if [[ -n "${cli_model}" ]]; then
+	agentops_resource_attributes="${agentops_resource_attributes},agentops.cli.model=${cli_model}"
+fi
+if [[ -n "${cli_agent}" ]]; then
+	agentops_resource_attributes="${agentops_resource_attributes},agentops.cli.agent=${cli_agent}"
+	agentops_resource_attributes="${agentops_resource_attributes},agentops.agent.name=${cli_agent}"
+	agent_file="$(find_agent_file "$cli_agent" || true)"
+	if [[ -n "$agent_file" ]]; then
+		agent_file_hash="$(shasum -a 256 "$agent_file" | awk '{print $1}')"
+		agentops_resource_attributes="${agentops_resource_attributes},agentops.agent.file=$(sanitize_attr_value "$(basename "$agent_file")"),agentops.agent.hash=${agent_file_hash}"
+	fi
+fi
+if [[ "$(lower_bool "${capture_content_enabled}")" != "true" && -n "${cli_agent}" ]] && list_contains_value "${AGENTOPS_CAPTURE_CONTENT_AGENTS:-}" "${cli_agent}"; then
+	capture_content_enabled="true"
+	capture_content_scope="agent:${cli_agent}"
+fi
+if [[ "$(lower_bool "${capture_content_enabled}")" != "true" && -n "${AGENTOPS_ACTIVE_SKILLS:-}" ]]; then
+	IFS=',| ' read -r -a active_skills <<< "${AGENTOPS_ACTIVE_SKILLS}"
+	for active_skill in "${active_skills[@]}"; do
+		if list_contains_value "${AGENTOPS_CAPTURE_CONTENT_SKILLS:-}" "${active_skill}"; then
+			capture_content_enabled="true"
+			capture_content_scope="skill:${active_skill}"
+			break
+		fi
+	done
+fi
+capture_content_enabled="$(lower_bool "${capture_content_enabled}")"
+if [[ "${capture_content_enabled}" == "true" ]]; then
+	export OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT="true"
+	export COPILOT_OTEL_CAPTURE_CONTENT="true"
+	if [[ "${capture_content_scope}" == "default-off" ]]; then
+		capture_content_scope="explicit"
+	fi
+else
+	export OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT="${OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT:-false}"
+	export COPILOT_OTEL_CAPTURE_CONTENT="${COPILOT_OTEL_CAPTURE_CONTENT:-false}"
+fi
+agentops_resource_attributes="${agentops_resource_attributes},agentops.content_capture.enabled=${capture_content_enabled},agentops.content_capture.scope=$(sanitize_attr_value "${capture_content_scope}")"
+if [[ -n "${cli_effort}" ]]; then
+	agentops_resource_attributes="${agentops_resource_attributes},agentops.cli.reasoning_effort=${cli_effort}"
+fi
+if [[ -n "${cli_stream}" ]]; then
+	agentops_resource_attributes="${agentops_resource_attributes},agentops.cli.stream=${cli_stream}"
+fi
+if [[ ${#additional_mcp_config_names[@]} -gt 0 ]]; then
+	agentops_resource_attributes="${agentops_resource_attributes},agentops.mcp.config.files=$(join_attr_values additional_mcp_config_names)"
+fi
+if [[ ${#additional_mcp_config_servers[@]} -gt 0 ]]; then
+	agentops_resource_attributes="${agentops_resource_attributes},agentops.mcp.config.servers=$(join_attr_values additional_mcp_config_servers)"
+fi
+if [[ ${#disabled_mcp_servers[@]} -gt 0 ]]; then
+	agentops_resource_attributes="${agentops_resource_attributes},agentops.mcp.disabled.servers=$(join_attr_values disabled_mcp_servers)"
+fi
+if [[ ${#github_mcp_tools[@]} -gt 0 ]]; then
+	agentops_resource_attributes="${agentops_resource_attributes},agentops.mcp.github.tools=$(join_attr_values github_mcp_tools)"
+fi
+if [[ ${#github_mcp_toolsets[@]} -gt 0 ]]; then
+	agentops_resource_attributes="${agentops_resource_attributes},agentops.mcp.github.toolsets=$(join_attr_values github_mcp_toolsets)"
+fi
+if [[ -n "${OTEL_RESOURCE_ATTRIBUTES:-}" ]]; then
+	export OTEL_RESOURCE_ATTRIBUTES="${agentops_resource_attributes},${OTEL_RESOURCE_ATTRIBUTES}"
+else
+	export OTEL_RESOURCE_ATTRIBUTES="${agentops_resource_attributes}"
+fi
+
+copilot_bin="${COPILOT_CLI_BIN:-copilot}"
+if [[ "${copilot_arg_count}" -gt 0 ]]; then
+	exec "$copilot_bin" "${copilot_args[@]}"
+else
+	exec "$copilot_bin"
+fi

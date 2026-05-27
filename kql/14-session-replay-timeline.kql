@@ -1,0 +1,164 @@
+// Session replay timeline for Copilot CLI AgentOps.
+// Combines documented Copilot CLI spans with lifecycle span events so one
+// session reads like an ordered investigation transcript without prompt content.
+let lookback = 24h;
+let selected_session = "";
+let builtin_tools = dynamic([
+    "bash", "powershell", "list_bash", "list_powershell", "read_bash", "read_powershell",
+    "stop_bash", "stop_powershell", "write_bash", "write_powershell", "apply_patch",
+    "create", "edit", "view", "list_agents", "read_agent", "task", "ask_user",
+    "glob", "grep", "rg", "skill", "web_fetch", "agent"
+]);
+let session_id = (props:dynamic, timestamp:datetime) {
+    case(
+        isnotempty(tostring(props["gen_ai.conversation.id"])),
+        tostring(props["gen_ai.conversation.id"]),
+        isnotempty(tostring(props["github.copilot.interaction_id"])),
+        tostring(props["github.copilot.interaction_id"]),
+        strcat(
+            tostring(props["gen_ai.agent.id"]),
+            "_",
+            tostring(props["github.copilot.turn_count"]),
+            "_",
+            format_datetime(bin(timestamp, 1h), "yyyyMMdd_HHmm")
+        )
+    )
+};
+let raw_spans =
+AppDependencies
+| where TimeGenerated > ago(lookback)
+| where (Properties has "github.copilot" or Properties has "gen_ai.operation.name" or Properties has "agentops." or AppRoleName in ("github-copilot", "copilot-chat", "github-copilot-cli", "codex", "openai-codex", "openai-codex-cli") or tostring(Properties["service.name"]) in ("github-copilot", "copilot-chat", "github-copilot-cli", "codex", "openai-codex", "openai-codex-cli") or tostring(Properties["agent.runtime"]) in ("codex", "openai-codex-cli"))
+| extend
+    direct_session = case(
+        isnotempty(tostring(Properties["gen_ai.conversation.id"])),
+        tostring(Properties["gen_ai.conversation.id"]),
+        isnotempty(tostring(Properties["github.copilot.interaction_id"])),
+        tostring(Properties["github.copilot.interaction_id"]),
+        ""
+    ),
+    fallback_session = session_id(Properties, TimeGenerated),
+    operation = tostring(Properties["gen_ai.operation.name"]),
+    agent = tostring(Properties["gen_ai.agent.name"]),
+    model = tostring(Properties["gen_ai.request.model"]),
+    tool = tostring(Properties["gen_ai.tool.name"]),
+    configured_servers = tostring(Properties["agentops.mcp.config.servers"]),
+    error = tostring(Properties["error.type"]),
+    input_tokens = todouble(Properties["gen_ai.usage.input_tokens"]),
+    output_tokens = todouble(Properties["gen_ai.usage.output_tokens"]),
+    credits = todouble(Properties["github.copilot.cost"]),
+    aiu = todouble(Properties["github.copilot.aiu"]);
+let operation_sessions =
+raw_spans
+| where isnotempty(direct_session)
+| summarize operation_session = take_any(direct_session) by OperationId;
+let spans =
+raw_spans
+| join kind=leftouter operation_sessions on OperationId
+| extend session = iff(isnotempty(operation_session), operation_session, iff(isnotempty(direct_session), direct_session, fallback_session))
+| where isempty(selected_session) or session == selected_session
+| extend event_type = case(
+    operation == "invoke_agent", "agent",
+    operation == "chat", "llm",
+    operation == "execute_tool" or isnotempty(tool), "tool",
+    "span"
+)
+| extend
+    single_configured_server = iff(isnotempty(configured_servers) and configured_servers !contains "|", configured_servers, "")
+| extend
+    mcp_server = case(
+        tool startswith "mcp__", extract(@"^mcp__(.+?)__", 1, tool),
+        tool contains "/", tostring(split(tool, "/")[0]),
+        tool startswith "azure-mcp-", "azure-mcp",
+        isnotempty(tool) and isnotempty(single_configured_server) and tool !in (builtin_tools), single_configured_server,
+        ""
+    ),
+    mcp_tool = case(
+        tool startswith "mcp__", extract(@"^mcp__.+?__(.+)$", 1, tool),
+        tool contains "/", tostring(split(tool, "/")[1]),
+        tool startswith "azure-mcp-", substring(tool, strlen("azure-mcp-")),
+        tool
+    )
+| project
+    TimeGenerated,
+    session,
+    event_type,
+    event = operation,
+    Name,
+    OperationId,
+    span_id = Id,
+    parent_id = iff(tostring(ParentId) == tostring(OperationId), "", tostring(ParentId)),
+    agent,
+    model,
+    tool,
+    mcp_server,
+    mcp_tool,
+    duration_ms = DurationMs,
+    success = Success,
+    error,
+    input_tokens,
+    output_tokens,
+    credits,
+    aiu,
+    detail = tostring(ResultCode);
+let raw_runtime_events =
+union isfuzzy=true AppTraces, AppDependencies
+| where TimeGenerated > ago(lookback)
+| where tostring(Properties) has_any ("github.copilot", "agentops.", "gen_ai.operation.name", "codex") or Message has_any ("github.copilot", "AgentOps", "codex")
+| extend
+    direct_session = case(
+        isnotempty(tostring(Properties["gen_ai.conversation.id"])),
+        tostring(Properties["gen_ai.conversation.id"]),
+        isnotempty(tostring(Properties["github.copilot.interaction_id"])),
+        tostring(Properties["github.copilot.interaction_id"]),
+        ""
+    ),
+    fallback_session = session_id(Properties, TimeGenerated),
+    operation = tostring(Properties["gen_ai.operation.name"]),
+    agent = tostring(Properties["gen_ai.agent.name"]),
+    model = tostring(Properties["gen_ai.request.model"]),
+    tool = tostring(Properties["gen_ai.tool.name"]),
+    error = tostring(Properties["error.type"]),
+    raw_event = coalesce(tostring(Properties["event.name"]), tostring(Properties["github.copilot.event.name"]), Name),
+    hook = tostring(Properties["github.copilot.hook.type"]),
+    skill = tostring(Properties["github.copilot.skill.name"]),
+    tokens_removed = toint(Properties["github.copilot.tokens_removed"]),
+    messages_removed = toint(Properties["github.copilot.messages_removed"]);
+let runtime_events =
+raw_runtime_events
+| join kind=leftouter operation_sessions on OperationId
+| extend session = iff(isnotempty(operation_session), operation_session, iff(isnotempty(direct_session), direct_session, fallback_session))
+| where isempty(selected_session) or session == selected_session
+| extend event_type = case(
+    raw_event has "hook", "hook",
+    raw_event has "skill", "skill",
+    raw_event has "truncation" or raw_event has "compaction", "context",
+    raw_event has "shutdown" or raw_event has "abort", "lifecycle",
+    raw_event == "exception" or isnotempty(error), "error",
+    "event"
+)
+| where event_type != "event"
+| project
+    TimeGenerated,
+    session,
+    event_type,
+    event = raw_event,
+    Name = coalesce(raw_event, Message),
+    OperationId,
+    span_id = Id,
+    parent_id = ParentId,
+    agent,
+    model,
+    tool = coalesce(tool, hook, skill),
+    mcp_server = "",
+    mcp_tool = "",
+    duration_ms = real(null),
+    success = iff(tostring(Properties["github.copilot.success"]) == "false" or isnotempty(error), false, true),
+    error,
+    input_tokens = real(null),
+    output_tokens = real(null),
+    credits = real(null),
+    aiu = real(null),
+    detail = strcat("tokens_removed=", tostring(tokens_removed), " messages_removed=", tostring(messages_removed));
+union isfuzzy=true spans, runtime_events
+| order by TimeGenerated asc
+| take 500

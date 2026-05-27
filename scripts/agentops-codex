@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_source="${BASH_SOURCE[0]}"
+while [[ -L "${script_source}" ]]; do
+  script_dir="$(cd "$(dirname "${script_source}")" && pwd)"
+  link_target="$(readlink "${script_source}")"
+  if [[ "${link_target}" == /* ]]; then
+    script_source="${link_target}"
+  else
+    script_source="${script_dir}/${link_target}"
+  fi
+done
+script_dir="$(cd "$(dirname "${script_source}")" && pwd)"
+repo_root="$(cd "${script_dir}/.." && pwd)"
+compose_file="${repo_root}/collector/docker-compose.azuremonitor.yaml"
+
+collector_running=false
+if command -v docker >/dev/null 2>&1; then
+  if docker compose -f "${compose_file}" ps --status running --services 2>/dev/null | grep -qx 'otelcol'; then
+    collector_running=true
+  fi
+fi
+
+if [[ "${collector_running}" != true ]]; then
+  "${repo_root}/scripts/collector-azuremonitor-up.sh" >/dev/null
+fi
+
+if ! command -v codex >/dev/null 2>&1; then
+  echo "ERROR: codex CLI was not found on PATH." >&2
+  exit 127
+fi
+
+export OTEL_EXPORTER_OTLP_ENDPOINT="${OTEL_EXPORTER_OTLP_ENDPOINT:-http://127.0.0.1:4318}"
+export OTEL_EXPORTER_OTLP_PROTOCOL="${OTEL_EXPORTER_OTLP_PROTOCOL:-http/protobuf}"
+export OTEL_SERVICE_NAME="${OTEL_SERVICE_NAME:-codex}"
+export OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT="${OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT:-false}"
+
+exec codex "$@"

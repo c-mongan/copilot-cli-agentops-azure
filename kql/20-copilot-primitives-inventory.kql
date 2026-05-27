@@ -1,0 +1,109 @@
+// Copilot primitive inventory from runtime telemetry.
+// Complements local `agentops primitives` configuration scanning.
+let lookback = 7d;
+let builtin_tools = dynamic([
+    "bash", "powershell", "list_bash", "list_powershell", "read_bash", "read_powershell",
+    "stop_bash", "stop_powershell", "write_bash", "write_powershell", "apply_patch",
+    "create", "edit", "view", "list_agents", "read_agent", "task", "ask_user",
+    "glob", "grep", "rg", "skill", "web_fetch", "agent"
+]);
+let expected = datatable(primitive:string, coverage:string)
+[
+    "custom_agents", "configured_and_runtime",
+    "subagents", "runtime_parent_child_or_event",
+    "skills", "configured_and_runtime",
+    "hooks", "configured_and_runtime",
+    "mcp_servers", "configured_and_runtime",
+    "mcp_tools", "runtime_tool_spans",
+    "built_in_tools", "runtime_tool_spans",
+    "instructions", "configured_only",
+    "plugins", "configured_only",
+    "workflows_commands", "configured_only",
+    "lsp_servers", "configured_only",
+    "benchmarks", "configured_and_runtime",
+    "acp", "runtime_flag",
+    "attachments", "runtime_flag",
+    "policy", "configured_and_runtime",
+    "context_events", "runtime_events"
+];
+let session_id = (props:dynamic, timestamp:datetime) {
+    case(
+        isnotempty(tostring(props["gen_ai.conversation.id"])),
+        tostring(props["gen_ai.conversation.id"]),
+        isnotempty(tostring(props["github.copilot.interaction_id"])),
+        tostring(props["github.copilot.interaction_id"]),
+        strcat(
+            tostring(props["gen_ai.agent.id"]),
+            "_",
+            tostring(props["github.copilot.turn_count"]),
+            "_",
+            format_datetime(bin(timestamp, 1h), "yyyyMMdd_HHmm")
+        )
+    )
+};
+let spans =
+AppDependencies
+| where TimeGenerated > ago(lookback)
+| where (Properties has "github.copilot" or Properties has "gen_ai.operation.name" or Properties has "agentops." or AppRoleName in ("github-copilot", "copilot-chat", "github-copilot-cli", "codex", "openai-codex", "openai-codex-cli") or tostring(Properties["service.name"]) in ("github-copilot", "copilot-chat", "github-copilot-cli", "codex", "openai-codex", "openai-codex-cli") or tostring(Properties["agent.runtime"]) in ("codex", "openai-codex-cli"))
+| extend
+    session = session_id(Properties, TimeGenerated),
+    operation = tostring(Properties["gen_ai.operation.name"]),
+    agent = coalesce(tostring(Properties["agentops.cli.agent"]), tostring(Properties["gen_ai.agent.name"]), tostring(Properties["gen_ai.agent.id"])),
+    tool = tostring(Properties["gen_ai.tool.name"]),
+    configured_mcp_servers = tostring(Properties["agentops.mcp.config.servers"]),
+    benchmark_run = tostring(Properties["agentops.benchmark.run_id"]),
+    acp = tostring(Properties["agentops.cli.acp"]) == "true",
+    attachments = toint(Properties["agentops.cli.attachment.count"]),
+    error = tostring(Properties["error.type"])
+| extend
+    single_configured_server = iff(isnotempty(configured_mcp_servers) and configured_mcp_servers !contains "|", configured_mcp_servers, "")
+| extend
+    mcp_server = case(
+        tool startswith "mcp__", extract(@"^mcp__(.+?)__", 1, tool),
+        tool contains "/", tostring(split(tool, "/")[0]),
+        tool startswith "azure-mcp-", "azure-mcp",
+        isnotempty(tool) and isnotempty(single_configured_server) and tool !in (builtin_tools), single_configured_server,
+        ""
+    );
+let runtime_events =
+union isfuzzy=true AppTraces, AppDependencies
+| where TimeGenerated > ago(lookback)
+| where tostring(Properties) has_any ("github.copilot", "agentops.", "gen_ai.operation.name", "codex") or Message has_any ("github.copilot", "AgentOps", "codex")
+| extend
+    session = session_id(Properties, TimeGenerated),
+    event = coalesce(tostring(Properties["event.name"]), tostring(Properties["github.copilot.event.name"]), Name),
+    skill = tostring(Properties["github.copilot.skill.name"]),
+    hook = tostring(Properties["github.copilot.hook.type"]),
+    error = tostring(Properties["error.type"]);
+let observed =
+union
+(spans | where isnotempty(agent) or operation == "invoke_agent" | project primitive="custom_agents", session, example=coalesce(agent, operation), failed=Success == false or isnotempty(error)),
+(spans | where operation == "invoke_agent" and isnotempty(ParentId) and tostring(ParentId) != tostring(OperationId) | project primitive="subagents", session, example=coalesce(agent, Id), failed=Success == false or isnotempty(error)),
+(runtime_events | where event has "subagent" | project primitive="subagents", session, example=event, failed=isnotempty(error)),
+(runtime_events | where event has "skill" or isnotempty(skill) | project primitive="skills", session, example=coalesce(skill, event), failed=isnotempty(error)),
+(spans | where isnotempty(tostring(Properties["github.copilot.context.skills"])) | mv-expand context_skill=parse_json(tostring(Properties["github.copilot.context.skills"])) to typeof(string) | where isnotempty(context_skill) | project primitive="skills", session, example=tostring(context_skill), failed=Success == false or isnotempty(error)),
+(runtime_events | where event has "hook" or isnotempty(hook) | project primitive="hooks", session, example=coalesce(hook, event), failed=isnotempty(error)),
+(spans | where isnotempty(configured_mcp_servers) | project primitive="mcp_servers", session, example=configured_mcp_servers, failed=Success == false or isnotempty(error)),
+(spans | where isnotempty(mcp_server) | project primitive="mcp_tools", session, example=coalesce(strcat(mcp_server, "/", tool), tool), failed=Success == false or isnotempty(error)),
+(spans | where operation == "execute_tool" and tool in (builtin_tools) | project primitive="built_in_tools", session, example=tool, failed=Success == false or isnotempty(error)),
+(spans | where isnotempty(benchmark_run) | project primitive="benchmarks", session, example=benchmark_run, failed=Success == false or isnotempty(error)),
+(spans | where acp | project primitive="acp", session, example="agentops.cli.acp", failed=Success == false or isnotempty(error)),
+(spans | where attachments > 0 | project primitive="attachments", session, example=strcat("attachments=", tostring(attachments)), failed=Success == false or isnotempty(error)),
+(runtime_events | where event has "permission" or event has "policy" or tostring(Properties) has "preToolUse" or Message has "AgentOps preToolUse policy" | project primitive="policy", session, example=coalesce(event, Message), failed=isnotempty(error)),
+(runtime_events | where event has "truncation" or event has "compaction" or tostring(Properties) has "github.copilot.tokens_removed" | project primitive="context_events", session, example=event, failed=isnotempty(error))
+| summarize
+    observed=count(),
+    sessions=dcount(session),
+    failures=countif(failed),
+    examples=make_set_if(example, isnotempty(example), 10)
+  by primitive;
+expected
+| join kind=leftouter observed on primitive
+| extend
+    observed=coalesce(observed, 0),
+    sessions=coalesce(sessions, 0),
+    failures=coalesce(failures, 0),
+    examples=coalesce(examples, dynamic([])),
+    runtime_status=iff(observed > 0, "observed", "not_observed")
+| project primitive, coverage, runtime_status, observed, sessions, failures, examples
+| order by primitive asc

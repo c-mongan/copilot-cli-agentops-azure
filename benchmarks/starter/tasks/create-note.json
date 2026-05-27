@@ -1,0 +1,26 @@
+{
+  "id": "create-note",
+  "title": "Create a note file",
+  "fixture": "fixtures/tiny-repo",
+  "prompt": "Create notes/hello.txt containing the text hello agentops.",
+  "copilotArgs": [
+    "--allow-all"
+  ],
+  "successCommands": [
+    "test -f notes/hello.txt",
+    "grep -q 'hello agentops' notes/hello.txt"
+  ],
+  "expectedFiles": [
+    "notes/hello.txt"
+  ],
+  "forbiddenFiles": [
+    ".env",
+    "secrets.txt"
+  ],
+  "timeoutSec": 30,
+  "tags": [
+    "starter",
+    "safe",
+    "filesystem"
+  ]
+}

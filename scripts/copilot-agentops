@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_source="${BASH_SOURCE[0]}"
+while [[ -L "${script_source}" ]]; do
+  script_dir="$(cd "$(dirname "${script_source}")" && pwd)"
+  link_target="$(readlink "${script_source}")"
+  if [[ "${link_target}" == /* ]]; then
+    script_source="${link_target}"
+  else
+    script_source="${script_dir}/${link_target}"
+  fi
+done
+script_dir="$(cd "$(dirname "${script_source}")" && pwd)"
+repo_root="$(cd "${script_dir}/.." && pwd)"
+compose_file="${repo_root}/collector/docker-compose.azuremonitor.yaml"
+
+run_copilot_without_observation() {
+  local reason="${1:-collector setup failed}"
+  shift || true
+
+  echo "WARNING: AgentOps Azure Monitor collector was not started: ${reason}" >&2
+  echo "WARNING: Launching Copilot without AgentOps telemetry." >&2
+
+  local copilot_bin="${COPILOT_CLI_BIN:-}"
+  if [[ -z "${copilot_bin}" ]]; then
+    if ! command -v copilot >/dev/null 2>&1; then
+      echo "ERROR: copilot CLI was not found on PATH." >&2
+      exit 127
+    fi
+    copilot_bin="$(command -v copilot)"
+  fi
+
+  exec "${copilot_bin}" "$@"
+}
+
+collector_running=false
+if command -v docker >/dev/null 2>&1; then
+  if docker compose -f "${compose_file}" ps --status running --services 2>/dev/null | grep -qx 'otelcol'; then
+    collector_running=true
+  fi
+fi
+
+if [[ "${collector_running}" != true ]]; then
+  collector_error="$(mktemp)"
+  if ! "${repo_root}/scripts/collector-azuremonitor-up.sh" >/dev/null 2>"${collector_error}"; then
+    reason="$(awk 'NF { line=$0 } END { print line }' "${collector_error}")"
+    rm -f "${collector_error}"
+    run_copilot_without_observation "${reason}" "$@"
+  fi
+  rm -f "${collector_error}"
+fi
+
+if [[ -z "${COPILOT_CLI_BIN:-}" ]]; then
+  if ! command -v copilot >/dev/null 2>&1; then
+    echo "ERROR: copilot CLI was not found on PATH." >&2
+    exit 127
+  fi
+fi
+
+exec "${repo_root}/copilot/copilot-observe" "$@"

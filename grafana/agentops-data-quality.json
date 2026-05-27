@@ -1,0 +1,359 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [
+    {
+      "title": "Overview",
+      "url": "/d/copilot-agentops",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
+      "title": "Sessions",
+      "url": "/d/agentops-sessions",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
+      "title": "Session Detail",
+      "url": "/d/agentops-session-detail",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
+      "title": "Live Replay",
+      "url": "/d/agentops-live-replay",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
+      "title": "Traces / Spans",
+      "url": "/d/agentops-traces-spans",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
+      "title": "Tools & MCP",
+      "url": "/d/agentops-tools-mcp",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
+      "title": "Runtime Events",
+      "url": "/d/agentops-runtime-events",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
+      "title": "Attribution",
+      "url": "/d/agentops-attribution",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
+      "title": "Safety & Policy",
+      "url": "/d/agentops-safety-policy",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
+      "title": "Permission Friction",
+      "url": "/d/agentops-permission-friction",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
+      "title": "Alert Tuning",
+      "url": "/d/agentops-alert-tuning",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
+      "title": "Quality",
+      "url": "/d/agentops-quality",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
+      "title": "Experiments",
+      "url": "/d/agentops-experiments",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
+      "title": "Data Quality",
+      "url": "/d/agentops-data-quality",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
+      "title": "Azure Portal - Log Analytics",
+      "url": "https://portal.azure.com/#@/resource/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev/logs",
+      "type": "link",
+      "icon": "external link",
+      "targetBlank": true
+    }
+  ],
+  "liveNow": false,
+  "panels": [
+    {
+      "id": 1,
+      "type": "text",
+      "gridPos": {
+        "h": 2,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "## Data Quality\nField discovery, token rollup, collector health, and smoke-ingestion checks for validating dashboard assumptions against real Copilot CLI telemetry."
+      }
+    },
+    {
+      "id": 10,
+      "type": "table",
+      "title": "Token rollup audit",
+      "gridPos": {
+        "h": 13,
+        "w": 24,
+        "x": 0,
+        "y": 2
+      },
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "azure-monitor-oob"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "TokenOvercountRatio"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "Azure Log Analytics",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor-oob"
+          },
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
+            ],
+            "resultFormat": "table",
+            "query": "// Token rollup audit for Copilot CLI AgentOps.\n// Copilot emits aggregate usage on invoke_agent spans and per-turn usage on chat spans.\n// Use this before changing dashboard token panels so sessions do not double-count parent and child spans.\nlet lookback = 14d;\nlet base =\nAppDependencies\n| where TimeGenerated > ago(lookback)\n| where (Properties has \"github.copilot\" or Properties has \"gen_ai.operation.name\" or Properties has \"agentops.\" or AppRoleName in (\"github-copilot\", \"copilot-chat\", \"github-copilot-cli\", \"codex\", \"openai-codex\", \"openai-codex-cli\") or tostring(Properties[\"service.name\"]) in (\"github-copilot\", \"copilot-chat\", \"github-copilot-cli\", \"codex\", \"openai-codex\", \"openai-codex-cli\") or tostring(Properties[\"agent.runtime\"]) in (\"codex\", \"openai-codex-cli\"))\n| extend\n    conversation = case(\n        isnotempty(tostring(Properties[\"gen_ai.conversation.id\"])),\n        tostring(Properties[\"gen_ai.conversation.id\"]),\n        isnotempty(tostring(Properties[\"github.copilot.interaction_id\"])),\n        tostring(Properties[\"github.copilot.interaction_id\"]),\n        strcat(\n            tostring(Properties[\"gen_ai.agent.id\"]),\n            \"_\",\n            tostring(Properties[\"github.copilot.turn_count\"]),\n            \"_\",\n            format_datetime(bin(TimeGenerated, 1h), \"yyyyMMdd_HHmm\")\n        )\n    ),\n    operation = tostring(Properties[\"gen_ai.operation.name\"]),\n    model = tostring(Properties[\"gen_ai.request.model\"]),\n    agent = tostring(Properties[\"gen_ai.agent.name\"]),\n    input_tokens = todouble(Properties[\"gen_ai.usage.input_tokens\"]),\n    output_tokens = todouble(Properties[\"gen_ai.usage.output_tokens\"]),\n    credits = todouble(Properties[\"github.copilot.cost\"]),\n    aiu = todouble(Properties[\"github.copilot.aiu\"]);\nbase\n| summarize\n    started = min(TimeGenerated),\n    ended = max(TimeGenerated),\n    spans = count(),\n    chat_spans = countif(operation == \"chat\"),\n    agent_spans = countif(operation == \"invoke_agent\"),\n    all_span_input_tokens = sum(input_tokens),\n    all_span_output_tokens = sum(output_tokens),\n    chat_input_tokens = sumif(input_tokens, operation == \"chat\"),\n    chat_output_tokens = sumif(output_tokens, operation == \"chat\"),\n    agent_input_tokens = maxif(input_tokens, operation == \"invoke_agent\"),\n    agent_output_tokens = maxif(output_tokens, operation == \"invoke_agent\"),\n    chat_credits = sumif(credits, operation == \"chat\"),\n    agent_credits = maxif(credits, operation == \"invoke_agent\"),\n    chat_aiu = sumif(aiu, operation == \"chat\"),\n    agent_aiu = maxif(aiu, operation == \"invoke_agent\"),\n    models = make_set(model, 5),\n    agents = make_set(agent, 5)\n  by session = conversation\n| extend\n    recommended_input_tokens = iff(chat_spans > 0, chat_input_tokens, agent_input_tokens),\n    recommended_output_tokens = iff(chat_spans > 0, chat_output_tokens, agent_output_tokens),\n    recommended_credits = iff(chat_spans > 0, chat_credits, agent_credits),\n    recommended_aiu = iff(chat_spans > 0, chat_aiu, agent_aiu)\n| extend\n    token_overcount_ratio = iff(recommended_input_tokens > 0, round(all_span_input_tokens / recommended_input_tokens, 2), 0.0),\n    rollup_mode = iff(chat_spans > 0, \"chat_spans\", \"invoke_agent_fallback\"),\n    needs_review = all_span_input_tokens > recommended_input_tokens * 1.25\n| project\n    started,\n    ended,\n    session,\n    rollup_mode,\n    needs_review,\n    token_overcount_ratio,\n    all_span_input_tokens,\n    recommended_input_tokens,\n    agent_input_tokens,\n    chat_input_tokens,\n    all_span_output_tokens,\n    recommended_output_tokens,\n    agent_output_tokens,\n    chat_output_tokens,\n    recommended_credits,\n    recommended_aiu,\n    spans,\n    chat_spans,\n    agent_spans,\n    models,\n    agents\n| order by needs_review desc, token_overcount_ratio desc, all_span_input_tokens desc\n| take 100\n"
+          }
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "type": "table",
+      "title": "Collector health and smoke ingestion",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 15
+      },
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "azure-monitor-oob"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "Azure Log Analytics",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor-oob"
+          },
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
+            ],
+            "resultFormat": "table",
+            "query": "// Collector health and smoke-ingestion check for Copilot CLI AgentOps.\n// Use with the collector health endpoint and `agentops smoke` to verify the full path.\nlet lookback = 24h;\nlet copilot =\nAppDependencies\n| where TimeGenerated > ago(lookback)\n| where (Properties has \"github.copilot\" or Properties has \"gen_ai.operation.name\" or Properties has \"agentops.\" or AppRoleName in (\"github-copilot\", \"copilot-chat\", \"github-copilot-cli\", \"codex\", \"openai-codex\", \"openai-codex-cli\") or tostring(Properties[\"service.name\"]) in (\"github-copilot\", \"copilot-chat\", \"github-copilot-cli\", \"codex\", \"openai-codex\", \"openai-codex-cli\") or tostring(Properties[\"agent.runtime\"]) in (\"codex\", \"openai-codex-cli\"))\n| summarize\n    LastCopilotSpan=max(TimeGenerated),\n    CopilotSpans=count(),\n    SmokeSpans=countif(Properties has \"agentops.smoke_id\");\nlet collectorLogs =\nAppTraces\n| where TimeGenerated > ago(lookback)\n| where Message has_any (\"otelcol\", \"azuremonitor\", \"exporter\", \"dropped\", \"retry\", \"queue\", \"refused\", \"timeout\")\n| summarize\n    LastCollectorLog=max(TimeGenerated),\n    CollectorErrors=countif(SeverityLevel >= 3 or Message has_any (\"error\", \"failed\", \"dropped\", \"refused\", \"timeout\")),\n    CollectorWarnings=countif(SeverityLevel == 2 or Message has \"warn\");\ncopilot\n| extend joinKey=1\n| join kind=fullouter (collectorLogs | extend joinKey=1) on joinKey\n| project LastCopilotSpan, CopilotSpans, SmokeSpans, LastCollectorLog, CollectorErrors, CollectorWarnings\n| extend Health=case(isnull(LastCopilotSpan), \"no_copilot_spans\", CollectorErrors > 0, \"collector_errors\", \"healthy\")\n"
+          }
+        }
+      ]
+    },
+    {
+      "id": 30,
+      "type": "table",
+      "title": "Observed property fields",
+      "gridPos": {
+        "h": 14,
+        "w": 24,
+        "x": 0,
+        "y": 23
+      },
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "azure-monitor-oob"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "Azure Log Analytics",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor-oob"
+          },
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
+            ],
+            "resultFormat": "table",
+            "query": "AppDependencies | where $__timeFilter(TimeGenerated) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or Properties has 'agentops.' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['agent.runtime']) in ('codex', 'openai-codex-cli')) | extend fields = bag_keys(Properties) | mv-expand field = fields to typeof(string) | extend value = tostring(Properties[field]) | summarize observed=count(), example_values=make_set_if(value, isnotempty(value), 5) by field | order by observed desc, field asc"
+          }
+        }
+      ]
+    }
+  ],
+  "refresh": "1m",
+  "schemaVersion": 39,
+  "tags": [
+    "agentops",
+    "copilot-cli",
+    "llm-observability"
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "workspaceResource",
+        "type": "constant",
+        "query": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev",
+        "current": {
+          "selected": false,
+          "text": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev",
+          "value": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
+        },
+        "hide": 2
+      }
+    ]
+  },
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "AgentOps Data Quality",
+  "uid": "agentops-data-quality",
+  "version": 1,
+  "weekStart": ""
+}

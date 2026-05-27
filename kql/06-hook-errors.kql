@@ -1,0 +1,6 @@
+union isfuzzy=true AppTraces, AppDependencies
+| where TimeGenerated > ago(14d)
+| where Message has "github.copilot.hook.error" or tostring(Properties) has "github.copilot.hook.error"
+| extend hook_type=tostring(Properties["github.copilot.hook.type"]), invocation_id=tostring(Properties["github.copilot.hook.invocation_id"]), error_message=tostring(Properties["github.copilot.hook.error_message"])
+| summarize errors=count(), examples=make_set(error_message, 5) by hook_type
+| order by errors desc

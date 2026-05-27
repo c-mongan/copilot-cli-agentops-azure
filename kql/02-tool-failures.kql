@@ -1,0 +1,10 @@
+AppDependencies
+| where TimeGenerated > ago(7d)
+| where (Properties has "github.copilot" or Properties has "gen_ai.operation.name" or Properties has "agentops." or AppRoleName in ("github-copilot", "copilot-chat", "github-copilot-cli", "codex", "openai-codex", "openai-codex-cli") or tostring(Properties["service.name"]) in ("github-copilot", "copilot-chat", "github-copilot-cli", "codex", "openai-codex", "openai-codex-cli") or tostring(Properties["agent.runtime"]) in ("codex", "openai-codex-cli"))
+| extend operation = tostring(Properties["gen_ai.operation.name"])
+| extend tool = tostring(Properties["gen_ai.tool.name"])
+| extend err = tostring(Properties["error.type"])
+| where operation == "execute_tool"
+| summarize calls=count(), failures=countif(Success == false or isnotempty(err)), p95_duration_ms=percentile(DurationMs, 95) by tool
+| extend failure_rate=round(100.0 * failures / calls, 2)
+| order by failures desc, failure_rate desc

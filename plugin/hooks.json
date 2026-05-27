@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "hooks": {
+    "preToolUse": [
+      {
+        "type": "command",
+        "bash": "node plugin/scripts/pre-tool-policy.js",
+        "powershell": "node plugin/scripts/pre-tool-policy.js",
+        "timeoutSec": 5
+      }
+    ],
+    "postToolUseFailure": [
+      {
+        "type": "command",
+        "bash": "node plugin/scripts/post-tool-failure-hints.js",
+        "powershell": "node plugin/scripts/post-tool-failure-hints.js",
+        "timeoutSec": 5
+      }
+    ],
+    "agentStop": [
+      {
+        "type": "command",
+        "bash": "node plugin/scripts/agent-stop-quality-gate.js",
+        "powershell": "node plugin/scripts/agent-stop-quality-gate.js",
+        "timeoutSec": 5
+      }
+    ],
+    "subagentStop": [
+      {
+        "type": "command",
+        "bash": "node plugin/scripts/agent-stop-quality-gate.js",
+        "powershell": "node plugin/scripts/agent-stop-quality-gate.js",
+        "timeoutSec": 5
+      }
+    ],
+    "notification": [
+      {
+        "type": "command",
+        "bash": "node plugin/scripts/emit-sidecar-event.js",
+        "powershell": "node plugin/scripts/emit-sidecar-event.js",
+        "timeoutSec": 2
+      }
+    ]
+  }
+}

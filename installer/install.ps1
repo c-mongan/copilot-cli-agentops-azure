@@ -1,0 +1,10 @@
+Write-Host "Copilot CLI AgentOps for Azure local files are ready."
+Write-Host "Next steps:"
+Write-Host "  . ./copilot/env.sample.ps1"
+Write-Host "  docker compose -f collector/docker-compose.yaml up"
+Write-Host "  copilot-observe --help"
+Write-Host ""
+Write-Host "For always-on Azure Monitor collection:"
+Write-Host "  ./scripts/install-copilot-agentops-shim.ps1"
+Write-Host '  $env:PATH = "$HOME/.local/bin;$env:PATH"'
+Write-Host "  copilot-agentops --help"

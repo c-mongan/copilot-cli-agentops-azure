@@ -1,0 +1,27 @@
+AppDependencies
+| where TimeGenerated > ago(24h)
+| where (Properties has "github.copilot" or Properties has "gen_ai.operation.name" or Properties has "agentops." or AppRoleName in ("github-copilot", "copilot-chat", "github-copilot-cli", "codex", "openai-codex", "openai-codex-cli") or tostring(Properties["service.name"]) in ("github-copilot", "copilot-chat", "github-copilot-cli", "codex", "openai-codex", "openai-codex-cli") or tostring(Properties["agent.runtime"]) in ("codex", "openai-codex-cli"))
+| extend operation = tostring(Properties["gen_ai.operation.name"])
+| where operation in ("invoke_agent", "chat", "execute_tool")
+| project TimeGenerated, operation, Name, DurationMs, Success, ResultCode,
+    agent_id=tostring(Properties["gen_ai.agent.id"]),
+    agent_name=tostring(Properties["gen_ai.agent.name"]),
+    model=tostring(Properties["gen_ai.request.model"]),
+    conversation=case(
+        isnotempty(tostring(Properties["gen_ai.conversation.id"])),
+        tostring(Properties["gen_ai.conversation.id"]),
+        isnotempty(tostring(Properties["github.copilot.interaction_id"])),
+        tostring(Properties["github.copilot.interaction_id"]),
+        strcat(
+            tostring(Properties["gen_ai.agent.id"]),
+            "_",
+            tostring(Properties["github.copilot.turn_count"]),
+            "_",
+            format_datetime(bin(TimeGenerated, 1h), "yyyyMMdd_HHmm")
+        )
+    ),
+    tool=tostring(Properties["gen_ai.tool.name"]),
+    error=tostring(Properties["error.type"]),
+    repo_hash=tostring(Properties["agentops.repo.hash"])
+| order by TimeGenerated desc
+| take 100
