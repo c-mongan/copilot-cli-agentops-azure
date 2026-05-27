@@ -83,17 +83,21 @@ This is useful when teams share one Azure workspace but want to know what agent/
 
 Use this for Copilot runtime behavior. It answers: **did hooks, skills, truncation, compaction, policy, or lifecycle events happen?**
 
-Some panels should be quiet in healthy runs. For example, content capture should be empty when privacy defaults are working.
+This page can be intentionally quiet in a healthy setup. Content-capture, truncation, compaction, and policy panels only light up when those events actually happen. Treat quiet panels here as a signal to check whether the event was expected, not as a setup failure.
 
-![AgentOps runtime events dashboard](screenshots/agentops-runtime-live.png)
+To generate lifecycle-style data for this page:
+
+```bash
+agentops custom emit --event agent.step.started --agent my-agent --workflow investigation --step collect --outcome started
+```
 
 ## Safety & Policy
 
 Use this for enterprise review. It answers: **are broad permissions, content capture, sharing, remote mode, policy blocks, or risky session settings present?**
 
-No data in content-capture panels is good when content capture is intentionally disabled.
+Quiet content-capture panels are good when content capture is intentionally disabled. Permission and policy panels only show rows when a run actually hits those controls.
 
-![AgentOps safety and policy dashboard](screenshots/agentops-safety-policy-live.png)
+For a first pass, use this page to confirm the absence of unsafe signals, then rely on [Secure by default](secure-by-default.md) and [Threat model](threat-model.md) for the policy posture.
 
 ## Permission Friction
 
@@ -101,7 +105,13 @@ Use this to tune developer experience. It answers: **where are permissions, deni
 
 This helps decide whether a tool should be allowed, denied, documented, or replaced.
 
-![AgentOps permission friction dashboard](screenshots/agentops-permission-friction-live.png)
+This page is most useful after real users have hit approval prompts, denials, or policy blocks. On a fresh install, quiet panels usually mean there has not been much permission friction yet.
+
+To create test data for the supporting attribution/tool panels, start with:
+
+```bash
+agentops attribution-smoke --wait 5m --poll 15s
+```
 
 ## Alert Tuning
 
@@ -109,7 +119,7 @@ Use this before enabling real alerts. It answers: **what thresholds are reasonab
 
 The alert rules are disabled by default. This page is evidence for choosing thresholds, not an emergency console on day one.
 
-![AgentOps alert tuning dashboard](screenshots/agentops-alert-tuning-live.png)
+This page needs enough history before it becomes visually interesting. On a fresh install, it may have little to recommend. Run real traffic or smoke tests over time, then use the recommendations here before turning on scheduled-query alerts.
 
 ## Quality
 
@@ -135,12 +145,13 @@ This is the troubleshooting dashboard for schema drift and ingestion issues.
 
 ![AgentOps data quality dashboard](screenshots/agentops-data-quality-live.png)
 
-## Expected Empty Panels
+## Expected Quiet Panels
 
-Some panels are expected to show no data until matching telemetry exists:
+Some panels stay quiet until matching telemetry exists:
 
 - **Safety & Policy** stays mostly empty when content capture is off and no policy block happened.
 - **Runtime Events** needs hook, skill, truncation, compaction, shutdown, or policy events.
+- **Permission Friction** needs permission, denial, retry, policy, or failure events.
 - **Alert Tuning** is evidence-first; alert rules are disabled by default until you have enough clean history.
 - **Experiments** needs benchmark telemetry or experiment labels.
 - **Attribution** needs custom agent, skill, MCP, or script labels. Use `agentops attribution-smoke --wait 5m --poll 15s` to verify the wiring.
