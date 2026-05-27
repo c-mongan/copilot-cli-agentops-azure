@@ -27,6 +27,7 @@ node src/index.js smoke --dry-run
 node src/index.js smoke --wait 2m --poll 10s
 node src/index.js attribution-smoke --wait 5m --poll 15s
 node src/index.js live-replay-smoke --wait 5m --poll 15s
+node src/index.js gallery-smoke --wait 5m --poll 15s
 node src/index.js ask-context latest --last 2h
 node src/index.js plugin install
 node src/index.js plugin uninstall
@@ -69,10 +70,11 @@ node src/index.js validate-azure --last 2h
 node src/index.js smoke --wait 5m --poll 15s
 node src/index.js attribution-smoke --wait 5m --poll 15s
 node src/index.js live-replay-smoke --wait 5m --poll 15s
+node src/index.js gallery-smoke --wait 5m --poll 15s
 node src/index.js open
 ```
 
-Open **Overview** first, then **Sessions**, **Traces / Spans**, and **Tools & MCP**. Empty Safety/Policy or Runtime Events panels are normal until matching policy, hook, skill, truncation, or content-capture signals exist.
+Open **Overview** first, then **Sessions**, **Traces / Spans**, and **Tools & MCP**. Empty Safety/Policy or Runtime Events panels are normal until matching policy, hook, skill, truncation, or content-capture signals exist. Use `gallery-smoke` when you want to seed those quieter pages for a demo or screenshot pass.
 
 `configure` stores non-secret Azure/Grafana identifiers in `~/.agentops/config.json` so users do not need to export terminal environment variables for every shell. Environment variables still override saved config for CI and advanced workflows.
 
@@ -87,6 +89,8 @@ Open **Overview** first, then **Sessions**, **Traces / Spans**, and **Tools & MC
 `attribution-smoke` sends a privacy-safe synthetic trace that exercises custom agent, skill, Azure MCP, and script/hook attribution fields. Use it after `smoke` when you want to verify attribution dashboards and filters without relying on a live agent to call every primitive.
 
 `live-replay-smoke` sends a privacy-safe synthetic orchestrator trace with a delegated sub-agent, skill, Azure MCP tool call, and hook/script event. It polls Log Analytics and prints the Live Replay URL so users can prove the run tree and timeline dashboards are wired.
+
+`gallery-smoke` sends privacy-safe synthetic metadata for Runtime Events, Safety & Policy, Permission Friction, and Alert Tuning. It emits a policy block, retry hint, failed tool, truncation signal, broad-permission markers, high AIU/cost evidence, and a content-capture signal marker without recording real prompt text, responses, tool arguments, URLs, or file contents.
 
 `collector-health` prints a KQL query for smoke span counts, latest Copilot span, and collector error/warning signals.
 
