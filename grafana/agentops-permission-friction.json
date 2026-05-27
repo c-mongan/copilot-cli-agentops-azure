@@ -29,6 +29,13 @@
       "targetBlank": false
     },
     {
+      "title": "Live Replay",
+      "url": "/d/agentops-live-replay",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false
+    },
+    {
       "title": "Traces / Spans",
       "url": "/d/agentops-traces-spans",
       "type": "link",
@@ -181,7 +188,7 @@
               "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
             ],
             "resultFormat": "time_series",
-            "query": "union isfuzzy=true AppDependencies, AppTraces | where $__timeFilter(TimeGenerated) | where tostring(Properties) has 'github.copilot' or Message has 'github.copilot' or Message has 'AgentOps' | extend conversation=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(tostring(Properties['gen_ai.agent.id']), '_', tostring(Properties['github.copilot.turn_count']), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm'))), operation=tostring(Properties['gen_ai.operation.name']), tool=tostring(Properties['gen_ai.tool.name']), agent=tostring(Properties['gen_ai.agent.name']), model=tostring(Properties['gen_ai.request.model']), repo=tostring(Properties['agentops.repo.hash']), error=tostring(Properties['error.type']), allow_all=tostring(Properties['agentops.cli.allow_all']) == 'true', allow_all_tools=tostring(Properties['agentops.cli.allow_all_tools']) == 'true', allow_all_paths=tostring(Properties['agentops.cli.allow_all_paths']) == 'true', allow_all_urls=tostring(Properties['agentops.cli.allow_all_urls']) == 'true', allow_tool_count=toint(Properties['agentops.cli.allow_tool.count']), allow_url_count=toint(Properties['agentops.cli.allow_url.count']), deny_tool_count=toint(Properties['agentops.cli.deny_tool.count']), deny_url_count=toint(Properties['agentops.cli.deny_url.count']), available_tool_count=toint(Properties['agentops.cli.available_tools.count']), excluded_tool_count=toint(Properties['agentops.cli.excluded_tools.count']), disabled_mcp_server_count=toint(Properties['agentops.cli.disabled_mcp_server.count']), extra_mcp_config_count=toint(Properties['agentops.cli.additional_mcp_config.count']), configured_mcp_servers=tostring(Properties['agentops.mcp.config.servers']), disabled_mcp_servers=tostring(Properties['agentops.mcp.disabled.servers']) | extend is_tool=operation == 'execute_tool' or isnotempty(tool), is_policy_block=tostring(Properties) has 'preToolUse' or tostring(Properties) has 'permissionDecision' or tostring(Properties) has 'AgentOps preToolUse policy' or Message has 'AgentOps preToolUse policy' or Message has 'permission', is_retry_hint=Message has 'Recovery hint' or tostring(Properties) has 'Recovery hint' | where is_policy_block | summarize Blocks=count() by bin(TimeGenerated, $__interval) | order by TimeGenerated asc"
+            "query": "union isfuzzy=true AppDependencies, AppTraces | where $__timeFilter(TimeGenerated) | where tostring(Properties) has_any ('github.copilot', 'agentops.', 'gen_ai.operation.name', 'codex') or Message has_any ('github.copilot', 'AgentOps', 'codex') or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') | extend conversation=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(iff(isnotempty(tostring(Properties['gen_ai.agent.id'])), tostring(Properties['gen_ai.agent.id']), iff(isnotempty(tostring(Properties['service.name'])), tostring(Properties['service.name']), iff(isnotempty(AppRoleName), AppRoleName, 'agent'))), '_', iff(isnotempty(tostring(Properties['github.copilot.turn_count'])), tostring(Properties['github.copilot.turn_count']), iff(isnotempty(OperationId), OperationId, 'session')), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm'))), operation=tostring(Properties['gen_ai.operation.name']), tool=tostring(Properties['gen_ai.tool.name']), agent=tostring(Properties['gen_ai.agent.name']), agentops_agent=coalesce(tostring(Properties['agentops.agent.name']), tostring(Properties['agentops.cli.agent']), tostring(Properties['gen_ai.agent.name'])), model=tostring(Properties['gen_ai.request.model']), repo=tostring(Properties['agentops.repo.hash']), error=tostring(Properties['error.type']), allow_all=tostring(Properties['agentops.cli.allow_all']) == 'true', allow_all_tools=tostring(Properties['agentops.cli.allow_all_tools']) == 'true', allow_all_paths=tostring(Properties['agentops.cli.allow_all_paths']) == 'true', allow_all_urls=tostring(Properties['agentops.cli.allow_all_urls']) == 'true', allow_tool_count=toint(Properties['agentops.cli.allow_tool.count']), allow_url_count=toint(Properties['agentops.cli.allow_url.count']), deny_tool_count=toint(Properties['agentops.cli.deny_tool.count']), deny_url_count=toint(Properties['agentops.cli.deny_url.count']), available_tool_count=toint(Properties['agentops.cli.available_tools.count']), excluded_tool_count=toint(Properties['agentops.cli.excluded_tools.count']), disabled_mcp_server_count=toint(Properties['agentops.cli.disabled_mcp_server.count']), extra_mcp_config_count=toint(Properties['agentops.cli.additional_mcp_config.count']), configured_mcp_servers=tostring(Properties['agentops.mcp.config.servers']), disabled_mcp_servers=tostring(Properties['agentops.mcp.disabled.servers'])  | extend is_tool=operation == 'execute_tool' or isnotempty(tool), is_policy_block=tostring(Properties) has 'preToolUse' or tostring(Properties) has 'permissionDecision' or tostring(Properties) has 'AgentOps preToolUse policy' or Message has 'AgentOps preToolUse policy' or Message has 'permission', is_retry_hint=Message has 'Recovery hint' or tostring(Properties) has 'Recovery hint' | summarize Blocks=countif(is_policy_block) by TimeGenerated=bin(TimeGenerated, $__interval) | order by TimeGenerated asc"
           }
         }
       ]
@@ -245,7 +252,7 @@
               "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
             ],
             "resultFormat": "time_series",
-            "query": "union isfuzzy=true AppDependencies, AppTraces | where $__timeFilter(TimeGenerated) | where tostring(Properties) has 'github.copilot' or Message has 'github.copilot' or Message has 'AgentOps' | extend conversation=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(tostring(Properties['gen_ai.agent.id']), '_', tostring(Properties['github.copilot.turn_count']), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm'))), operation=tostring(Properties['gen_ai.operation.name']), tool=tostring(Properties['gen_ai.tool.name']), agent=tostring(Properties['gen_ai.agent.name']), model=tostring(Properties['gen_ai.request.model']), repo=tostring(Properties['agentops.repo.hash']), error=tostring(Properties['error.type']), allow_all=tostring(Properties['agentops.cli.allow_all']) == 'true', allow_all_tools=tostring(Properties['agentops.cli.allow_all_tools']) == 'true', allow_all_paths=tostring(Properties['agentops.cli.allow_all_paths']) == 'true', allow_all_urls=tostring(Properties['agentops.cli.allow_all_urls']) == 'true', allow_tool_count=toint(Properties['agentops.cli.allow_tool.count']), allow_url_count=toint(Properties['agentops.cli.allow_url.count']), deny_tool_count=toint(Properties['agentops.cli.deny_tool.count']), deny_url_count=toint(Properties['agentops.cli.deny_url.count']), available_tool_count=toint(Properties['agentops.cli.available_tools.count']), excluded_tool_count=toint(Properties['agentops.cli.excluded_tools.count']), disabled_mcp_server_count=toint(Properties['agentops.cli.disabled_mcp_server.count']), extra_mcp_config_count=toint(Properties['agentops.cli.additional_mcp_config.count']), configured_mcp_servers=tostring(Properties['agentops.mcp.config.servers']), disabled_mcp_servers=tostring(Properties['agentops.mcp.disabled.servers']) | extend is_tool=operation == 'execute_tool' or isnotempty(tool), is_policy_block=tostring(Properties) has 'preToolUse' or tostring(Properties) has 'permissionDecision' or tostring(Properties) has 'AgentOps preToolUse policy' or Message has 'AgentOps preToolUse policy' or Message has 'permission', is_retry_hint=Message has 'Recovery hint' or tostring(Properties) has 'Recovery hint' | where is_tool | summarize Failures=countif(Success == false or tostring(Success) =~ 'false' or isnotempty(error)) by bin(TimeGenerated, $__interval) | order by TimeGenerated asc"
+            "query": "union isfuzzy=true AppDependencies, AppTraces | where $__timeFilter(TimeGenerated) | where tostring(Properties) has_any ('github.copilot', 'agentops.', 'gen_ai.operation.name', 'codex') or Message has_any ('github.copilot', 'AgentOps', 'codex') or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') | extend conversation=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(iff(isnotempty(tostring(Properties['gen_ai.agent.id'])), tostring(Properties['gen_ai.agent.id']), iff(isnotempty(tostring(Properties['service.name'])), tostring(Properties['service.name']), iff(isnotempty(AppRoleName), AppRoleName, 'agent'))), '_', iff(isnotempty(tostring(Properties['github.copilot.turn_count'])), tostring(Properties['github.copilot.turn_count']), iff(isnotempty(OperationId), OperationId, 'session')), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm'))), operation=tostring(Properties['gen_ai.operation.name']), tool=tostring(Properties['gen_ai.tool.name']), agent=tostring(Properties['gen_ai.agent.name']), agentops_agent=coalesce(tostring(Properties['agentops.agent.name']), tostring(Properties['agentops.cli.agent']), tostring(Properties['gen_ai.agent.name'])), model=tostring(Properties['gen_ai.request.model']), repo=tostring(Properties['agentops.repo.hash']), error=tostring(Properties['error.type']), allow_all=tostring(Properties['agentops.cli.allow_all']) == 'true', allow_all_tools=tostring(Properties['agentops.cli.allow_all_tools']) == 'true', allow_all_paths=tostring(Properties['agentops.cli.allow_all_paths']) == 'true', allow_all_urls=tostring(Properties['agentops.cli.allow_all_urls']) == 'true', allow_tool_count=toint(Properties['agentops.cli.allow_tool.count']), allow_url_count=toint(Properties['agentops.cli.allow_url.count']), deny_tool_count=toint(Properties['agentops.cli.deny_tool.count']), deny_url_count=toint(Properties['agentops.cli.deny_url.count']), available_tool_count=toint(Properties['agentops.cli.available_tools.count']), excluded_tool_count=toint(Properties['agentops.cli.excluded_tools.count']), disabled_mcp_server_count=toint(Properties['agentops.cli.disabled_mcp_server.count']), extra_mcp_config_count=toint(Properties['agentops.cli.additional_mcp_config.count']), configured_mcp_servers=tostring(Properties['agentops.mcp.config.servers']), disabled_mcp_servers=tostring(Properties['agentops.mcp.disabled.servers'])  | extend is_tool=operation == 'execute_tool' or isnotempty(tool), is_policy_block=tostring(Properties) has 'preToolUse' or tostring(Properties) has 'permissionDecision' or tostring(Properties) has 'AgentOps preToolUse policy' or Message has 'AgentOps preToolUse policy' or Message has 'permission', is_retry_hint=Message has 'Recovery hint' or tostring(Properties) has 'Recovery hint' | where is_tool | summarize Failures=countif(Success == false or tostring(Success) =~ 'false' or isnotempty(error)) by bin(TimeGenerated, $__interval) | order by TimeGenerated asc"
           }
         }
       ]
@@ -309,7 +316,7 @@
               "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
             ],
             "resultFormat": "time_series",
-            "query": "union isfuzzy=true AppDependencies, AppTraces | where $__timeFilter(TimeGenerated) | where tostring(Properties) has 'github.copilot' or Message has 'github.copilot' or Message has 'AgentOps' | extend conversation=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(tostring(Properties['gen_ai.agent.id']), '_', tostring(Properties['github.copilot.turn_count']), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm'))), operation=tostring(Properties['gen_ai.operation.name']), tool=tostring(Properties['gen_ai.tool.name']), agent=tostring(Properties['gen_ai.agent.name']), model=tostring(Properties['gen_ai.request.model']), repo=tostring(Properties['agentops.repo.hash']), error=tostring(Properties['error.type']), allow_all=tostring(Properties['agentops.cli.allow_all']) == 'true', allow_all_tools=tostring(Properties['agentops.cli.allow_all_tools']) == 'true', allow_all_paths=tostring(Properties['agentops.cli.allow_all_paths']) == 'true', allow_all_urls=tostring(Properties['agentops.cli.allow_all_urls']) == 'true', allow_tool_count=toint(Properties['agentops.cli.allow_tool.count']), allow_url_count=toint(Properties['agentops.cli.allow_url.count']), deny_tool_count=toint(Properties['agentops.cli.deny_tool.count']), deny_url_count=toint(Properties['agentops.cli.deny_url.count']), available_tool_count=toint(Properties['agentops.cli.available_tools.count']), excluded_tool_count=toint(Properties['agentops.cli.excluded_tools.count']), disabled_mcp_server_count=toint(Properties['agentops.cli.disabled_mcp_server.count']), extra_mcp_config_count=toint(Properties['agentops.cli.additional_mcp_config.count']), configured_mcp_servers=tostring(Properties['agentops.mcp.config.servers']), disabled_mcp_servers=tostring(Properties['agentops.mcp.disabled.servers']) | extend is_tool=operation == 'execute_tool' or isnotempty(tool), is_policy_block=tostring(Properties) has 'preToolUse' or tostring(Properties) has 'permissionDecision' or tostring(Properties) has 'AgentOps preToolUse policy' or Message has 'AgentOps preToolUse policy' or Message has 'permission', is_retry_hint=Message has 'Recovery hint' or tostring(Properties) has 'Recovery hint' | where is_retry_hint | summarize Hints=count() by bin(TimeGenerated, $__interval) | order by TimeGenerated asc"
+            "query": "union isfuzzy=true AppDependencies, AppTraces | where $__timeFilter(TimeGenerated) | where tostring(Properties) has_any ('github.copilot', 'agentops.', 'gen_ai.operation.name', 'codex') or Message has_any ('github.copilot', 'AgentOps', 'codex') or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') | extend conversation=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(iff(isnotempty(tostring(Properties['gen_ai.agent.id'])), tostring(Properties['gen_ai.agent.id']), iff(isnotempty(tostring(Properties['service.name'])), tostring(Properties['service.name']), iff(isnotempty(AppRoleName), AppRoleName, 'agent'))), '_', iff(isnotempty(tostring(Properties['github.copilot.turn_count'])), tostring(Properties['github.copilot.turn_count']), iff(isnotempty(OperationId), OperationId, 'session')), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm'))), operation=tostring(Properties['gen_ai.operation.name']), tool=tostring(Properties['gen_ai.tool.name']), agent=tostring(Properties['gen_ai.agent.name']), agentops_agent=coalesce(tostring(Properties['agentops.agent.name']), tostring(Properties['agentops.cli.agent']), tostring(Properties['gen_ai.agent.name'])), model=tostring(Properties['gen_ai.request.model']), repo=tostring(Properties['agentops.repo.hash']), error=tostring(Properties['error.type']), allow_all=tostring(Properties['agentops.cli.allow_all']) == 'true', allow_all_tools=tostring(Properties['agentops.cli.allow_all_tools']) == 'true', allow_all_paths=tostring(Properties['agentops.cli.allow_all_paths']) == 'true', allow_all_urls=tostring(Properties['agentops.cli.allow_all_urls']) == 'true', allow_tool_count=toint(Properties['agentops.cli.allow_tool.count']), allow_url_count=toint(Properties['agentops.cli.allow_url.count']), deny_tool_count=toint(Properties['agentops.cli.deny_tool.count']), deny_url_count=toint(Properties['agentops.cli.deny_url.count']), available_tool_count=toint(Properties['agentops.cli.available_tools.count']), excluded_tool_count=toint(Properties['agentops.cli.excluded_tools.count']), disabled_mcp_server_count=toint(Properties['agentops.cli.disabled_mcp_server.count']), extra_mcp_config_count=toint(Properties['agentops.cli.additional_mcp_config.count']), configured_mcp_servers=tostring(Properties['agentops.mcp.config.servers']), disabled_mcp_servers=tostring(Properties['agentops.mcp.disabled.servers'])  | extend is_tool=operation == 'execute_tool' or isnotempty(tool), is_policy_block=tostring(Properties) has 'preToolUse' or tostring(Properties) has 'permissionDecision' or tostring(Properties) has 'AgentOps preToolUse policy' or Message has 'AgentOps preToolUse policy' or Message has 'permission', is_retry_hint=Message has 'Recovery hint' or tostring(Properties) has 'Recovery hint' | summarize Hints=countif(is_retry_hint) by TimeGenerated=bin(TimeGenerated, $__interval) | order by TimeGenerated asc"
           }
         }
       ]
@@ -373,7 +380,7 @@
               "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
             ],
             "resultFormat": "time_series",
-            "query": "union isfuzzy=true AppDependencies, AppTraces | where $__timeFilter(TimeGenerated) | where tostring(Properties) has 'github.copilot' or Message has 'github.copilot' or Message has 'AgentOps' | extend conversation=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(tostring(Properties['gen_ai.agent.id']), '_', tostring(Properties['github.copilot.turn_count']), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm'))), operation=tostring(Properties['gen_ai.operation.name']), tool=tostring(Properties['gen_ai.tool.name']), agent=tostring(Properties['gen_ai.agent.name']), model=tostring(Properties['gen_ai.request.model']), repo=tostring(Properties['agentops.repo.hash']), error=tostring(Properties['error.type']), allow_all=tostring(Properties['agentops.cli.allow_all']) == 'true', allow_all_tools=tostring(Properties['agentops.cli.allow_all_tools']) == 'true', allow_all_paths=tostring(Properties['agentops.cli.allow_all_paths']) == 'true', allow_all_urls=tostring(Properties['agentops.cli.allow_all_urls']) == 'true', allow_tool_count=toint(Properties['agentops.cli.allow_tool.count']), allow_url_count=toint(Properties['agentops.cli.allow_url.count']), deny_tool_count=toint(Properties['agentops.cli.deny_tool.count']), deny_url_count=toint(Properties['agentops.cli.deny_url.count']), available_tool_count=toint(Properties['agentops.cli.available_tools.count']), excluded_tool_count=toint(Properties['agentops.cli.excluded_tools.count']), disabled_mcp_server_count=toint(Properties['agentops.cli.disabled_mcp_server.count']), extra_mcp_config_count=toint(Properties['agentops.cli.additional_mcp_config.count']), configured_mcp_servers=tostring(Properties['agentops.mcp.config.servers']), disabled_mcp_servers=tostring(Properties['agentops.mcp.disabled.servers']) | extend is_tool=operation == 'execute_tool' or isnotempty(tool), is_policy_block=tostring(Properties) has 'preToolUse' or tostring(Properties) has 'permissionDecision' or tostring(Properties) has 'AgentOps preToolUse policy' or Message has 'AgentOps preToolUse policy' or Message has 'permission', is_retry_hint=Message has 'Recovery hint' or tostring(Properties) has 'Recovery hint' | summarize AllowAll=max(toint(allow_all)) by conversation, TimeGenerated=bin(TimeGenerated, $__interval) | summarize Sessions=sum(AllowAll) by TimeGenerated | order by TimeGenerated asc"
+            "query": "union isfuzzy=true AppDependencies, AppTraces | where $__timeFilter(TimeGenerated) | where tostring(Properties) has_any ('github.copilot', 'agentops.', 'gen_ai.operation.name', 'codex') or Message has_any ('github.copilot', 'AgentOps', 'codex') or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') | extend conversation=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(iff(isnotempty(tostring(Properties['gen_ai.agent.id'])), tostring(Properties['gen_ai.agent.id']), iff(isnotempty(tostring(Properties['service.name'])), tostring(Properties['service.name']), iff(isnotempty(AppRoleName), AppRoleName, 'agent'))), '_', iff(isnotempty(tostring(Properties['github.copilot.turn_count'])), tostring(Properties['github.copilot.turn_count']), iff(isnotempty(OperationId), OperationId, 'session')), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm'))), operation=tostring(Properties['gen_ai.operation.name']), tool=tostring(Properties['gen_ai.tool.name']), agent=tostring(Properties['gen_ai.agent.name']), agentops_agent=coalesce(tostring(Properties['agentops.agent.name']), tostring(Properties['agentops.cli.agent']), tostring(Properties['gen_ai.agent.name'])), model=tostring(Properties['gen_ai.request.model']), repo=tostring(Properties['agentops.repo.hash']), error=tostring(Properties['error.type']), allow_all=tostring(Properties['agentops.cli.allow_all']) == 'true', allow_all_tools=tostring(Properties['agentops.cli.allow_all_tools']) == 'true', allow_all_paths=tostring(Properties['agentops.cli.allow_all_paths']) == 'true', allow_all_urls=tostring(Properties['agentops.cli.allow_all_urls']) == 'true', allow_tool_count=toint(Properties['agentops.cli.allow_tool.count']), allow_url_count=toint(Properties['agentops.cli.allow_url.count']), deny_tool_count=toint(Properties['agentops.cli.deny_tool.count']), deny_url_count=toint(Properties['agentops.cli.deny_url.count']), available_tool_count=toint(Properties['agentops.cli.available_tools.count']), excluded_tool_count=toint(Properties['agentops.cli.excluded_tools.count']), disabled_mcp_server_count=toint(Properties['agentops.cli.disabled_mcp_server.count']), extra_mcp_config_count=toint(Properties['agentops.cli.additional_mcp_config.count']), configured_mcp_servers=tostring(Properties['agentops.mcp.config.servers']), disabled_mcp_servers=tostring(Properties['agentops.mcp.disabled.servers'])  | extend is_tool=operation == 'execute_tool' or isnotempty(tool), is_policy_block=tostring(Properties) has 'preToolUse' or tostring(Properties) has 'permissionDecision' or tostring(Properties) has 'AgentOps preToolUse policy' or Message has 'AgentOps preToolUse policy' or Message has 'permission', is_retry_hint=Message has 'Recovery hint' or tostring(Properties) has 'Recovery hint' | summarize AllowAll=max(toint(allow_all)) by conversation, TimeGenerated=bin(TimeGenerated, $__interval) | summarize Sessions=sum(AllowAll) by TimeGenerated | order by TimeGenerated asc"
           }
         }
       ]
@@ -499,7 +506,7 @@
               "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
             ],
             "resultFormat": "table",
-            "query": "union isfuzzy=true AppDependencies, AppTraces | where $__timeFilter(TimeGenerated) | where tostring(Properties) has 'github.copilot' or Message has 'github.copilot' or Message has 'AgentOps' | extend conversation=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(tostring(Properties['gen_ai.agent.id']), '_', tostring(Properties['github.copilot.turn_count']), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm'))), operation=tostring(Properties['gen_ai.operation.name']), tool=tostring(Properties['gen_ai.tool.name']), agent=tostring(Properties['gen_ai.agent.name']), model=tostring(Properties['gen_ai.request.model']), repo=tostring(Properties['agentops.repo.hash']), error=tostring(Properties['error.type']), allow_all=tostring(Properties['agentops.cli.allow_all']) == 'true', allow_all_tools=tostring(Properties['agentops.cli.allow_all_tools']) == 'true', allow_all_paths=tostring(Properties['agentops.cli.allow_all_paths']) == 'true', allow_all_urls=tostring(Properties['agentops.cli.allow_all_urls']) == 'true', allow_tool_count=toint(Properties['agentops.cli.allow_tool.count']), allow_url_count=toint(Properties['agentops.cli.allow_url.count']), deny_tool_count=toint(Properties['agentops.cli.deny_tool.count']), deny_url_count=toint(Properties['agentops.cli.deny_url.count']), available_tool_count=toint(Properties['agentops.cli.available_tools.count']), excluded_tool_count=toint(Properties['agentops.cli.excluded_tools.count']), disabled_mcp_server_count=toint(Properties['agentops.cli.disabled_mcp_server.count']), extra_mcp_config_count=toint(Properties['agentops.cli.additional_mcp_config.count']), configured_mcp_servers=tostring(Properties['agentops.mcp.config.servers']), disabled_mcp_servers=tostring(Properties['agentops.mcp.disabled.servers']) | extend is_tool=operation == 'execute_tool' or isnotempty(tool), is_policy_block=tostring(Properties) has 'preToolUse' or tostring(Properties) has 'permissionDecision' or tostring(Properties) has 'AgentOps preToolUse policy' or Message has 'AgentOps preToolUse policy' or Message has 'permission', is_retry_hint=Message has 'Recovery hint' or tostring(Properties) has 'Recovery hint' | summarize Started=min(TimeGenerated), Ended=max(TimeGenerated), Spans=count(), ToolCalls=countif(is_tool), ToolFailures=countif(is_tool and (Success == false or tostring(Success) =~ 'false' or isnotempty(error))), PolicyBlocks=countif(is_policy_block), RetryHints=countif(is_retry_hint), AllowAll=max(toint(allow_all)), AllowAllTools=max(toint(allow_all_tools)), AllowAllPaths=max(toint(allow_all_paths)), AllowAllUrls=max(toint(allow_all_urls)), MaxAllowTools=max(allow_tool_count), MaxAllowUrls=max(allow_url_count), MaxDenyTools=max(deny_tool_count), MaxDenyUrls=max(deny_url_count), MaxAvailableTools=max(available_tool_count), MaxExcludedTools=max(excluded_tool_count), MaxDisabledMcp=max(disabled_mcp_server_count), MaxExtraMcpConfigs=max(extra_mcp_config_count), P95DurationMs=percentile(DurationMs, 95), Tools=make_set_if(tool, isnotempty(tool), 10), Agents=make_set_if(agent, isnotempty(agent), 5), Models=make_set_if(model, isnotempty(model), 5), Repos=make_set_if(repo, isnotempty(repo), 3), ConfiguredMcpServers=make_set_if(configured_mcp_servers, isnotempty(configured_mcp_servers), 10), DisabledMcpServerNames=make_set_if(disabled_mcp_servers, isnotempty(disabled_mcp_servers), 10), Errors=make_set_if(error, isnotempty(error), 10) by Session=conversation | extend AllowAll=coalesce(AllowAll, 0), AllowAllTools=coalesce(AllowAllTools, 0), AllowAllPaths=coalesce(AllowAllPaths, 0), AllowAllUrls=coalesce(AllowAllUrls, 0), MaxAllowTools=coalesce(MaxAllowTools, 0), MaxAllowUrls=coalesce(MaxAllowUrls, 0), MaxDenyTools=coalesce(MaxDenyTools, 0), MaxDenyUrls=coalesce(MaxDenyUrls, 0), MaxAvailableTools=coalesce(MaxAvailableTools, 0), MaxExcludedTools=coalesce(MaxExcludedTools, 0), MaxDisabledMcp=coalesce(MaxDisabledMcp, 0), MaxExtraMcpConfigs=coalesce(MaxExtraMcpConfigs, 0) | extend DurationSec=round(datetime_diff('millisecond', Ended, Started) / 1000.0, 2), FrictionScore=PolicyBlocks * 5 + ToolFailures * 3 + RetryHints * 2 + AllowAll * 2 + MaxDenyTools + MaxDenyUrls + MaxExcludedTools + MaxDisabledMcp, Posture=case(PolicyBlocks > 0, 'blocked', ToolFailures > 0, 'tool_failed', RetryHints > 0, 'retry_hint', AllowAll > 0, 'allow_all', AllowAllTools > 0 or AllowAllPaths > 0 or AllowAllUrls > 0, 'permissive_scope', MaxDenyTools > 0 or MaxDenyUrls > 0 or MaxExcludedTools > 0 or MaxDisabledMcp > 0, 'restricted', 'ok') | where Posture != 'ok' | project Started, Session, Posture, FrictionScore, DurationSec, Spans, ToolCalls, ToolFailures, PolicyBlocks, RetryHints, AllowAll, AllowAllTools, AllowAllPaths, AllowAllUrls, MaxAllowTools, MaxAllowUrls, MaxDenyTools, MaxDenyUrls, MaxAvailableTools, MaxExcludedTools, MaxDisabledMcp, MaxExtraMcpConfigs, P95DurationMs, Tools, Agents, Models, Repos, ConfiguredMcpServers, DisabledMcpServerNames, Errors | order by FrictionScore desc, Started desc | take 200"
+            "query": "union isfuzzy=true AppDependencies, AppTraces | where $__timeFilter(TimeGenerated) | where tostring(Properties) has_any ('github.copilot', 'agentops.', 'gen_ai.operation.name', 'codex') or Message has_any ('github.copilot', 'AgentOps', 'codex') or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') | extend conversation=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(iff(isnotempty(tostring(Properties['gen_ai.agent.id'])), tostring(Properties['gen_ai.agent.id']), iff(isnotempty(tostring(Properties['service.name'])), tostring(Properties['service.name']), iff(isnotempty(AppRoleName), AppRoleName, 'agent'))), '_', iff(isnotempty(tostring(Properties['github.copilot.turn_count'])), tostring(Properties['github.copilot.turn_count']), iff(isnotempty(OperationId), OperationId, 'session')), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm'))), operation=tostring(Properties['gen_ai.operation.name']), tool=tostring(Properties['gen_ai.tool.name']), agent=tostring(Properties['gen_ai.agent.name']), agentops_agent=coalesce(tostring(Properties['agentops.agent.name']), tostring(Properties['agentops.cli.agent']), tostring(Properties['gen_ai.agent.name'])), model=tostring(Properties['gen_ai.request.model']), repo=tostring(Properties['agentops.repo.hash']), error=tostring(Properties['error.type']), allow_all=tostring(Properties['agentops.cli.allow_all']) == 'true', allow_all_tools=tostring(Properties['agentops.cli.allow_all_tools']) == 'true', allow_all_paths=tostring(Properties['agentops.cli.allow_all_paths']) == 'true', allow_all_urls=tostring(Properties['agentops.cli.allow_all_urls']) == 'true', allow_tool_count=toint(Properties['agentops.cli.allow_tool.count']), allow_url_count=toint(Properties['agentops.cli.allow_url.count']), deny_tool_count=toint(Properties['agentops.cli.deny_tool.count']), deny_url_count=toint(Properties['agentops.cli.deny_url.count']), available_tool_count=toint(Properties['agentops.cli.available_tools.count']), excluded_tool_count=toint(Properties['agentops.cli.excluded_tools.count']), disabled_mcp_server_count=toint(Properties['agentops.cli.disabled_mcp_server.count']), extra_mcp_config_count=toint(Properties['agentops.cli.additional_mcp_config.count']), configured_mcp_servers=tostring(Properties['agentops.mcp.config.servers']), disabled_mcp_servers=tostring(Properties['agentops.mcp.disabled.servers'])  | extend is_tool=operation == 'execute_tool' or isnotempty(tool), is_policy_block=tostring(Properties) has 'preToolUse' or tostring(Properties) has 'permissionDecision' or tostring(Properties) has 'AgentOps preToolUse policy' or Message has 'AgentOps preToolUse policy' or Message has 'permission', is_retry_hint=Message has 'Recovery hint' or tostring(Properties) has 'Recovery hint' | summarize Started=min(TimeGenerated), Ended=max(TimeGenerated), Spans=count(), ToolCalls=countif(is_tool), ToolFailures=countif(is_tool and (Success == false or tostring(Success) =~ 'false' or isnotempty(error))), PolicyBlocks=countif(is_policy_block), RetryHints=countif(is_retry_hint), AllowAll=max(toint(allow_all)), AllowAllTools=max(toint(allow_all_tools)), AllowAllPaths=max(toint(allow_all_paths)), AllowAllUrls=max(toint(allow_all_urls)), MaxAllowTools=max(allow_tool_count), MaxAllowUrls=max(allow_url_count), MaxDenyTools=max(deny_tool_count), MaxDenyUrls=max(deny_url_count), MaxAvailableTools=max(available_tool_count), MaxExcludedTools=max(excluded_tool_count), MaxDisabledMcp=max(disabled_mcp_server_count), MaxExtraMcpConfigs=max(extra_mcp_config_count), P95DurationMs=percentile(DurationMs, 95), Tools=make_set_if(tool, isnotempty(tool), 10), Agents=make_set_if(agent, isnotempty(agent), 5), Models=make_set_if(model, isnotempty(model), 5), Repos=make_set_if(repo, isnotempty(repo), 3), ConfiguredMcpServers=make_set_if(configured_mcp_servers, isnotempty(configured_mcp_servers), 10), DisabledMcpServerNames=make_set_if(disabled_mcp_servers, isnotempty(disabled_mcp_servers), 10), Errors=make_set_if(error, isnotempty(error), 10) by Session=conversation | extend AllowAll=coalesce(AllowAll, 0), AllowAllTools=coalesce(AllowAllTools, 0), AllowAllPaths=coalesce(AllowAllPaths, 0), AllowAllUrls=coalesce(AllowAllUrls, 0), MaxAllowTools=coalesce(MaxAllowTools, 0), MaxAllowUrls=coalesce(MaxAllowUrls, 0), MaxDenyTools=coalesce(MaxDenyTools, 0), MaxDenyUrls=coalesce(MaxDenyUrls, 0), MaxAvailableTools=coalesce(MaxAvailableTools, 0), MaxExcludedTools=coalesce(MaxExcludedTools, 0), MaxDisabledMcp=coalesce(MaxDisabledMcp, 0), MaxExtraMcpConfigs=coalesce(MaxExtraMcpConfigs, 0) | extend DurationSec=round(datetime_diff('millisecond', Ended, Started) / 1000.0, 2), FrictionScore=PolicyBlocks * 5 + ToolFailures * 3 + RetryHints * 2 + AllowAll * 2 + MaxDenyTools + MaxDenyUrls + MaxExcludedTools + MaxDisabledMcp, Posture=case(PolicyBlocks > 0, 'blocked', ToolFailures > 0, 'tool_failed', RetryHints > 0, 'retry_hint', AllowAll > 0, 'allow_all', AllowAllTools > 0 or AllowAllPaths > 0 or AllowAllUrls > 0, 'permissive_scope', MaxDenyTools > 0 or MaxDenyUrls > 0 or MaxExcludedTools > 0 or MaxDisabledMcp > 0, 'restricted', 'ok') | where Posture != 'ok' | project Started, Session, Posture, FrictionScore, DurationSec, Spans, ToolCalls, ToolFailures, PolicyBlocks, RetryHints, AllowAll, AllowAllTools, AllowAllPaths, AllowAllUrls, MaxAllowTools, MaxAllowUrls, MaxDenyTools, MaxDenyUrls, MaxAvailableTools, MaxExcludedTools, MaxDisabledMcp, MaxExtraMcpConfigs, P95DurationMs, Tools, Agents, Models, Repos, ConfiguredMcpServers, DisabledMcpServerNames, Errors | order by FrictionScore desc, Started desc | take 200"
           }
         }
       ]
@@ -552,7 +559,7 @@
               "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
             ],
             "resultFormat": "time_series",
-            "query": "union isfuzzy=true AppDependencies, AppTraces | where $__timeFilter(TimeGenerated) | where tostring(Properties) has 'github.copilot' or Message has 'github.copilot' or Message has 'AgentOps' | extend conversation=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(tostring(Properties['gen_ai.agent.id']), '_', tostring(Properties['github.copilot.turn_count']), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm'))), operation=tostring(Properties['gen_ai.operation.name']), tool=tostring(Properties['gen_ai.tool.name']), agent=tostring(Properties['gen_ai.agent.name']), model=tostring(Properties['gen_ai.request.model']), repo=tostring(Properties['agentops.repo.hash']), error=tostring(Properties['error.type']), allow_all=tostring(Properties['agentops.cli.allow_all']) == 'true', allow_all_tools=tostring(Properties['agentops.cli.allow_all_tools']) == 'true', allow_all_paths=tostring(Properties['agentops.cli.allow_all_paths']) == 'true', allow_all_urls=tostring(Properties['agentops.cli.allow_all_urls']) == 'true', allow_tool_count=toint(Properties['agentops.cli.allow_tool.count']), allow_url_count=toint(Properties['agentops.cli.allow_url.count']), deny_tool_count=toint(Properties['agentops.cli.deny_tool.count']), deny_url_count=toint(Properties['agentops.cli.deny_url.count']), available_tool_count=toint(Properties['agentops.cli.available_tools.count']), excluded_tool_count=toint(Properties['agentops.cli.excluded_tools.count']), disabled_mcp_server_count=toint(Properties['agentops.cli.disabled_mcp_server.count']), extra_mcp_config_count=toint(Properties['agentops.cli.additional_mcp_config.count']), configured_mcp_servers=tostring(Properties['agentops.mcp.config.servers']), disabled_mcp_servers=tostring(Properties['agentops.mcp.disabled.servers']) | extend is_tool=operation == 'execute_tool' or isnotempty(tool), is_policy_block=tostring(Properties) has 'preToolUse' or tostring(Properties) has 'permissionDecision' or tostring(Properties) has 'AgentOps preToolUse policy' or Message has 'AgentOps preToolUse policy' or Message has 'permission', is_retry_hint=Message has 'Recovery hint' or tostring(Properties) has 'Recovery hint' | summarize ToolFailures=countif(is_tool and (Success == false or tostring(Success) =~ 'false' or isnotempty(error))), PolicyBlocks=countif(is_policy_block), RetryHints=countif(is_retry_hint), AllowAll=max(toint(allow_all)), AllowAllTools=max(toint(allow_all_tools)), AllowAllPaths=max(toint(allow_all_paths)), AllowAllUrls=max(toint(allow_all_urls)), MaxDenyTools=max(deny_tool_count), MaxDenyUrls=max(deny_url_count), MaxExcludedTools=max(excluded_tool_count), MaxDisabledMcp=max(disabled_mcp_server_count) by TimeGenerated=bin(TimeGenerated, $__interval), conversation | extend AllowAll=coalesce(AllowAll, 0), AllowAllTools=coalesce(AllowAllTools, 0), AllowAllPaths=coalesce(AllowAllPaths, 0), AllowAllUrls=coalesce(AllowAllUrls, 0), MaxDenyTools=coalesce(MaxDenyTools, 0), MaxDenyUrls=coalesce(MaxDenyUrls, 0), MaxExcludedTools=coalesce(MaxExcludedTools, 0), MaxDisabledMcp=coalesce(MaxDisabledMcp, 0) | extend Posture=case(PolicyBlocks > 0, 'blocked', ToolFailures > 0, 'tool_failed', RetryHints > 0, 'retry_hint', AllowAll > 0, 'allow_all', AllowAllTools > 0 or AllowAllPaths > 0 or AllowAllUrls > 0, 'permissive_scope', MaxDenyTools > 0 or MaxDenyUrls > 0 or MaxExcludedTools > 0 or MaxDisabledMcp > 0, 'restricted', 'ok') | where Posture != 'ok' | summarize Sessions=dcount(conversation) by TimeGenerated, Posture | order by TimeGenerated asc"
+            "query": "union isfuzzy=true AppDependencies, AppTraces | where $__timeFilter(TimeGenerated) | where tostring(Properties) has_any ('github.copilot', 'agentops.', 'gen_ai.operation.name', 'codex') or Message has_any ('github.copilot', 'AgentOps', 'codex') or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') | extend conversation=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(iff(isnotempty(tostring(Properties['gen_ai.agent.id'])), tostring(Properties['gen_ai.agent.id']), iff(isnotempty(tostring(Properties['service.name'])), tostring(Properties['service.name']), iff(isnotempty(AppRoleName), AppRoleName, 'agent'))), '_', iff(isnotempty(tostring(Properties['github.copilot.turn_count'])), tostring(Properties['github.copilot.turn_count']), iff(isnotempty(OperationId), OperationId, 'session')), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm'))), operation=tostring(Properties['gen_ai.operation.name']), tool=tostring(Properties['gen_ai.tool.name']), agent=tostring(Properties['gen_ai.agent.name']), agentops_agent=coalesce(tostring(Properties['agentops.agent.name']), tostring(Properties['agentops.cli.agent']), tostring(Properties['gen_ai.agent.name'])), model=tostring(Properties['gen_ai.request.model']), repo=tostring(Properties['agentops.repo.hash']), error=tostring(Properties['error.type']), allow_all=tostring(Properties['agentops.cli.allow_all']) == 'true', allow_all_tools=tostring(Properties['agentops.cli.allow_all_tools']) == 'true', allow_all_paths=tostring(Properties['agentops.cli.allow_all_paths']) == 'true', allow_all_urls=tostring(Properties['agentops.cli.allow_all_urls']) == 'true', allow_tool_count=toint(Properties['agentops.cli.allow_tool.count']), allow_url_count=toint(Properties['agentops.cli.allow_url.count']), deny_tool_count=toint(Properties['agentops.cli.deny_tool.count']), deny_url_count=toint(Properties['agentops.cli.deny_url.count']), available_tool_count=toint(Properties['agentops.cli.available_tools.count']), excluded_tool_count=toint(Properties['agentops.cli.excluded_tools.count']), disabled_mcp_server_count=toint(Properties['agentops.cli.disabled_mcp_server.count']), extra_mcp_config_count=toint(Properties['agentops.cli.additional_mcp_config.count']), configured_mcp_servers=tostring(Properties['agentops.mcp.config.servers']), disabled_mcp_servers=tostring(Properties['agentops.mcp.disabled.servers'])  | extend is_tool=operation == 'execute_tool' or isnotempty(tool), is_policy_block=tostring(Properties) has 'preToolUse' or tostring(Properties) has 'permissionDecision' or tostring(Properties) has 'AgentOps preToolUse policy' or Message has 'AgentOps preToolUse policy' or Message has 'permission', is_retry_hint=Message has 'Recovery hint' or tostring(Properties) has 'Recovery hint' | summarize ToolFailures=countif(is_tool and (Success == false or tostring(Success) =~ 'false' or isnotempty(error))), PolicyBlocks=countif(is_policy_block), RetryHints=countif(is_retry_hint), AllowAll=max(toint(allow_all)), AllowAllTools=max(toint(allow_all_tools)), AllowAllPaths=max(toint(allow_all_paths)), AllowAllUrls=max(toint(allow_all_urls)), MaxDenyTools=max(deny_tool_count), MaxDenyUrls=max(deny_url_count), MaxExcludedTools=max(excluded_tool_count), MaxDisabledMcp=max(disabled_mcp_server_count) by TimeGenerated=bin(TimeGenerated, $__interval), conversation | extend AllowAll=coalesce(AllowAll, 0), AllowAllTools=coalesce(AllowAllTools, 0), AllowAllPaths=coalesce(AllowAllPaths, 0), AllowAllUrls=coalesce(AllowAllUrls, 0), MaxDenyTools=coalesce(MaxDenyTools, 0), MaxDenyUrls=coalesce(MaxDenyUrls, 0), MaxExcludedTools=coalesce(MaxExcludedTools, 0), MaxDisabledMcp=coalesce(MaxDisabledMcp, 0) | extend Posture=case(PolicyBlocks > 0, 'blocked', ToolFailures > 0, 'tool_failed', RetryHints > 0, 'retry_hint', AllowAll > 0, 'allow_all', AllowAllTools > 0 or AllowAllPaths > 0 or AllowAllUrls > 0, 'permissive_scope', MaxDenyTools > 0 or MaxDenyUrls > 0 or MaxExcludedTools > 0 or MaxDisabledMcp > 0, 'restricted', 'ok') | where Posture != 'ok' | summarize Sessions=dcount(conversation) by TimeGenerated, Posture | order by TimeGenerated asc"
           }
         }
       ]
@@ -644,7 +651,7 @@
               "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
             ],
             "resultFormat": "table",
-            "query": "union isfuzzy=true AppDependencies, AppTraces | where $__timeFilter(TimeGenerated) | where tostring(Properties) has 'github.copilot' or Message has 'github.copilot' or Message has 'AgentOps' | extend conversation=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(tostring(Properties['gen_ai.agent.id']), '_', tostring(Properties['github.copilot.turn_count']), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm'))), operation=tostring(Properties['gen_ai.operation.name']), tool=tostring(Properties['gen_ai.tool.name']), agent=tostring(Properties['gen_ai.agent.name']), model=tostring(Properties['gen_ai.request.model']), repo=tostring(Properties['agentops.repo.hash']), error=tostring(Properties['error.type']), allow_all=tostring(Properties['agentops.cli.allow_all']) == 'true', allow_all_tools=tostring(Properties['agentops.cli.allow_all_tools']) == 'true', allow_all_paths=tostring(Properties['agentops.cli.allow_all_paths']) == 'true', allow_all_urls=tostring(Properties['agentops.cli.allow_all_urls']) == 'true', allow_tool_count=toint(Properties['agentops.cli.allow_tool.count']), allow_url_count=toint(Properties['agentops.cli.allow_url.count']), deny_tool_count=toint(Properties['agentops.cli.deny_tool.count']), deny_url_count=toint(Properties['agentops.cli.deny_url.count']), available_tool_count=toint(Properties['agentops.cli.available_tools.count']), excluded_tool_count=toint(Properties['agentops.cli.excluded_tools.count']), disabled_mcp_server_count=toint(Properties['agentops.cli.disabled_mcp_server.count']), extra_mcp_config_count=toint(Properties['agentops.cli.additional_mcp_config.count']), configured_mcp_servers=tostring(Properties['agentops.mcp.config.servers']), disabled_mcp_servers=tostring(Properties['agentops.mcp.disabled.servers']) | extend is_tool=operation == 'execute_tool' or isnotempty(tool), is_policy_block=tostring(Properties) has 'preToolUse' or tostring(Properties) has 'permissionDecision' or tostring(Properties) has 'AgentOps preToolUse policy' or Message has 'AgentOps preToolUse policy' or Message has 'permission', is_retry_hint=Message has 'Recovery hint' or tostring(Properties) has 'Recovery hint' | where is_tool or is_policy_block or is_retry_hint | summarize Calls=countif(is_tool), Failures=countif(is_tool and (Success == false or tostring(Success) =~ 'false' or isnotempty(error))), PolicyBlocks=countif(is_policy_block), RetryHints=countif(is_retry_hint), Sessions=dcount(conversation), P95DurationMs=percentile(DurationMs, 95) by tool, error | extend FailurePct=iff(Calls > 0, round(100.0 * Failures / Calls, 1), 0.0), FrictionScore=PolicyBlocks * 5 + Failures * 3 + RetryHints * 2 | order by FrictionScore desc, Failures desc | take 50"
+            "query": "union isfuzzy=true AppDependencies, AppTraces | where $__timeFilter(TimeGenerated) | where tostring(Properties) has_any ('github.copilot', 'agentops.', 'gen_ai.operation.name', 'codex') or Message has_any ('github.copilot', 'AgentOps', 'codex') or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') | extend conversation=case(isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(iff(isnotempty(tostring(Properties['gen_ai.agent.id'])), tostring(Properties['gen_ai.agent.id']), iff(isnotempty(tostring(Properties['service.name'])), tostring(Properties['service.name']), iff(isnotempty(AppRoleName), AppRoleName, 'agent'))), '_', iff(isnotempty(tostring(Properties['github.copilot.turn_count'])), tostring(Properties['github.copilot.turn_count']), iff(isnotempty(OperationId), OperationId, 'session')), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMdd_HHmm'))), operation=tostring(Properties['gen_ai.operation.name']), tool=tostring(Properties['gen_ai.tool.name']), agent=tostring(Properties['gen_ai.agent.name']), agentops_agent=coalesce(tostring(Properties['agentops.agent.name']), tostring(Properties['agentops.cli.agent']), tostring(Properties['gen_ai.agent.name'])), model=tostring(Properties['gen_ai.request.model']), repo=tostring(Properties['agentops.repo.hash']), error=tostring(Properties['error.type']), allow_all=tostring(Properties['agentops.cli.allow_all']) == 'true', allow_all_tools=tostring(Properties['agentops.cli.allow_all_tools']) == 'true', allow_all_paths=tostring(Properties['agentops.cli.allow_all_paths']) == 'true', allow_all_urls=tostring(Properties['agentops.cli.allow_all_urls']) == 'true', allow_tool_count=toint(Properties['agentops.cli.allow_tool.count']), allow_url_count=toint(Properties['agentops.cli.allow_url.count']), deny_tool_count=toint(Properties['agentops.cli.deny_tool.count']), deny_url_count=toint(Properties['agentops.cli.deny_url.count']), available_tool_count=toint(Properties['agentops.cli.available_tools.count']), excluded_tool_count=toint(Properties['agentops.cli.excluded_tools.count']), disabled_mcp_server_count=toint(Properties['agentops.cli.disabled_mcp_server.count']), extra_mcp_config_count=toint(Properties['agentops.cli.additional_mcp_config.count']), configured_mcp_servers=tostring(Properties['agentops.mcp.config.servers']), disabled_mcp_servers=tostring(Properties['agentops.mcp.disabled.servers'])  | extend is_tool=operation == 'execute_tool' or isnotempty(tool), is_policy_block=tostring(Properties) has 'preToolUse' or tostring(Properties) has 'permissionDecision' or tostring(Properties) has 'AgentOps preToolUse policy' or Message has 'AgentOps preToolUse policy' or Message has 'permission', is_retry_hint=Message has 'Recovery hint' or tostring(Properties) has 'Recovery hint' | where is_tool or is_policy_block or is_retry_hint | summarize Calls=countif(is_tool), Failures=countif(is_tool and (Success == false or tostring(Success) =~ 'false' or isnotempty(error))), PolicyBlocks=countif(is_policy_block), RetryHints=countif(is_retry_hint), Sessions=dcount(conversation), P95DurationMs=percentile(DurationMs, 95) by tool, error | extend FailurePct=iff(Calls > 0, round(100.0 * Failures / Calls, 1), 0.0), FrictionScore=PolicyBlocks * 5 + Failures * 3 + RetryHints * 2 | order by FrictionScore desc, Failures desc | take 50"
           }
         }
       ]
@@ -669,296 +676,6 @@
           "value": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
         },
         "hide": 2
-      },
-      {
-        "name": "model",
-        "label": "Model",
-        "type": "query",
-        "datasource": {
-          "type": "grafana-azure-monitor-datasource",
-          "uid": "azure-monitor-oob"
-        },
-        "queryType": "Azure Log Analytics",
-        "query": {
-          "queryType": "Azure Log Analytics",
-          "azureLogAnalytics": {
-            "resources": [
-              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
-            ],
-            "query": "AppDependencies | where TimeGenerated > ago(14d) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli')) | extend model=tostring(Properties['gen_ai.request.model']) | where isnotempty(model) | distinct model | order by model asc"
-          }
-        },
-        "refresh": 2,
-        "includeAll": true,
-        "multi": true,
-        "current": {
-          "selected": false,
-          "text": [
-            "All"
-          ],
-          "value": [
-            "$__all"
-          ]
-        }
-      },
-      {
-        "name": "operation",
-        "label": "Operation",
-        "type": "query",
-        "datasource": {
-          "type": "grafana-azure-monitor-datasource",
-          "uid": "azure-monitor-oob"
-        },
-        "queryType": "Azure Log Analytics",
-        "query": {
-          "queryType": "Azure Log Analytics",
-          "azureLogAnalytics": {
-            "resources": [
-              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
-            ],
-            "query": "AppDependencies | where TimeGenerated > ago(14d) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli')) | extend operation=tostring(Properties['gen_ai.operation.name']) | where isnotempty(operation) | distinct operation | order by operation asc"
-          }
-        },
-        "refresh": 2,
-        "includeAll": true,
-        "multi": true,
-        "current": {
-          "selected": false,
-          "text": [
-            "All"
-          ],
-          "value": [
-            "$__all"
-          ]
-        }
-      },
-      {
-        "name": "agent",
-        "label": "Agent",
-        "type": "query",
-        "datasource": {
-          "type": "grafana-azure-monitor-datasource",
-          "uid": "azure-monitor-oob"
-        },
-        "queryType": "Azure Log Analytics",
-        "query": {
-          "queryType": "Azure Log Analytics",
-          "azureLogAnalytics": {
-            "resources": [
-              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
-            ],
-            "query": "AppDependencies | where TimeGenerated > ago(14d) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli')) | extend agent=tostring(Properties['gen_ai.agent.name']) | where isnotempty(agent) | distinct agent | order by agent asc"
-          }
-        },
-        "refresh": 2,
-        "includeAll": true,
-        "multi": true,
-        "current": {
-          "selected": false,
-          "text": [
-            "All"
-          ],
-          "value": [
-            "$__all"
-          ]
-        }
-      },
-      {
-        "name": "agentops_agent",
-        "label": "Custom Agent",
-        "type": "query",
-        "datasource": {
-          "type": "grafana-azure-monitor-datasource",
-          "uid": "azure-monitor-oob"
-        },
-        "queryType": "Azure Log Analytics",
-        "query": {
-          "queryType": "Azure Log Analytics",
-          "azureLogAnalytics": {
-            "resources": [
-              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
-            ],
-            "query": "AppDependencies | where TimeGenerated > ago(14d) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli')) | extend agentops_agent=coalesce(tostring(Properties['agentops.agent.name']), tostring(Properties['agentops.cli.agent']), tostring(Properties['gen_ai.agent.name'])) | where isnotempty(agentops_agent) | distinct agentops_agent | order by agentops_agent asc"
-          }
-        },
-        "refresh": 2,
-        "includeAll": true,
-        "multi": true,
-        "current": {
-          "selected": false,
-          "text": [
-            "All"
-          ],
-          "value": [
-            "$__all"
-          ]
-        }
-      },
-      {
-        "name": "skill",
-        "label": "Skill",
-        "type": "query",
-        "datasource": {
-          "type": "grafana-azure-monitor-datasource",
-          "uid": "azure-monitor-oob"
-        },
-        "queryType": "Azure Log Analytics",
-        "query": {
-          "queryType": "Azure Log Analytics",
-          "azureLogAnalytics": {
-            "resources": [
-              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
-            ],
-            "query": "union isfuzzy=true AppDependencies, AppTraces, AppEvents | where TimeGenerated > ago(14d) | where tostring(Properties) has_any ('agentops.skill', 'github.copilot.skill') | extend skill=coalesce(tostring(Properties['agentops.skill.name']), tostring(Properties['github.copilot.skill.name'])) | where isnotempty(skill) | distinct skill | order by skill asc"
-          }
-        },
-        "refresh": 2,
-        "includeAll": true,
-        "multi": true,
-        "current": {
-          "selected": false,
-          "text": [
-            "All"
-          ],
-          "value": [
-            "$__all"
-          ]
-        }
-      },
-      {
-        "name": "mcp_server",
-        "label": "MCP Server",
-        "type": "query",
-        "datasource": {
-          "type": "grafana-azure-monitor-datasource",
-          "uid": "azure-monitor-oob"
-        },
-        "queryType": "Azure Log Analytics",
-        "query": {
-          "queryType": "Azure Log Analytics",
-          "azureLogAnalytics": {
-            "resources": [
-              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
-            ],
-            "query": "union isfuzzy=true AppDependencies, AppTraces, AppEvents | where TimeGenerated > ago(14d) | where tostring(Properties) has_any ('agentops.mcp', 'mcp__') | extend tool=tostring(Properties['gen_ai.tool.name']), mcp_server=coalesce(tostring(Properties['agentops.mcp.server']), tostring(Properties['agentops.mcp.config.servers']), extract('^mcp__([^_]+)__', 1, tool), extract('^([^/]+)/', 1, tool)) | where isnotempty(mcp_server) | distinct mcp_server | order by mcp_server asc"
-          }
-        },
-        "refresh": 2,
-        "includeAll": true,
-        "multi": true,
-        "current": {
-          "selected": false,
-          "text": [
-            "All"
-          ],
-          "value": [
-            "$__all"
-          ]
-        }
-      },
-      {
-        "name": "script",
-        "label": "Script / Hook",
-        "type": "query",
-        "datasource": {
-          "type": "grafana-azure-monitor-datasource",
-          "uid": "azure-monitor-oob"
-        },
-        "queryType": "Azure Log Analytics",
-        "query": {
-          "queryType": "Azure Log Analytics",
-          "azureLogAnalytics": {
-            "resources": [
-              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
-            ],
-            "query": "union isfuzzy=true AppDependencies, AppTraces, AppEvents | where TimeGenerated > ago(14d) | where tostring(Properties) has_any ('agentops.script', 'agentops.hook', 'github.copilot.hook') | extend script=coalesce(tostring(Properties['agentops.script.name']), tostring(Properties['agentops.hook.name']), tostring(Properties['github.copilot.hook.name']), tostring(Properties['github.copilot.hook.type'])) | where isnotempty(script) | distinct script | order by script asc"
-          }
-        },
-        "refresh": 2,
-        "includeAll": true,
-        "multi": true,
-        "current": {
-          "selected": false,
-          "text": [
-            "All"
-          ],
-          "value": [
-            "$__all"
-          ]
-        }
-      },
-      {
-        "name": "repo",
-        "label": "Repo",
-        "type": "query",
-        "datasource": {
-          "type": "grafana-azure-monitor-datasource",
-          "uid": "azure-monitor-oob"
-        },
-        "queryType": "Azure Log Analytics",
-        "query": {
-          "queryType": "Azure Log Analytics",
-          "azureLogAnalytics": {
-            "resources": [
-              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
-            ],
-            "query": "AppDependencies | where TimeGenerated > ago(14d) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli')) | extend repo=tostring(Properties['agentops.repo.hash']) | where isnotempty(repo) | distinct repo | order by repo asc"
-          }
-        },
-        "refresh": 2,
-        "includeAll": true,
-        "multi": true,
-        "current": {
-          "selected": false,
-          "text": [
-            "All"
-          ],
-          "value": [
-            "$__all"
-          ]
-        }
-      },
-      {
-        "name": "tool",
-        "label": "Tool",
-        "type": "query",
-        "datasource": {
-          "type": "grafana-azure-monitor-datasource",
-          "uid": "azure-monitor-oob"
-        },
-        "queryType": "Azure Log Analytics",
-        "query": {
-          "queryType": "Azure Log Analytics",
-          "azureLogAnalytics": {
-            "resources": [
-              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
-            ],
-            "query": "AppDependencies | where TimeGenerated > ago(14d) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli')) | extend tool=tostring(Properties['gen_ai.tool.name']) | where isnotempty(tool) | distinct tool | order by tool asc"
-          }
-        },
-        "refresh": 2,
-        "includeAll": true,
-        "multi": true,
-        "current": {
-          "selected": false,
-          "text": [
-            "All"
-          ],
-          "value": [
-            "$__all"
-          ]
-        }
-      },
-      {
-        "name": "risk",
-        "label": "Risk",
-        "type": "custom",
-        "query": "all,failed,expensive,slow,policy,content",
-        "current": {
-          "selected": true,
-          "text": "all",
-          "value": "all"
-        }
       }
     ]
   },

@@ -1,7 +1,10 @@
 let lookback = 2h;
 let copilot_otel_filter = (Properties has "github.copilot"
     or Properties has "gen_ai.operation.name"
-    or AppRoleName in ("github-copilot", "copilot-chat", "github-copilot-cli"));
+    or Properties has "agentops."
+    or AppRoleName in ("github-copilot", "copilot-chat", "github-copilot-cli", "codex", "openai-codex", "openai-codex-cli")
+    or tostring(Properties["service.name"]) in ("github-copilot", "copilot-chat", "github-copilot-cli", "codex", "openai-codex", "openai-codex-cli")
+    or tostring(Properties["agent.runtime"]) in ("codex", "openai-codex-cli"));
 let expected_metrics = dynamic([
     "gen_ai.client.operation.duration",
     "gen_ai.client.token.usage",
@@ -80,7 +83,7 @@ let span_summary = AppDependencies
 | extend joinKey=1;
 let metric_summary = union isfuzzy=true AppMetrics
 | where TimeGenerated > ago(lookback)
-| where Name in (expected_metrics) or tostring(Properties) has_any ("gen_ai", "github.copilot", "copilot_chat")
+| where Name in (expected_metrics) or tostring(Properties) has_any ("gen_ai", "github.copilot", "copilot_chat", "agentops.", "codex")
 | summarize
     Metrics=count(),
     MetricNames=make_set(Name, 50),
@@ -93,8 +96,8 @@ let event_summary = union isfuzzy=true AppTraces, AppEvents
 | where TimeGenerated > ago(lookback)
 | extend event=coalesce(tostring(Properties["event.name"]), tostring(Properties["github.copilot.event.name"]), Name)
 | where event in (expected_events)
-    or tostring(Properties) has_any ("github.copilot", "copilot_chat", "gen_ai.client.inference")
-    or Message has_any ("github.copilot", "copilot_chat", "gen_ai.client.inference")
+    or tostring(Properties) has_any ("github.copilot", "copilot_chat", "gen_ai.client.inference", "agentops.", "codex")
+    or Message has_any ("github.copilot", "copilot_chat", "gen_ai.client.inference", "AgentOps", "codex")
 | summarize
     Events=count(),
     EventNames=make_set_if(event, isnotempty(event), 50),

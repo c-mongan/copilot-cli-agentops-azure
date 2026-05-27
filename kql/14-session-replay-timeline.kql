@@ -27,7 +27,7 @@ let session_id = (props:dynamic, timestamp:datetime) {
 let raw_spans =
 AppDependencies
 | where TimeGenerated > ago(lookback)
-| where (Properties has "github.copilot" or Properties has "gen_ai.operation.name" or AppRoleName in ("github-copilot", "copilot-chat", "github-copilot-cli") or tostring(Properties["service.name"]) in ("github-copilot", "copilot-chat", "github-copilot-cli"))
+| where (Properties has "github.copilot" or Properties has "gen_ai.operation.name" or Properties has "agentops." or AppRoleName in ("github-copilot", "copilot-chat", "github-copilot-cli", "codex", "openai-codex", "openai-codex-cli") or tostring(Properties["service.name"]) in ("github-copilot", "copilot-chat", "github-copilot-cli", "codex", "openai-codex", "openai-codex-cli") or tostring(Properties["agent.runtime"]) in ("codex", "openai-codex-cli"))
 | extend
     direct_session = case(
         isnotempty(tostring(Properties["gen_ai.conversation.id"])),
@@ -68,12 +68,14 @@ raw_spans
     mcp_server = case(
         tool startswith "mcp__", extract(@"^mcp__(.+?)__", 1, tool),
         tool contains "/", tostring(split(tool, "/")[0]),
+        tool startswith "azure-mcp-", "azure-mcp",
         isnotempty(tool) and isnotempty(single_configured_server) and tool !in (builtin_tools), single_configured_server,
         ""
     ),
     mcp_tool = case(
         tool startswith "mcp__", extract(@"^mcp__.+?__(.+)$", 1, tool),
         tool contains "/", tostring(split(tool, "/")[1]),
+        tool startswith "azure-mcp-", substring(tool, strlen("azure-mcp-")),
         tool
     )
 | project
@@ -101,7 +103,7 @@ raw_spans
 let raw_runtime_events =
 union isfuzzy=true AppTraces, AppDependencies
 | where TimeGenerated > ago(lookback)
-| where tostring(Properties) has "github.copilot" or Message has "github.copilot"
+| where tostring(Properties) has_any ("github.copilot", "agentops.", "gen_ai.operation.name", "codex") or Message has_any ("github.copilot", "AgentOps", "codex")
 | extend
     direct_session = case(
         isnotempty(tostring(Properties["gen_ai.conversation.id"])),

@@ -1,6 +1,6 @@
 AppDependencies
 | where TimeGenerated > ago(24h)
-| where (Properties has "github.copilot" or Properties has "gen_ai.operation.name" or AppRoleName in ("github-copilot", "copilot-chat", "github-copilot-cli") or tostring(Properties["service.name"]) in ("github-copilot", "copilot-chat", "github-copilot-cli"))
+| where (Properties has "github.copilot" or Properties has "gen_ai.operation.name" or Properties has "agentops." or AppRoleName in ("github-copilot", "copilot-chat", "github-copilot-cli", "codex", "openai-codex", "openai-codex-cli") or tostring(Properties["service.name"]) in ("github-copilot", "copilot-chat", "github-copilot-cli", "codex", "openai-codex", "openai-codex-cli") or tostring(Properties["agent.runtime"]) in ("codex", "openai-codex-cli"))
 | extend operation = tostring(Properties["gen_ai.operation.name"])
 | where operation in ("invoke_agent", "chat", "execute_tool")
 | project TimeGenerated, operation, Name, DurationMs, Success, ResultCode,

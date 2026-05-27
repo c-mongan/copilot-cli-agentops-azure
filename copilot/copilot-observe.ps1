@@ -51,6 +51,8 @@ $additionalMcpConfigServers = @()
 $disabledMcpServers = @()
 $githubMcpTools = @()
 $githubMcpToolsets = @()
+$captureContentEnabled = if ($env:AGENTOPS_CAPTURE_CONTENT) { $env:AGENTOPS_CAPTURE_CONTENT.ToLowerInvariant() } else { "false" }
+$captureContentScope = "default-off"
 
 function Safe-AttrValue($value) {
 	return ([string]$value) -replace "[,=`r`n`t ]", "_"
@@ -66,6 +68,16 @@ function Add-UniqueValue([ref]$values, $value) {
 
 function Join-AttrValues($values) {
 	return ($values -join "|")
+}
+
+function List-ContainsValue($list, $candidate) {
+	if (-not $list -or -not $candidate) { return $false }
+	$values = ([string]$list) -split "[,\| ]+"
+	foreach ($value in $values) {
+		if (-not $value) { continue }
+		if ($value -eq "*" -or $value -eq $candidate) { return $true }
+	}
+	return $false
 }
 
 function Track-McpConfig($rawPath) {
@@ -194,6 +206,31 @@ if ($cliAgent) {
 		$agentopsResourceAttributes = "$agentopsResourceAttributes,agentops.agent.file=$(Safe-AttrValue ([System.IO.Path]::GetFileName($agentFile))),agentops.agent.hash=$(Get-FileSha256 $agentFile)"
 	}
 }
+if ($captureContentEnabled -ne "true" -and $cliAgent -and (List-ContainsValue $env:AGENTOPS_CAPTURE_CONTENT_AGENTS $cliAgent)) {
+	$captureContentEnabled = "true"
+	$captureContentScope = "agent:$cliAgent"
+}
+if ($captureContentEnabled -ne "true" -and $env:AGENTOPS_ACTIVE_SKILLS) {
+	$activeSkills = ([string]$env:AGENTOPS_ACTIVE_SKILLS) -split "[,\| ]+"
+	foreach ($activeSkill in $activeSkills) {
+		if (List-ContainsValue $env:AGENTOPS_CAPTURE_CONTENT_SKILLS $activeSkill) {
+			$captureContentEnabled = "true"
+			$captureContentScope = "skill:$activeSkill"
+			break
+		}
+	}
+}
+if ($captureContentEnabled -eq "true") {
+	$env:OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT = "true"
+	$env:COPILOT_OTEL_CAPTURE_CONTENT = "true"
+	if ($captureContentScope -eq "default-off") {
+		$captureContentScope = "explicit"
+	}
+} else {
+	if (-not $env:OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT) { $env:OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT = "false" }
+	if (-not $env:COPILOT_OTEL_CAPTURE_CONTENT) { $env:COPILOT_OTEL_CAPTURE_CONTENT = "false" }
+}
+$agentopsResourceAttributes = "$agentopsResourceAttributes,agentops.content_capture.enabled=$captureContentEnabled,agentops.content_capture.scope=$(Safe-AttrValue $captureContentScope)"
 if ($cliEffort) {
 	$agentopsResourceAttributes = "$agentopsResourceAttributes,agentops.cli.reasoning_effort=$cliEffort"
 }

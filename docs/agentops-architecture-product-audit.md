@@ -2,7 +2,7 @@
 
 Date: 2026-05-24
 
-Scope: current repository state in `/Users/conormongan/Projects/azure-agentops-observability`.
+Scope: current repository state at the time of audit.
 
 Related SVG: `docs/agentops-architecture-dataflow.svg`.
 

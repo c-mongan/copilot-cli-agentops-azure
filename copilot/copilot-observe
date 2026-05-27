@@ -53,6 +53,8 @@ copilot_args=("$@")
 copilot_arg_count=$#
 agent_file=""
 agent_file_hash=""
+capture_content_enabled="${AGENTOPS_CAPTURE_CONTENT:-false}"
+capture_content_scope="default-off"
 
 sanitize_attr_value() {
 	printf '%s' "$1" | tr ',=\n\r\t ' '______'
@@ -83,6 +85,24 @@ join_attr_values() {
 		fi
 	done
 	printf '%s' "$joined"
+}
+
+list_contains_value() {
+	local list="${1:-}"
+	local candidate="${2:-}"
+	[[ -z "${list}" || -z "${candidate}" ]] && return 1
+	IFS=',| ' read -r -a values <<< "$list"
+	for value in "${values[@]}"; do
+		[[ -z "$value" ]] && continue
+		if [[ "$value" == "*" || "$value" == "$candidate" ]]; then
+			return 0
+		fi
+	done
+	return 1
+}
+
+lower_bool() {
+	printf '%s' "${1:-false}" | tr '[:upper:]' '[:lower:]'
 }
 
 track_mcp_config() {
@@ -332,6 +352,32 @@ if [[ -n "${cli_agent}" ]]; then
 		agentops_resource_attributes="${agentops_resource_attributes},agentops.agent.file=$(sanitize_attr_value "$(basename "$agent_file")"),agentops.agent.hash=${agent_file_hash}"
 	fi
 fi
+if [[ "$(lower_bool "${capture_content_enabled}")" != "true" && -n "${cli_agent}" ]] && list_contains_value "${AGENTOPS_CAPTURE_CONTENT_AGENTS:-}" "${cli_agent}"; then
+	capture_content_enabled="true"
+	capture_content_scope="agent:${cli_agent}"
+fi
+if [[ "$(lower_bool "${capture_content_enabled}")" != "true" && -n "${AGENTOPS_ACTIVE_SKILLS:-}" ]]; then
+	IFS=',| ' read -r -a active_skills <<< "${AGENTOPS_ACTIVE_SKILLS}"
+	for active_skill in "${active_skills[@]}"; do
+		if list_contains_value "${AGENTOPS_CAPTURE_CONTENT_SKILLS:-}" "${active_skill}"; then
+			capture_content_enabled="true"
+			capture_content_scope="skill:${active_skill}"
+			break
+		fi
+	done
+fi
+capture_content_enabled="$(lower_bool "${capture_content_enabled}")"
+if [[ "${capture_content_enabled}" == "true" ]]; then
+	export OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT="true"
+	export COPILOT_OTEL_CAPTURE_CONTENT="true"
+	if [[ "${capture_content_scope}" == "default-off" ]]; then
+		capture_content_scope="explicit"
+	fi
+else
+	export OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT="${OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT:-false}"
+	export COPILOT_OTEL_CAPTURE_CONTENT="${COPILOT_OTEL_CAPTURE_CONTENT:-false}"
+fi
+agentops_resource_attributes="${agentops_resource_attributes},agentops.content_capture.enabled=${capture_content_enabled},agentops.content_capture.scope=$(sanitize_attr_value "${capture_content_scope}")"
 if [[ -n "${cli_effort}" ]]; then
 	agentops_resource_attributes="${agentops_resource_attributes},agentops.cli.reasoning_effort=${cli_effort}"
 fi

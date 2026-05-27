@@ -48,6 +48,7 @@ else
     "${REPO_ROOT}/grafana/agentops-dashboard.json"
     "${REPO_ROOT}/grafana/agentops-sessions.json"
     "${REPO_ROOT}/grafana/agentops-session-detail.json"
+    "${REPO_ROOT}/grafana/agentops-live-replay.json"
     "${REPO_ROOT}/grafana/agentops-traces-spans.json"
     "${REPO_ROOT}/grafana/agentops-tools-mcp.json"
     "${REPO_ROOT}/grafana/agentops-attribution.json"
@@ -79,18 +80,79 @@ az grafana folder show -n "${GRAFANA_NAME}" --folder "${GRAFANA_FOLDER}" >/dev/n
 
 URL="$(az grafana show -n "${GRAFANA_NAME}" -g "${AZURE_RESOURCE_GROUP}" --query 'properties.endpoint' -o tsv)"
 
+SUBSCRIPTION_ID="${AGENTOPS_AZURE_SUBSCRIPTION_ID:-${AZURE_SUBSCRIPTION_ID:-}}"
+if [[ -z "${SUBSCRIPTION_ID}" ]]; then
+  SUBSCRIPTION_ID="$(az account show --query id -o tsv)"
+fi
+
+WORKSPACE_RESOURCE_ID="${AGENTOPS_LOG_ANALYTICS_WORKSPACE_RESOURCE_ID:-}"
+WORKSPACE_NAME="${AGENTOPS_LOG_ANALYTICS_WORKSPACE_NAME:-${LOG_ANALYTICS_WORKSPACE_NAME:-}}"
+WORKSPACE_ID="${AGENTOPS_LOG_ANALYTICS_WORKSPACE_ID:-${LOG_ANALYTICS_WORKSPACE_ID:-}}"
+
+if [[ -z "${WORKSPACE_RESOURCE_ID}" && -n "${WORKSPACE_NAME}" ]]; then
+  WORKSPACE_RESOURCE_ID="$(az monitor log-analytics workspace show \
+    -g "${AZURE_RESOURCE_GROUP}" \
+    -n "${WORKSPACE_NAME}" \
+    --query id \
+    -o tsv 2>/dev/null || true)"
+fi
+
+if [[ -z "${WORKSPACE_RESOURCE_ID}" && -n "${WORKSPACE_ID}" ]]; then
+  WORKSPACE_RESOURCE_ID="$(az monitor log-analytics workspace list \
+    -g "${AZURE_RESOURCE_GROUP}" \
+    --query "[?customerId=='${WORKSPACE_ID}'].id | [0]" \
+    -o tsv 2>/dev/null || true)"
+fi
+
+if [[ -z "${WORKSPACE_RESOURCE_ID}" ]]; then
+  WORKSPACE_RESOURCE_ID="$(az monitor log-analytics workspace list \
+    -g "${AZURE_RESOURCE_GROUP}" \
+    --query '[0].id' \
+    -o tsv 2>/dev/null || true)"
+fi
+
+if [[ -z "${WORKSPACE_RESOURCE_ID}" ]]; then
+  echo "ERROR: could not resolve a Log Analytics workspace in ${AZURE_RESOURCE_GROUP}." >&2
+  echo "Set AGENTOPS_LOG_ANALYTICS_WORKSPACE_NAME or AGENTOPS_LOG_ANALYTICS_WORKSPACE_RESOURCE_ID and retry." >&2
+  exit 2
+fi
+
+DATASOURCE_UID="${AGENTOPS_GRAFANA_DATASOURCE_UID:-azure-monitor-oob}"
+PORTAL_LOGS_URL="${AGENTOPS_AZURE_PORTAL_LOGS_URL:-https://portal.azure.com/#@/resource${WORKSPACE_RESOURCE_ID}/logs}"
+
 for dashboard_file in "${DASHBOARD_FILES[@]}"; do
   echo "Importing dashboard '${dashboard_file##*/}' into Grafana '${GRAFANA_NAME}' (folder: ${GRAFANA_FOLDER})..."
 
   # Build the definition payload Grafana expects: {"dashboard": {...}, "overwrite": true}
   TMP_DEF="$(mktemp -t agentops-dash.XXXXXX.json)"
-  python3 - "${dashboard_file}" "${TMP_DEF}" <<'PY'
-import json, sys
-src, dst = sys.argv[1], sys.argv[2]
+  python3 - "${dashboard_file}" "${TMP_DEF}" "${WORKSPACE_RESOURCE_ID}" "${DATASOURCE_UID}" "${PORTAL_LOGS_URL}" <<'PY'
+import json, re, sys
+src, dst, workspace_resource_id, datasource_uid, portal_logs_url = sys.argv[1:6]
+workspace_pattern = re.compile(r"/subscriptions/[^/]+/resourceGroups/[^/]+/providers/Microsoft\.OperationalInsights/workspaces/[^/?#'\"\s)]+")
+
+def patch_value(value):
+    if isinstance(value, str):
+        return workspace_pattern.sub(workspace_resource_id, value).replace(
+            "https://portal.azure.com/#@/resource" + workspace_resource_id + "/logs",
+            portal_logs_url,
+        )
+    if isinstance(value, list):
+        return [patch_value(item) for item in value]
+    if isinstance(value, dict):
+        if value.get("type") == "grafana-azure-monitor-datasource":
+            value["uid"] = datasource_uid
+        for key, item in list(value.items()):
+            if key == "resources" and isinstance(item, list):
+                value[key] = [workspace_resource_id]
+            else:
+                value[key] = patch_value(item)
+    return value
+
 with open(src) as f:
     dashboard = json.load(f)
 # Let Grafana assign id on first import; keep stable uid for upsert.
 dashboard["id"] = None
+patch_value(dashboard)
 payload = {"dashboard": dashboard, "overwrite": True}
 with open(dst, "w") as f:
     json.dump(payload, f)

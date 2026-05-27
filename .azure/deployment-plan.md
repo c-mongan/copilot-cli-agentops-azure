@@ -21,6 +21,9 @@ The core loop is:
 - Repository URLs are hashed before export.
 - Azure and Grafana MCP samples are read-only.
 - Patch workflows are proposal-only by default.
+- The default `team` deployment profile caps Log Analytics ingestion and keeps 30-day retention.
+- The App Insights connection string is retrieved at collector/actioner runtime, not emitted as a top-level azd output.
+- Optional Entra group RBAC assignments and a monthly resource-group budget are off by default.
 - Secrets are environment variables or Key Vault references, never committed.
 
 ## Azure Inputs
@@ -40,6 +43,16 @@ The Bicep deployment accepts:
 - `environmentName`
 - `location`
 - `baseName`
+- `deploymentProfile` (`dev`, `team`, or `enterprise`; default `team`)
+- `logRetentionDays` (`0` uses the profile default)
+- `dailyIngestionCapGb` (`0` uses the profile default; `-1` disables the cap)
+- `deployRbacAssignments`
+- `observerPrincipalIds`
+- `operatorPrincipalIds`
+- `adminPrincipalIds`
+- `deployBudget`
+- `monthlyBudgetAmount`
+- `budgetContactEmails`
 - `deployActioner`
 - `deployAlerts`
 - `enableAlerts`
@@ -53,6 +66,8 @@ The core stack creates:
 - Azure Monitor Workspace
 - Azure Managed Grafana
 - Key Vault
+- Optional Entra group RBAC assignments
+- Optional resource-group monthly Azure Consumption budget
 - Optional Function App placeholder for future alert actioner workflows
 - Disabled proposal-only scheduled query rules when `deployAlerts=true`
 
@@ -63,22 +78,34 @@ Local validation:
 ```bash
 npm --prefix agentops-cli test
 node agentops-cli/src/index.js doctor --local-only
+node agentops-cli/src/index.js validate-enterprise
 node scripts/build-grafana-dashboard-pack.js
 docker compose -f collector/docker-compose.yaml config >/tmp/agentops-compose.yaml
 az bicep build --file infra/bicep/main.bicep --stdout >/tmp/agentops-main-arm.json
 ```
 
+Pilot review docs:
+
+- `docs/enterprise-pilot.md`
+- `docs/threat-model.md`
+
 Azure validation:
 
 ```bash
 ./scripts/azure-readiness.sh
-./scripts/azure-what-if.sh
+AGENTOPS_DEPLOYMENT_PROFILE=team ./scripts/azure-what-if.sh
 ```
 
 Only after reviewing what-if should provisioning run:
 
 ```bash
 azd provision
+```
+
+For an enterprise pilot that enables optional RBAC or budget modules, use:
+
+```bash
+./scripts/azure-deploy-enterprise-pilot.sh
 ```
 
 ## Post-Deployment Smoke Tests

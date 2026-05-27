@@ -11,5 +11,7 @@ Defaults:
 - Agents produce patch plans before edits.
 - Agent recommendations must include evidence, observed pattern, proposed files, expected metric movement, validation, and rollback.
 - Hook scripts do not call remote services.
+- Entra group RBAC assignments are optional and disabled by default.
+- Azure Consumption budget creation is optional and disabled by default.
 
 Never commit secrets, Grafana tokens, Azure credentials, `.env` files, or raw prompt/tool content telemetry.

@@ -11,7 +11,9 @@ const {
   agentopsAttributionSmoke,
   agentopsInit,
   agentopsConfigure,
+  agentopsSetupGuide,
   agentopsSmoke,
+  agentopsLiveReplaySmoke,
   agentopsStatusSummary,
   agentopsWorkflows,
   alertRecommendationQuery,
@@ -31,6 +33,8 @@ const {
   compactConfig,
   contextPressureQuery,
   copilotPrimitivesInventory,
+  agentopsCustomEmit,
+  agentopsCustomImport,
   doctor,
   durationToMs,
   explainLatest,
@@ -53,20 +57,25 @@ const {
   liveViewFromArgs,
   openLinksSummary,
   otlpAttributionSmokeTracePayload,
+  otlpLiveReplaySmokeTracePayload,
+  otlpCustomEventPayload,
   otelCompatibilityQuery,
   parseBenchmarkCompareArgs,
   parseBenchmarkReportArgs,
   parseBenchmarkRunArgs,
   parseConfigureArgs,
+  parseCustomArgs,
   parseEnvAssignments,
   parseOtelSetupArgs,
   parseFrontmatter,
   parseSavedViewArgs,
+  parseSetupArgs,
   parseSmokeArgs,
   replayTimeline,
   renderExplanation,
   renderAskContext,
   renderConfigure,
+  renderCustom,
   renderInit,
   renderLatest,
   renderLive,
@@ -74,6 +83,7 @@ const {
   renderOtelSetup,
   renderRecommendation,
   renderReplay,
+  renderSetupGuide,
   renderSmoke,
   renderAgentsInstall,
   renderAgentsUninstall,
@@ -82,6 +92,7 @@ const {
   renderSkillsInstall,
   renderSkillsUninstall,
   renderStatus,
+  renderValidateEnterprise,
   renderValidateAzure,
   renderWorkflow,
   renderWorkflowsList,
@@ -92,6 +103,7 @@ const {
   scan,
   spanRowsFromSource,
   tokenRollupAuditQuery,
+  validateEnterprise,
   validateAzure,
   validateKqlDuration,
   validateBenchmarkTask,
@@ -362,14 +374,82 @@ test('configure import-azd maps azd env values into AgentOps config', () => {
 });
 
 test('configure parsers normalize env assignment values and CLI flags', () => {
-  const envValues = parseEnvAssignments('AZURE_RESOURCE_GROUP="rg-a"\nAGENTOPS_GRAFANA_BASE_URL=https://grafana.example\n');
+  const envValues = parseEnvAssignments('AZURE_RESOURCE_GROUP="rg-a"\nGRAFANA_ENDPOINT=https://grafana.example\nAPPLICATIONINSIGHTS_NAME=appi-a\n');
   const configValues = configFromEnvValues(envValues);
   const parsed = parseConfigureArgs(['set', '--resource-group', 'rg-b', '--workspace-id', 'workspace-b']);
 
   assert.equal(configValues.resourceGroup, 'rg-a');
   assert.equal(configValues.grafanaBaseUrl, 'https://grafana.example');
+  assert.equal(configValues.appInsightsName, 'appi-a');
   assert.deepEqual(parsed.values, { resourceGroup: 'rg-b', workspaceId: 'workspace-b' });
   assert.deepEqual(compactConfig({ resourceGroup: 'rg-c', workspaceId: '' }), { resourceGroup: 'rg-c' });
+});
+
+test('setup guide recommends the shortest non-mutating setup path', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-setup-guide-'));
+  try {
+    const result = agentopsSetupGuide({
+      installDir: tempDir,
+      config: {},
+      env: {},
+      commandAvailability: { az: true, azd: true, docker: true, copilot: true },
+      commandPaths: {
+        az: '/usr/local/bin/az',
+        azd: '/usr/local/bin/azd',
+        docker: '/usr/local/bin/docker',
+        copilot: '/usr/local/bin/copilot'
+      },
+      azdValues: [
+        'AZURE_RESOURCE_GROUP="rg-agentops-dev"',
+        'LOG_ANALYTICS_WORKSPACE_ID="workspace-123"',
+        'LOG_ANALYTICS_WORKSPACE_NAME="law-agentops-dev"',
+        'GRAFANA_ENDPOINT="https://grafana.example"',
+        'GRAFANA_NAME="graf-agentops-dev"',
+        'APPLICATIONINSIGHTS_NAME="appi-agentops-dev"'
+      ].join('\n')
+    });
+    const output = renderSetupGuide(result);
+
+    assert.equal(result.mutates, false);
+    assert.equal(result.azd.ok, true);
+    assert.ok(result.next.includes('agentops configure import-azd'));
+    assert.match(output, /This command is read-only/);
+    assert.match(output, /Fastest path/);
+    assert.match(output, /agentops smoke --wait 2m --poll 10s/);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('setup args support json output', () => {
+  assert.deepEqual(parseSetupArgs(['--json']), { json: true });
+});
+
+test('enterprise validation confirms local guardrails', () => {
+  const result = validateEnterprise({ config: {}, env: {} });
+  const output = renderValidateEnterprise(result);
+
+  assert.equal(result.ok, true);
+  assert.ok(result.score >= 88);
+  assert.ok(result.checks.some(check => check.name === 'daily-ingestion-cap' && check.ok));
+  assert.ok(result.checks.some(check => check.name === 'least-privilege-rbac-module' && check.ok));
+  assert.ok(result.checks.some(check => check.name === 'budget-module' && check.ok));
+  assert.ok(result.checks.some(check => check.name === 'enterprise-deploy-script' && check.ok));
+  assert.ok(result.checks.some(check => check.name === 'pilot-review-docs' && check.ok));
+  assert.ok(result.checks.some(check => check.name === 'threat-model' && check.ok));
+  assert.ok(result.checks.some(check => check.name === 'azd-no-connection-string-output' && check.ok));
+  assert.ok(result.checks.some(check => check.name === 'collector-content-scrub' && check.ok));
+  assert.match(output, /Enterprise guardrails passed/);
+});
+
+test('enterprise validation blocks content capture env overrides', () => {
+  const result = validateEnterprise({
+    config: {},
+    env: { COPILOT_OTEL_CAPTURE_CONTENT: 'true' }
+  });
+
+  assert.equal(result.ok, false);
+  assert.ok(result.failed.includes('content-capture-env-off'));
 });
 
 test('otel setup renders VS Code, Copilot CLI, and SDK configuration', () => {
@@ -499,6 +579,37 @@ test('attribution smoke emits agent skill mcp and script dimensions', async () =
   assert.ok(result.next.some(command => command.includes('attribution --last 2h')));
 });
 
+test('live replay smoke emits orchestrator delegation telemetry', async () => {
+  const payload = otlpLiveReplaySmokeTracePayload('agentops-live-replay-smoke-test', Date.parse('2026-05-26T12:00:00Z'));
+  const spans = payload.resourceSpans[0].scopeSpans[0].spans;
+  const attrValues = JSON.stringify(payload);
+
+  assert.equal(spans.length, 7);
+  assert.ok(spans.some(span => span.parentSpanId));
+  assert.match(attrValues, /agentops-orchestrator-smoke/);
+  assert.match(attrValues, /agentops-investigator-smoke/);
+  assert.match(attrValues, /agentops\.parent_agent\.name/);
+  assert.match(attrValues, /agentops\.delegation\.id/);
+  assert.match(attrValues, /azure-mcp\/monitor_query/);
+
+  const result = await agentopsLiveReplaySmoke({
+    dryRun: true,
+    id: 'agentops-live-replay-smoke-test',
+    workspaceId: 'workspace-123',
+    last: '30m'
+  });
+  const output = renderSmoke(result);
+
+  assert.equal(result.ok, true);
+  assert.equal(result.smoke_kind, 'live-replay');
+  assert.equal(result.payload_preview.agent, 'agentops-orchestrator-smoke');
+  assert.equal(result.payload_preview.subagent, 'agentops-investigator-smoke');
+  assert.match(result.grafana_url, /agentops-live-replay/);
+  assert.match(result.grafana_url, /agentops-live-replay-smoke-test/);
+  assert.match(output, /AgentOps live replay smoke/);
+  assert.match(output, /Grafana Live Replay/);
+});
+
 test('smoke live mode verifies synthetic telemetry in Azure', async () => {
   let postedUrl = null;
   const result = await agentopsSmoke({
@@ -549,6 +660,97 @@ test('smoke args parse verification wait and poll durations', () => {
   assert.equal(args.pollMs, 500);
   assert.equal(args.json, true);
   assert.equal(durationToMs('2m'), 120000);
+});
+
+test('custom emit dry run creates privacy-safe agent lifecycle telemetry', async () => {
+  const result = await agentopsCustomEmit({
+    dryRun: true,
+    id: 'agentops-custom-test',
+    event: 'agent.step.started',
+    agent: 'agentops-ci-pattern-smoke',
+    workflow: 'investigation',
+    step: 'collect-evidence',
+    outcome: 'started',
+    risk: 'low',
+    score: 0.98,
+    entityType: 'pull-request',
+    entityIdHash: 'synthetic-pr-001',
+    tags: ['smoke', 'ci-pattern'],
+    custom: { 'agentops.custom.signal': 'build-log' },
+    workspaceId: 'workspace-123'
+  });
+  const output = renderCustom(result);
+
+  assert.equal(result.ok, true);
+  assert.equal(result.custom_event_id, 'agentops-custom-test');
+  assert.equal(result.payload_preview.content_capture_enabled, false);
+  assert.equal(result.events[0].event, 'agent.step.started');
+  assert.equal(result.events[0].agent, 'agentops-ci-pattern-smoke');
+  assert.equal(result.events[0].entityType, 'pull-request');
+  assert.equal(result.events[0].entityIdHash, 'synthetic-pr-001');
+  assert.equal(result.events[0].custom['agentops.custom.signal'], 'build-log');
+  assert.match(result.azure_query, /agentops-custom-test/);
+  assert.match(output, /AgentOps custom telemetry/);
+});
+
+test('custom OTLP payload maps generic fields to dashboard attributes', () => {
+  const { payload, normalized } = otlpCustomEventPayload([{
+    event: 'agent.eval.scored',
+    agent: 'agentops-eval-gate-smoke',
+    workflow: 'release-gate',
+    step: 'score',
+    session: 'session-123',
+    outcome: 'passed',
+    score: 0.91,
+    custom: { 'agentops.custom.eval_name': 'smoke' }
+  }], {
+    id: 'agentops-custom-payload',
+    nowMs: Date.parse('2026-05-26T12:00:00Z')
+  });
+  const span = payload.resourceSpans[0].scopeSpans[0].spans[0];
+  const attrs = Object.fromEntries(span.attributes.map(item => [item.key, item.value.stringValue ?? item.value.doubleValue ?? item.value.boolValue]));
+
+  assert.equal(normalized[0].event, 'agent.eval.scored');
+  assert.equal(attrs['agentops.event.name'], 'agent.eval.scored');
+  assert.equal(attrs['gen_ai.operation.name'], 'agent.eval.scored');
+  assert.equal(attrs['agentops.agent.name'], 'agentops-eval-gate-smoke');
+  assert.equal(attrs['agentops.workflow.name'], 'release-gate');
+  assert.equal(attrs['agentops.score'], 0.91);
+  assert.equal(attrs['content.capture.enabled'], false);
+});
+
+test('custom import maps JSONL agent rows without CI-specific coupling', async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-custom-import-'));
+  const file = path.join(tempDir, 'events.jsonl');
+  try {
+    fs.writeFileSync(file, [
+      JSON.stringify({ event_name: 'agent.run.started', agent: 'portable-agent', workflow: 'analysis', session_id: 'session-a' }),
+      JSON.stringify({ event_name: 'agent.decision.made', agent: 'portable-agent', workflow: 'analysis', step: 'rank', outcome: 'selected', metrics: { confidence: 0.82 } })
+    ].join('\n'));
+
+    const result = await agentopsCustomImport(file, {
+      dryRun: true,
+      id: 'agentops-custom-import-test',
+      workspaceId: 'workspace-123'
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.rows, 2);
+    assert.equal(result.events[0].event, 'agent.run.started');
+    assert.equal(result.events[1].custom['agentops.custom.confidence'], 0.82);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('custom args parse repeated tags and custom dimensions', () => {
+  const args = parseCustomArgs(['emit', '--event', 'agent.step.started', '--agent', 'portable-agent', '--tag', 'smoke', '--tag', 'ci-pattern', '--custom', 'queue=main', '--score', '0.7']);
+
+  assert.equal(args.subcommand, 'emit');
+  assert.equal(args.event, 'agent.step.started');
+  assert.deepEqual(args.tags, ['smoke', 'ci-pattern']);
+  assert.equal(args.custom['agentops.custom.queue'], 'main');
+  assert.equal(args.score, 0.7);
 });
 
 test('validateAzure reports missing local Azure prerequisites without mutating Azure', () => {
@@ -657,6 +859,7 @@ test('Grafana dashboard inventory reads stable dashboard UIDs from repo', () => 
 
   assert.ok(uids.includes('agentops-sessions'));
   assert.ok(uids.includes('agentops-session-detail'));
+  assert.ok(uids.includes('agentops-live-replay'));
   assert.ok(uids.includes('agentops-attribution'));
 });
 
@@ -669,6 +872,53 @@ test('Grafana dashboards use Copilot OTel compatibility filters', () => {
   assert.doesNotMatch(combined, /Properties has ['"]github\.copilot['"] and Properties has ['"]github-copilot-cli['"]/);
   assert.match(combined, /copilot-chat/);
   assert.match(combined, /agentops_agent/);
+});
+
+test('Grafana dashboard filters follow page-specific contracts', () => {
+  const dashboards = Object.fromEntries(listGrafanaDashboardFiles().map(dashboard => {
+    const body = JSON.parse(fs.readFileSync(path.join(root, dashboard.file), 'utf8'));
+    const variables = (body.templating?.list || [])
+      .filter(variable => variable.type !== 'constant')
+      .map(variable => variable.name);
+    return [dashboard.uid, variables];
+  }));
+
+  assert.deepEqual(dashboards['agentops-sessions'], [
+    'model',
+    'operation',
+    'agent',
+    'agentops_agent',
+    'repo',
+    'tool',
+    'risk'
+  ]);
+  assert.deepEqual(dashboards['agentops-session-detail'], ['conversation']);
+  assert.deepEqual(dashboards['agentops-live-replay'], [
+    'conversation',
+    'agentops_agent',
+    'mcp_server',
+    'tool'
+  ]);
+  assert.deepEqual(dashboards['agentops-traces-spans'], [
+    'model',
+    'operation',
+    'agent',
+    'agentops_agent',
+    'repo',
+    'tool'
+  ]);
+  assert.deepEqual(dashboards['agentops-tools-mcp'], [
+    'mcp_server',
+    'tool'
+  ]);
+  assert.deepEqual(dashboards['agentops-attribution'], ['risk']);
+  assert.deepEqual(dashboards['agentops-experiments'], [
+    'benchmark_suite',
+    'benchmark_task',
+    'benchmark_variant',
+    'benchmark_run',
+    'hypothesis'
+  ]);
 });
 
 test('verifySmokeInAzure returns query failure details', async () => {

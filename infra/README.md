@@ -9,7 +9,9 @@ This folder contains AZD/Bicep infrastructure for the AgentOps v0.1 skeleton.
 - Azure Monitor Workspace
 - Azure Managed Grafana
 - Key Vault
-- Function App placeholder for alert actioner workflows
+- Optional Function App placeholder for alert actioner workflows
+- Optional Entra group RBAC assignments
+- Optional resource-group monthly budget
 
 ## Deployment
 
@@ -20,3 +22,8 @@ azd provision
 ```
 
 Run Azure validation first and confirm subscription/location before any provisioning.
+
+For an internal pilot, review:
+
+- `docs/enterprise-pilot.md`
+- `docs/threat-model.md`

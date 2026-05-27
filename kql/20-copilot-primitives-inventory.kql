@@ -44,7 +44,7 @@ let session_id = (props:dynamic, timestamp:datetime) {
 let spans =
 AppDependencies
 | where TimeGenerated > ago(lookback)
-| where (Properties has "github.copilot" or Properties has "gen_ai.operation.name" or AppRoleName in ("github-copilot", "copilot-chat", "github-copilot-cli") or tostring(Properties["service.name"]) in ("github-copilot", "copilot-chat", "github-copilot-cli"))
+| where (Properties has "github.copilot" or Properties has "gen_ai.operation.name" or Properties has "agentops." or AppRoleName in ("github-copilot", "copilot-chat", "github-copilot-cli", "codex", "openai-codex", "openai-codex-cli") or tostring(Properties["service.name"]) in ("github-copilot", "copilot-chat", "github-copilot-cli", "codex", "openai-codex", "openai-codex-cli") or tostring(Properties["agent.runtime"]) in ("codex", "openai-codex-cli"))
 | extend
     session = session_id(Properties, TimeGenerated),
     operation = tostring(Properties["gen_ai.operation.name"]),
@@ -61,13 +61,14 @@ AppDependencies
     mcp_server = case(
         tool startswith "mcp__", extract(@"^mcp__(.+?)__", 1, tool),
         tool contains "/", tostring(split(tool, "/")[0]),
+        tool startswith "azure-mcp-", "azure-mcp",
         isnotempty(tool) and isnotempty(single_configured_server) and tool !in (builtin_tools), single_configured_server,
         ""
     );
 let runtime_events =
 union isfuzzy=true AppTraces, AppDependencies
 | where TimeGenerated > ago(lookback)
-| where tostring(Properties) has "github.copilot" or Message has "github.copilot" or Message has "AgentOps"
+| where tostring(Properties) has_any ("github.copilot", "agentops.", "gen_ai.operation.name", "codex") or Message has_any ("github.copilot", "AgentOps", "codex")
 | extend
     session = session_id(Properties, TimeGenerated),
     event = coalesce(tostring(Properties["event.name"]), tostring(Properties["github.copilot.event.name"]), Name),
@@ -80,6 +81,7 @@ union
 (spans | where operation == "invoke_agent" and isnotempty(ParentId) and tostring(ParentId) != tostring(OperationId) | project primitive="subagents", session, example=coalesce(agent, Id), failed=Success == false or isnotempty(error)),
 (runtime_events | where event has "subagent" | project primitive="subagents", session, example=event, failed=isnotempty(error)),
 (runtime_events | where event has "skill" or isnotempty(skill) | project primitive="skills", session, example=coalesce(skill, event), failed=isnotempty(error)),
+(spans | where isnotempty(tostring(Properties["github.copilot.context.skills"])) | mv-expand context_skill=parse_json(tostring(Properties["github.copilot.context.skills"])) to typeof(string) | where isnotempty(context_skill) | project primitive="skills", session, example=tostring(context_skill), failed=Success == false or isnotempty(error)),
 (runtime_events | where event has "hook" or isnotempty(hook) | project primitive="hooks", session, example=coalesce(hook, event), failed=isnotempty(error)),
 (spans | where isnotempty(configured_mcp_servers) | project primitive="mcp_servers", session, example=configured_mcp_servers, failed=Success == false or isnotempty(error)),
 (spans | where isnotempty(mcp_server) | project primitive="mcp_tools", session, example=coalesce(strcat(mcp_server, "/", tool), tool), failed=Success == false or isnotempty(error)),

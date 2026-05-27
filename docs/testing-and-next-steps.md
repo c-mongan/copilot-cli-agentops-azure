@@ -318,6 +318,52 @@ agentops lineage --last 2h
 
 This sends a metadata-only synthetic trace for `agentops-kitchen-sink-smoke`. It should light up custom agent, skill, Azure MCP, and script/hook fields without recording prompt text, tool arguments, code contents, or secrets.
 
+## Real Copilot CLI E2E Dashboard Check
+
+The May 27, 2026 E2E pass used GitHub Copilot CLI `1.0.55-3` with the AgentOps shadow shim installed. Official Copilot CLI docs confirm that `-p`, custom agents, MCP config, permissions, and native OTel export are supported surfaces, and VS Code docs confirm the related custom agent, MCP, and `AGENTS.md` customization paths.
+
+Commands used:
+
+```bash
+copilot --agent agentops-kitchen-sink-smoke \
+  --allow-all-tools --allow-all-paths --allow-all-urls --no-ask-user \
+  --name agentops-e2e-kitchen-sink \
+  -p "AgentOps E2E smoke. Do not edit files. Inspect this repo using read-only commands only..."
+
+copilot --allow-all-tools --allow-all-paths --allow-all-urls --no-ask-user \
+  --name agentops-e2e-tool-failure \
+  -p "Do not edit files. Run a harmless command that succeeds, then a harmless command that fails..."
+
+copilot --agent telemetry-investigator \
+  --allow-all-tools --allow-all-paths --allow-all-urls --no-ask-user \
+  --name agentops-e2e-telemetry-investigator \
+  -p "Use read-only local commands and Azure MCP if available..."
+
+node agentops-cli/src/index.js attribution-smoke
+node agentops-cli/src/index.js smoke
+node agentops-cli/src/index.js benchmark run starter --variant e2e-docs --repeat 1 --hypothesis copilot-docs-e2e
+```
+
+Observed in Log Analytics for the last 24 hours:
+
+- 220 matching AgentOps/Copilot spans across 31 sessions.
+- Operations: `invoke_agent`, `skill.invoke`, `execute_tool`, `hook.execute`, `plan`, `chat`, and `smoke_test`.
+- Custom agents: `agentops-kitchen-sink-smoke` and `telemetry-investigator`.
+- Tools: shell/read-only local tools plus Azure MCP monitor/subscription/resource-group tools.
+- MCP server: `azure-mcp`.
+- Hook/script: `pre-tool-policy`.
+- Benchmark run: `bench-20260527071414-40ba63ac`.
+- Hypothesis: `copilot-docs-e2e`.
+- Intentional tool failures: 7, including KQL syntax failures generated during MCP query testing.
+- Content capture signals: 0.
+
+Grafana checks:
+
+- Overview, Sessions, Session Detail, Traces / Spans, Tools & MCP, Attribution, Runtime Events, Data Quality, Safety & Policy, Permission Friction, Alert Tuning, and Quality all rendered from live Azure telemetry without query errors.
+- Session Detail showed data when opened with a concrete conversation id.
+- Experiments opened populated without query errors or `No data`, showing the benchmark row for Suite=`starter`, Task=`create-note`, Variant=`e2e-docs`, Run=`bench-20260527071414-40ba63ac`, Hypothesis=`copilot-docs-e2e`.
+- Dropdown variables populated and concrete selections worked. Operational dashboards keep **All** for normal triage; benchmark variables avoid **All** so sparse experiment pages do not open blank.
+
 ## Alert Rule Validation
 
 The v0.2 alert rules are deployed but disabled. Verify them with:

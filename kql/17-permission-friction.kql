@@ -4,7 +4,7 @@ let lookback = 14d;
 let base =
 union isfuzzy=true AppDependencies, AppTraces
 | where TimeGenerated > ago(lookback)
-| where tostring(Properties) has "github.copilot" or Message has "github.copilot" or Message has "AgentOps"
+| where tostring(Properties) has_any ("github.copilot", "agentops.", "gen_ai.operation.name", "codex") or Message has_any ("github.copilot", "AgentOps", "codex")
 | extend
     conversation = case(
         isnotempty(tostring(Properties["gen_ai.conversation.id"])),

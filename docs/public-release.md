@@ -1,6 +1,6 @@
 # Public Release Checklist
 
-Use this checklist before publishing this repo publicly.
+Use this checklist before publishing this repo publicly. Treat it as a release gate, not a suggestion list.
 
 ## Publish From A Fresh History
 
@@ -25,11 +25,24 @@ Run these checks from the repo root:
 
 ```bash
 npm --prefix agentops-cli test
+node --check agentops-cli/src/index.js
+node --check scripts/build-grafana-dashboard-pack.js
+node --check scripts/validate-grafana-dashboard-kql.js
 node scripts/build-grafana-dashboard-pack.js
 docker compose -f collector/docker-compose.yaml config >/tmp/agentops-compose.yaml
 docker compose -f collector/docker-compose.azuremonitor.yaml config >/tmp/agentops-azuremonitor-compose.yaml
 az bicep build --file infra/bicep/main.bicep --stdout >/tmp/agentops-main-arm.json
 git diff --check
+```
+
+Also run a clean export verification so the README path is not accidentally relying on ignored files, local config, or the current Git directory:
+
+```bash
+rm -rf /tmp/copilot-cli-agentops-azure-public-check
+rsync -a --exclude .git --exclude node_modules --exclude .agentops --exclude benchmarks/runs ./ /tmp/copilot-cli-agentops-azure-public-check/
+cd /tmp/copilot-cli-agentops-azure-public-check
+npm --prefix agentops-cli test
+node agentops-cli/src/index.js doctor --local-only
 ```
 
 Search for deployment-specific identifiers before publishing:
@@ -39,6 +52,14 @@ rg -n "InstrumentationKey|connectionString|Connection String|Bearer |client_secr
 ```
 
 Placeholders such as `<workspace-id>`, `00000000-0000-0000-0000-000000000000`, and `https://<your-grafana>.grafana.azure.com` are expected.
+
+Search for common local and tenant-specific leaks:
+
+```bash
+rg -n "/Users/|C:\\\\Users\\\\|rg-copilot|graf-[a-z0-9-]+\\.grafana\\.azure\\.com|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}" README.md docs infra agentops-cli collector copilot grafana kql plugin scripts setup-agentops.sh setup-agentops.ps1
+```
+
+Allow only documented placeholders, generated IDs inside demo fixtures, or intentionally generic examples.
 
 Confirm the public safety files are present:
 
@@ -63,3 +84,14 @@ export AGENTOPS_GRAFANA_BASE_URL="https://<your-grafana>.grafana.azure.com"
 ```
 
 Do not commit `.env` files, connection strings, Grafana tokens, or raw telemetry exports.
+
+## Release Position
+
+Recommended public positioning:
+
+- preview OSS project
+- safe-by-default metadata observability
+- Azure-first, not cloud-neutral
+- content capture opt-in only
+- dashboards may show expected empty states until users generate matching telemetry
+- alerts and automation are disabled by default and require local threshold tuning

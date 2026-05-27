@@ -138,13 +138,57 @@ AgentOps shim fields:
 - `agentops.mcp.github.tools`
 - `agentops.mcp.github.toolsets`
 
+Custom agent lifecycle fields:
+
+- `agentops.custom_event_id`
+- `agentops.schema.version`
+- `agentops.event.kind`
+- `agentops.event.name`
+- `agentops.agent.name`
+- `agentops.parent_agent.name`
+- `agentops.delegation.id`
+- `agentops.workflow.name`
+- `agentops.step.name`
+- `agentops.outcome`
+- `agentops.risk`
+- `agentops.score`
+- `agentops.entity.type`
+- `agentops.entity.id_hash`
+- `agentops.tags`
+- `agentops.custom.*`
+
+Recommended lifecycle event names:
+
+- `agent.run.started`
+- `agent.delegation.started`
+- `agent.step.started`
+- `agent.tool.used`
+- `agent.evidence.found`
+- `agent.decision.made`
+- `agent.policy.blocked`
+- `agent.eval.scored`
+- `agent.delegation.completed`
+- `agent.run.completed`
+- `agent.run.failed`
+
 The shim records only privacy-safe run dimensions and counts from Copilot CLI flags. It does not record prompt text, tool arguments, allow/deny pattern values, URLs, paths, attachment names, plugin directories, session IDs, or secret variable names. For MCP lineage, it records MCP config basenames, configured server names, disabled server names, and explicitly selected GitHub MCP tool/toolset names when those values are provided by CLI flags or readable MCP config files.
 
-When the wrapper sees `--agent <name>`, it emits `agentops.agent.name`. If a matching local agent file is present under `COPILOT_HOME/agents`, `.copilot/agents`, or `agents`, it also emits the basename and content hash. Skills, hooks, scripts, and exact MCP server/tool attribution are supported when spans or sidecar events provide `agentops.skill.*`, `agentops.script.*`, `agentops.hook.*`, or `agentops.mcp.*`; otherwise MCP server attribution is inferred from tool names such as `mcp__<server>__<tool>` or `<server>/<tool>`.
+When the wrapper sees `--agent <name>`, it emits `agentops.agent.name`. If a matching local agent file is present under `COPILOT_HOME/agents`, `.copilot/agents`, or `agents`, it also emits the basename and content hash. Skills, hooks, scripts, and exact MCP server/tool attribution are supported when spans or sidecar events provide `agentops.skill.*`, `agentops.script.*`, `agentops.hook.*`, or `agentops.mcp.*`. Native Copilot CLI runs may instead expose loaded skills in `github.copilot.context.skills`; dashboards surface that as context rather than charging every loaded skill for session cost. MCP server attribution is inferred from tool names such as `mcp__<server>__<tool>`, `<server>/<tool>`, and observed Azure MCP tool names such as `azure-mcp-monitor`.
 
-The collector strips content-capture attributes before Azure export, including `gen_ai.input.messages`, `gen_ai.output.messages`, `gen_ai.system_instructions`, `gen_ai.tool.definitions`, `gen_ai.tool.call.arguments`, `gen_ai.tool.call.result`, legacy `gen_ai.prompt`/`gen_ai.completion`, request/response bodies, raw URLs, and file paths.
+For orchestrator-style agents, emit the same session/conversation ID on every span and keep normal OpenTelemetry parent-child span IDs when available. If the runtime has explicit delegation metadata, add `agentops.parent_agent.name` and `agentops.delegation.id`. Agents without sub-agents do not need those fields; they still appear as a single run timeline with LLM calls, tool calls, MCP calls, scripts/hooks, timings, and errors.
 
-MCP tool server attribution is exact when tool names use documented namespaced forms such as `mcp__<server>__<tool>` or `<server>/<tool>`. It is inferred when a session has exactly one configured MCP server and a non-built-in tool span has no server prefix.
+The collector marks content-capture attempts with `agentops.content_capture.signal=true`, then strips content-capture attributes before Azure export, including `gen_ai.input.messages`, `gen_ai.output.messages`, `gen_ai.system_instructions`, `gen_ai.tool.definitions`, `gen_ai.tool.call.arguments`, `gen_ai.tool.call.result`, legacy `gen_ai.prompt`/`gen_ai.completion`, request/response bodies, raw URLs, and file paths.
+
+Scoped content capture is opt-in for local debugging. The Copilot wrapper keeps capture off by default, but can enable Copilot-side capture for a narrow allowlist:
+
+```bash
+AGENTOPS_CAPTURE_CONTENT_AGENTS=agentops-review-pattern-smoke copilot --agent agentops-review-pattern-smoke -p "synthetic debug prompt"
+AGENTOPS_CAPTURE_CONTENT_SKILLS=agentops-custom-telemetry AGENTOPS_ACTIVE_SKILLS=agentops-custom-telemetry copilot -p "synthetic debug prompt"
+```
+
+Use `AGENTOPS_CAPTURE_CONTENT=true` only for an explicitly approved local debugging run. The default Azure collector still scrubs raw content and exports the signal marker so Safety & Policy panels can alert without storing prompt or tool payload text.
+
+MCP tool server attribution is exact when tool names use documented namespaced forms such as `mcp__<server>__<tool>` or `<server>/<tool>`. It is inferred for observed Azure MCP prefixes such as `azure-mcp-*`, and when a session has exactly one configured MCP server and a non-built-in tool span has no server prefix.
 
 ## Token Rollups
 
@@ -161,7 +205,10 @@ For broad Copilot/GenAI discovery, use a compatibility filter that accepts nativ
 ```kql
 Properties has "github.copilot"
 or Properties has "gen_ai.operation.name"
-or AppRoleName in ("github-copilot", "copilot-chat", "github-copilot-cli")
+or Properties has "agentops."
+or AppRoleName in ("github-copilot", "copilot-chat", "github-copilot-cli", "codex", "openai-codex", "openai-codex-cli")
+or tostring(Properties["service.name"]) in ("github-copilot", "copilot-chat", "github-copilot-cli", "codex", "openai-codex", "openai-codex-cli")
+or tostring(Properties["agent.runtime"]) in ("codex", "openai-codex-cli")
 ```
 
 For session-level token panels, prefer summing `chat` spans when they exist and falling back to the `invoke_agent` aggregate when they do not. Use `kql/13-token-rollup-audit.kql` or:

@@ -4,7 +4,7 @@ let lookback = 14d;
 let hourly =
 AppDependencies
 | where TimeGenerated > ago(lookback)
-| where (Properties has "github.copilot" or Properties has "gen_ai.operation.name" or AppRoleName in ("github-copilot", "copilot-chat", "github-copilot-cli") or tostring(Properties["service.name"]) in ("github-copilot", "copilot-chat", "github-copilot-cli"))
+| where (Properties has "github.copilot" or Properties has "gen_ai.operation.name" or Properties has "agentops." or AppRoleName in ("github-copilot", "copilot-chat", "github-copilot-cli", "codex", "openai-codex", "openai-codex-cli") or tostring(Properties["service.name"]) in ("github-copilot", "copilot-chat", "github-copilot-cli", "codex", "openai-codex", "openai-codex-cli") or tostring(Properties["agent.runtime"]) in ("codex", "openai-codex-cli"))
 | extend
     conversation = case(
         isnotempty(tostring(Properties["gen_ai.conversation.id"])),
@@ -34,8 +34,7 @@ AppDependencies
 let content =
 union isfuzzy=true AppDependencies, AppTraces
 | where TimeGenerated > ago(lookback)
-| where tostring(Properties) has_any ("gen_ai.input.messages", "gen_ai.output.messages", "gen_ai.prompt", "gen_ai.completion", "github.copilot.message")
-| summarize content_capture_signals = count() by bin(TimeGenerated, 1h);
+| summarize content_capture_signals = countif(tostring(Properties["agentops.content_capture.signal"]) =~ "true" or tostring(Properties) has_any ("gen_ai.input.messages", "gen_ai.output.messages", "gen_ai.prompt", "gen_ai.completion", "github.copilot.message")) by bin(TimeGenerated, 1h);
 let session_rollup =
 hourly
 | summarize
@@ -57,10 +56,10 @@ content
     max_content_capture_signals = max(content_capture_signals);
 union
 (session_rollup
-| extend suggested_threshold = case(p99_aiu * 1.25 > p95_aiu * 2, p99_aiu * 1.25, p95_aiu * 2)
+| extend suggested_threshold = case(p99_aiu * 1.25 > p95_aiu * 2.0, todouble(p99_aiu * 1.25), todouble(p95_aiu * 2.0))
 | project rule = "high-aiu", current_threshold = 50000000000.0, suggested_threshold, p50 = p50_aiu, p95 = p95_aiu, p99 = p99_aiu, max_observed = max_aiu, supporting_hours = hours, rollout = "Keep disabled until at least 14 days of clean history."),
 (session_rollup
-| extend suggested_threshold = case(p95_failures > 1, p95_failures, 1.0)
-| project rule = "failed-spans", current_threshold = 0.0, suggested_threshold, p50 = real(null), p95 = p95_failures, p99 = real(null), max_observed = max_failures, supporting_hours = hours, rollout = "Review false positives in Permission Friction before attaching action groups."),
+| extend suggested_threshold = case(p95_failures > 1.0, todouble(p95_failures), 1.0)
+| project rule = "failed-spans", current_threshold = 0.0, suggested_threshold, p50 = real(null), p95 = p95_failures, p99 = real(null), max_observed = todouble(max_failures), supporting_hours = hours, rollout = "Review false positives in Permission Friction before attaching action groups."),
 (content_rollup
-| project rule = "content-capture", current_threshold = 0.0, suggested_threshold = 0.0, p50 = real(null), p95 = real(null), p99 = real(null), max_observed = coalesce(max_content_capture_signals, 0), supporting_hours = content_capture_hours, rollout = "Keep strict. Investigate immediately if nonzero.")
+| project rule = "content-capture", current_threshold = 0.0, suggested_threshold = 0.0, p50 = real(null), p95 = real(null), p99 = real(null), max_observed = todouble(coalesce(max_content_capture_signals, 0)), supporting_hours = content_capture_hours, rollout = "Keep strict. Investigate immediately if nonzero.")

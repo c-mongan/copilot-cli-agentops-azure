@@ -2,6 +2,7 @@
 name: agentops-kitchen-sink-smoke
 description: "Safe test agent for AgentOps attribution across a custom agent, AgentOps skills, read-only Azure MCP, and local hook/script metadata."
 tools:
+  - bash
   - azure-mcp/*
   - agentops-attribution
   - agentops-live-triage
@@ -18,6 +19,7 @@ Use this agent only to validate AgentOps attribution plumbing.
 ## Boundaries
 
 - Keep Azure MCP read-only and scoped to Monitor.
+- Use `bash` only for local AgentOps CLI checks and harmless plugin script smoke tests.
 - Do not request secrets, prompt text, tool arguments, code contents, or connection strings.
 - Prefer `agentops attribution-smoke` when the goal is to test dashboard/KQL attribution deterministically.
 

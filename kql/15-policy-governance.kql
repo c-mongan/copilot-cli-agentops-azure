@@ -20,7 +20,7 @@ let session_id = (props:dynamic, timestamp:datetime) {
 let sessions =
 AppDependencies
 | where TimeGenerated > ago(lookback)
-| where (Properties has "github.copilot" or Properties has "gen_ai.operation.name" or AppRoleName in ("github-copilot", "copilot-chat", "github-copilot-cli") or tostring(Properties["service.name"]) in ("github-copilot", "copilot-chat", "github-copilot-cli"))
+| where (Properties has "github.copilot" or Properties has "gen_ai.operation.name" or Properties has "agentops." or AppRoleName in ("github-copilot", "copilot-chat", "github-copilot-cli", "codex", "openai-codex", "openai-codex-cli") or tostring(Properties["service.name"]) in ("github-copilot", "copilot-chat", "github-copilot-cli", "codex", "openai-codex", "openai-codex-cli") or tostring(Properties["agent.runtime"]) in ("codex", "openai-codex-cli"))
 | extend
     session = session_id(Properties, TimeGenerated),
     operation = tostring(Properties["gen_ai.operation.name"]),
@@ -93,7 +93,7 @@ AppDependencies
 let events =
 union isfuzzy=true AppTraces, AppDependencies
 | where TimeGenerated > ago(lookback)
-| where tostring(Properties) has "github.copilot" or Message has "github.copilot"
+| where tostring(Properties) has_any ("github.copilot", "agentops.", "gen_ai.operation.name", "codex") or Message has_any ("github.copilot", "AgentOps", "codex")
 | extend
     session = session_id(Properties, TimeGenerated),
     event = coalesce(tostring(Properties["event.name"]), tostring(Properties["github.copilot.event.name"]), Name),
