@@ -2,6 +2,10 @@
 
 > Independent personal open-source project. Not an official Microsoft, GitHub, OpenAI, Azure, or Grafana product, and not endorsed by those organizations. See [DISCLAIMER.md](DISCLAIMER.md) and [SECURITY.md](SECURITY.md) before using with real telemetry.
 
+<p align="center">
+  <img src="docs/images/agentops-for-azure-banner.png" width="520" alt="AgentOps for Azure - Copilot CLI observability">
+</p>
+
 AgentOps gives GitHub Copilot CLI runs an Azure/Grafana observability loop: sessions, tool calls, failures, tokens, cost, policy signals, and benchmark results without recording prompts, code, tool arguments, or file contents by default.
 
 ![AgentOps overview dashboard](docs/screenshots/agentops-overview-live.png)
