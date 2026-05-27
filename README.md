@@ -165,6 +165,46 @@ Overview
 
 Full screenshot tour: [Dashboard tour](docs/dashboard-tour.md).
 
+## What It Looks Like
+
+The dashboards are meant to answer practical questions first, not make you learn KQL.
+
+### Start Here
+
+| Page | What it tells you |
+| --- | --- |
+| <img src="docs/screenshots/agentops-overview-live.png" width="360" alt="AgentOps overview dashboard"> | **Overview**: the health of recent agent runs, tokens, cost, latency, failures, and top activity. |
+| <img src="docs/screenshots/agentops-sessions-live.png" width="360" alt="AgentOps sessions dashboard"> | **Sessions**: which runs happened, which failed, which were slow, and which used the most tokens or credits. |
+| <img src="docs/screenshots/agentops-session-detail-live.png" width="360" alt="AgentOps session detail dashboard"> | **Session Detail**: one selected run, broken into its important events and tool calls. |
+| <img src="docs/screenshots/agentops-live-replay-live.jpg" width="360" alt="AgentOps live replay dashboard"> | **Live Replay**: watch one run as a timeline, including orchestrator and sub-agent delegation when present. |
+
+### Debug A Run
+
+| Page | What it tells you |
+| --- | --- |
+| <img src="docs/screenshots/agentops-traces-live.png" width="360" alt="AgentOps traces and spans dashboard"> | **Traces / Spans**: the raw execution path for agent operations, model calls, tools, MCP calls, and scripts. |
+| <img src="docs/screenshots/agentops-tools-live.png" width="360" alt="AgentOps tools and MCP dashboard"> | **Tools & MCP**: which tools and MCP servers were called, how often they failed, and what errors appeared. |
+| <img src="docs/screenshots/agentops-runtime-live.png" width="360" alt="AgentOps runtime events dashboard"> | **Runtime Events**: hooks, lifecycle events, compactions, truncations, and other runtime signals. |
+| <img src="docs/screenshots/agentops-attribution-live.png" width="360" alt="AgentOps attribution dashboard"> | **Attribution**: which agent, skill, MCP server, script, hook, or repo produced the telemetry. |
+
+### Safety, Quality, And Cost
+
+| Page | What it tells you |
+| --- | --- |
+| <img src="docs/screenshots/agentops-safety-policy-live.png" width="360" alt="AgentOps safety and policy dashboard"> | **Safety & Policy**: permission blocks, policy blocks, and privacy posture. |
+| <img src="docs/screenshots/agentops-permission-friction-live.png" width="360" alt="AgentOps permission friction dashboard"> | **Permission Friction**: where approvals, denials, and blocked tools slow the agent down. |
+| <img src="docs/screenshots/agentops-quality-live.png" width="360" alt="AgentOps quality dashboard"> | **Quality**: slow, expensive, failing, or inefficient runs that are worth investigating. |
+| <img src="docs/screenshots/agentops-alert-tuning-live.png" width="360" alt="AgentOps alert tuning dashboard"> | **Alert Tuning**: suggested thresholds before you turn alert rules on. |
+
+### Experiments And Custom Signals
+
+| Page | What it tells you |
+| --- | --- |
+| <img src="docs/screenshots/agentops-experiments-live.png" width="360" alt="AgentOps experiments dashboard"> | **Experiments**: compare baseline and variant runs for prompts, tools, agents, or policies. |
+| <img src="docs/screenshots/agentops-data-quality-live.png" width="360" alt="AgentOps data quality dashboard"> | **Data Quality**: whether the telemetry has the fields dashboards need. |
+| <img src="docs/screenshots/agentops-custom-lifecycle-widget-live.png" width="360" alt="AgentOps custom lifecycle widget"> | **Custom Lifecycle Events**: agent-specific milestones from SDKs, hooks, scripts, or extensions. |
+| <img src="docs/screenshots/agentops-custom-eval-widget-live.png" width="360" alt="AgentOps custom evaluation widget"> | **Custom Eval Events**: metadata-only scores and measurements from your own eval gates. |
+
 ## Common Workflows
 
 Open dashboard links:
