@@ -85,10 +85,13 @@ Use this for Copilot runtime behavior. It answers: **did hooks, skills, truncati
 
 This page can be intentionally quiet in a healthy setup. Content-capture, truncation, compaction, and policy panels only light up when those events actually happen. Treat quiet panels here as a signal to check whether the event was expected, not as a setup failure.
 
-To populate this page with metadata-only demo signals:
+To populate this page with real signals, install the Copilot plugin and run a small observed agent task:
 
 ```bash
-agentops gallery-smoke --wait 5m --poll 15s
+copilot plugin install c-mongan/copilot-cli-agentops-azure:plugin
+agentops copilot --agent agentops-orchestrator \
+  --allow-tool=bash --add-dir . --no-ask-user --no-remote \
+  -p "Do not edit files. Use read-only shell commands: pwd and ls docs | head. Summarize what you saw."
 ```
 
 ![AgentOps runtime events dashboard](screenshots/agentops-runtime-live.png)
@@ -107,7 +110,13 @@ Quiet content-capture panels are good when content capture is intentionally disa
 
 For a first pass, use this page to confirm the absence of unsafe signals, then rely on [Secure by default](secure-by-default.md) and [Threat model](threat-model.md) for the policy posture.
 
-For a demo/screenshot pass, `agentops gallery-smoke --wait 5m --poll 15s` emits synthetic broad-permission, policy-block, remote-mode, and content-signal markers without recording actual prompt text or tool arguments.
+For a safe policy-block check, ask the agent to try a fake Key Vault secret-read command. The hook should deny it before it reaches Azure:
+
+```bash
+agentops copilot --agent agentops-orchestrator \
+  --allow-tool=bash --add-dir . --no-ask-user --no-remote \
+  -p "Use bash once to run: az keyvault secret show --vault-name agentops-nonexistent-vault --name agentops-nonexistent-secret. If AgentOps blocks it, do not retry."
+```
 
 ![AgentOps safety and policy dashboard](screenshots/agentops-safety-policy-live.png)
 
@@ -119,11 +128,9 @@ This helps decide whether a tool should be allowed, denied, documented, or repla
 
 This page is most useful after real users have hit approval prompts, denials, or policy blocks. On a fresh install, quiet panels usually mean there has not been much permission friction yet.
 
-To create metadata-only test data for this page, start with:
+To create real policy-friction data for this page, run the safe policy-block check from **Safety & Policy**. To create ordinary tool-failure data, run a harmless failing command through an observed Copilot task.
 
-```bash
-agentops gallery-smoke --wait 5m --poll 15s
-```
+Retry-hint panels stay quiet unless a real post-tool-failure hook emits a recovery hint.
 
 ![AgentOps permission friction dashboard](screenshots/agentops-permission-friction-live.png)
 
@@ -133,9 +140,7 @@ Use this before enabling real alerts. It answers: **what thresholds are reasonab
 
 The alert rules are disabled by default. This page is evidence for choosing thresholds, not an emergency console on day one.
 
-This page needs enough history before it becomes visually interesting. On a fresh install, it may have little to recommend. Run real traffic or smoke tests over time, then use the recommendations here before turning on scheduled-query alerts.
-
-For a quick visual check, `agentops gallery-smoke --wait 5m --poll 15s` emits one synthetic high-AIU/cost sample, failed tool, failed span, and content-signal marker so the recommendation and hourly panels have something to render.
+This page needs enough history before it becomes visually interesting. On a fresh install, it may have little to recommend. Run real traffic, smoke tests, and the safe policy-block check over time, then use the recommendations here before turning on scheduled-query alerts.
 
 ![AgentOps alert tuning dashboard](screenshots/agentops-alert-tuning-live.png)
 
@@ -175,8 +180,10 @@ Some panels stay quiet until matching telemetry exists:
 - **Attribution** needs custom agent, skill, MCP, or script labels. Use `agentops attribution-smoke --wait 5m --poll 15s` to verify the wiring.
 - **Live Replay** needs at least one session inside the selected time range. Use `agentops live-replay-smoke --wait 5m --poll 15s` to generate a fresh orchestrator/sub-agent replay and open the printed URL.
 
-For demo screenshots of Runtime Events, Safety & Policy, Permission Friction, and Alert Tuning, run:
+For real Runtime Events, Safety & Policy, Permission Friction, and Alert Tuning evidence, run:
 
 ```bash
-agentops gallery-smoke --wait 5m --poll 15s
+copilot plugin install c-mongan/copilot-cli-agentops-azure:plugin
+agentops copilot --agent agentops-orchestrator --allow-tool=bash --add-dir . --no-ask-user --no-remote -p "Do not edit files. Use read-only shell commands: pwd and ls docs | head."
+agentops copilot --agent agentops-orchestrator --allow-tool=bash --add-dir . --no-ask-user --no-remote -p "Use bash once to run: az keyvault secret show --vault-name agentops-nonexistent-vault --name agentops-nonexistent-secret. If AgentOps blocks it, do not retry."
 ```

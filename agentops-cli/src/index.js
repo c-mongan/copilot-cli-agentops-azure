@@ -48,7 +48,6 @@ function usage() {
     'smoke [--dry-run] [--endpoint <url>] [--id <smoke-id>] [--last <duration>] [--wait <duration>] [--poll <duration>] [--no-verify] [--json]',
     'attribution-smoke [--dry-run] [--endpoint <url>] [--id <smoke-id>] [--last <duration>] [--wait <duration>] [--poll <duration>] [--no-verify] [--json]',
     'live-replay-smoke [--dry-run] [--endpoint <url>] [--id <smoke-id>] [--last <duration>] [--wait <duration>] [--poll <duration>] [--no-verify] [--json]',
-    'gallery-smoke [--dry-run] [--endpoint <url>] [--id <smoke-id>] [--last <duration>] [--wait <duration>] [--poll <duration>] [--no-verify] [--json]',
     'validate-enterprise [--json]',
     'ask-context <latest|session-id> [--file <jsonl>] [--last <duration>] [--json]',
     'enable-shadow',
@@ -1932,24 +1931,8 @@ function liveReplaySmokeId(now = new Date()) {
   return `agentops-live-replay-smoke-${stamp}-${crypto.randomBytes(3).toString('hex')}`;
 }
 
-function gallerySmokeId(now = new Date()) {
-  const stamp = now.toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
-  return `agentops-gallery-smoke-${stamp}-${crypto.randomBytes(3).toString('hex')}`;
-}
-
 function liveReplayGrafanaUrl(id, last = '2h') {
   return `${grafanaBaseUrl}/d/agentops-live-replay/agentops-live-replay?from=now-${encodeGrafanaValue(validateKqlDuration(last))}&to=now&timezone=browser&refresh=30s&var-conversation=${encodeGrafanaValue(id)}&var-agentops_agent=__all&var-mcp_server=__all&var-tool=__all`;
-}
-
-function gallerySmokeGrafanaUrls(last = '2h') {
-  const lookback = encodeGrafanaValue(validateKqlDuration(last));
-  const suffix = `from=now-${lookback}&to=now&timezone=browser&refresh=30s`;
-  return {
-    runtime_events: `${grafanaBaseUrl}/d/agentops-runtime-events/agentops-runtime-events?${suffix}`,
-    safety_policy: `${grafanaBaseUrl}/d/agentops-safety-policy/agentops-safety-policy?${suffix}`,
-    permission_friction: `${grafanaBaseUrl}/d/agentops-permission-friction/agentops-permission-friction?${suffix}`,
-    alert_tuning: `${grafanaBaseUrl}/d/agentops-alert-tuning/agentops-alert-tuning?${suffix}`
-  };
 }
 
 function smokeAzureQuery(id, last = '2h') {
@@ -2192,152 +2175,6 @@ function otlpLiveReplaySmokeTracePayload(id, nowMs = Date.now()) {
                 attr('agentops.workflow.name', 'live-replay-e2e'),
                 attr('agentops.outcome', 'completed')
               ], delegationSpanId)
-            ]
-          }
-        ]
-      }
-    ]
-  };
-}
-
-function otlpGallerySmokeTracePayload(id, nowMs = Date.now()) {
-  const traceId = crypto.randomBytes(16).toString('hex');
-  const rootSpanId = crypto.randomBytes(8).toString('hex');
-  const start = BigInt(nowMs) * 1000000n;
-  const attr = (key, stringValue) => ({ key, value: { stringValue } });
-  const boolAttr = (key, boolValue) => ({ key, value: { boolValue } });
-  const intAttr = (key, intValue) => ({ key, value: { intValue: String(intValue) } });
-  const doubleAttr = (key, doubleValue) => ({ key, value: { doubleValue } });
-  const span = (spanId, name, offsetMs, durationMs, attributes, parentSpanId = undefined, statusCode = 1) => {
-    const spanStart = start + BigInt(offsetMs) * 1000000n;
-    const spanEnd = spanStart + BigInt(durationMs) * 1000000n;
-    return {
-      traceId,
-      spanId,
-      ...(parentSpanId ? { parentSpanId } : {}),
-      name,
-      kind: 1,
-      startTimeUnixNano: spanStart.toString(),
-      endTimeUnixNano: spanEnd.toString(),
-      attributes: [
-        attr('agentops.smoke_id', id),
-        attr('agentops.test.kind', 'dashboard-gallery'),
-        attr('gen_ai.conversation.id', id),
-        boolAttr('content.capture.enabled', false),
-        ...attributes
-      ],
-      status: statusCode === 2 ? { code: 2, message: 'synthetic AgentOps gallery failure signal' } : { code: 1 }
-    };
-  };
-
-  return {
-    resourceSpans: [
-      {
-        resource: {
-          attributes: [
-            attr('service.name', 'github-copilot-cli'),
-            attr('service.namespace', 'copilot-agentops'),
-            attr('agent.framework', 'github-copilot'),
-            attr('agent.runtime', 'github-copilot-cli'),
-            attr('agentops.profile', 'dashboard-gallery-smoke'),
-            attr('agentops.gallery.seed', 'true'),
-            attr('agentops.smoke_id', id)
-          ]
-        },
-        scopeSpans: [
-          {
-            scope: { name: 'agentops.gallery-smoke', version: '0.1.0' },
-            spans: [
-              span(rootSpanId, `agentops.gallery.${id}.invoke_agent`, 0, 820, [
-                attr('gen_ai.operation.name', 'invoke_agent'),
-                attr('gen_ai.agent.name', 'agentops-gallery-smoke'),
-                attr('agentops.agent.name', 'agentops-gallery-smoke'),
-                attr('agentops.agent.file', 'agentops-gallery-smoke.agent.md'),
-                attr('agentops.cli.mode', 'agent'),
-                attr('agentops.cli.model', 'claude-sonnet-4.5'),
-                attr('gen_ai.request.model', 'claude-sonnet-4.5'),
-                attr('agentops.cli.remote', 'enabled'),
-                attr('agentops.cli.allow_all', 'true'),
-                attr('agentops.cli.allow_all_tools', 'true'),
-                attr('agentops.cli.allow_all_paths', 'true'),
-                attr('agentops.cli.allow_all_urls', 'true'),
-                intAttr('agentops.cli.allow_tool.count', 3),
-                intAttr('agentops.cli.allow_url.count', 2),
-                intAttr('agentops.cli.deny_tool.count', 2),
-                intAttr('agentops.cli.deny_url.count', 1),
-                intAttr('agentops.cli.available_tools.count', 12),
-                intAttr('agentops.cli.excluded_tools.count', 1),
-                intAttr('agentops.cli.disabled_mcp_server.count', 1),
-                intAttr('agentops.cli.additional_mcp_config.count', 1),
-                attr('agentops.mcp.config.servers', 'azure-mcp,agent-grafana'),
-                attr('agentops.mcp.disabled.servers', 'untrusted-local'),
-                intAttr('gen_ai.usage.input_tokens', 48000),
-                intAttr('gen_ai.usage.output_tokens', 420),
-                doubleAttr('github.copilot.aiu', 120000000000),
-                doubleAttr('github.copilot.cost', 18.25),
-                attr('agentops.repo.hash', 'demo-repo-hash')
-              ]),
-              span(crypto.randomBytes(8).toString('hex'), `AgentOps preToolUse policy blocked command ${id}`, 90, 70, [
-                attr('gen_ai.operation.name', 'hook.execute'),
-                attr('event.name', 'AgentOps preToolUse policy blocked command'),
-                attr('agentops.event.name', 'AgentOps preToolUse policy blocked command'),
-                attr('github.copilot.hook.name', 'preToolUse'),
-                attr('github.copilot.hook.type', 'preToolUse'),
-                attr('agentops.hook.name', 'preToolUse'),
-                attr('agentops.script.name', 'pre-tool-policy'),
-                attr('agentops.script.file', 'plugin/scripts/pre-tool-policy.js'),
-                attr('agentops.policy.blocked', 'true'),
-                attr('agentops.permissionDecision', 'denied'),
-                attr('agentops.risk', 'policy'),
-                attr('agentops.policy.message', 'AgentOps preToolUse policy blocked command'),
-                attr('error.type', 'AgentOpsPolicyBlock')
-              ], rootSpanId, 2),
-              span(crypto.randomBytes(8).toString('hex'), `Recovery hint after denied tool ${id}`, 180, 45, [
-                attr('gen_ai.operation.name', 'hook.execute'),
-                attr('event.name', 'Recovery hint: retry with read-only tool'),
-                attr('agentops.event.name', 'Recovery hint: retry with read-only tool'),
-                attr('github.copilot.hook.name', 'postToolUseFailure'),
-                attr('agentops.hook.name', 'postToolUseFailure'),
-                attr('agentops.script.name', 'post-tool-failure-hints'),
-                attr('agentops.recovery.hint', 'Recovery hint: retry with read-only tool'),
-                attr('agentops.permissionDecision', 'denied')
-              ], rootSpanId),
-              span(crypto.randomBytes(8).toString('hex'), `agentops.gallery.${id}.failed_tool`, 250, 160, [
-                attr('gen_ai.operation.name', 'execute_tool'),
-                attr('gen_ai.tool.name', 'bash'),
-                attr('agentops.mcp.server', 'local-shell'),
-                attr('agentops.mcp.tool', 'bash'),
-                attr('agentops.risk', 'permission'),
-                attr('error.type', 'PermissionDenied')
-              ], rootSpanId, 2),
-              span(crypto.randomBytes(8).toString('hex'), `github.copilot.session.truncation ${id}`, 440, 60, [
-                attr('gen_ai.operation.name', 'runtime.event'),
-                attr('event.name', 'github.copilot.session.truncation'),
-                attr('github.copilot.event.name', 'github.copilot.session.truncation'),
-                attr('github.copilot.skill.name', 'agentops-live-triage'),
-                attr('agentops.skill.name', 'agentops-live-triage'),
-                attr('github.copilot.context.skills', '["agentops-live-triage","agentops-attribution"]'),
-                intAttr('github.copilot.tokens_removed', 18432),
-                intAttr('github.copilot.messages_removed', 9)
-              ], rootSpanId),
-              span(crypto.randomBytes(8).toString('hex'), `agentops.gallery.${id}.content_signal`, 530, 35, [
-                attr('gen_ai.operation.name', 'runtime.event'),
-                attr('event.name', 'agentops.content_capture.signal'),
-                attr('agentops.event.name', 'agentops.content_capture.signal'),
-                attr('agentops.content_capture.signal', 'true'),
-                attr('agentops.content_capture.mode', 'signal-only'),
-                attr('agentops.risk', 'content')
-              ], rootSpanId),
-              span(crypto.randomBytes(8).toString('hex'), `agentops.gallery.${id}.custom_lifecycle`, 610, 55, [
-                attr('gen_ai.operation.name', 'workflow.step'),
-                attr('agentops.event.name', 'agent.gallery.step.completed'),
-                attr('agentops.event.kind', 'lifecycle'),
-                attr('agentops.workflow.name', 'dashboard-gallery'),
-                attr('agentops.step.name', 'seed-quiet-panels'),
-                attr('agentops.outcome', 'completed'),
-                attr('agentops.risk', 'policy'),
-                doubleAttr('agentops.score', 0.98)
-              ], rootSpanId)
             ]
           }
         ]
@@ -2682,103 +2519,13 @@ async function agentopsLiveReplaySmoke(options = {}) {
   };
 }
 
-async function agentopsGallerySmoke(options = {}) {
-  const endpoint = (options.endpoint || 'http://127.0.0.1:4318').replace(/\/$/, '');
-  const id = options.id || gallerySmokeId(options.now);
-  const last = validateKqlDuration(options.last || '2h');
-  const query = smokeAzureQuery(id, last);
-  const waitMs = durationToMs(options.waitMs ?? options.wait, 60000);
-  const pollMs = durationToMs(options.pollMs ?? options.poll, 10000);
-  const verify = options.verify !== false;
-  const grafanaUrls = gallerySmokeGrafanaUrls(last);
-  const result = {
-    smoke_kind: 'gallery',
-    smoke_id: id,
-    endpoint,
-    dry_run: Boolean(options.dryRun),
-    verify,
-    wait_ms: waitMs,
-    poll_ms: pollMs,
-    workspace_id: options.workspaceId || workspaceId,
-    azure_query: query,
-    grafana_urls: grafanaUrls,
-    payload_preview: {
-      service: 'github-copilot-cli',
-      operation: 'dashboard_gallery_smoke',
-      agent: 'agentops-gallery-smoke',
-      policy_block: true,
-      retry_hint: true,
-      failed_tool: true,
-      context_truncation: true,
-      content_capture_signal: true,
-      content_capture_enabled: false
-    }
-  };
-
-  if (options.dryRun) {
-    return {
-      ...result,
-      ok: true,
-      next: [
-        `POST ${endpoint}/v1/traces`,
-        grafanaUrls.runtime_events,
-        grafanaUrls.safety_policy,
-        grafanaUrls.permission_friction,
-        grafanaUrls.alert_tuning,
-        verify
-          ? `node agentops-cli/src/index.js gallery-smoke --id ${id} --wait ${Math.ceil(waitMs / 1000)}s --poll ${Math.ceil(pollMs / 1000)}s`
-          : `az monitor log-analytics query --workspace "${result.workspace_id}" --analytics-query "<azure_query>"`
-      ]
-    };
-  }
-
-  const post = options.postJson || postJson;
-  const response = await post(`${endpoint}/v1/traces`, otlpGallerySmokeTracePayload(id, options.nowMs), options);
-  let verification = null;
-  if (response.ok && verify) {
-    verification = await verifySmokeInAzure(id, {
-      ...options,
-      last,
-      workspaceId: result.workspace_id,
-      waitMs,
-      pollMs
-    });
-  }
-  const ok = response.ok && (!verify || verification?.ok === true);
-  return {
-    ...result,
-    ok,
-    collector_response: response,
-    verification,
-    next: response.ok
-      ? (verification?.ok
-          ? [
-              `Verified ${verification.rows} gallery smoke rows in Log Analytics.`,
-              grafanaUrls.runtime_events,
-              grafanaUrls.safety_policy,
-              grafanaUrls.permission_friction,
-              grafanaUrls.alert_tuning
-            ]
-          : [
-              verify
-                ? `Gallery smoke was sent, but Log Analytics did not return ${id} before the wait expired.`
-                : `Run this Azure query after ingestion latency settles: ${query}`,
-              grafanaUrls.runtime_events,
-              grafanaUrls.safety_policy,
-              grafanaUrls.permission_friction,
-              grafanaUrls.alert_tuning
-            ])
-      : ['Start the collector with `node agentops-cli/src/index.js collector start` or `./scripts/collector-azuremonitor-up.sh`.']
-  };
-}
-
 function renderSmoke(result) {
   const lines = [
     result.smoke_kind === 'live-replay'
       ? 'AgentOps live replay smoke'
       : (result.smoke_kind === 'attribution'
           ? 'AgentOps attribution smoke'
-          : (result.smoke_kind === 'gallery' ? 'AgentOps gallery smoke' : 'AgentOps smoke')),
+          : 'AgentOps smoke'),
     '',
     `Smoke id: ${result.smoke_id}`,
     `Endpoint: ${result.endpoint}`,
@@ -2802,16 +2549,6 @@ function renderSmoke(result) {
   if (result.grafana_url) {
     lines.push(`Grafana Live Replay: ${result.grafana_url}`);
   }
-  if (result.grafana_urls) {
-    lines.push(
-      'Grafana gallery pages:',
-      `- Runtime Events: ${result.grafana_urls.runtime_events}`,
-      `- Safety & Policy: ${result.grafana_urls.safety_policy}`,
-      `- Permission Friction: ${result.grafana_urls.permission_friction}`,
-      `- Alert Tuning: ${result.grafana_urls.alert_tuning}`
-    );
-  }
-
   lines.push('', 'Azure verification query:', result.azure_query, '', 'Next:');
   for (const item of result.next || []) lines.push(`- ${item}`);
   return `${lines.join('\n')}\n`;
@@ -5567,14 +5304,6 @@ async function main(argv) {
     return;
   }
 
-  if (command === 'gallery-smoke') {
-    const options = parseSmokeArgs(args);
-    const result = await agentopsGallerySmoke(options);
-    process.stdout.write(options.json ? JSON.stringify(result, null, 2) + '\n' : renderSmoke(result));
-    process.exitCode = result.ok ? 0 : 1;
-    return;
-  }
-
   if (command === 'ask-context') {
     const options = parseAskContextArgs(args);
     const result = askAgentOpsContext(options);
@@ -5707,7 +5436,6 @@ module.exports = {
   agentopsConfigure,
   agentopsSetupGuide,
   agentopsSmoke,
-  agentopsGallerySmoke,
   agentopsLiveReplaySmoke,
   agentopsStatusSummary,
   agentopsWorkflows,
@@ -5743,7 +5471,6 @@ module.exports = {
   installedShimStatus,
   agentInstallTarget,
   attributionSmokeId,
-  gallerySmokeId,
   liveReplaySmokeId,
   installDefaultAgents,
   installDefaultSkills,
@@ -5763,7 +5490,6 @@ module.exports = {
   openLinksSummary,
   otlpAttributionSmokeTracePayload,
   otlpCustomEventPayload,
-  otlpGallerySmokeTracePayload,
   otlpLiveReplaySmokeTracePayload,
   parseBenchmarkCompareArgs,
   parseBenchmarkReportArgs,

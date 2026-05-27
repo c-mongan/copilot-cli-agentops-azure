@@ -188,7 +188,7 @@ function textPanel(id, x, y, w, h, content) {
   };
 }
 
-function statPanel(id, title, x, y, query, unit = 'short', color = 'blue') {
+function statPanel(id, title, x, y, query, unit = 'short', color = 'blue', calc = 'lastNotNull') {
   return {
     id,
     type: 'stat',
@@ -208,7 +208,7 @@ function statPanel(id, title, x, y, query, unit = 'short', color = 'blue') {
       graphMode: 'area',
       justifyMode: 'auto',
       orientation: 'auto',
-      reduceOptions: { calcs: ['lastNotNull'], fields: '', values: false },
+      reduceOptions: { calcs: [calc], fields: '', values: false },
       textMode: 'auto',
     },
     targets: target(query, 'time_series'),
@@ -665,11 +665,11 @@ function runtimeEventsDashboard() {
   const policyBlockExpr = "tostring(Properties) has 'preToolUse' or tostring(Properties) has 'AgentOps preToolUse policy' or Message has 'AgentOps preToolUse policy'";
   const panels = [
     textPanel(1, 0, 0, 24, 2, '## Runtime Events\nHooks, skills, compaction/truncation, shutdown, exceptions, and policy decisions.'),
-    statPanel(2, 'Content Capture Signals', 0, 2, `${runtimeBaseWhere()} ${conversationFilterPipe()} | summarize Signals=countif(${contentSignalExpr}) by TimeGenerated=bin(TimeGenerated, $__interval) | order by TimeGenerated asc`, 'short', 'red'),
-    statPanel(3, 'Compactions / Truncations', 6, 2, `${runtimeBaseWhere()} ${conversationFilterPipe()} | summarize Events=countif(${compactionSignalExpr}) by TimeGenerated=bin(TimeGenerated, $__interval) | order by TimeGenerated asc`, 'short', 'yellow'),
-    statPanel(4, 'Policy Blocks', 12, 2, `${runtimeBaseWhere()} ${conversationFilterPipe()} | summarize Blocks=countif(${policyBlockExpr}) by TimeGenerated=bin(TimeGenerated, $__interval) | order by TimeGenerated asc`, 'short', 'red'),
-    statPanel(5, 'Hook / Skill Context', 18, 2, `${runtimeBaseWhere()} ${conversationFilterPipe()} | where tostring(Properties) has 'github.copilot.hook' or tostring(Properties) has 'github.copilot.skill' or tostring(Properties) has 'github.copilot.context.skills' | summarize Events=count() by bin(TimeGenerated, $__interval) | order by TimeGenerated asc`, 'short', 'blue'),
-    statPanel(6, 'Custom Lifecycle Events', 0, 6, `${customBase} ${conversationFilterPipe()} | summarize Events=count() by bin(TimeGenerated, $__interval) | order by TimeGenerated asc`, 'short', 'green'),
+    statPanel(2, 'Content Capture Signals', 0, 2, `${runtimeBaseWhere()} ${conversationFilterPipe()} | summarize Signals=countif(${contentSignalExpr}) by TimeGenerated=bin(TimeGenerated, $__interval) | order by TimeGenerated asc`, 'short', 'red', 'sum'),
+    statPanel(3, 'Compactions / Truncations', 6, 2, `${runtimeBaseWhere()} ${conversationFilterPipe()} | summarize Events=countif(${compactionSignalExpr}) by TimeGenerated=bin(TimeGenerated, $__interval) | order by TimeGenerated asc`, 'short', 'yellow', 'sum'),
+    statPanel(4, 'Policy Blocks', 12, 2, `${runtimeBaseWhere()} ${conversationFilterPipe()} | summarize Blocks=countif(${policyBlockExpr}) by TimeGenerated=bin(TimeGenerated, $__interval) | order by TimeGenerated asc`, 'short', 'red', 'sum'),
+    statPanel(5, 'Hook / Skill Context', 18, 2, `${runtimeBaseWhere()} ${conversationFilterPipe()} | where tostring(Properties) has 'github.copilot.hook' or tostring(Properties) has 'github.copilot.skill' or tostring(Properties) has 'github.copilot.context.skills' | summarize Events=count() by bin(TimeGenerated, $__interval) | order by TimeGenerated asc`, 'short', 'blue', 'sum'),
+    statPanel(6, 'Custom Lifecycle Events', 0, 6, `${customBase} ${conversationFilterPipe()} | summarize Events=count() by bin(TimeGenerated, $__interval) | order by TimeGenerated asc`, 'short', 'green', 'sum'),
     timeseriesPanel(7, 'Custom events by type', 6, 6, 18, 4, `${customBase} ${conversationFilterPipe()} | summarize Events=count() by TimeGenerated=bin(TimeGenerated, $__interval), event | order by TimeGenerated asc`),
     tablePanel(11, 'Custom lifecycle events', 0, 10, 24, 10, `${customBase} ${conversationFilterPipe()} | project TimeGenerated, Session=conversation, custom_event_id, event, agentops_agent, workflow, step, outcome, risk, score, entity_type, entity_id_hash, tags, custom_source | order by TimeGenerated desc | take 500`, [
       byNameLinks('Session', [
@@ -694,10 +694,10 @@ function safetyPolicyDashboard() {
   const policyBlockExpr = "tostring(Properties) has 'preToolUse' or Message has 'AgentOps preToolUse policy'";
   const panels = [
     textPanel(1, 0, 0, 24, 2, '## Safety & Policy\nPrivacy posture, permission mode, content capture signals, and policy friction.'),
-    statPanel(2, 'Content Capture Signals', 0, 2, `${runtimeBaseWhere()} | summarize Signals=countif(${contentSignalExpr}) by TimeGenerated=bin(TimeGenerated, $__interval) | order by TimeGenerated asc`, 'short', 'red'),
-    statPanel(3, 'Allow All Sessions', 6, 2, `${sessionBaseWhere()} | summarize AllowAll=max(toint(tostring(Properties['agentops.cli.allow_all']) == 'true')) by conversation, bin(TimeGenerated, $__interval) | summarize Sessions=sum(AllowAll) by TimeGenerated | order by TimeGenerated asc`, 'short', 'red'),
-    statPanel(4, 'Policy Blocks', 12, 2, `${runtimeBaseWhere()} | summarize Blocks=countif(${policyBlockExpr}) by TimeGenerated=bin(TimeGenerated, $__interval) | order by TimeGenerated asc`, 'short', 'yellow'),
-    statPanel(5, 'Remote Enabled', 18, 2, `${sessionBaseWhere()} | summarize Sessions=dcountif(conversation, tostring(Properties['agentops.cli.remote']) == 'enabled') by TimeGenerated=bin(TimeGenerated, $__interval) | order by TimeGenerated asc`, 'short', 'blue'),
+    statPanel(2, 'Content Capture Signals', 0, 2, `${runtimeBaseWhere()} | summarize Signals=countif(${contentSignalExpr}) by TimeGenerated=bin(TimeGenerated, $__interval) | order by TimeGenerated asc`, 'short', 'red', 'sum'),
+    statPanel(3, 'Allow All Sessions', 6, 2, `${sessionBaseWhere()} | summarize AllowAll=max(toint(tostring(Properties['agentops.cli.allow_all']) == 'true')) by conversation, bin(TimeGenerated, $__interval) | summarize Sessions=sum(AllowAll) by TimeGenerated | order by TimeGenerated asc`, 'short', 'red', 'sum'),
+    statPanel(4, 'Policy Blocks', 12, 2, `${runtimeBaseWhere()} | summarize Blocks=countif(${policyBlockExpr}) by TimeGenerated=bin(TimeGenerated, $__interval) | order by TimeGenerated asc`, 'short', 'yellow', 'sum'),
+    statPanel(5, 'Remote Enabled', 18, 2, `${sessionBaseWhere()} | summarize Sessions=dcountif(conversation, tostring(Properties['agentops.cli.remote']) == 'enabled') by TimeGenerated=bin(TimeGenerated, $__interval) | order by TimeGenerated asc`, 'short', 'blue', 'sum'),
     tablePanel(10, 'Governance session review', 0, 6, 24, 17, kqlFileQuery('15-policy-governance.kql'), [
       byNameLink('session', 'Open session detail', '/d/agentops-session-detail?var-conversation=${__data.fields.session}'),
     ]),
@@ -722,10 +722,10 @@ function permissionFrictionSessionsQuery(limit = 100) {
 function permissionFrictionDashboard() {
   const panels = [
     textPanel(1, 0, 0, 24, 2, '## Permission Friction\nPermission posture, policy blocks, retry hints, broad allow modes, and tool failures that slow or risk Copilot CLI sessions.'),
-    statPanel(2, 'Policy Blocks', 0, 2, `${permissionFrictionBaseWhere()} | summarize Blocks=countif(is_policy_block) by TimeGenerated=bin(TimeGenerated, $__interval) | order by TimeGenerated asc`, 'short', 'red'),
-    statPanel(3, 'Tool Failures', 6, 2, `${permissionFrictionBaseWhere()} | where is_tool | summarize Failures=countif(Success == false or tostring(Success) =~ 'false' or isnotempty(error)) by bin(TimeGenerated, $__interval) | order by TimeGenerated asc`, 'short', 'red'),
-    statPanel(4, 'Retry Hints', 12, 2, `${permissionFrictionBaseWhere()} | summarize Hints=countif(is_retry_hint) by TimeGenerated=bin(TimeGenerated, $__interval) | order by TimeGenerated asc`, 'short', 'yellow'),
-    statPanel(5, 'Allow All Sessions', 18, 2, `${permissionFrictionBaseWhere()} | summarize AllowAll=max(toint(allow_all)) by conversation, TimeGenerated=bin(TimeGenerated, $__interval) | summarize Sessions=sum(AllowAll) by TimeGenerated | order by TimeGenerated asc`, 'short', 'red'),
+    statPanel(2, 'Policy Blocks', 0, 2, `${permissionFrictionBaseWhere()} | summarize Blocks=countif(is_policy_block) by TimeGenerated=bin(TimeGenerated, $__interval) | order by TimeGenerated asc`, 'short', 'red', 'sum'),
+    statPanel(3, 'Tool Failures', 6, 2, `${permissionFrictionBaseWhere()} | where is_tool | summarize Failures=countif(Success == false or tostring(Success) =~ 'false' or isnotempty(error)) by bin(TimeGenerated, $__interval) | order by TimeGenerated asc`, 'short', 'red', 'sum'),
+    statPanel(4, 'Retry Hints', 12, 2, `${permissionFrictionBaseWhere()} | summarize Hints=countif(is_retry_hint) by TimeGenerated=bin(TimeGenerated, $__interval) | order by TimeGenerated asc`, 'short', 'yellow', 'sum'),
+    statPanel(5, 'Allow All Sessions', 18, 2, `${permissionFrictionBaseWhere()} | summarize AllowAll=max(toint(allow_all)) by conversation, TimeGenerated=bin(TimeGenerated, $__interval) | summarize Sessions=sum(AllowAll) by TimeGenerated | order by TimeGenerated asc`, 'short', 'red', 'sum'),
     tablePanel(10, 'Friction sessions', 0, 6, 24, 15, permissionFrictionSessionsQuery(200), [
       byNameLink('Session', 'Open session detail', '/d/agentops-session-detail?var-conversation=${__data.fields.Session}'),
       byNameUnit('FrictionScore', 'short', 0),

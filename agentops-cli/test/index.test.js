@@ -13,7 +13,6 @@ const {
   agentopsConfigure,
   agentopsSetupGuide,
   agentopsSmoke,
-  agentopsGallerySmoke,
   agentopsLiveReplaySmoke,
   agentopsStatusSummary,
   agentopsWorkflows,
@@ -58,7 +57,6 @@ const {
   liveViewFromArgs,
   openLinksSummary,
   otlpAttributionSmokeTracePayload,
-  otlpGallerySmokeTracePayload,
   otlpLiveReplaySmokeTracePayload,
   otlpCustomEventPayload,
   otelCompatibilityQuery,
@@ -122,6 +120,8 @@ test('scan finds plugin agents and skills', () => {
   assert.ok(result.agents.length >= 5);
   assert.ok(result.skills.length >= 4);
   assert.ok(result.mcp_servers.includes('azure-mcp'));
+  assert.equal(result.hooks.hooks.preToolUse[0].bash, 'node scripts/pre-tool-policy.js');
+  assert.equal(result.hooks.hooks.postToolUseFailure[0].bash, 'node scripts/post-tool-failure-hints.js');
 });
 
 test('default skills list exposes user-friendly AgentOps workflows', () => {
@@ -610,41 +610,6 @@ test('live replay smoke emits orchestrator delegation telemetry', async () => {
   assert.match(result.grafana_url, /agentops-live-replay-smoke-test/);
   assert.match(output, /AgentOps live replay smoke/);
   assert.match(output, /Grafana Live Replay/);
-});
-
-test('gallery smoke emits quiet-dashboard signal telemetry', async () => {
-  const payload = otlpGallerySmokeTracePayload('agentops-gallery-smoke-test', Date.parse('2026-05-26T12:00:00Z'));
-  const spans = payload.resourceSpans[0].scopeSpans[0].spans;
-  const attrValues = JSON.stringify(payload);
-
-  assert.equal(spans.length, 7);
-  assert.match(attrValues, /agentops\.content_capture\.signal/);
-  assert.match(attrValues, /AgentOps preToolUse policy blocked command/);
-  assert.match(attrValues, /Recovery hint/);
-  assert.match(attrValues, /agentops\.cli\.allow_all/);
-  assert.match(attrValues, /github\.copilot\.tokens_removed/);
-  assert.match(attrValues, /github\.copilot\.aiu/);
-  assert.match(attrValues, /PermissionDenied/);
-  assert.ok(spans.some(span => span.status.code === 2));
-
-  const result = await agentopsGallerySmoke({
-    dryRun: true,
-    id: 'agentops-gallery-smoke-test',
-    workspaceId: 'workspace-123',
-    last: '30m'
-  });
-  const output = renderSmoke(result);
-
-  assert.equal(result.ok, true);
-  assert.equal(result.smoke_kind, 'gallery');
-  assert.equal(result.payload_preview.content_capture_enabled, false);
-  assert.equal(result.payload_preview.content_capture_signal, true);
-  assert.match(result.grafana_urls.runtime_events, /agentops-runtime-events/);
-  assert.match(result.grafana_urls.safety_policy, /agentops-safety-policy/);
-  assert.match(result.grafana_urls.permission_friction, /agentops-permission-friction/);
-  assert.match(result.grafana_urls.alert_tuning, /agentops-alert-tuning/);
-  assert.match(output, /AgentOps gallery smoke/);
-  assert.match(output, /Grafana gallery pages/);
 });
 
 test('smoke live mode verifies synthetic telemetry in Azure', async () => {

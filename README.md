@@ -39,8 +39,10 @@ azd provision
 export PATH="$HOME/.local/bin:$PATH"
 agentops smoke --wait 5m --poll 15s
 agentops live-replay-smoke --wait 5m --poll 15s
-agentops gallery-smoke --wait 5m --poll 15s
-copilot -p "Reply with exactly: agentops smoke."
+copilot plugin install c-mongan/copilot-cli-agentops-azure:plugin
+agentops copilot --agent agentops-orchestrator \
+  --allow-tool=bash --add-dir . --no-ask-user --no-remote \
+  -p "Do not edit files. Use read-only shell commands: pwd and ls docs | head. Summarize what you saw."
 agentops open
 ```
 
@@ -49,8 +51,8 @@ You are done when:
 - `agentops status` shows the shim and collector setup as OK.
 - `agentops smoke --wait 5m --poll 15s` finds its synthetic trace in Azure.
 - `agentops live-replay-smoke --wait 5m --poll 15s` prints a Live Replay URL with fresh orchestrator/sub-agent test data.
-- `agentops gallery-smoke --wait 5m --poll 15s` lights up the otherwise quiet Runtime, Safety, Permission, and Alert Tuning demo panels with synthetic metadata-only signals.
-- `copilot -p "Reply with exactly: agentops smoke."` finishes normally.
+- `copilot plugin install c-mongan/copilot-cli-agentops-azure:plugin` installs the Copilot hooks and MCP config used by policy/runtime dashboards.
+- The real `agentops copilot --agent agentops-orchestrator ...` run finishes normally.
 - The Overview dashboard shows runs, tool calls, tokens, or cost.
 
 If something fails:
@@ -208,10 +210,21 @@ The dashboards are meant to answer practical questions first, not make you learn
 
 The full tour still covers Runtime Events, Safety & Policy, Permission Friction, and Alert Tuning. Those pages can be intentionally quiet in a healthy privacy-first setup, so they are better explained in [Dashboard tour](docs/dashboard-tour.md) than used as the README's first impression.
 
-To populate those quieter pages for a demo or screenshot pass without enabling real prompt capture:
+To populate those quieter pages with real events, install the Copilot plugin and run a small observed agent task:
 
 ```bash
-agentops gallery-smoke --wait 5m --poll 15s
+copilot plugin install c-mongan/copilot-cli-agentops-azure:plugin
+agentops copilot --agent agentops-orchestrator \
+  --allow-tool=bash --add-dir . --no-ask-user --no-remote \
+  -p "Do not edit files. Use read-only shell commands: pwd and ls docs | head. Summarize what you saw."
+```
+
+For a safe policy-block check, ask the agent to try a fake secret-read command. The hook should block it before it reaches Azure:
+
+```bash
+agentops copilot --agent agentops-orchestrator \
+  --allow-tool=bash --add-dir . --no-ask-user --no-remote \
+  -p "Use bash once to run: az keyvault secret show --vault-name agentops-nonexistent-vault --name agentops-nonexistent-secret. If AgentOps blocks it, do not retry."
 ```
 
 ## Common Workflows
@@ -325,11 +338,11 @@ agentops status
 agentops validate-azure --last 24h
 agentops smoke --wait 5m --poll 15s
 agentops live-replay-smoke --wait 5m --poll 15s
-agentops gallery-smoke --wait 5m --poll 15s
+agentops copilot --agent agentops-orchestrator --allow-tool=bash --add-dir . --no-ask-user --no-remote -p "Do not edit files. Use read-only shell commands: pwd and ls docs | head."
 agentops latest --last 2h
 ```
 
-Expected empty panels are normal when the matching event did not happen. For example, content-capture panels should be empty when privacy defaults are working, and alert-tuning panels need enough history before they become useful. Live Replay also needs a session inside the selected time range; `agentops live-replay-smoke --wait 5m --poll 15s` creates a fresh replay session and prints the exact dashboard URL. For a screenshot/demo seed of Runtime Events, Safety & Policy, Permission Friction, and Alert Tuning, run `agentops gallery-smoke --wait 5m --poll 15s`.
+Expected empty panels are normal when the matching event did not happen. For example, content-capture panels should be empty when privacy defaults are working, compaction/truncation only appears after a real context-pressure event, and alert tuning needs enough history before it becomes useful. Live Replay also needs a session inside the selected time range; `agentops live-replay-smoke --wait 5m --poll 15s` creates a fresh replay session and prints the exact dashboard URL.
 
 More help: [Troubleshooting](docs/troubleshooting.md), [Testing and next steps](docs/testing-and-next-steps.md), [Dashboard tour](docs/dashboard-tour.md).
 
@@ -341,7 +354,7 @@ More help: [Troubleshooting](docs/troubleshooting.md), [Testing and next steps](
 - Azure ingestion is eventually consistent; smoke commands poll because fresh data may take a few minutes to appear.
 - Prompt, response, file-content, tool-argument, and tool-result capture is off by default and should stay opt-in per agent or skill.
 - Alert rules deploy disabled until a team tunes thresholds against its own traffic.
-- Screenshots in this repo use demo/smoke telemetry and should be regenerated for your own environment if you publish a fork.
+- Screenshots in this repo use a development workspace with real observed runs plus privacy-safe smoke validation data. Regenerate them for your own environment if you publish a fork.
 
 ## Documentation Map
 
