@@ -85,6 +85,14 @@ Use this for Copilot runtime behavior. It answers: **did hooks, skills, truncati
 
 This page can be intentionally quiet in a healthy setup. Content-capture, truncation, compaction, and policy panels only light up when those events actually happen. Treat quiet panels here as a signal to check whether the event was expected, not as a setup failure.
 
+To populate this page with metadata-only demo signals:
+
+```bash
+agentops gallery-smoke --wait 5m --poll 15s
+```
+
+![AgentOps runtime events dashboard](screenshots/agentops-runtime-live.png)
+
 To generate lifecycle-style data for this page:
 
 ```bash
@@ -99,6 +107,10 @@ Quiet content-capture panels are good when content capture is intentionally disa
 
 For a first pass, use this page to confirm the absence of unsafe signals, then rely on [Secure by default](secure-by-default.md) and [Threat model](threat-model.md) for the policy posture.
 
+For a demo/screenshot pass, `agentops gallery-smoke --wait 5m --poll 15s` emits synthetic broad-permission, policy-block, remote-mode, and content-signal markers without recording actual prompt text or tool arguments.
+
+![AgentOps safety and policy dashboard](screenshots/agentops-safety-policy-live.png)
+
 ## Permission Friction
 
 Use this to tune developer experience. It answers: **where are permissions, denied tools, policy blocks, or repeated failures slowing people down?**
@@ -107,11 +119,13 @@ This helps decide whether a tool should be allowed, denied, documented, or repla
 
 This page is most useful after real users have hit approval prompts, denials, or policy blocks. On a fresh install, quiet panels usually mean there has not been much permission friction yet.
 
-To create test data for the supporting attribution/tool panels, start with:
+To create metadata-only test data for this page, start with:
 
 ```bash
-agentops attribution-smoke --wait 5m --poll 15s
+agentops gallery-smoke --wait 5m --poll 15s
 ```
+
+![AgentOps permission friction dashboard](screenshots/agentops-permission-friction-live.png)
 
 ## Alert Tuning
 
@@ -120,6 +134,10 @@ Use this before enabling real alerts. It answers: **what thresholds are reasonab
 The alert rules are disabled by default. This page is evidence for choosing thresholds, not an emergency console on day one.
 
 This page needs enough history before it becomes visually interesting. On a fresh install, it may have little to recommend. Run real traffic or smoke tests over time, then use the recommendations here before turning on scheduled-query alerts.
+
+For a quick visual check, `agentops gallery-smoke --wait 5m --poll 15s` emits one synthetic high-AIU/cost sample, failed tool, failed span, and content-signal marker so the recommendation and hourly panels have something to render.
+
+![AgentOps alert tuning dashboard](screenshots/agentops-alert-tuning-live.png)
 
 ## Quality
 
@@ -156,3 +174,9 @@ Some panels stay quiet until matching telemetry exists:
 - **Experiments** needs benchmark telemetry or experiment labels.
 - **Attribution** needs custom agent, skill, MCP, or script labels. Use `agentops attribution-smoke --wait 5m --poll 15s` to verify the wiring.
 - **Live Replay** needs at least one session inside the selected time range. Use `agentops live-replay-smoke --wait 5m --poll 15s` to generate a fresh orchestrator/sub-agent replay and open the printed URL.
+
+For demo screenshots of Runtime Events, Safety & Policy, Permission Friction, and Alert Tuning, run:
+
+```bash
+agentops gallery-smoke --wait 5m --poll 15s
+```

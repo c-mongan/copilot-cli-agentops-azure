@@ -51,7 +51,8 @@ AppDependencies
     disabled_mcp_server_names = tostring(Properties["agentops.mcp.disabled.servers"]),
     github_mcp_tool_names = tostring(Properties["agentops.mcp.github.tools"]),
     github_mcp_toolset_names = tostring(Properties["agentops.mcp.github.toolsets"]),
-    content_capture = isnotempty(tostring(Properties["gen_ai.input.messages"]))
+    content_capture = tostring(Properties["agentops.content_capture.signal"]) =~ "true"
+        or isnotempty(tostring(Properties["gen_ai.input.messages"]))
         or isnotempty(tostring(Properties["gen_ai.output.messages"]))
         or isnotempty(tostring(Properties["gen_ai.tool.call.arguments"]))
         or isnotempty(tostring(Properties["gen_ai.tool.call.result"])),
