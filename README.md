@@ -1,5 +1,7 @@
 # Copilot CLI AgentOps for Azure
 
+![Copilot CLI AgentOps for Azure](docs/images/agentops-for-azure-banner.png)
+
 > Independent personal OSS project. Not an official Microsoft, GitHub, OpenAI, Azure, or Grafana product.
 
 Privacy-first observability for GitHub Copilot CLI runs in Azure Monitor and Grafana. AgentOps records run/session metadata, tool names, failures, latency, token usage, and estimated cost without recording prompts, code, file contents, tool arguments, or tool results by default.
