@@ -37,8 +37,7 @@ az login
 azd provision
 ./setup-agentops.sh
 export PATH="$HOME/.local/bin:$PATH"
-agentops smoke --wait 5m --poll 15s
-agentops live-replay-smoke --wait 5m --poll 15s
+agentops validate-azure --last 24h
 copilot plugin install c-mongan/copilot-cli-agentops-azure:plugin
 agentops copilot --agent agentops-orchestrator \
   --allow-tool=bash --add-dir . --no-ask-user --no-remote \
@@ -49,8 +48,7 @@ agentops open
 You are done when:
 
 - `agentops status` shows the shim and collector setup as OK.
-- `agentops smoke --wait 5m --poll 15s` finds its synthetic trace in Azure.
-- `agentops live-replay-smoke --wait 5m --poll 15s` prints a Live Replay URL with fresh orchestrator/sub-agent test data.
+- `agentops validate-azure --last 24h` can query the deployed workspace and find imported dashboards.
 - `copilot plugin install c-mongan/copilot-cli-agentops-azure:plugin` installs the Copilot hooks and MCP config used by policy/runtime dashboards.
 - The real `agentops copilot --agent agentops-orchestrator ...` run finishes normally.
 - The Overview dashboard shows runs, tool calls, tokens, or cost.
@@ -261,14 +259,16 @@ For a Grafana view of the same idea, open **Live Replay**. It shows a selected s
 If Live Replay is empty, widen the time picker or run:
 
 ```bash
-agentops live-replay-smoke --wait 5m --poll 15s
+agentops custom emit --event agent.delegation.started --agent investigator --parent-agent agentops-orchestrator --delegation-id demo-delegation --workflow investigation --step delegate --outcome started
+agentops custom emit --event agent.delegation.completed --agent investigator --parent-agent agentops-orchestrator --delegation-id demo-delegation --workflow investigation --step delegate --outcome completed
 ```
 
 Verify agent, skill, MCP, and hook attribution:
 
 ```bash
-agentops plugin install
-agentops attribution-smoke --wait 5m --poll 15s
+copilot plugin install c-mongan/copilot-cli-agentops-azure:plugin
+agentops copilot --agent agentops-orchestrator --allow-tool=bash --add-dir . --no-ask-user --no-remote -p "Do not edit files. Use read-only shell commands: pwd and ls docs | head."
+agentops custom emit --event agent.delegation.started --agent investigator --parent-agent agentops-orchestrator --delegation-id attribution-check --workflow investigation --step delegate --outcome started
 agentops attribution --last 2h
 agentops mcp --last 2h
 agentops lineage --last 2h
@@ -312,7 +312,7 @@ az login
 ./setup-agentops.ps1
 $env:PATH = "$HOME/.local/bin;$env:PATH"
 agentops status
-agentops smoke --wait 2m --poll 10s
+agentops validate-azure --last 24h
 ```
 
 ## Native OTel And Other Clients
@@ -336,13 +336,11 @@ If dashboards are empty:
 ```bash
 agentops status
 agentops validate-azure --last 24h
-agentops smoke --wait 5m --poll 15s
-agentops live-replay-smoke --wait 5m --poll 15s
 agentops copilot --agent agentops-orchestrator --allow-tool=bash --add-dir . --no-ask-user --no-remote -p "Do not edit files. Use read-only shell commands: pwd and ls docs | head."
 agentops latest --last 2h
 ```
 
-Expected empty panels are normal when the matching event did not happen. For example, content-capture panels should be empty when privacy defaults are working, compaction/truncation only appears after a real context-pressure event, and alert tuning needs enough history before it becomes useful. Live Replay also needs a session inside the selected time range; `agentops live-replay-smoke --wait 5m --poll 15s` creates a fresh replay session and prints the exact dashboard URL.
+Expected empty panels are normal when the matching event did not happen. For example, content-capture panels should be empty when privacy defaults are working, compaction/truncation only appears after a real context-pressure event, and alert tuning needs enough history before it becomes useful. Collector smoke commands still exist for low-level ingestion debugging, but the README path uses real observed Copilot/custom telemetry for dashboard population.
 
 More help: [Troubleshooting](docs/troubleshooting.md), [Testing and next steps](docs/testing-and-next-steps.md), [Dashboard tour](docs/dashboard-tour.md).
 
@@ -351,10 +349,10 @@ More help: [Troubleshooting](docs/troubleshooting.md), [Testing and next steps](
 - This is a preview OSS project, not a hosted service or official product.
 - The managed path assumes Azure Monitor, Log Analytics, Application Insights, and Azure Managed Grafana.
 - Dashboard panels can be empty until matching events exist inside the selected time range.
-- Azure ingestion is eventually consistent; smoke commands poll because fresh data may take a few minutes to appear.
+- Azure ingestion is eventually consistent; fresh data may take a few minutes to appear.
 - Prompt, response, file-content, tool-argument, and tool-result capture is off by default and should stay opt-in per agent or skill.
 - Alert rules deploy disabled until a team tunes thresholds against its own traffic.
-- Screenshots in this repo use a development workspace with real observed runs plus privacy-safe smoke validation data. Regenerate them for your own environment if you publish a fork.
+- Screenshots in this repo use a development workspace with real observed runs. Regenerate them for your own environment if you publish a fork.
 
 ## Documentation Map
 

@@ -182,8 +182,8 @@ The collector marks content-capture attempts with `agentops.content_capture.sign
 Scoped content capture is opt-in for local debugging. The Copilot wrapper keeps capture off by default, but can enable Copilot-side capture for a narrow allowlist:
 
 ```bash
-AGENTOPS_CAPTURE_CONTENT_AGENTS=agentops-review-pattern-smoke copilot --agent agentops-review-pattern-smoke -p "synthetic debug prompt"
-AGENTOPS_CAPTURE_CONTENT_SKILLS=agentops-custom-telemetry AGENTOPS_ACTIVE_SKILLS=agentops-custom-telemetry copilot -p "synthetic debug prompt"
+AGENTOPS_CAPTURE_CONTENT_AGENTS=agentops-orchestrator copilot --agent agentops-orchestrator -p "local debug prompt"
+AGENTOPS_CAPTURE_CONTENT_SKILLS=agentops-custom-telemetry AGENTOPS_ACTIVE_SKILLS=agentops-custom-telemetry copilot -p "local debug prompt"
 ```
 
 Use `AGENTOPS_CAPTURE_CONTENT=true` only for an explicitly approved local debugging run. The default Azure collector still scrubs raw content and exports the signal marker so Safety & Policy panels can alert without storing prompt or tool payload text.

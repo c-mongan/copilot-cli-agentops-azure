@@ -669,15 +669,17 @@ test('custom emit dry run creates privacy-safe agent lifecycle telemetry', async
     dryRun: true,
     id: 'agentops-custom-test',
     event: 'agent.step.started',
-    agent: 'agentops-ci-pattern-smoke',
+    agent: 'ci-investigator',
+    parentAgent: 'agentops-orchestrator',
+    delegationId: 'delegation-123',
     workflow: 'investigation',
     step: 'collect-evidence',
     outcome: 'started',
     risk: 'low',
     score: 0.98,
     entityType: 'pull-request',
-    entityIdHash: 'synthetic-pr-001',
-    tags: ['smoke', 'ci-pattern'],
+    entityIdHash: 'hashed-pr-001',
+    tags: ['real-run', 'ci-pattern'],
     custom: { 'agentops.custom.signal': 'build-log' },
     workspaceId: 'workspace-123'
   });
@@ -687,9 +689,11 @@ test('custom emit dry run creates privacy-safe agent lifecycle telemetry', async
   assert.equal(result.custom_event_id, 'agentops-custom-test');
   assert.equal(result.payload_preview.content_capture_enabled, false);
   assert.equal(result.events[0].event, 'agent.step.started');
-  assert.equal(result.events[0].agent, 'agentops-ci-pattern-smoke');
+  assert.equal(result.events[0].agent, 'ci-investigator');
+  assert.equal(result.events[0].parentAgent, 'agentops-orchestrator');
+  assert.equal(result.events[0].delegationId, 'delegation-123');
   assert.equal(result.events[0].entityType, 'pull-request');
-  assert.equal(result.events[0].entityIdHash, 'synthetic-pr-001');
+  assert.equal(result.events[0].entityIdHash, 'hashed-pr-001');
   assert.equal(result.events[0].custom['agentops.custom.signal'], 'build-log');
   assert.match(result.azure_query, /agentops-custom-test/);
   assert.match(output, /AgentOps custom telemetry/);
@@ -698,13 +702,15 @@ test('custom emit dry run creates privacy-safe agent lifecycle telemetry', async
 test('custom OTLP payload maps generic fields to dashboard attributes', () => {
   const { payload, normalized } = otlpCustomEventPayload([{
     event: 'agent.eval.scored',
-    agent: 'agentops-eval-gate-smoke',
+    agent: 'eval-gate',
+    parentAgent: 'agentops-orchestrator',
+    delegationId: 'delegation-eval',
     workflow: 'release-gate',
     step: 'score',
     session: 'session-123',
     outcome: 'passed',
     score: 0.91,
-    custom: { 'agentops.custom.eval_name': 'smoke' }
+    custom: { 'agentops.custom.eval_name': 'release' }
   }], {
     id: 'agentops-custom-payload',
     nowMs: Date.parse('2026-05-26T12:00:00Z')
@@ -715,7 +721,9 @@ test('custom OTLP payload maps generic fields to dashboard attributes', () => {
   assert.equal(normalized[0].event, 'agent.eval.scored');
   assert.equal(attrs['agentops.event.name'], 'agent.eval.scored');
   assert.equal(attrs['gen_ai.operation.name'], 'agent.eval.scored');
-  assert.equal(attrs['agentops.agent.name'], 'agentops-eval-gate-smoke');
+  assert.equal(attrs['agentops.agent.name'], 'eval-gate');
+  assert.equal(attrs['agentops.parent_agent.name'], 'agentops-orchestrator');
+  assert.equal(attrs['agentops.delegation.id'], 'delegation-eval');
   assert.equal(attrs['agentops.workflow.name'], 'release-gate');
   assert.equal(attrs['agentops.score'], 0.91);
   assert.equal(attrs['content.capture.enabled'], false);
@@ -745,12 +753,14 @@ test('custom import maps JSONL agent rows without CI-specific coupling', async (
   }
 });
 
-test('custom args parse repeated tags and custom dimensions', () => {
-  const args = parseCustomArgs(['emit', '--event', 'agent.step.started', '--agent', 'portable-agent', '--tag', 'smoke', '--tag', 'ci-pattern', '--custom', 'queue=main', '--score', '0.7']);
+test('custom args parse repeated tags and delegation dimensions', () => {
+  const args = parseCustomArgs(['emit', '--event', 'agent.step.started', '--agent', 'portable-agent', '--parent-agent', 'orchestrator', '--delegation-id', 'delegation-1', '--tag', 'real-run', '--tag', 'ci-pattern', '--custom', 'queue=main', '--score', '0.7']);
 
   assert.equal(args.subcommand, 'emit');
   assert.equal(args.event, 'agent.step.started');
-  assert.deepEqual(args.tags, ['smoke', 'ci-pattern']);
+  assert.equal(args.parentAgent, 'orchestrator');
+  assert.equal(args.delegationId, 'delegation-1');
+  assert.deepEqual(args.tags, ['real-run', 'ci-pattern']);
   assert.equal(args.custom['agentops.custom.queue'], 'main');
   assert.equal(args.score, 0.7);
 });

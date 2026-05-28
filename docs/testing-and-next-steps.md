@@ -304,19 +304,21 @@ Before running that command, replace `<grafana-endpoint>` in the sample with you
 
 Prompt templates for session investigation, tool failures, benchmark variant comparison, agent improvement, hook policy tuning, and MCP/tool regression checks are in `docs/copilot-mcp-agentops-prompts.md`.
 
-## Agent Skill MCP Script Attribution Smoke Test
+## Real Agent, Skill, MCP, And Script Attribution Check
 
-After the normal collector smoke passes, run the attribution smoke to verify the full AgentOps filter surface:
+After the collector and Azure checks pass, prefer a real observed Copilot run plus real custom lifecycle metadata:
 
 ```bash
-agentops plugin install
-agentops attribution-smoke --wait 5m --poll 15s
+copilot plugin install c-mongan/copilot-cli-agentops-azure:plugin
+agentops copilot --agent agentops-orchestrator --allow-tool=bash --add-dir . --no-ask-user --no-remote \
+  -p "Do not edit files. Use read-only shell commands: pwd and ls docs | head. Summarize what you saw."
+agentops custom emit --event agent.delegation.started --agent investigator --parent-agent agentops-orchestrator --delegation-id e2e-delegation --workflow investigation --step delegate --outcome started
 agentops attribution --last 2h
 agentops mcp --last 2h
 agentops lineage --last 2h
 ```
 
-This sends a metadata-only synthetic trace for `agentops-kitchen-sink-smoke`. It should light up custom agent, skill, Azure MCP, and script/hook fields without recording prompt text, tool arguments, code contents, or secrets.
+The older `agentops attribution-smoke` command remains useful as a low-level collector/filter diagnostic, but do not use it as screenshot or product-demo data when real Copilot/custom telemetry is available.
 
 ## Real Copilot CLI E2E Dashboard Check
 

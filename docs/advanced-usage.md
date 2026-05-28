@@ -71,6 +71,13 @@ agentops custom emit --event agent.eval.scored --agent my-agent --workflow eval-
 agentops custom emit --event agent.run.completed --agent my-agent --workflow investigation --step finish --outcome passed
 ```
 
+For orchestrators or scripts that delegate work, add parent/delegation metadata. Live Replay uses those fields to split the run into lanes:
+
+```bash
+agentops custom emit --event agent.delegation.started --agent investigator --parent-agent agentops-orchestrator --delegation-id investigate-001 --workflow investigation --step delegate --outcome started
+agentops custom emit --event agent.delegation.completed --agent investigator --parent-agent agentops-orchestrator --delegation-id investigate-001 --workflow investigation --step delegate --outcome completed
+```
+
 For JSONL-producing agents:
 
 ```bash
@@ -237,8 +244,9 @@ codex mcp list
 To verify custom agent, skill, MCP, and script attribution:
 
 ```bash
-agentops plugin install
-agentops attribution-smoke --wait 5m --poll 15s
+copilot plugin install c-mongan/copilot-cli-agentops-azure:plugin
+agentops copilot --agent agentops-orchestrator --allow-tool=bash --add-dir . --no-ask-user --no-remote -p "Do not edit files. Use read-only shell commands: pwd and ls docs | head."
+agentops custom emit --event agent.delegation.started --agent investigator --parent-agent agentops-orchestrator --delegation-id attribution-check --workflow investigation --step delegate --outcome started
 agentops attribution --last 2h
 agentops mcp --last 2h
 agentops lineage --last 2h

@@ -33,7 +33,7 @@ function usage() {
     'scan [--json]',
     'primitives [--last <duration>] [--root <path>]',
     'import-jsonl <file>',
-    'custom emit --event <name> --agent <name> [--workflow <name>] [--step <name>] [--outcome <value>] [--risk <value>] [--score <number>] [--tag <tag>] [--custom key=value] [--dry-run] [--json]',
+    'custom emit --event <name> --agent <name> [--parent-agent <name>] [--delegation-id <id>] [--workflow <name>] [--step <name>] [--outcome <value>] [--risk <value>] [--score <number>] [--tag <tag>] [--custom key=value] [--dry-run] [--json]',
     'custom import <file> [--agent <name>] [--workflow <name>] [--dry-run] [--json]',
     'configure show|set|import-azd [--json]',
     'install [--shadow-copilot]',
@@ -3133,6 +3133,8 @@ function parseCustomArgs(args) {
     file: subcommand === 'import' ? rest[0] : null,
     event: optionValue(rest, ['--event', '--name']),
     agent: optionValue(rest, ['--agent']),
+    parentAgent: optionValue(rest, ['--parent-agent']),
+    delegationId: optionValue(rest, ['--delegation-id']),
     workflow: optionValue(rest, ['--workflow']),
     step: optionValue(rest, ['--step']),
     outcome: optionValue(rest, ['--outcome']),
@@ -3168,6 +3170,8 @@ function normalizeCustomEvent(row = {}, defaults = {}, index = 0) {
   };
   const event = row.event || row.event_name || row.name || attrs['agentops.event.name'] || attrs['event.name'] || defaults.event || 'agent.event';
   const agent = row.agent || row.agent_name || attrs['agentops.agent.name'] || attrs['gen_ai.agent.name'] || defaults.agent || 'custom-agent';
+  const parentAgent = row.parentAgent || row.parent_agent || attrs['agentops.parent_agent.name'] || defaults.parentAgent || null;
+  const delegationId = row.delegationId || row.delegation_id || attrs['agentops.delegation.id'] || defaults.delegationId || null;
   const workflow = row.workflow || row.workflow_name || attrs['agentops.workflow.name'] || defaults.workflow || null;
   const step = row.step || row.step_name || attrs['agentops.step.name'] || null;
   const session = row.session || row.session_id || row.conversation_id || attrs['gen_ai.conversation.id'] || defaults.session || null;
@@ -3175,6 +3179,8 @@ function normalizeCustomEvent(row = {}, defaults = {}, index = 0) {
   return {
     event,
     agent,
+    parentAgent,
+    delegationId,
     workflow,
     step,
     session,
@@ -3208,6 +3214,8 @@ function customEventAttributes(event, defaults = {}) {
     ...event.custom
   };
   if (event.workflow) attrs['agentops.workflow.name'] = event.workflow;
+  if (event.parentAgent) attrs['agentops.parent_agent.name'] = event.parentAgent;
+  if (event.delegationId) attrs['agentops.delegation.id'] = event.delegationId;
   if (event.step) attrs['agentops.step.name'] = event.step;
   if (event.outcome) attrs['agentops.outcome'] = event.outcome;
   if (event.risk) attrs['agentops.risk'] = event.risk;
@@ -3277,6 +3285,8 @@ async function agentopsCustomEmit(options = {}) {
   const event = {
     event: options.event,
     agent: options.agent,
+    parentAgent: options.parentAgent,
+    delegationId: options.delegationId,
     workflow: options.workflow,
     step: options.step,
     session: options.session,

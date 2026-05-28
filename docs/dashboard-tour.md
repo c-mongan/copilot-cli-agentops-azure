@@ -177,8 +177,8 @@ Some panels stay quiet until matching telemetry exists:
 - **Permission Friction** needs permission, denial, retry, policy, or failure events.
 - **Alert Tuning** is evidence-first; alert rules are disabled by default until you have enough clean history.
 - **Experiments** needs benchmark telemetry or experiment labels.
-- **Attribution** needs custom agent, skill, MCP, or script labels. Use `agentops attribution-smoke --wait 5m --poll 15s` to verify the wiring.
-- **Live Replay** needs at least one session inside the selected time range. Use `agentops live-replay-smoke --wait 5m --poll 15s` to generate a fresh orchestrator/sub-agent replay and open the printed URL.
+- **Attribution** needs custom agent, skill, MCP, or script labels. Run a real observed Copilot task and optional `agentops custom emit` lifecycle events to verify the wiring.
+- **Live Replay** needs at least one session inside the selected time range. Single-agent runs are valid; add `--parent-agent` and `--delegation-id` on custom lifecycle events when an orchestrator delegates work.
 
 For real Runtime Events, Safety & Policy, Permission Friction, and Alert Tuning evidence, run:
 
@@ -186,4 +186,5 @@ For real Runtime Events, Safety & Policy, Permission Friction, and Alert Tuning 
 copilot plugin install c-mongan/copilot-cli-agentops-azure:plugin
 agentops copilot --agent agentops-orchestrator --allow-tool=bash --add-dir . --no-ask-user --no-remote -p "Do not edit files. Use read-only shell commands: pwd and ls docs | head."
 agentops copilot --agent agentops-orchestrator --allow-tool=bash --add-dir . --no-ask-user --no-remote -p "Use bash once to run: az keyvault secret show --vault-name agentops-nonexistent-vault --name agentops-nonexistent-secret. If AgentOps blocks it, do not retry."
+agentops custom emit --event agent.delegation.started --agent investigator --parent-agent agentops-orchestrator --delegation-id tour-delegation --workflow investigation --step delegate --outcome started
 ```

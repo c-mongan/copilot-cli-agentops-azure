@@ -66,11 +66,9 @@ Dashboard verification path:
 
 ```bash
 node src/index.js validate-azure --last 2h
-node src/index.js smoke --wait 5m --poll 15s
-node src/index.js attribution-smoke --wait 5m --poll 15s
-node src/index.js live-replay-smoke --wait 5m --poll 15s
 copilot plugin install c-mongan/copilot-cli-agentops-azure:plugin
 node src/index.js copilot --agent agentops-orchestrator --allow-tool=bash --add-dir . --no-ask-user --no-remote -p "Do not edit files. Use read-only shell commands: pwd and ls docs | head."
+node src/index.js custom emit --event agent.delegation.started --agent investigator --parent-agent agentops-orchestrator --delegation-id real-delegation --workflow investigation --step delegate --outcome started
 node src/index.js open
 ```
 
@@ -86,9 +84,9 @@ Open **Overview** first, then **Sessions**, **Traces / Spans**, and **Tools & MC
 
 `smoke` sends or dry-runs a privacy-safe OTLP trace through the local collector. In live mode it polls Log Analytics for the smoke id by default; use `--no-verify` only when you want a collector-only check.
 
-`attribution-smoke` sends a privacy-safe synthetic trace that exercises custom agent, skill, Azure MCP, and script/hook attribution fields. Use it after `smoke` when you want to verify attribution dashboards and filters without relying on a live agent to call every primitive.
+`attribution-smoke` sends a privacy-safe synthetic trace that exercises custom agent, skill, Azure MCP, and script/hook attribution fields. Keep it as a collector/filter wiring diagnostic; do not use it for README screenshots or product demos when real traffic is available.
 
-`live-replay-smoke` sends a privacy-safe synthetic orchestrator trace with a delegated sub-agent, skill, Azure MCP tool call, and hook/script event. It polls Log Analytics and prints the Live Replay URL so users can prove the run tree and timeline dashboards are wired.
+`live-replay-smoke` sends a privacy-safe synthetic orchestrator trace with a delegated sub-agent, skill, Azure MCP tool call, and hook/script event. Keep it as a diagnostic. For normal dashboard population, emit real lifecycle metadata with `custom emit --parent-agent ... --delegation-id ...` from the orchestrator, sub-agent, hook, SDK app, or script doing the work.
 
 For Runtime Events, Safety & Policy, Permission Friction, and Alert Tuning, prefer real signals: install the Copilot plugin, run an observed agent task, and trigger a safe policy-block check with a fake Key Vault secret-read command. Compaction and truncation panels stay quiet until a real run actually hits context pressure.
 
