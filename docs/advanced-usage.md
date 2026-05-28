@@ -2,6 +2,8 @@
 
 This page holds the deeper workflows that are useful after the basic quickstart works.
 
+Most commands on this page are intentionally outside the quick path. Run them through `agentops experimental ...` unless the README lists them as core.
+
 ## Native Copilot OTel Without The Wrapper
 
 You can use the observability stack without installing the `agentops` command or the `copilot-agentops` shim. AgentOps is an OTLP receiver plus Azure/Grafana/KQL content on top. If your Copilot surface emits OpenTelemetry to the local collector, the stack can observe it.
@@ -46,16 +48,16 @@ const client = new CopilotClient({
 Print setup snippets:
 
 ```bash
-agentops otel-setup
-agentops otel-setup --shell powershell
-agentops otel-setup --endpoint "http://localhost:4318" --service-name copilot-chat
+agentops experimental otel-setup
+agentops experimental otel-setup --shell powershell
+agentops experimental otel-setup --endpoint "http://localhost:4318" --service-name copilot-chat
 ```
 
 Then start the collector and check compatibility:
 
 ```bash
 agentops collector start
-agentops compat-check --last 2h
+agentops experimental compat-check --last 2h
 ```
 
 ## Custom Agent Telemetry
@@ -65,16 +67,32 @@ Default Copilot telemetry covers the broad runtime. Custom telemetry is for agen
 Use the same contract from Copilot CLI, VS Code extensions, Copilot SDK apps, hooks, MCP servers, or plain scripts:
 
 ```bash
-agentops custom emit --event agent.run.started --agent my-agent --workflow investigation --step start --outcome started
-agentops custom emit --event agent.evidence.found --agent my-agent --workflow investigation --step collect --outcome found --risk low --custom evidence_type=build-signal
-agentops custom emit --event agent.eval.scored --agent my-agent --workflow eval-gate --step candidate --score 0.91 --outcome measured
-agentops custom emit --event agent.run.completed --agent my-agent --workflow investigation --step finish --outcome passed
+agentops experimental custom emit --event agent.run.started --agent my-agent --workflow investigation --step start --outcome started
+agentops experimental custom emit --event agent.evidence.found --agent my-agent --workflow investigation --step collect --outcome found --risk low --custom evidence_type=build-signal
+agentops experimental custom emit --event agent.eval.scored --agent my-agent --workflow eval-gate --step candidate --score 0.91 --outcome measured
+agentops experimental custom emit --event agent.run.completed --agent my-agent --workflow investigation --step finish --outcome passed
 ```
+
+For orchestrators or scripts that delegate work, add parent/delegation metadata. Live Replay uses those fields to split the run into lanes:
+
+```bash
+agentops experimental custom emit --event agent.delegation.started --agent investigator --parent-agent agentops-orchestrator --delegation-id investigate-001 --workflow investigation --step delegate --outcome started
+agentops experimental custom emit --event agent.delegation.completed --agent investigator --parent-agent agentops-orchestrator --delegation-id investigate-001 --workflow investigation --step delegate --outcome completed
+```
+
+For trusted agents or scripts that need to light up first-class safety panels, use explicit telemetry attributes:
+
+```bash
+agentops experimental custom emit --event agent.policy.blocked --agent policy-reviewer --workflow safety-review --step pre-tool --outcome blocked --risk policy --attribute github.copilot.policy.decision=blocked
+agentops experimental custom emit --event agent.content.signal --agent debug-agent --workflow local-debug --step capture-check --outcome observed --risk content --attribute agentops.content_capture.signal=true
+```
+
+Keep raw prompt, response, tool argument, and file content out of these attributes unless you are doing a trusted local debugging session.
 
 For JSONL-producing agents:
 
 ```bash
-agentops custom import ./agent-events.jsonl --agent my-agent --workflow investigation
+agentops experimental custom import ./agent-events.jsonl --agent my-agent --workflow investigation
 ```
 
 Minimal JSONL row:
@@ -114,13 +132,23 @@ Docs used for this support matrix:
 
 ## Shadow Install And Plugin Files
 
-The setup script is the shortest local wrapper. The product-style CLI installer is:
+The setup script is the shortest local wrapper. It installs the tested Collector binary, installs shims, and makes plain `copilot` observed when `~/.local/bin` is first on `PATH`:
 
 ```bash
-agentops install --shadow-copilot
+./setup-agentops.sh
 ```
 
-The installer adds `agentops`, `copilot-agentops`, and optional plain-`copilot` shadowing. Plain `copilot` is observed when installed with shadowing and `~/.local/bin` is first on `PATH`.
+The product-style CLI installer is:
+
+```bash
+agentops install
+```
+
+The installer adds `agentops`, `copilot-agentops`, the tested local Collector binary, and the plain-`copilot` shim by default. Skip the plain shim with:
+
+```bash
+agentops install --no-shadow-copilot
+```
 
 If you deployed with `azd` and the environment contains the expected outputs, use:
 
@@ -132,8 +160,8 @@ To install or refresh only the Copilot plugin files:
 
 ```bash
 agentops plugin install
-agentops agents install
-agentops skills install
+agentops experimental agents install
+agentops experimental skills install
 ```
 
 To remove only the AgentOps Copilot agents and skills while keeping the CLI/shim installed:
@@ -145,7 +173,7 @@ agentops plugin uninstall
 To stop routing plain `copilot` through AgentOps while keeping the explicit `copilot-agentops` command:
 
 ```bash
-agentops disable-shadow
+agentops experimental disable-shadow
 ```
 
 To stop the local Azure Monitor collector:
@@ -161,9 +189,15 @@ agentops plugin uninstall
 agentops uninstall
 ```
 
+To remove everything installed by the one-shot path, including the local Collector binary:
+
+```bash
+./uninstall-agentops.sh --purge
+```
+
 ## Useful Agent Prompts
 
-After `agentops init` or `agentops plugin install`, you can ask Copilot:
+After `agentops experimental init` or `agentops plugin install`, you can ask Copilot:
 
 ```text
 Use agentops-orchestrator to figure out which AgentOps workflow I need and run the first read-only check.
@@ -237,8 +271,9 @@ codex mcp list
 To verify custom agent, skill, MCP, and script attribution:
 
 ```bash
-agentops plugin install
-agentops attribution-smoke --wait 5m --poll 15s
+copilot plugin install c-mongan/copilot-cli-agentops-azure:plugin
+agentops copilot --agent agentops-orchestrator --allow-tool=bash --add-dir . --no-ask-user --no-remote -p "Do not edit files. Use read-only shell commands: pwd and ls docs | head."
+agentops custom emit --event agent.delegation.started --agent investigator --parent-agent agentops-orchestrator --delegation-id attribution-check --workflow investigation --step delegate --outcome started
 agentops attribution --last 2h
 agentops mcp --last 2h
 agentops lineage --last 2h
@@ -248,26 +283,26 @@ agentops lineage --last 2h
 
 ```bash
 agentops status
-agentops init --dry-run
+agentops experimental init --dry-run
 agentops validate-azure
-agentops smoke --dry-run
-agentops smoke --wait 2m --poll 10s
-agentops attribution-smoke --wait 5m --poll 15s
+agentops experimental smoke --dry-run
+agentops experimental smoke --wait 2m --poll 10s
+agentops experimental attribution-smoke --wait 5m --poll 15s
 agentops open
-agentops link session <conversation>
-agentops link trace <operationId>
-agentops ask-context latest --last 24h
-agentops fields --last 7d
-agentops context --last 7d
-agentops token-rollup-audit --last 14d
-agentops collector-health --last 24h
-agentops attribution --last 7d
-agentops primitives --last 7d
-agentops policy --last 7d
-agentops mcp --last 7d
-agentops lineage --last 24h
-agentops permission-friction --last 7d
-agentops alert recommend --last 14d
+agentops experimental link session <conversation>
+agentops experimental link trace <operationId>
+agentops experimental ask-context latest --last 24h
+agentops experimental fields --last 7d
+agentops experimental context --last 7d
+agentops experimental token-rollup-audit --last 14d
+agentops experimental collector-health --last 24h
+agentops experimental attribution --last 7d
+agentops experimental primitives --last 7d
+agentops experimental policy --last 7d
+agentops experimental mcp --last 7d
+agentops experimental lineage --last 24h
+agentops experimental permission-friction --last 7d
+agentops experimental alert recommend --last 14d
 agentops saved-view add latest-risk --session <conversation-id> --tag risk
 agentops saved-view list
 ```

@@ -1,4 +1,5 @@
 const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -6,6 +7,11 @@ const path = require('node:path');
 const test = require('node:test');
 
 process.env.AGENTOPS_CONFIG_PATH = path.join(os.tmpdir(), `agentops-test-config-${process.pid}.json`);
+const collectorManager = require('../src/lib/collector-manager');
+const copilotResolver = require('../src/lib/copilot-resolver');
+const privacy = require('../src/lib/privacy');
+const { removeAgentOpsCopilotFlags } = require('../src/commands/copilot');
+const { checkReportHtml, renderReportHtml } = require('../src/commands/e2e');
 
 const {
   agentopsAttributionSmoke,
@@ -13,7 +19,6 @@ const {
   agentopsConfigure,
   agentopsSetupGuide,
   agentopsSmoke,
-  agentopsGallerySmoke,
   agentopsLiveReplaySmoke,
   agentopsStatusSummary,
   agentopsWorkflows,
@@ -58,7 +63,6 @@ const {
   liveViewFromArgs,
   openLinksSummary,
   otlpAttributionSmokeTracePayload,
-  otlpGallerySmokeTracePayload,
   otlpLiveReplaySmokeTracePayload,
   otlpCustomEventPayload,
   otelCompatibilityQuery,
@@ -117,11 +121,128 @@ const {
 const root = path.resolve(__dirname, '..', '..');
 const benchmarkSummariesDir = path.join(__dirname, 'fixtures', 'benchmark-runs');
 
+test('CLI help exposes small core surface and hides experimental commands', () => {
+  const result = spawnSync(process.execPath, [path.join(root, 'agentops-cli', 'src', 'index.js'), '--help'], {
+    cwd: root,
+    encoding: 'utf8'
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /collector start\|stop\|status\|validate\|smoke\|install-binary\|uninstall-binary/);
+  assert.match(result.stdout, /uninstall \[--keep-plugin\]/);
+  assert.match(result.stdout, /agentops experimental <old-command>/);
+  assert.doesNotMatch(result.stdout, /benchmark list/);
+  assert.doesNotMatch(result.stdout, /saved-view add/);
+});
+
+test('collector manager plans strict configs and absolute Docker compose paths', () => {
+  const args = collectorManager.dockerComposeArgs(['config']);
+  assert.ok(path.isAbsolute(args[args.indexOf('-f') + 1]));
+  assert.ok(args.includes('--project-name'));
+  assert.ok(args.includes('agentops-azuremonitor'));
+  assert.match(collectorManager.configPathFor('docker', 'strict'), /otelcol\.azuremonitor\.strict\.yaml$/);
+  assert.match(collectorManager.configPathFor('binary', 'strict'), /otelcol\.binary\.strict\.yaml$/);
+  assert.equal(collectorManager.composeHasLocalhostBindings(), true);
+});
+
+test('collector binary resolution respects AGENTOPS_OTELCOL_BIN', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-otelcol-'));
+  const fake = path.join(tempDir, 'otelcol-contrib');
+  try {
+    fs.writeFileSync(fake, '#!/usr/bin/env bash\nexit 0\n');
+    fs.chmodSync(fake, 0o755);
+    const resolved = collectorManager.findCollectorBinary({ AGENTOPS_OTELCOL_BIN: fake });
+    assert.equal(resolved.ok, true);
+    assert.equal(resolved.path, fake);
+    assert.equal(resolved.source, 'AGENTOPS_OTELCOL_BIN');
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('collector binary installer maps release packages without Docker', () => {
+  const mac = collectorManager.collectorPackageInfo({ version: '0.151.0', platform: 'darwin', arch: 'arm64' });
+  assert.equal(mac.fileName, 'otelcol-contrib_0.151.0_darwin_arm64.tar.gz');
+  assert.equal(mac.binaryName, 'otelcol-contrib');
+  assert.match(mac.url, /opentelemetry-collector-releases\/releases\/download\/v0\.151\.0/);
+  assert.match(mac.checksumUrl, /opentelemetry-collector-releases_otelcol-contrib_checksums\.txt$/);
+
+  const win = collectorManager.collectorPackageInfo({ version: 'v0.151.0', platform: 'win32', arch: 'x64' });
+  assert.equal(win.fileName, 'otelcol-contrib_0.151.0_windows_amd64.tar.gz');
+  assert.equal(win.binaryName, 'otelcol-contrib.exe');
+  assert.match(win.checksumUrl, /opentelemetry-collector-releases_otelcol-contrib_windows_checksums\.txt$/);
+});
+
+test('collector binary checksum verification rejects tampered archives', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-checksum-test-'));
+  try {
+    const archive = path.join(tempDir, 'otelcol-contrib_0.151.0_linux_amd64.tar.gz');
+    fs.writeFileSync(archive, 'expected archive');
+    const goodHash = crypto.createHash('sha256').update('expected archive').digest('hex');
+    const checksums = [
+      `${goodHash}  otelcol-contrib_0.151.0_linux_amd64.tar.gz`,
+      '0'.repeat(64) + '  otelcol-contrib_0.151.0_linux_arm64.tar.gz'
+    ].join('\n');
+
+    assert.equal(
+      collectorManager.parseChecksumFile(checksums, 'otelcol-contrib_0.151.0_linux_amd64.tar.gz'),
+      goodHash
+    );
+    assert.equal(collectorManager.verifyChecksum({
+      archive,
+      checksumsText: checksums,
+      fileName: 'otelcol-contrib_0.151.0_linux_amd64.tar.gz'
+    }).ok, true);
+
+    fs.writeFileSync(archive, 'tampered archive');
+    const tampered = collectorManager.verifyChecksum({
+      archive,
+      checksumsText: checksums,
+      fileName: 'otelcol-contrib_0.151.0_linux_amd64.tar.gz'
+    });
+    assert.equal(tampered.ok, false);
+    assert.match(tampered.error, /SHA256 mismatch/);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('strict privacy poison check drops unknown content fields and keeps safe metadata', () => {
+  const result = privacy.poisonCheck();
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.leaked, []);
+  assert.equal(result.sanitized['agentops.content_capture.signal'], true);
+  assert.equal(result.sanitized['unknown.future.content.field'], undefined);
+});
+
+test('copilot resolver rejects AgentOps shim candidates', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-shim-resolver-'));
+  const shim = path.join(tempDir, 'copilot');
+  try {
+    fs.writeFileSync(shim, '#!/usr/bin/env bash\nexec /tmp/copilot-agentops "$@"\n# AGENTOPS_\n');
+    fs.chmodSync(shim, 0o755);
+    const result = copilotResolver.validateCandidate(shim, {});
+    assert.equal(result.ok, false);
+    assert.match(result.error, /AgentOps shim/);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('copilot command strips AgentOps-only flags before invoking Copilot', () => {
+  assert.deepEqual(
+    removeAgentOpsCopilotFlags(['--collector-mode', 'none', '--privacy=strict', '--unsafe-no-collector', '-p', 'hello']),
+    ['-p', 'hello']
+  );
+});
+
 test('scan finds plugin agents and skills', () => {
   const result = scan();
   assert.ok(result.agents.length >= 5);
   assert.ok(result.skills.length >= 4);
   assert.ok(result.mcp_servers.includes('azure-mcp'));
+  assert.equal(result.hooks.hooks.preToolUse[0].bash, 'node scripts/pre-tool-policy.js');
+  assert.equal(result.hooks.hooks.postToolUseFailure[0].bash, 'node scripts/post-tool-failure-hints.js');
 });
 
 test('default skills list exposes user-friendly AgentOps workflows', () => {
@@ -417,7 +538,7 @@ test('setup guide recommends the shortest non-mutating setup path', () => {
     assert.ok(result.next.includes('agentops configure import-azd'));
     assert.match(output, /This command is read-only/);
     assert.match(output, /Fastest path/);
-    assert.match(output, /agentops smoke --wait 2m --poll 10s/);
+    assert.match(output, /agentops collector smoke --privacy strict --poison/);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
@@ -524,7 +645,7 @@ test('init workflow installs skills in dry-run mode and returns first-run next s
     assert.equal(result.cloud.workspace_id_configured, false);
     assert.equal(result.cloud.grafana_url_configured, false);
     assert.ok(result.next.includes('node agentops-cli/src/index.js validate-azure'));
-    assert.ok(result.next.includes('node agentops-cli/src/index.js ask-context latest --last 2h'));
+    assert.ok(result.next.includes('node agentops-cli/src/index.js experimental ask-context latest --last 2h'));
     assert.ok(result.next.includes('node agentops-cli/src/index.js plugin uninstall'));
     assert.match(output, /AgentOps init/);
     assert.match(output, /Agents:/);
@@ -612,41 +733,6 @@ test('live replay smoke emits orchestrator delegation telemetry', async () => {
   assert.match(output, /Grafana Live Replay/);
 });
 
-test('gallery smoke emits quiet-dashboard signal telemetry', async () => {
-  const payload = otlpGallerySmokeTracePayload('agentops-gallery-smoke-test', Date.parse('2026-05-26T12:00:00Z'));
-  const spans = payload.resourceSpans[0].scopeSpans[0].spans;
-  const attrValues = JSON.stringify(payload);
-
-  assert.equal(spans.length, 7);
-  assert.match(attrValues, /agentops\.content_capture\.signal/);
-  assert.match(attrValues, /AgentOps preToolUse policy blocked command/);
-  assert.match(attrValues, /Recovery hint/);
-  assert.match(attrValues, /agentops\.cli\.allow_all/);
-  assert.match(attrValues, /github\.copilot\.tokens_removed/);
-  assert.match(attrValues, /github\.copilot\.aiu/);
-  assert.match(attrValues, /PermissionDenied/);
-  assert.ok(spans.some(span => span.status.code === 2));
-
-  const result = await agentopsGallerySmoke({
-    dryRun: true,
-    id: 'agentops-gallery-smoke-test',
-    workspaceId: 'workspace-123',
-    last: '30m'
-  });
-  const output = renderSmoke(result);
-
-  assert.equal(result.ok, true);
-  assert.equal(result.smoke_kind, 'gallery');
-  assert.equal(result.payload_preview.content_capture_enabled, false);
-  assert.equal(result.payload_preview.content_capture_signal, true);
-  assert.match(result.grafana_urls.runtime_events, /agentops-runtime-events/);
-  assert.match(result.grafana_urls.safety_policy, /agentops-safety-policy/);
-  assert.match(result.grafana_urls.permission_friction, /agentops-permission-friction/);
-  assert.match(result.grafana_urls.alert_tuning, /agentops-alert-tuning/);
-  assert.match(output, /AgentOps gallery smoke/);
-  assert.match(output, /Grafana gallery pages/);
-});
-
 test('smoke live mode verifies synthetic telemetry in Azure', async () => {
   let postedUrl = null;
   const result = await agentopsSmoke({
@@ -704,16 +790,19 @@ test('custom emit dry run creates privacy-safe agent lifecycle telemetry', async
     dryRun: true,
     id: 'agentops-custom-test',
     event: 'agent.step.started',
-    agent: 'agentops-ci-pattern-smoke',
+    agent: 'ci-investigator',
+    parentAgent: 'agentops-orchestrator',
+    delegationId: 'delegation-123',
     workflow: 'investigation',
     step: 'collect-evidence',
     outcome: 'started',
     risk: 'low',
     score: 0.98,
     entityType: 'pull-request',
-    entityIdHash: 'synthetic-pr-001',
-    tags: ['smoke', 'ci-pattern'],
+    entityIdHash: 'hashed-pr-001',
+    tags: ['real-run', 'ci-pattern'],
     custom: { 'agentops.custom.signal': 'build-log' },
+    attributes: { 'agentops.content_capture.signal': 'true' },
     workspaceId: 'workspace-123'
   });
   const output = renderCustom(result);
@@ -722,10 +811,13 @@ test('custom emit dry run creates privacy-safe agent lifecycle telemetry', async
   assert.equal(result.custom_event_id, 'agentops-custom-test');
   assert.equal(result.payload_preview.content_capture_enabled, false);
   assert.equal(result.events[0].event, 'agent.step.started');
-  assert.equal(result.events[0].agent, 'agentops-ci-pattern-smoke');
+  assert.equal(result.events[0].agent, 'ci-investigator');
+  assert.equal(result.events[0].parentAgent, 'agentops-orchestrator');
+  assert.equal(result.events[0].delegationId, 'delegation-123');
   assert.equal(result.events[0].entityType, 'pull-request');
-  assert.equal(result.events[0].entityIdHash, 'synthetic-pr-001');
+  assert.equal(result.events[0].entityIdHash, 'hashed-pr-001');
   assert.equal(result.events[0].custom['agentops.custom.signal'], 'build-log');
+  assert.equal(result.events[0].attributes['agentops.content_capture.signal'], 'true');
   assert.match(result.azure_query, /agentops-custom-test/);
   assert.match(output, /AgentOps custom telemetry/);
 });
@@ -733,13 +825,16 @@ test('custom emit dry run creates privacy-safe agent lifecycle telemetry', async
 test('custom OTLP payload maps generic fields to dashboard attributes', () => {
   const { payload, normalized } = otlpCustomEventPayload([{
     event: 'agent.eval.scored',
-    agent: 'agentops-eval-gate-smoke',
+    agent: 'eval-gate',
+    parentAgent: 'agentops-orchestrator',
+    delegationId: 'delegation-eval',
     workflow: 'release-gate',
     step: 'score',
     session: 'session-123',
     outcome: 'passed',
     score: 0.91,
-    custom: { 'agentops.custom.eval_name': 'smoke' }
+    custom: { 'agentops.custom.eval_name': 'release' },
+    attributes: { 'github.copilot.policy.decision': 'allowed' }
   }], {
     id: 'agentops-custom-payload',
     nowMs: Date.parse('2026-05-26T12:00:00Z')
@@ -750,10 +845,13 @@ test('custom OTLP payload maps generic fields to dashboard attributes', () => {
   assert.equal(normalized[0].event, 'agent.eval.scored');
   assert.equal(attrs['agentops.event.name'], 'agent.eval.scored');
   assert.equal(attrs['gen_ai.operation.name'], 'agent.eval.scored');
-  assert.equal(attrs['agentops.agent.name'], 'agentops-eval-gate-smoke');
+  assert.equal(attrs['agentops.agent.name'], 'eval-gate');
+  assert.equal(attrs['agentops.parent_agent.name'], 'agentops-orchestrator');
+  assert.equal(attrs['agentops.delegation.id'], 'delegation-eval');
   assert.equal(attrs['agentops.workflow.name'], 'release-gate');
   assert.equal(attrs['agentops.score'], 0.91);
   assert.equal(attrs['content.capture.enabled'], false);
+  assert.equal(attrs['github.copilot.policy.decision'], 'allowed');
 });
 
 test('custom import maps JSONL agent rows without CI-specific coupling', async () => {
@@ -761,7 +859,7 @@ test('custom import maps JSONL agent rows without CI-specific coupling', async (
   const file = path.join(tempDir, 'events.jsonl');
   try {
     fs.writeFileSync(file, [
-      JSON.stringify({ event_name: 'agent.run.started', agent: 'portable-agent', workflow: 'analysis', session_id: 'session-a' }),
+      JSON.stringify({ event_name: 'agent.run.started', agent: 'portable-agent', workflow: 'analysis', session_id: 'session-a', attributes: { 'agentops.content_capture.signal': 'true' } }),
       JSON.stringify({ event_name: 'agent.decision.made', agent: 'portable-agent', workflow: 'analysis', step: 'rank', outcome: 'selected', metrics: { confidence: 0.82 } })
     ].join('\n'));
 
@@ -774,19 +872,24 @@ test('custom import maps JSONL agent rows without CI-specific coupling', async (
     assert.equal(result.ok, true);
     assert.equal(result.rows, 2);
     assert.equal(result.events[0].event, 'agent.run.started');
+    assert.equal(result.events[0].attributes['agentops.content_capture.signal'], 'true');
     assert.equal(result.events[1].custom['agentops.custom.confidence'], 0.82);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
 });
 
-test('custom args parse repeated tags and custom dimensions', () => {
-  const args = parseCustomArgs(['emit', '--event', 'agent.step.started', '--agent', 'portable-agent', '--tag', 'smoke', '--tag', 'ci-pattern', '--custom', 'queue=main', '--score', '0.7']);
+test('custom args parse repeated tags and delegation dimensions', () => {
+  const args = parseCustomArgs(['emit', '--event', 'agent.step.started', '--agent', 'portable-agent', '--parent-agent', 'orchestrator', '--delegation-id', 'delegation-1', '--tag', 'real-run', '--tag', 'ci-pattern', '--custom', 'queue=main', '--attribute', 'agentops.content_capture.signal=true', '--attr', 'github.copilot.policy.decision=blocked', '--score', '0.7']);
 
   assert.equal(args.subcommand, 'emit');
   assert.equal(args.event, 'agent.step.started');
-  assert.deepEqual(args.tags, ['smoke', 'ci-pattern']);
+  assert.equal(args.parentAgent, 'orchestrator');
+  assert.equal(args.delegationId, 'delegation-1');
+  assert.deepEqual(args.tags, ['real-run', 'ci-pattern']);
   assert.equal(args.custom['agentops.custom.queue'], 'main');
+  assert.equal(args.attributes['agentops.content_capture.signal'], 'true');
+  assert.equal(args.attributes['github.copilot.policy.decision'], 'blocked');
   assert.equal(args.score, 0.7);
 });
 
@@ -970,11 +1073,12 @@ test('verifySmokeInAzure returns query failure details', async () => {
   assert.equal(result.attempts[0].error, 'not logged in');
 });
 
-test('collector health query summarizes collector and smoke signals', () => {
+test('collector health query summarizes collector and real ingestion signals', () => {
   const query = collectorHealthQuery('12h');
 
   assert.match(query, /let lookback = 12h/);
-  assert.match(query, /SmokeSpans/);
+  assert.match(query, /AgentOpsSpans/);
+  assert.match(query, /agentops\.smoke_id/);
   assert.match(query, /collector_errors/);
 });
 
@@ -1054,7 +1158,7 @@ test('installed shim status reports expected paths', () => {
   assert.equal(status.plain_copilot_observed, false);
 });
 
-test('copilot-agentops falls back to real copilot when collector setup fails', () => {
+test('copilot-agentops help resolves real copilot without collector fallback', { skip: process.platform === 'win32' }, () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-copilot-fallback-'));
   const fakeCopilot = path.join(tempDir, 'copilot');
   try {
@@ -1065,7 +1169,7 @@ test('copilot-agentops falls back to real copilot when collector setup fails', (
       cwd: root,
       env: {
         ...process.env,
-        PATH: '/bin:/usr/bin',
+        PATH: `${path.dirname(process.execPath)}:/bin:/usr/bin`,
         COPILOT_CLI_BIN: fakeCopilot,
         AZURE_RESOURCE_GROUP: 'rg-agentops-definitely-missing',
         APPLICATIONINSIGHTS_NAME: 'appi-agentops-definitely-missing'
@@ -1075,9 +1179,54 @@ test('copilot-agentops falls back to real copilot when collector setup fails', (
 
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /real copilot --help/);
-    assert.match(result.stderr, /Launching Copilot without AgentOps telemetry/);
+    assert.doesNotMatch(result.stderr, /Launching Copilot without AgentOps telemetry/);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('copilot-observe percent-encodes resource attributes and forces content capture off', { skip: process.platform === 'win32' }, () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-observe-env-'));
+  const fakeCopilot = path.join(tempDir, 'copilot');
+  try {
+    fs.writeFileSync(fakeCopilot, '#!/usr/bin/env bash\nprintf "capture=%s\\nattrs=%s\\n" "$OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT" "$OTEL_RESOURCE_ATTRIBUTES"\n');
+    fs.chmodSync(fakeCopilot, 0o755);
+    const result = spawnSync(path.join(root, 'copilot', 'copilot-observe'), ['--version'], {
+      cwd: root,
+      env: {
+        ...process.env,
+        COPILOT_CLI_BIN: fakeCopilot,
+        AGENTOPS_PROFILE: 'safe default,=x',
+        AGENTOPS_E2E_ID: 'agentops e2e,=id',
+        AGENTOPS_CAPTURE_CONTENT: 'true',
+        OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT: 'true'
+      },
+      encoding: 'utf8'
+    });
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /capture=false/);
+    assert.match(result.stdout, /agentops\.profile=safe%20default%2C%3Dx/);
+    assert.match(result.stdout, /agentops\.e2e\.id=agentops%20e2e%2C%3Did/);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('pre-tool policy emits valid deny decisions for camelCase and snake_case inputs', () => {
+  const hook = path.join(root, 'plugin', 'scripts', 'pre-tool-policy.js');
+  for (const payload of [
+    { toolName: 'shell', toolArgs: { command: 'az keyvault secret show --vault-name x --name y' } },
+    { tool_name: 'shell', tool_input: { command: 'cat .env' } }
+  ]) {
+    const result = spawnSync(process.execPath, [hook], {
+      input: JSON.stringify(payload),
+      encoding: 'utf8'
+    });
+    assert.equal(result.status, 0, result.stderr);
+    const decision = JSON.parse(result.stdout);
+    assert.equal(decision.permissionDecision, 'deny');
+    assert.match(decision.permissionDecisionReason, /demo preToolUse guardrail/);
   }
 });
 
@@ -1099,6 +1248,28 @@ test('status renders beginner-first privacy and setup checks from fixtures', () 
   assert.match(output, /Prompts\/code were not recorded/);
   assert.match(output, /localhost/);
   assert.match(output, /plain copilot is routed through AgentOps/);
+});
+
+test('E2E report browser check detects pass status, evidence links, and secret leaks', () => {
+  const html = renderReportHtml({
+    ok: true,
+    privacyMode: 'strict',
+    e2eId: 'agentops-e2e-test',
+    latestSessionId: 'session-test',
+    collector: { effectiveMode: 'binary' },
+    poison: { ok: true },
+    grafanaLinks: [{ label: 'Overview', url: 'https://grafana.example.grafana.azure.com/d/overview' }],
+    evidenceFiles: ['/tmp/summary.json']
+  });
+  const clean = checkReportHtml(html);
+  assert.equal(clean.ok, true);
+  assert.equal(clean.passVisible, true);
+  assert.equal(clean.grafanaLinks, 1);
+  assert.equal(clean.evidenceLinks, 1);
+
+  const leaked = checkReportHtml(html.replace('</main>', '<p>SECRET_SHOULD_NOT_LEAVE</p></main>'));
+  assert.equal(leaked.ok, false);
+  assert.equal(leaked.secretLooking, true);
 });
 
 test('import-jsonl summarizes operations', () => {
@@ -1174,8 +1345,8 @@ test('benchmark dry run plans fixture copy, Copilot args, labels, checks, and ti
   assert.equal(plan.wouldMutateRepo, false);
   assert.equal(plan.wouldExecuteCopilot, false);
   assert.equal(plan.runs.length, 2);
-  assert.match(plan.runs[0].copiedFixturePath.from, /benchmarks\/starter\/fixtures\/tiny-repo$/);
-  assert.match(plan.runs[0].copiedFixturePath.to, /agentops-benchmark-runs\/bench-test\/create-note\/repeat-1\/workspace$/);
+  assert.match(plan.runs[0].copiedFixturePath.from.replaceAll(path.sep, '/'), /benchmarks\/starter\/fixtures\/tiny-repo$/);
+  assert.match(plan.runs[0].copiedFixturePath.to.replaceAll(path.sep, '/'), /agentops-benchmark-runs\/bench-test\/create-note\/repeat-1\/workspace$/);
   assert.deepEqual(plan.runs[0].copilot.args, ['--allow-all']);
   assert.match(plan.runs[0].copilot.prompt, /notes\/hello\.txt/);
   assert.equal(plan.runs[0].otelLabels['agentops.benchmark.variant'], 'baseline');
@@ -1239,7 +1410,7 @@ test('benchmark run executes Copilot in an isolated fixture copy and writes a su
     assert.equal(result.wouldExecuteCopilot, true);
     assert.equal(result.summaries.length, 1);
     assert.equal(result.summaries[0].success, true);
-    assert.deepEqual(result.summaries[0].changedFiles, ['notes/hello.txt']);
+    assert.deepEqual(result.summaries[0].changedFiles.map(file => file.replaceAll(path.sep, '/')), ['notes/hello.txt']);
     assert.equal(result.report.recommendation.action, 'keep');
     assert.equal(result.report.promotion.decision, 'promote');
     assert.equal(fs.existsSync(result.summariesPath), true);
@@ -1883,11 +2054,11 @@ test('token rollup audit compares all-span totals against chat rollups', () => {
 
 test('command plan exposes shadow and collector lifecycle commands', () => {
   const install = commandPlan('install', [], 'darwin');
-  assert.match(install.command, /install-copilot-agentops-shim\.sh$/);
+  assert.match(install.command, /install-agentops\.sh$/);
   assert.deepEqual(install.args, []);
 
-  const installShadow = commandPlan('install', ['--shadow-copilot'], 'darwin');
-  assert.deepEqual(installShadow.args, ['--shadow-copilot']);
+  const installNoShadow = commandPlan('install', ['--no-shadow-copilot', '--no-collector'], 'darwin');
+  assert.deepEqual(installNoShadow.args, ['--no-shadow-copilot', '--no-collector']);
 
   const enable = commandPlan('enable-shadow', [], 'darwin');
   assert.match(enable.command, /install-copilot-agentops-shim\.sh$/);
@@ -1923,7 +2094,7 @@ test('windows command plan prefers PowerShell Core wrappers', () => {
   const install = commandPlan('install', ['--shadow-copilot'], 'win32');
   assert.equal(install.command, 'pwsh');
   assert.ok(install.args.includes('-ShadowCopilot'));
-  assert.match(install.args.at(-2), /install-copilot-agentops-shim\.ps1$/);
+  assert.match(install.args.at(-2), /install-agentops\.ps1$/);
 
   const enable = commandPlan('enable-shadow', [], 'win32');
   assert.equal(enable.command, 'pwsh');
@@ -1943,6 +2114,16 @@ test('windows command plan prefers PowerShell Core wrappers', () => {
   const codex = commandPlan('codex', ['--help'], 'win32');
   assert.equal(codex.command, 'pwsh');
   assert.match(codex.args.at(-2), /agentops-codex\.ps1$/);
+});
+
+test('PowerShell shim does not auto-install plugin files and uninstall advice is collector-native', () => {
+  const installScript = fs.readFileSync(path.join(root, 'scripts', 'install-copilot-agentops-shim.ps1'), 'utf8');
+  const uninstallScript = fs.readFileSync(path.join(root, 'scripts', 'uninstall-copilot-agentops-shim.ps1'), 'utf8');
+
+  assert.doesNotMatch(installScript, /src\/index\.js"\) plugin install/);
+  assert.match(installScript, /agentops plugin install/);
+  assert.match(uninstallScript, /agentops collector stop --mode auto/);
+  assert.doesNotMatch(uninstallScript, /docker compose/);
 });
 
 test('policy and mcp KQL queries expose documented Copilot dimensions', () => {

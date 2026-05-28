@@ -1,388 +1,180 @@
 # Copilot CLI AgentOps for Azure
 
-> Independent personal open-source project. Not an official Microsoft, GitHub, OpenAI, Azure, or Grafana product, and not endorsed by those organizations. See [DISCLAIMER.md](DISCLAIMER.md) and [SECURITY.md](SECURITY.md) before using with real telemetry.
+> Independent personal OSS project. Not an official Microsoft, GitHub, OpenAI, Azure, or Grafana product.
 
-<p align="center">
-  <img src="docs/images/agentops-for-azure-banner.png" width="520" alt="AgentOps for Azure - Copilot CLI observability">
-</p>
+Privacy-first observability for GitHub Copilot CLI runs in Azure Monitor and Grafana. AgentOps records run/session metadata, tool names, failures, latency, token usage, and estimated cost without recording prompts, code, file contents, tool arguments, or tool results by default.
 
-AgentOps gives GitHub Copilot CLI runs an Azure/Grafana observability loop: sessions, tool calls, failures, tokens, cost, policy signals, and benchmark results without recording prompts, code, tool arguments, or file contents by default.
-
-![AgentOps overview dashboard](docs/screenshots/agentops-overview-live.png)
-
-## What It Answers
-
-- Did my latest Copilot run work?
-- Which tool failed?
-- Did a run get slow, expensive, or context-heavy?
-- Did a safety or permission policy block something?
-- Which agent, skill, MCP server, hook, or benchmark produced the signal?
-- Did a prompt/agent/tooling change make things better or worse?
-
-You do not need to know OpenTelemetry, KQL, MCP, or Grafana to start. Those are the plumbing underneath the quick path.
+```text
+GitHub Copilot CLI
+  -> local OTLP endpoint on 127.0.0.1
+  -> local OpenTelemetry Collector privacy boundary
+  -> Azure Monitor / Application Insights / Log Analytics
+  -> Azure Managed Grafana dashboards
+```
 
 ## Quick Start
 
-### Prerequisites
+Prerequisites:
 
-- Azure CLI logged into a subscription where you can create resources.
-- Azure Developer CLI (`azd`) for the Bicep deployment path.
+- Azure CLI logged in.
+- Azure Developer CLI (`azd`) for the Bicep deployment.
 - GitHub Copilot CLI installed and authenticated.
-- Docker Desktop, OrbStack, or another way to run the OpenTelemetry Collector locally.
-
-### Fastest Path
+- No Docker required: `./setup-agentops.sh` installs the tested local OpenTelemetry Collector binary. Docker is only an optional fallback.
 
 ```bash
 az login
 azd provision
 ./setup-agentops.sh
 export PATH="$HOME/.local/bin:$PATH"
-agentops smoke --wait 5m --poll 15s
-agentops live-replay-smoke --wait 5m --poll 15s
-agentops gallery-smoke --wait 5m --poll 15s
-copilot -p "Reply with exactly: agentops smoke."
+agentops configure import-azd
+agentops collector start --mode auto --privacy strict
+copilot --no-ask-user --no-remote --add-dir . --allow-tool='shell(pwd)' --allow-tool='shell(ls:*)' -p 'Do not edit files. Run pwd and ls docs | head, then summarize.'
+agentops latest --last 2h
 agentops open
 ```
 
-You are done when:
-
-- `agentops status` shows the shim and collector setup as OK.
-- `agentops smoke --wait 5m --poll 15s` finds its synthetic trace in Azure.
-- `agentops live-replay-smoke --wait 5m --poll 15s` prints a Live Replay URL with fresh orchestrator/sub-agent test data.
-- `agentops gallery-smoke --wait 5m --poll 15s` lights up the otherwise quiet Runtime, Safety, Permission, and Alert Tuning demo panels with synthetic metadata-only signals.
-- `copilot -p "Reply with exactly: agentops smoke."` finishes normally.
-- The Overview dashboard shows runs, tool calls, tokens, or cost.
-
-If something fails:
+If `collector start --mode auto` cannot find a collector binary and Docker is not running, it fails with setup instructions. It does not silently run Copilot without the local privacy boundary. Install the binary any time with:
 
 ```bash
-agentops status
-agentops validate-azure --last 24h
-agentops latest --last 2h
+agentops collector install-binary
 ```
 
-## What Gets Deployed
+## Core Commands
 
 ```text
-Developer machine                            Azure resource group
------------------                            --------------------
-
-Copilot CLI / VS Code / Codex / SDK
-        |
-        | OTLP on localhost
-        v
-OpenTelemetry Collector
-        |
-        | scrub prompt/content/tool payload fields
-        v
-Application Insights + Log Analytics  --->  Azure Managed Grafana
+agentops setup
+agentops install
+agentops uninstall
+agentops status
+agentops doctor
+agentops configure show|set|import-azd
+agentops collector start|stop|status|validate|smoke|install-binary|uninstall-binary
+agentops copilot [...args]
+agentops latest
+agentops replay
+agentops open
+agentops validate-azure
+agentops validate-enterprise
+agentops plugin install|uninstall
+agentops e2e run
+agentops e2e report
+agentops e2e browser-check
 ```
 
-The Azure path uses the repo's Bicep through `azure.yaml`:
-
-- Log Analytics Workspace
-- Application Insights
-- Azure Monitor Workspace
-- Azure Managed Grafana
-- Key Vault
-- Optional Function actioner, disabled by default
-- Optional scheduled-query alerts, disabled by default
+Everything else is under `agentops experimental ...` or documented as experimental.
 
 ## Safe Defaults
 
-Enterprise-safe, cost-bounded setup is the default posture: metadata-only telemetry, local collector binding, capped ingestion profiles, and opt-in automation.
-
 Captured by default:
 
-- run/session IDs
-- operation names
-- tool names
+- session/run identifiers
+- operation and tool names
 - model names
 - duration and success/failure
-- token, estimated cost, and AIU fields
+- token, cost, and AIU metadata when Copilot emits it
 - hashed repo metadata
-- policy, safety, agent, skill, MCP, and benchmark labels
+- simple hook/policy signals
 
 Not captured by default:
 
-- prompts
-- responses
-- code contents
-- file contents
-- tool arguments
-- tool results
+- prompts or responses
+- code or file contents
+- tool arguments or tool results
 - system instructions
-- request/response bodies
+- request or response bodies
 - full URLs
+- secrets
 
-For local debugging, content capture can be scoped to specific agents or annotated skills with `AGENTOPS_CAPTURE_CONTENT_AGENTS` or `AGENTOPS_CAPTURE_CONTENT_SKILLS`. The Azure collector still marks and scrubs raw prompt/tool content by default, so the dashboards can show a content-capture signal without storing the text.
+The local Collector is the scrub-before-export boundary. Direct/no-collector mode is advanced and unsafe: it requires `AGENTOPS_ALLOW_NO_COLLECTOR=1` or `--unsafe-no-collector`.
 
-Enterprise guardrails:
+Enterprise-safe, cost-bounded setup is the intended default: metadata-only telemetry, localhost collection, capped Azure ingestion profiles, and disabled automation until explicitly enabled.
 
-- Local collector binds to `127.0.0.1`.
-- Content capture is off.
-- Azure Managed Grafana API keys are disabled.
-- Key Vault RBAC and purge protection are enabled.
-- Log Analytics has profile-based retention and daily ingestion caps.
-- Alert rules deploy disabled until thresholds are tuned.
-- Automation/actioner resources are opt-in.
+## Collector Modes
 
-Run the static enterprise check before a pilot or release:
+`AGENTOPS_COLLECTOR_MODE=auto` is the default.
 
-```bash
-agentops validate-enterprise
-```
+- `auto`: prefer a configured/found local Collector binary, then Docker Compose, then fail closed.
+- `binary`: run `AGENTOPS_OTELCOL_BIN`, `otelcol-contrib`, or compatible `otelcol`.
+- `docker`: run the bundled Compose file with localhost-only ports.
+- `none`: do not start a collector; explicit unsafe opt-in required.
 
-## Cost Expectations
+See [Collector modes](docs/collector-modes.md).
 
-AgentOps is designed for a small Azure footprint, but it is not free:
+## Privacy Modes
 
-- Log Analytics ingestion and retention are the main variable cost.
-- Managed Grafana, Application Insights, and Azure Monitor resources may add service cost depending on your subscription and region.
-- Defaults are intentionally conservative: metadata-only telemetry, content capture off, disabled actioner, disabled alerts, and capped ingestion profiles.
+`AGENTOPS_PRIVACY_MODE=strict` is the default.
 
-For a team pilot, start with the default `team` profile and review what-if:
+- `strict`: allowlist safe metadata and drop/redact everything else before export.
+- `compat`: current denylist scrubber for compatibility with older dashboards or collectors.
 
-```bash
-AGENTOPS_DEPLOYMENT_PROFILE=team ./scripts/azure-what-if.sh
-```
+See [Privacy modes](docs/privacy-modes.md).
 
-For budget/RBAC guardrails, see [Enterprise pilot guide](docs/enterprise-pilot.md).
+## Plugin And Hooks
 
-## Dashboard Tour
-
-Start with **Overview**, then open **Sessions** and **Session Detail** when you need to inspect a run. Use the rest as drilldowns.
-
-```text
-Overview
-   |
-   +--> Sessions ---------> Session Detail
-   |        |                    |
-   |        |                    +--> Live Replay
-   |        |
-   |        +--------------> Traces / Spans
-   |
-   +--> Tools & MCP -------> failed tools and MCP servers
-   +--> Attribution -------> agents, skills, MCP, scripts/hooks
-   +--> Safety & Policy ---> privacy and permission posture
-   +--> Quality -----------> slow, expensive, failing, inefficient runs
-   +--> Experiments -------> benchmark and variant comparisons
-```
-
-Full screenshot tour: [Dashboard tour](docs/dashboard-tour.md).
-
-## What It Looks Like
-
-The dashboards are meant to answer practical questions first, not make you learn KQL.
-
-### Start Here
-
-| Page | What it tells you |
-| --- | --- |
-| <img src="docs/screenshots/agentops-overview-live.png" width="360" alt="AgentOps overview dashboard"> | **Overview**: the health of recent agent runs, tokens, cost, latency, failures, and top activity. |
-| <img src="docs/screenshots/agentops-sessions-live.png" width="360" alt="AgentOps sessions dashboard"> | **Sessions**: which runs happened, which failed, which were slow, and which used the most tokens or credits. |
-| <img src="docs/screenshots/agentops-session-detail-live.png" width="360" alt="AgentOps session detail dashboard"> | **Session Detail**: one selected run, broken into its important events and tool calls. |
-| <img src="docs/screenshots/agentops-live-replay-live.jpg" width="360" alt="AgentOps live replay dashboard"> | **Live Replay**: watch one run as a timeline, including orchestrator and sub-agent delegation when present. |
-
-### Debug A Run
-
-| Page | What it tells you |
-| --- | --- |
-| <img src="docs/screenshots/agentops-traces-live.png" width="360" alt="AgentOps traces and spans dashboard"> | **Traces / Spans**: the raw execution path for agent operations, model calls, tools, MCP calls, and scripts. |
-| <img src="docs/screenshots/agentops-tools-live.png" width="360" alt="AgentOps tools and MCP dashboard"> | **Tools & MCP**: which tools and MCP servers were called, how often they failed, and what errors appeared. |
-| <img src="docs/screenshots/agentops-attribution-live.png" width="360" alt="AgentOps attribution dashboard"> | **Attribution**: which agent, skill, MCP server, script, hook, or repo produced the telemetry. |
-
-### Safety, Quality, And Cost
-
-| Page | What it tells you |
-| --- | --- |
-| <img src="docs/screenshots/agentops-quality-live.png" width="360" alt="AgentOps quality dashboard"> | **Quality**: slow, expensive, failing, or inefficient runs that are worth investigating. |
-| <img src="docs/screenshots/agentops-data-quality-live.png" width="360" alt="AgentOps data quality dashboard"> | **Data Quality**: whether the telemetry has the fields dashboards need. |
-
-### Experiments And Custom Signals
-
-| Page | What it tells you |
-| --- | --- |
-| <img src="docs/screenshots/agentops-experiments-live.png" width="360" alt="AgentOps experiments dashboard"> | **Experiments**: compare baseline and variant runs for prompts, tools, agents, or policies. |
-| <img src="docs/screenshots/agentops-custom-eval-widget-live.png" width="360" alt="AgentOps custom evaluation widget"> | **Custom Eval Events**: metadata-only scores and measurements from your own eval gates. |
-
-The full tour still covers Runtime Events, Safety & Policy, Permission Friction, and Alert Tuning. Those pages can be intentionally quiet in a healthy privacy-first setup, so they are better explained in [Dashboard tour](docs/dashboard-tour.md) than used as the README's first impression.
-
-To populate those quieter pages for a demo or screenshot pass without enabling real prompt capture:
-
-```bash
-agentops gallery-smoke --wait 5m --poll 15s
-```
-
-## Common Workflows
-
-Open dashboard links:
-
-```bash
-agentops open
-```
-
-Show the latest observed run:
-
-```bash
-agentops latest --last 2h
-agentops explain latest --last 2h
-agentops recommend latest --last 2h
-```
-
-Watch a compact live stream:
-
-```bash
-agentops live --last 2h --follow --interval 10
-```
-
-Replay one session:
-
-```bash
-agentops replay latest --last 2h
-agentops replay <conversation-id> --last 24h
-```
-
-For a Grafana view of the same idea, open **Live Replay**. It shows a selected session as a timeline/tree: single-agent runs stay in one lane, while orchestrator runs split into parent/sub-agent lanes when the telemetry includes delegation fields.
-
-If Live Replay is empty, widen the time picker or run:
-
-```bash
-agentops live-replay-smoke --wait 5m --poll 15s
-```
-
-Verify agent, skill, MCP, and hook attribution:
+`agentops install` installs local shims and the tested Collector binary. It also installs a plain `copilot` shim by default so normal Copilot CLI runs are observed when `~/.local/bin` is first on `PATH`. Plugin files are explicit and reversible:
 
 ```bash
 agentops plugin install
-agentops attribution-smoke --wait 5m --poll 15s
-agentops attribution --last 2h
-agentops mcp --last 2h
-agentops lineage --last 2h
+agentops plugin uninstall
 ```
 
-Emit custom metadata-only lifecycle telemetry from an agent, hook, VS Code extension, SDK app, or script:
+The bundled `preToolUse` hook is a transparent demo guardrail. It can block obvious risky patterns such as fake secret reads, but it is not a full security boundary.
+
+## What This Is Not Yet
+
+- Not an official Microsoft/GitHub/Azure/OpenAI/Grafana product.
+- Not a hosted service.
+- Not a complete agent governance platform.
+- Not a full security boundary.
+- Policy hooks, benchmarks, Codex support, MCP analyst workflows, custom events, actioners, and advanced dashboards are experimental.
+
+## Validation
+
+Offline checks:
 
 ```bash
-agentops custom emit --event agent.step.started --agent my-agent --workflow investigation --step collect --outcome started
-agentops custom emit --event agent.eval.scored --agent my-agent --workflow eval-gate --step candidate --score 0.91 --outcome measured
-agentops custom import ./agent-events.jsonl --agent my-agent --workflow investigation
+npm --prefix agentops-cli test
+agentops doctor --json
+agentops validate-enterprise --json
+agentops collector validate --mode auto --privacy strict --json
+agentops collector smoke --privacy strict --poison --json
 ```
 
-Run a benchmark:
+Live E2E:
 
 ```bash
-agentops benchmark run starter --variant baseline --repeat 1 --hypothesis safer-tool-policy
-agentops benchmark report <run-id> --azure --last 24h
+agentops e2e run --live --browser-report --last 2h --json
+agentops e2e report --last 2h --out .agentops/e2e/latest/report.html
+agentops e2e browser-check --report .agentops/e2e/latest/report.html --json
 ```
 
-## Manual Configuration
-
-`./setup-agentops.sh` tries `agentops configure import-azd` when `azd` outputs are available.
-
-If you are binding to an existing Azure environment instead of using `azd`, configure values manually:
+`browser-check` validates the local static report and can capture screenshots when Playwright is available:
 
 ```bash
-agentops configure set \
-  --resource-group rg-agentops-dev \
-  --workspace-id "<workspace-id>" \
-  --workspace-name "<workspace-name>" \
-  --grafana-url "https://<your-grafana>.grafana.azure.com" \
-  --grafana-name "<grafana-resource-name>" \
-  --app-insights-name "<app-insights-name>"
+AGENTOPS_E2E_PLAYWRIGHT=1 AGENTOPS_BROWSER_EXECUTABLE="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+  agentops e2e browser-check --report .agentops/e2e/latest/report.html --playwright --grafana --json
 ```
 
-PowerShell setup is also available:
+Azure Managed Grafana validation may still require the user’s normal signed-in browser.
 
-```powershell
-az login
-./setup-agentops.ps1
-$env:PATH = "$HOME/.local/bin;$env:PATH"
-agentops status
-agentops smoke --wait 2m --poll 10s
-```
+See [E2E validation](docs/e2e-validation.md).
 
-## Native OTel And Other Clients
+## Documentation
 
-The shim is convenient, but not required. Any Copilot surface that emits compatible OTLP can send data to the local collector.
-
-Supported paths include:
-
-- GitHub Copilot CLI
-- VS Code Copilot Chat
-- Copilot SDK apps
-- Codex CLI through `agentops codex`
-- Offline JSONL replay for local debugging
-
-See [Advanced usage](docs/advanced-usage.md) for VS Code settings, Copilot CLI OTel environment variables, SDK snippets, Codex setup, custom agent telemetry, science mode, and Azure MCP analyst mode.
-
-## Troubleshooting
-
-If dashboards are empty:
-
-```bash
-agentops status
-agentops validate-azure --last 24h
-agentops smoke --wait 5m --poll 15s
-agentops live-replay-smoke --wait 5m --poll 15s
-agentops gallery-smoke --wait 5m --poll 15s
-agentops latest --last 2h
-```
-
-Expected empty panels are normal when the matching event did not happen. For example, content-capture panels should be empty when privacy defaults are working, and alert-tuning panels need enough history before they become useful. Live Replay also needs a session inside the selected time range; `agentops live-replay-smoke --wait 5m --poll 15s` creates a fresh replay session and prints the exact dashboard URL. For a screenshot/demo seed of Runtime Events, Safety & Policy, Permission Friction, and Alert Tuning, run `agentops gallery-smoke --wait 5m --poll 15s`.
-
-More help: [Troubleshooting](docs/troubleshooting.md), [Testing and next steps](docs/testing-and-next-steps.md), [Dashboard tour](docs/dashboard-tour.md).
-
-## Known Limitations
-
-- This is a preview OSS project, not a hosted service or official product.
-- The managed path assumes Azure Monitor, Log Analytics, Application Insights, and Azure Managed Grafana.
-- Dashboard panels can be empty until matching events exist inside the selected time range.
-- Azure ingestion is eventually consistent; smoke commands poll because fresh data may take a few minutes to appear.
-- Prompt, response, file-content, tool-argument, and tool-result capture is off by default and should stay opt-in per agent or skill.
-- Alert rules deploy disabled until a team tunes thresholds against its own traffic.
-- Screenshots in this repo use demo/smoke telemetry and should be regenerated for your own environment if you publish a fork.
-
-## Documentation Map
-
-- [Dashboard tour](docs/dashboard-tour.md) - plain-English guide to every Grafana page.
-- [Architecture](docs/architecture.md) - resource and data-flow overview.
-- [Enterprise pilot guide](docs/enterprise-pilot.md) - safe internal rollout path.
-- [Threat model](docs/threat-model.md) - privacy and abuse cases.
-- [Secure by default](docs/secure-by-default.md) - security posture summary.
-- [Telemetry schema](docs/telemetry-schema.md) - fields and KQL assumptions.
-- [Advanced usage](docs/advanced-usage.md) - native OTel, Codex, benchmarks, MCP analyst mode.
-- [Copilot MCP prompts](docs/copilot-mcp-agentops-prompts.md) - copyable investigation prompts.
-- [Public release checklist](docs/public-release.md) - OSS release readiness.
+- [Architecture](docs/architecture.md)
+- [Collector modes](docs/collector-modes.md)
+- [Privacy modes](docs/privacy-modes.md)
+- [Secure by default](docs/secure-by-default.md)
+- [Threat model](docs/threat-model.md)
+- [E2E validation](docs/e2e-validation.md)
+- [Experimental features](docs/experimental-features.md)
+- [Advanced usage](docs/advanced-usage.md)
+- [Dashboard tour](docs/dashboard-tour.md)
 
 ## Remove It
 
-Stop the collector:
-
 ```bash
 agentops collector stop
-```
-
-Stop routing plain `copilot` through AgentOps:
-
-```bash
-agentops disable-shadow
-```
-
-Remove installed AgentOps shims and plugin files:
-
-```bash
 agentops plugin uninstall
 agentops uninstall
 ```
-
-## Plain English Glossary
-
-- **context pressure** = Copilot had too much to remember
-- **tool failure** = a tool Copilot tried did not work
-- **policy block** = a safety rule stopped something risky
-- **content capture** = recording prompts/code/tool arguments
-- **benchmark** = a repeatable task
-- **baseline** = before
-- **variant** = after/version being tested
-- **regression** = got worse

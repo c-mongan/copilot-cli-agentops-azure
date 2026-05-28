@@ -83,25 +83,29 @@ args = ["-y", "@azure/mcp@latest", "server", "start", "--read-only", "--namespac
 
 Keep the server read-only for AgentOps investigation. For this repo, use Codex to ask for Azure Monitor evidence, then validate the same query with `agentops latest`, `agentops attribution`, `agentops mcp`, or `agentops lineage`.
 
-### Attribution Smoke
+### Real Attribution Check
 
-Use the bundled `agentops-kitchen-sink-smoke` agent profile and synthetic attribution smoke to verify that filters work before debugging a real custom agent:
+Use a real observed Copilot run and optional custom lifecycle events to verify filters before debugging a custom agent:
 
 ```bash
-agentops plugin install
-agentops validate-collector
-agentops attribution-smoke --wait 5m --poll 15s
+copilot plugin install c-mongan/copilot-cli-agentops-azure:plugin
+agentops copilot --agent agentops-orchestrator --allow-tool=bash --add-dir . --no-ask-user --no-remote \
+  -p "Do not edit files. Use read-only shell commands: pwd and ls docs | head. Summarize what you saw."
+agentops custom emit --event agent.delegation.started --agent investigator --parent-agent agentops-orchestrator --delegation-id real-attribution-check --workflow investigation --step delegate --outcome started
 agentops attribution --last 2h
 agentops mcp --last 2h
 agentops lineage --last 2h
 ```
 
-The synthetic trace is metadata-only. It does not send prompt text, tool arguments, code contents, or secrets. It should produce these dimensions:
+This should produce real observed dimensions such as:
 
-- `agentops.agent.name=agentops-kitchen-sink-smoke`
-- `agentops.skill.name=agentops-attribution`
-- `agentops.mcp.server=azure-mcp`
-- `agentops.script.name=pre-tool-policy`
+- `agentops.agent.name`
+- `agentops.parent_agent.name` when custom delegation metadata is emitted
+- `agentops.delegation.id` when custom delegation metadata is emitted
+- `gen_ai.tool.name`
+- `agentops.script.name` or hook fields when hooks run
+
+`agentops attribution-smoke` still exists for collector/filter diagnostics, but it is not the preferred source for screenshots or demos.
 
 ## Recommendation Contract
 

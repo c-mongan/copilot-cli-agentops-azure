@@ -33,13 +33,6 @@ $agentopsCodexCmd = Join-Path $InstallDir "agentops-codex.cmd"
 "$powershell" -NoProfile -ExecutionPolicy Bypass -File "$agentopsCodexScript" %*
 "@ | Set-Content -Path $agentopsCodexCmd -Encoding ASCII
 
-$node = Get-Command node -ErrorAction SilentlyContinue
-if ($node) {
-  & $node.Source (Join-Path $repoRoot "agentops-cli/src/index.js") plugin install
-} else {
-  Write-Warning "node was not found, so AgentOps Copilot plugin files were not installed. Install Node.js, then run: node $(Join-Path $repoRoot 'agentops-cli/src/index.js') plugin install"
-}
-
 if ($ShadowCopilot) {
   $installDirFull = [System.IO.Path]::GetFullPath($InstallDir).TrimEnd([System.IO.Path]::DirectorySeparatorChar)
   $commands = Get-Command copilot -All -ErrorAction SilentlyContinue
@@ -83,3 +76,9 @@ if ($ShadowCopilot) {
 Write-Host ""
 Write-Host "Make sure your shell can see $InstallDir. For PowerShell:"
 Write-Host "  `$env:PATH = `"$InstallDir;`$env:PATH`""
+Write-Host ""
+Write-Host "Plugin files are optional and reversible. To install them explicitly:"
+Write-Host "  agentops plugin install"
+Write-Host ""
+Write-Host "Remove plugin files later with:"
+Write-Host "  agentops plugin uninstall"

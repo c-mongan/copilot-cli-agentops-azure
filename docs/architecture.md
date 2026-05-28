@@ -1,80 +1,42 @@
 # Architecture
 
-Copilot CLI AgentOps for Azure is a local-first telemetry loop.
+AgentOps for Azure is one local-first observability loop:
 
 ```text
-Copilot CLI -> copilot-observe -> localhost OTel Collector -> Azure Monitor/App Insights/Log Analytics/Grafana -> Azure MCP/Grafana MCP -> telemetry-investigator -> patch proposal
+GitHub Copilot CLI
+  -> agentops copilot wrapper
+  -> OTLP on 127.0.0.1
+  -> local OpenTelemetry Collector
+  -> Azure Monitor exporter
+  -> Application Insights + Log Analytics
+  -> Azure Managed Grafana dashboards
 ```
 
-The v0.1 implementation focuses on metadata-only telemetry and patch proposals. It does not capture prompts, responses, tool arguments, or file contents by default.
+## Runtime Path
 
-## Runtime Data Flow
+`agentops copilot` resolves the real GitHub Copilot CLI, ensures the local collector is available unless explicitly disabled, sets metadata-only OpenTelemetry environment variables, and executes Copilot.
 
-```text
-developer shell
-    |
-    | copilot -p ...             or              agentops codex ...
-    v
-AgentOps wrapper
-    |
-    +--> starts collector if needed
-    +--> sets OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318
-    +--> sets content capture off
-    +--> adds safe labels: experiment, profile, agent name, hashed repo
-    |
-    v
-real CLI process
-    |
-    | OTLP spans/metrics/events
-    v
-127.0.0.1 OpenTelemetry Collector
-    |
-    +--> drops prompt/content/tool payload fields
-    +--> keeps operation metadata, cost/tokens, timing, success/failure
-    |
-    v
-Azure Monitor exporter
-    |
-    +--> Application Insights tables
-    +--> Log Analytics KQL
-    +--> Azure Managed Grafana dashboards
-```
+The wrapper records safe metadata such as model name, tool name, duration, token usage, cost fields, success/failure, and hashed repository metadata. It forces GenAI message content capture off by default.
 
-## Dashboard Topology
+## Privacy Boundary
 
-```text
-Copilot CLI AgentOps overview
-    |
-    +--> Sessions
-    |       |
-    |       +--> Session Detail
-    |       +--> Traces / Spans
-    |       +--> Runtime Events
-    |
-    +--> Tools & MCP
-    +--> Attribution
-    +--> Safety & Policy
-    +--> Permission Friction
-    +--> Quality / Experiments / Data Quality
-    +--> Alert Tuning
-```
+The local Collector is the scrub-before-export boundary. Docker is optional, but the Collector is required for the safe path.
 
-The overview is the user entry point. The other dashboards are drilldowns for operators, not separate products.
+Strict mode allowlists known safe attributes before export. Compat mode keeps the older denylist scrubber for compatibility.
 
-## Alert Posture
+## Azure Resources
 
-```text
-raw telemetry
-    |
-    v
-alert tuning dashboard
-    |
-    +--> review history and false positives
-    +--> pick thresholds
-    +--> wire action groups intentionally
-    |
-    v
-disabled-by-default scheduled-query rules
-```
+The Bicep deployment provisions:
 
-Do not enable paging alerts on the first install. Start with dashboard evidence and opt-in action groups.
+- Log Analytics Workspace
+- Application Insights
+- Azure Monitor Workspace
+- Azure Managed Grafana
+- Key Vault
+- optional alerts, actioner, RBAC, and budget modules disabled by default
+
+## Dashboards
+
+The core Grafana path is Overview, Sessions, and Session Detail. Other dashboards are useful but experimental or data-dependent.
+
+Policy panels show observed hook signals only. They are not a security boundary.

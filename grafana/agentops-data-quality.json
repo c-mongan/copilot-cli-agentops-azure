@@ -126,7 +126,7 @@
       },
       "options": {
         "mode": "markdown",
-        "content": "## Data Quality\nField discovery, token rollup, collector health, and smoke-ingestion checks for validating dashboard assumptions against real Copilot CLI telemetry."
+        "content": "## Data Quality\nField discovery, token rollup, collector health, and real-ingestion checks for validating dashboard assumptions against real Copilot CLI telemetry."
       }
     },
     {
@@ -208,7 +208,7 @@
     {
       "id": 20,
       "type": "table",
-      "title": "Collector health and smoke ingestion",
+      "title": "Collector health and real ingestion",
       "gridPos": {
         "h": 8,
         "w": 24,
@@ -259,7 +259,7 @@
               "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
             ],
             "resultFormat": "table",
-            "query": "// Collector health and smoke-ingestion check for Copilot CLI AgentOps.\n// Use with the collector health endpoint and `agentops smoke` to verify the full path.\nlet lookback = 24h;\nlet copilot =\nAppDependencies\n| where TimeGenerated > ago(lookback)\n| where (Properties has \"github.copilot\" or Properties has \"gen_ai.operation.name\" or Properties has \"agentops.\" or AppRoleName in (\"github-copilot\", \"copilot-chat\", \"github-copilot-cli\", \"codex\", \"openai-codex\", \"openai-codex-cli\") or tostring(Properties[\"service.name\"]) in (\"github-copilot\", \"copilot-chat\", \"github-copilot-cli\", \"codex\", \"openai-codex\", \"openai-codex-cli\") or tostring(Properties[\"agent.runtime\"]) in (\"codex\", \"openai-codex-cli\"))\n| summarize\n    LastCopilotSpan=max(TimeGenerated),\n    CopilotSpans=count(),\n    SmokeSpans=countif(Properties has \"agentops.smoke_id\");\nlet collectorLogs =\nAppTraces\n| where TimeGenerated > ago(lookback)\n| where Message has_any (\"otelcol\", \"azuremonitor\", \"exporter\", \"dropped\", \"retry\", \"queue\", \"refused\", \"timeout\")\n| summarize\n    LastCollectorLog=max(TimeGenerated),\n    CollectorErrors=countif(SeverityLevel >= 3 or Message has_any (\"error\", \"failed\", \"dropped\", \"refused\", \"timeout\")),\n    CollectorWarnings=countif(SeverityLevel == 2 or Message has \"warn\");\ncopilot\n| extend joinKey=1\n| join kind=fullouter (collectorLogs | extend joinKey=1) on joinKey\n| project LastCopilotSpan, CopilotSpans, SmokeSpans, LastCollectorLog, CollectorErrors, CollectorWarnings\n| extend Health=case(isnull(LastCopilotSpan), \"no_copilot_spans\", CollectorErrors > 0, \"collector_errors\", \"healthy\")\n"
+            "query": "// Collector health and real-ingestion check for Copilot CLI AgentOps.\n// Use after an observed Copilot, SDK, Codex, or custom telemetry run.\nlet lookback = 24h;\nlet copilot =\nAppDependencies\n| where TimeGenerated > ago(lookback)\n| where (Properties has \"github.copilot\" or Properties has \"gen_ai.operation.name\" or Properties has \"agentops.\" or AppRoleName in (\"github-copilot\", \"copilot-chat\", \"github-copilot-cli\", \"codex\", \"openai-codex\", \"openai-codex-cli\") or tostring(Properties[\"service.name\"]) in (\"github-copilot\", \"copilot-chat\", \"github-copilot-cli\", \"codex\", \"openai-codex\", \"openai-codex-cli\") or tostring(Properties[\"agent.runtime\"]) in (\"codex\", \"openai-codex-cli\"))\n| where isempty(tostring(Properties[\"agentops.smoke_id\"]))\n    and tostring(Properties[\"agentops.profile\"]) !has \"smoke\"\n    and isempty(tostring(Properties[\"agentops.test.kind\"]))\n| summarize\n    LastCopilotSpan=max(TimeGenerated),\n    CopilotSpans=count(),\n    FailedSpans=countif(Success == false or tostring(Success) =~ \"false\" or isnotempty(tostring(Properties[\"error.type\"]))),\n    AgentOpsSpans=countif(Properties has \"agentops.\");\nlet collectorLogs =\nAppTraces\n| where TimeGenerated > ago(lookback)\n| where Message has_any (\"otelcol\", \"azuremonitor\", \"exporter\", \"dropped\", \"retry\", \"queue\", \"refused\", \"timeout\")\n| summarize\n    LastCollectorLog=max(TimeGenerated),\n    CollectorErrors=countif(SeverityLevel >= 3 or Message has_any (\"error\", \"failed\", \"dropped\", \"refused\", \"timeout\")),\n    CollectorWarnings=countif(SeverityLevel == 2 or Message has \"warn\");\ncopilot\n| extend joinKey=1\n| join kind=fullouter (collectorLogs | extend joinKey=1) on joinKey\n| project LastCopilotSpan, CopilotSpans, AgentOpsSpans, FailedSpans, LastCollectorLog, CollectorErrors, CollectorWarnings\n| extend Health=case(isnull(LastCopilotSpan), \"no_copilot_spans\", CollectorErrors > 0, \"collector_errors\", \"healthy\")\n"
           }
         }
       ]

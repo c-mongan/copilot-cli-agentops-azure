@@ -49,5 +49,8 @@ if (-not $KeepAgentopsCommand) {
 }
 
 Write-Host ""
-Write-Host "Stop the Azure Monitor collector with:"
-Write-Host "  docker compose -f collector/docker-compose.azuremonitor.yaml down"
+Write-Host "Stop the local Collector with:"
+Write-Host "  agentops collector stop --mode auto"
+Write-Host ""
+Write-Host "Remove the installed Collector binary with:"
+Write-Host "  agentops collector uninstall-binary"

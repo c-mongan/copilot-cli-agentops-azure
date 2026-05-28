@@ -27,7 +27,6 @@ node src/index.js smoke --dry-run
 node src/index.js smoke --wait 2m --poll 10s
 node src/index.js attribution-smoke --wait 5m --poll 15s
 node src/index.js live-replay-smoke --wait 5m --poll 15s
-node src/index.js gallery-smoke --wait 5m --poll 15s
 node src/index.js ask-context latest --last 2h
 node src/index.js plugin install
 node src/index.js plugin uninstall
@@ -67,14 +66,14 @@ Dashboard verification path:
 
 ```bash
 node src/index.js validate-azure --last 2h
-node src/index.js smoke --wait 5m --poll 15s
-node src/index.js attribution-smoke --wait 5m --poll 15s
-node src/index.js live-replay-smoke --wait 5m --poll 15s
-node src/index.js gallery-smoke --wait 5m --poll 15s
+copilot plugin install c-mongan/copilot-cli-agentops-azure:plugin
+node src/index.js copilot --agent agentops-orchestrator --allow-tool=bash --add-dir . --no-ask-user --no-remote -p "Do not edit files. Use read-only shell commands: pwd and ls docs | head."
+node src/index.js custom emit --event agent.delegation.started --agent investigator --parent-agent agentops-orchestrator --delegation-id real-delegation --workflow investigation --step delegate --outcome started
+node src/index.js custom emit --event agent.policy.blocked --agent policy-reviewer --workflow safety-review --step pre-tool --outcome blocked --risk policy --attribute github.copilot.policy.decision=blocked
 node src/index.js open
 ```
 
-Open **Overview** first, then **Sessions**, **Traces / Spans**, and **Tools & MCP**. Empty Safety/Policy or Runtime Events panels are normal until matching policy, hook, skill, truncation, or content-capture signals exist. Use `gallery-smoke` when you want to seed those quieter pages for a demo or screenshot pass.
+Open **Overview** first, then **Sessions**, **Traces / Spans**, and **Tools & MCP**. Empty Safety/Policy or Runtime Events panels are normal until matching policy, hook, skill, truncation, or content-capture signals exist. Use a real observed Copilot run when you want to seed those quieter pages.
 
 `configure` stores non-secret Azure/Grafana identifiers in `~/.agentops/config.json` so users do not need to export terminal environment variables for every shell. Environment variables still override saved config for CI and advanced workflows.
 
@@ -86,13 +85,15 @@ Open **Overview** first, then **Sessions**, **Traces / Spans**, and **Tools & MC
 
 `smoke` sends or dry-runs a privacy-safe OTLP trace through the local collector. In live mode it polls Log Analytics for the smoke id by default; use `--no-verify` only when you want a collector-only check.
 
-`attribution-smoke` sends a privacy-safe synthetic trace that exercises custom agent, skill, Azure MCP, and script/hook attribution fields. Use it after `smoke` when you want to verify attribution dashboards and filters without relying on a live agent to call every primitive.
+`attribution-smoke` sends a privacy-safe synthetic trace that exercises custom agent, skill, Azure MCP, and script/hook attribution fields. Keep it as a collector/filter wiring diagnostic; do not use it for README screenshots or product demos when real traffic is available.
 
-`live-replay-smoke` sends a privacy-safe synthetic orchestrator trace with a delegated sub-agent, skill, Azure MCP tool call, and hook/script event. It polls Log Analytics and prints the Live Replay URL so users can prove the run tree and timeline dashboards are wired.
+`live-replay-smoke` sends a privacy-safe synthetic orchestrator trace with a delegated sub-agent, skill, Azure MCP tool call, and hook/script event. Keep it as a diagnostic. For normal dashboard population, emit real lifecycle metadata with `custom emit --parent-agent ... --delegation-id ...` from the orchestrator, sub-agent, hook, SDK app, or script doing the work.
 
-`gallery-smoke` sends privacy-safe synthetic metadata for Runtime Events, Safety & Policy, Permission Friction, and Alert Tuning. It emits a policy block, retry hint, failed tool, truncation signal, broad-permission markers, high AIU/cost evidence, and a content-capture signal marker without recording real prompt text, responses, tool arguments, URLs, or file contents.
+For Runtime Events, Safety & Policy, Permission Friction, and Alert Tuning, prefer real signals: install the Copilot plugin, run an observed agent task, and trigger a safe policy-block check with a fake Key Vault secret-read command. Compaction and truncation panels stay quiet until a real run actually hits context pressure.
 
-`collector-health` prints a KQL query for smoke span counts, latest Copilot span, and collector error/warning signals.
+`custom emit --attribute key=value` is the explicit opt-in path for first-class dashboard fields from trusted agents or scripts. It only accepts known telemetry namespaces such as `agentops.*`, `gen_ai.*`, and `github.copilot.*`; use `--custom key=value` for generic private dimensions.
+
+`collector-health` prints a KQL query for latest real Copilot/AgentOps spans and collector error/warning signals.
 
 `attribution` prints KQL that groups usage, failures, tokens, cost, and tools by custom agent, skill, MCP server, and script/hook attribution fields.
 
