@@ -546,6 +546,10 @@ function sessionsDashboard() {
 }
 
 function sessionDetailDashboard() {
+  const runtimeEvents = healthyEmptyTable(
+    `${runtimeBaseWhere()} ${sessionFilterPipe()} | where tostring(Properties) has 'github.copilot.session' or tostring(Properties) has 'github.copilot.skill' or tostring(Properties) has 'github.copilot.context.skills' or tostring(Properties) has 'github.copilot.hook' or tostring(Properties) has 'github.copilot.tokens_removed' or isnotempty(error) | extend event=coalesce(tostring(Properties['event.name']), tostring(Properties['github.copilot.event.name']), Name), skill=tostring(Properties['github.copilot.skill.name']), context_skills=tostring(Properties['github.copilot.context.skills']), hook=tostring(Properties['github.copilot.hook.name']), tokens_removed=toint(Properties['github.copilot.tokens_removed']) | project TimeGenerated, event, operation, agent, model, tool, skill, context_skills, hook, tokens_removed, error, Message | order by TimeGenerated asc`,
+    "print TimeGenerated=now(), event='No runtime events observed for this session', operation='', agent='', model='', tool='', skill='', context_skills='', hook='', tokens_removed=int(0), error='', Message='Healthy empty state'"
+  );
   const panels = [
     textPanel(1, 0, 0, 24, 2, '## Session Detail\nSingle-session investigation: spans, tool waterfall, runtime events, token/cost breakdown, and safety signals.'),
     statPanel(2, 'Spans', 0, 2, `${sessionBaseWhere()} ${sessionFilterPipe()} | summarize Spans=count() by bin(TimeGenerated, $__interval) | order by TimeGenerated asc`),
@@ -561,7 +565,7 @@ function sessionDetailDashboard() {
     ]),
     timeseriesPanel(20, 'Span duration by operation', 0, 19, 12, 8, `${sessionBaseWhere()} ${sessionFilterPipe()} | summarize DurationMs=avg(DurationMs) by bin(TimeGenerated, $__interval), operation | order by TimeGenerated asc`, 'ms'),
     tablePanel(21, 'Tool waterfall', 12, 19, 12, 8, `${sessionBaseWhere()} ${sessionFilterPipe()} | where operation == 'execute_tool' or isnotempty(tool) | project TimeGenerated, tool, Name, DurationMs, Success, ResultCode, error | order by TimeGenerated asc`, [byNameUnit('DurationMs', 'ms', 2)]),
-    tablePanel(30, 'Runtime events', 0, 27, 24, 9, `${runtimeBaseWhere()} ${sessionFilterPipe()} | where tostring(Properties) has 'github.copilot.session' or tostring(Properties) has 'github.copilot.skill' or tostring(Properties) has 'github.copilot.context.skills' or tostring(Properties) has 'github.copilot.hook' or tostring(Properties) has 'github.copilot.tokens_removed' or isnotempty(error) | extend event=coalesce(tostring(Properties['event.name']), tostring(Properties['github.copilot.event.name']), Name), skill=tostring(Properties['github.copilot.skill.name']), context_skills=tostring(Properties['github.copilot.context.skills']), hook=tostring(Properties['github.copilot.hook.name']), tokens_removed=toint(Properties['github.copilot.tokens_removed']) | project TimeGenerated, event, operation, agent, model, tool, skill, context_skills, hook, tokens_removed, error, Message | order by TimeGenerated asc`, [byNameUnit('tokens_removed', 'short')]),
+    tablePanel(30, 'Runtime events', 0, 27, 24, 9, runtimeEvents, [byNameUnit('tokens_removed', 'short')]),
   ];
   return baseDashboard('agentops-session-detail', 'AgentOps Session Detail', panels, true, {
     conversationIncludeAll: false,

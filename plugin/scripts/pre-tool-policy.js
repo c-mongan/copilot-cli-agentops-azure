@@ -18,9 +18,14 @@ function deny(reason) {
 }
 
 (async () => {
-  const input = JSON.parse(await readStdin() || '{}');
+  let input;
+  try {
+    input = JSON.parse(await readStdin() || '{}');
+  } catch {
+    input = {};
+  }
   const tool = input.toolName || input.tool_name || '';
-  const args = input.toolArgs || input.tool_input || {};
+  const args = input.toolArgs || input.tool_args || input.toolInput || input.tool_input || input.input || {};
   const argText = JSON.stringify(args).toLowerCase();
 
   const blockedPatterns = [
@@ -37,12 +42,12 @@ function deny(reason) {
 
   for (const pattern of blockedPatterns) {
     if (argText.includes(pattern)) {
-      return deny(`Blocked by AgentOps preToolUse policy: risky command or secret access pattern "${pattern}".`);
+      return deny(`Blocked by AgentOps demo preToolUse guardrail: risky command or secret access pattern "${pattern}".`);
     }
   }
 
   if ((tool.includes('write') || tool.includes('edit')) && argText.includes('.env')) {
-    return deny('Blocked by AgentOps policy: writing .env files is not allowed.');
+    return deny('Blocked by AgentOps demo preToolUse guardrail: writing .env files is not allowed.');
   }
 
   process.exit(0);

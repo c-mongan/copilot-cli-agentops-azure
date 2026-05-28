@@ -29,8 +29,8 @@ node --check agentops-cli/src/index.js
 node --check scripts/build-grafana-dashboard-pack.js
 node --check scripts/validate-grafana-dashboard-kql.js
 node scripts/build-grafana-dashboard-pack.js
-docker compose -f collector/docker-compose.yaml config >/tmp/agentops-compose.yaml
-docker compose -f collector/docker-compose.azuremonitor.yaml config >/tmp/agentops-azuremonitor-compose.yaml
+node agentops-cli/src/index.js collector validate --mode auto --privacy strict --json
+node agentops-cli/src/index.js collector smoke --privacy strict --poison --json
 az bicep build --file infra/bicep/main.bicep --stdout >/tmp/agentops-main-arm.json
 git diff --check
 ```

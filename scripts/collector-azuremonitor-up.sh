@@ -4,6 +4,12 @@ set -euo pipefail
 subscription_id="${AZURE_SUBSCRIPTION_ID:-}"
 resource_group="${AZURE_RESOURCE_GROUP:-rg-agentops-dev}"
 app_insights_name="${APPLICATIONINSIGHTS_NAME:-appi-agentops-dev}"
+privacy_mode="${AGENTOPS_PRIVACY_MODE:-strict}"
+export AGENTOPS_PRIVACY_MODE="${privacy_mode}"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd "${script_dir}/.." && pwd)"
+collector_dir="${repo_root}/collector"
+compose_file="${collector_dir}/docker-compose.azuremonitor.yaml"
 
 if [[ -n "$subscription_id" ]]; then
   az account set --subscription "$subscription_id"
@@ -20,15 +26,20 @@ if [[ -z "$APPLICATIONINSIGHTS_CONNECTION_STRING" ]]; then
   exit 1
 fi
 
-docker compose -f collector/docker-compose.azuremonitor.yaml up -d --force-recreate
+docker compose \
+  --project-name agentops-azuremonitor \
+  --project-directory "${collector_dir}" \
+  -f "${compose_file}" \
+  up -d --force-recreate
 
 cat <<MSG
 Azure Monitor collector started on 127.0.0.1:4318 and 127.0.0.1:4317.
+Privacy mode: ${privacy_mode}.
 Connection string was retrieved at runtime and not written to disk.
 
 Check status:
-  docker compose -f collector/docker-compose.azuremonitor.yaml ps
+  docker compose --project-name agentops-azuremonitor --project-directory "${collector_dir}" -f "${compose_file}" ps
 
 Stop it:
-  docker compose -f collector/docker-compose.azuremonitor.yaml down
+  docker compose --project-name agentops-azuremonitor --project-directory "${collector_dir}" -f "${compose_file}" down
 MSG

@@ -1,11 +1,24 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+script_source="${BASH_SOURCE[0]}"
+while [[ -L "${script_source}" ]]; do
+	script_dir="$(cd "$(dirname "${script_source}")" && pwd)"
+	link_target="$(readlink "${script_source}")"
+	if [[ "${link_target}" == /* ]]; then
+		script_source="${link_target}"
+	else
+		script_source="${script_dir}/${link_target}"
+	fi
+done
+script_dir="$(cd "$(dirname "${script_source}")" && pwd)"
+repo_root="$(cd "${script_dir}/.." && pwd)"
+
 export COPILOT_OTEL_ENABLED="${COPILOT_OTEL_ENABLED:-true}"
 export COPILOT_OTEL_EXPORTER_TYPE="${COPILOT_OTEL_EXPORTER_TYPE:-otlp-http}"
 export OTEL_EXPORTER_OTLP_ENDPOINT="${OTEL_EXPORTER_OTLP_ENDPOINT:-http://127.0.0.1:4318}"
 export OTEL_SERVICE_NAME="${OTEL_SERVICE_NAME:-github-copilot-cli}"
-export OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT="${OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT:-false}"
+export OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT="false"
 export COPILOT_OTEL_SOURCE_NAME="${COPILOT_OTEL_SOURCE_NAME:-github.copilot}"
 
 repo_url="$(git remote get-url origin 2>/dev/null || echo unknown)"
@@ -57,7 +70,58 @@ capture_content_enabled="${AGENTOPS_CAPTURE_CONTENT:-false}"
 capture_content_scope="default-off"
 
 sanitize_attr_value() {
-	printf '%s' "$1" | tr ',=\n\r\t ' '______'
+	local raw="${1:-}"
+	if command -v node >/dev/null 2>&1; then
+		node -e 'const value = process.argv[1] || ""; process.stdout.write(encodeURIComponent(value).replace(/[!'"'"'()*]/g, c => "%" + c.charCodeAt(0).toString(16).toUpperCase()));' "$raw"
+	else
+		printf '%s' "$raw" | tr ',=\n\r\t ' '______'
+	fi
+}
+
+looks_like_agentops_shim() {
+	local candidate="${1:-}"
+	[[ -z "$candidate" || ! -f "$candidate" ]] && return 1
+	case "$(cd "$(dirname "$candidate")" && pwd)/$(basename "$candidate")" in
+		"${repo_root}/scripts/copilot-agentops"|\
+		"${repo_root}/copilot/copilot-observe"|\
+		"${HOME}/.local/bin/copilot"|\
+		"${HOME}/.local/bin/copilot-agentops")
+			return 0
+			;;
+	esac
+	if [[ "$(wc -c <"$candidate" 2>/dev/null || echo 9999999)" -lt 1048576 ]] && grep -Eiq 'copilot-agentops|copilot-observe|AGENTOPS_|AgentOps' "$candidate" 2>/dev/null; then
+		return 0
+	fi
+	return 1
+}
+
+resolve_copilot_bin() {
+	if [[ -n "${COPILOT_CLI_BIN:-}" ]]; then
+		if [[ ! -x "${COPILOT_CLI_BIN}" ]]; then
+			echo "ERROR: COPILOT_CLI_BIN is not executable: ${COPILOT_CLI_BIN}" >&2
+			exit 127
+		fi
+		if looks_like_agentops_shim "${COPILOT_CLI_BIN}"; then
+			echo "ERROR: COPILOT_CLI_BIN points to an AgentOps shim: ${COPILOT_CLI_BIN}" >&2
+			exit 2
+		fi
+		printf '%s' "${COPILOT_CLI_BIN}"
+		return
+	fi
+
+	local candidate
+	IFS=':' read -r -a path_dirs <<< "${PATH:-}"
+	for path_dir in "${path_dirs[@]}"; do
+		[[ -z "$path_dir" ]] && continue
+		candidate="${path_dir}/copilot"
+		if [[ -x "$candidate" ]] && ! looks_like_agentops_shim "$candidate"; then
+			printf '%s' "$candidate"
+			return
+		fi
+	done
+
+	echo "ERROR: real GitHub Copilot CLI was not found. Set COPILOT_CLI_BIN to the real binary." >&2
+	exit 127
 }
 
 append_unique() {
@@ -339,13 +403,16 @@ while [[ $# -gt 0 ]]; do
 	shift
 done
 
-agentops_resource_attributes="service.namespace=copilot-agentops,service.name=github-copilot-cli,agent.framework=github-copilot,agent.runtime=github-copilot-cli,agentops.profile=${profile},agentops.experiment=${experiment},agentops.pack.version=${agentops_version},agentops.repo.hash=${repo_hash},git.branch=${branch},git.commit=${commit},agentops.cli.mode=${cli_mode},agentops.cli.remote=${cli_remote},agentops.cli.output_format=${cli_output_format},agentops.cli.allow_all=${allow_all},agentops.cli.allow_all_tools=${allow_all_tools},agentops.cli.allow_all_paths=${allow_all_paths},agentops.cli.allow_all_urls=${allow_all_urls},agentops.cli.acp=${acp_enabled},agentops.cli.cwd_changed=${cwd_changed},agentops.cli.session_id_provided=${session_id_provided},agentops.cli.share=${share_enabled},agentops.cli.share_gist=${share_gist_enabled},agentops.cli.allow_tool.count=${allow_tool_count},agentops.cli.allow_url.count=${allow_url_count},agentops.cli.deny_tool.count=${deny_tool_count},agentops.cli.deny_url.count=${deny_url_count},agentops.cli.available_tools.count=${available_tool_count},agentops.cli.excluded_tools.count=${excluded_tool_count},agentops.cli.secret_env_vars.count=${secret_env_count},agentops.cli.attachment.count=${attachment_count},agentops.cli.plugin_dir.count=${plugin_dir_count},agentops.cli.additional_mcp_config.count=${additional_mcp_config_count},agentops.cli.disabled_mcp_server.count=${disabled_mcp_server_count},agentops.cli.github_mcp_tool.count=${github_mcp_tool_count},agentops.cli.github_mcp_toolset.count=${github_mcp_toolset_count}"
+agentops_resource_attributes="service.namespace=copilot-agentops,service.name=github-copilot-cli,agent.framework=github-copilot,agent.runtime=github-copilot-cli,agentops.profile=$(sanitize_attr_value "${profile}"),agentops.experiment=$(sanitize_attr_value "${experiment}"),agentops.pack.version=$(sanitize_attr_value "${agentops_version}"),agentops.repo.hash=${repo_hash},git.branch=$(sanitize_attr_value "${branch}"),git.commit=$(sanitize_attr_value "${commit}"),agentops.cli.mode=$(sanitize_attr_value "${cli_mode}"),agentops.cli.remote=$(sanitize_attr_value "${cli_remote}"),agentops.cli.output_format=$(sanitize_attr_value "${cli_output_format}"),agentops.cli.allow_all=${allow_all},agentops.cli.allow_all_tools=${allow_all_tools},agentops.cli.allow_all_paths=${allow_all_paths},agentops.cli.allow_all_urls=${allow_all_urls},agentops.cli.acp=${acp_enabled},agentops.cli.cwd_changed=${cwd_changed},agentops.cli.session_id_provided=${session_id_provided},agentops.cli.share=${share_enabled},agentops.cli.share_gist=${share_gist_enabled},agentops.cli.allow_tool.count=${allow_tool_count},agentops.cli.allow_url.count=${allow_url_count},agentops.cli.deny_tool.count=${deny_tool_count},agentops.cli.deny_url.count=${deny_url_count},agentops.cli.available_tools.count=${available_tool_count},agentops.cli.excluded_tools.count=${excluded_tool_count},agentops.cli.secret_env_vars.count=${secret_env_count},agentops.cli.attachment.count=${attachment_count},agentops.cli.plugin_dir.count=${plugin_dir_count},agentops.cli.additional_mcp_config.count=${additional_mcp_config_count},agentops.cli.disabled_mcp_server.count=${disabled_mcp_server_count},agentops.cli.github_mcp_tool.count=${github_mcp_tool_count},agentops.cli.github_mcp_toolset.count=${github_mcp_toolset_count}"
+if [[ -n "${AGENTOPS_E2E_ID:-}" ]]; then
+	agentops_resource_attributes="${agentops_resource_attributes},agentops.e2e.id=$(sanitize_attr_value "${AGENTOPS_E2E_ID}")"
+fi
 if [[ -n "${cli_model}" ]]; then
-	agentops_resource_attributes="${agentops_resource_attributes},agentops.cli.model=${cli_model}"
+	agentops_resource_attributes="${agentops_resource_attributes},agentops.cli.model=$(sanitize_attr_value "${cli_model}")"
 fi
 if [[ -n "${cli_agent}" ]]; then
-	agentops_resource_attributes="${agentops_resource_attributes},agentops.cli.agent=${cli_agent}"
-	agentops_resource_attributes="${agentops_resource_attributes},agentops.agent.name=${cli_agent}"
+	agentops_resource_attributes="${agentops_resource_attributes},agentops.cli.agent=$(sanitize_attr_value "${cli_agent}")"
+	agentops_resource_attributes="${agentops_resource_attributes},agentops.agent.name=$(sanitize_attr_value "${cli_agent}")"
 	agent_file="$(find_agent_file "$cli_agent" || true)"
 	if [[ -n "$agent_file" ]]; then
 		agent_file_hash="$(shasum -a 256 "$agent_file" | awk '{print $1}')"
@@ -367,22 +434,27 @@ if [[ "$(lower_bool "${capture_content_enabled}")" != "true" && -n "${AGENTOPS_A
 	done
 fi
 capture_content_enabled="$(lower_bool "${capture_content_enabled}")"
-if [[ "${capture_content_enabled}" == "true" ]]; then
+capture_override_enabled="$(lower_bool "${AGENTOPS_DISABLE_CONTENT_CAPTURE_OVERRIDE:-1}")"
+if [[ "${capture_content_enabled}" == "true" && "${capture_override_enabled}" == "0" ]]; then
 	export OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT="true"
 	export COPILOT_OTEL_CAPTURE_CONTENT="true"
 	if [[ "${capture_content_scope}" == "default-off" ]]; then
 		capture_content_scope="explicit"
 	fi
 else
-	export OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT="${OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT:-false}"
-	export COPILOT_OTEL_CAPTURE_CONTENT="${COPILOT_OTEL_CAPTURE_CONTENT:-false}"
+	capture_content_enabled="false"
+	if [[ "${capture_content_scope}" != "default-off" ]]; then
+		capture_content_scope="blocked-by-default"
+	fi
+	export OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT="false"
+	export COPILOT_OTEL_CAPTURE_CONTENT="false"
 fi
 agentops_resource_attributes="${agentops_resource_attributes},agentops.content_capture.enabled=${capture_content_enabled},agentops.content_capture.scope=$(sanitize_attr_value "${capture_content_scope}")"
 if [[ -n "${cli_effort}" ]]; then
-	agentops_resource_attributes="${agentops_resource_attributes},agentops.cli.reasoning_effort=${cli_effort}"
+	agentops_resource_attributes="${agentops_resource_attributes},agentops.cli.reasoning_effort=$(sanitize_attr_value "${cli_effort}")"
 fi
 if [[ -n "${cli_stream}" ]]; then
-	agentops_resource_attributes="${agentops_resource_attributes},agentops.cli.stream=${cli_stream}"
+	agentops_resource_attributes="${agentops_resource_attributes},agentops.cli.stream=$(sanitize_attr_value "${cli_stream}")"
 fi
 if [[ ${#additional_mcp_config_names[@]} -gt 0 ]]; then
 	agentops_resource_attributes="${agentops_resource_attributes},agentops.mcp.config.files=$(join_attr_values additional_mcp_config_names)"
@@ -405,7 +477,7 @@ else
 	export OTEL_RESOURCE_ATTRIBUTES="${agentops_resource_attributes}"
 fi
 
-copilot_bin="${COPILOT_CLI_BIN:-copilot}"
+copilot_bin="$(resolve_copilot_bin)"
 if [[ "${copilot_arg_count}" -gt 0 ]]; then
 	exec "$copilot_bin" "${copilot_args[@]}"
 else
