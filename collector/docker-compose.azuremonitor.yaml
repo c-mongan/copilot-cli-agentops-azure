@@ -9,5 +9,6 @@ services:
       - "127.0.0.1:13133:13133"
     environment:
       APPLICATIONINSIGHTS_CONNECTION_STRING: ${APPLICATIONINSIGHTS_CONNECTION_STRING:-}
+      AGENTOPS_PRIVACY_MODE: ${AGENTOPS_PRIVACY_MODE:-strict}
     volumes:
-      - ./otelcol.azuremonitor.yaml:/etc/otelcol/config.yaml:ro
+      - ./otelcol.azuremonitor.${AGENTOPS_PRIVACY_MODE:-strict}.yaml:/etc/otelcol/config.yaml:ro

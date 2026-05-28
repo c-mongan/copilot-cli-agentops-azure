@@ -1,0 +1,67 @@
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+      grpc:
+        endpoint: 0.0.0.0:4317
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+processors:
+  memory_limiter:
+    check_interval: 5s
+    limit_mib: 256
+  transform/privacy_strict:
+    error_mode: ignore
+    trace_statements:
+      - context: resource
+        statements:
+          - keep_keys(attributes, ["service.name", "service.namespace", "service.version", "telemetry.sdk.name", "telemetry.sdk.language", "telemetry.sdk.version", "agent.framework", "agent.runtime", "agentops.profile", "agentops.experiment", "agentops.e2e.id", "agentops.pack.version", "agentops.repo.hash", "agentops.cli.mode", "agentops.cli.remote", "agentops.cli.output_format", "agentops.cli.allow_all", "agentops.cli.allow_all_tools", "agentops.cli.allow_all_paths", "agentops.cli.allow_all_urls", "agentops.cli.acp", "agentops.cli.cwd_changed", "agentops.cli.session_id_provided", "agentops.cli.share", "agentops.cli.share_gist", "agentops.cli.allow_tool.count", "agentops.cli.allow_url.count", "agentops.cli.deny_tool.count", "agentops.cli.deny_url.count", "agentops.cli.available_tools.count", "agentops.cli.excluded_tools.count", "agentops.cli.secret_env_vars.count", "agentops.cli.attachment.count", "agentops.cli.plugin_dir.count", "agentops.cli.additional_mcp_config.count", "agentops.cli.disabled_mcp_server.count", "agentops.cli.github_mcp_tool.count", "agentops.cli.github_mcp_toolset.count", "agentops.content_capture.enabled", "agentops.content_capture.scope", "agentops.content_capture.signal", "agentops.poison_id"])
+      - context: span
+        statements:
+          - set(attributes["agentops.content_capture.signal"], true) where attributes["content.capture.enabled"] == true or attributes["gen_ai.input.messages"] != nil or attributes["gen_ai.output.messages"] != nil or attributes["gen_ai.prompt"] != nil or attributes["gen_ai.completion"] != nil or attributes["gen_ai.system_instructions"] != nil or attributes["gen_ai.tool.definitions"] != nil or attributes["gen_ai.tool.call.arguments"] != nil or attributes["gen_ai.tool.call.result"] != nil or attributes["github.copilot.message"] != nil or attributes["http.request.body.content"] != nil or attributes["http.response.body.content"] != nil or attributes["url.full"] != nil or attributes["code.filepath"] != nil
+          - keep_keys(attributes, ["agentops.content_capture.signal", "agentops.poison_id", "gen_ai.operation.name", "gen_ai.provider.name", "gen_ai.request.model", "gen_ai.response.model", "gen_ai.conversation.id", "gen_ai.tool.name", "gen_ai.tool.type", "gen_ai.tool.call.id", "gen_ai.usage.input_tokens", "gen_ai.usage.output_tokens", "gen_ai.usage.cache_read.input_tokens", "gen_ai.usage.cache_creation.input_tokens", "github.copilot.cost", "github.copilot.aiu", "github.copilot.turn_count", "github.copilot.hook.type", "github.copilot.hook.invocation_id", "github.copilot.skill.name", "github.copilot.skill.plugin_name", "github.copilot.skill.plugin_version", "error.type", "exception.type", "http.status_code"])
+      - context: spanevent
+        statements:
+          - keep_keys(attributes, ["agentops.content_capture.signal", "github.copilot.hook.type", "github.copilot.hook.invocation_id", "github.copilot.skill.name", "github.copilot.skill.plugin_name", "github.copilot.skill.plugin_version", "github.copilot.success", "error.type", "exception.type"])
+    metric_statements:
+      - context: resource
+        statements:
+          - keep_keys(attributes, ["service.name", "service.namespace", "service.version", "telemetry.sdk.name", "telemetry.sdk.language", "telemetry.sdk.version", "agent.framework", "agent.runtime", "agentops.profile", "agentops.experiment", "agentops.e2e.id", "agentops.pack.version"])
+      - context: datapoint
+        statements:
+          - keep_keys(attributes, ["agentops.poison_id", "gen_ai.operation.name", "gen_ai.provider.name", "gen_ai.request.model", "gen_ai.response.model", "gen_ai.tool.name", "gen_ai.tool.type", "github.copilot.cost", "github.copilot.aiu", "error.type", "http.status_code"])
+    log_statements:
+      - context: resource
+        statements:
+          - keep_keys(attributes, ["service.name", "service.namespace", "service.version", "telemetry.sdk.name", "telemetry.sdk.language", "telemetry.sdk.version", "agent.framework", "agent.runtime", "agentops.profile", "agentops.experiment", "agentops.e2e.id", "agentops.pack.version"])
+      - context: log
+        statements:
+          - set(attributes["agentops.content_capture.signal"], true) where attributes["content.capture.enabled"] == true or attributes["gen_ai.input.messages"] != nil or attributes["gen_ai.output.messages"] != nil or attributes["gen_ai.prompt"] != nil or attributes["gen_ai.completion"] != nil or attributes["gen_ai.system_instructions"] != nil or attributes["gen_ai.tool.definitions"] != nil or attributes["gen_ai.tool.call.arguments"] != nil or attributes["gen_ai.tool.call.result"] != nil or attributes["github.copilot.message"] != nil or attributes["http.request.body.content"] != nil or attributes["http.response.body.content"] != nil or attributes["url.full"] != nil or attributes["code.filepath"] != nil
+          - set(body, "redacted by AgentOps strict privacy mode") where body != nil
+          - keep_keys(attributes, ["agentops.content_capture.signal", "agentops.poison_id", "gen_ai.operation.name", "gen_ai.provider.name", "gen_ai.request.model", "gen_ai.response.model", "gen_ai.conversation.id", "gen_ai.tool.name", "gen_ai.tool.type", "gen_ai.tool.call.id", "gen_ai.usage.input_tokens", "gen_ai.usage.output_tokens", "gen_ai.usage.cache_read.input_tokens", "gen_ai.usage.cache_creation.input_tokens", "github.copilot.cost", "github.copilot.aiu", "github.copilot.turn_count", "github.copilot.hook.type", "github.copilot.hook.invocation_id", "github.copilot.skill.name", "github.copilot.skill.plugin_name", "github.copilot.skill.plugin_version", "error.type", "exception.type", "http.status_code"])
+  cumulativetodelta: {}
+  batch: {}
+
+exporters:
+  azuremonitor:
+    connection_string: ${env:APPLICATIONINSIGHTS_CONNECTION_STRING}
+
+service:
+  extensions: [health_check]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, transform/privacy_strict, batch]
+      exporters: [azuremonitor]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, transform/privacy_strict, cumulativetodelta, batch]
+      exporters: [azuremonitor]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, transform/privacy_strict, batch]
+      exporters: [azuremonitor]

@@ -8,7 +8,7 @@ Completed locally:
 npm --prefix agentops-cli test
 node agentops-cli/src/index.js doctor --local-only
 az bicep build --file infra/bicep/main.bicep --stdout >/tmp/agentops-main-arm.json
-docker compose -f collector/docker-compose.yaml config >/tmp/agentops-compose.yaml
+node agentops-cli/src/index.js collector validate --mode auto --privacy strict --json
 ```
 
 All of the above pass.
@@ -24,52 +24,46 @@ Azure deployment checklist:
 
 ## Local Collector Smoke Test
 
-The collector smoke test requires Docker/OrbStack or a local `otelcol-contrib` binary.
+The collector smoke test uses the local Collector binary by default. Docker/OrbStack is optional.
 
-### Option A: Docker/OrbStack
+### Option A: Local Collector Binary
+
+Install and validate the tested OpenTelemetry Collector Contrib binary:
+
+```bash
+node agentops-cli/src/index.js collector install-binary
+node agentops-cli/src/index.js collector validate --mode binary --privacy strict
+node agentops-cli/src/index.js collector smoke --privacy strict --poison
+```
+
+### Option B: Docker/OrbStack
 
 Start Docker Desktop or OrbStack, then run:
 
 ```bash
-docker compose -f collector/docker-compose.yaml up -d
-node agentops-cli/src/index.js validate-collector
+node agentops-cli/src/index.js collector start --mode docker --privacy strict
 node agentops-cli/src/index.js smoke --dry-run
-node agentops-cli/src/index.js collector-health --last 24h
-docker compose -f collector/docker-compose.yaml logs --tail=50
+node agentops-cli/src/index.js experimental collector-health --last 24h
 ```
 
 Stop the collector with:
 
 ```bash
-docker compose -f collector/docker-compose.yaml down
-```
-
-### Option B: Local Collector Binary
-
-Install OpenTelemetry Collector Contrib and run:
-
-```bash
-otelcol-contrib --config collector/otelcol.local.yaml
-```
-
-In another terminal:
-
-```bash
-node agentops-cli/src/index.js validate-collector
+node agentops-cli/src/index.js collector stop --mode docker
 ```
 
 ## Azure Monitor Collector Smoke Test
 
-Docker is the current tested path for collector-backed Azure export. Start the Azure Monitor collector with the deployed Application Insights connection string retrieved at runtime:
+Binary mode is the default tested path for collector-backed Azure export. Start the Azure Monitor collector with the deployed Application Insights connection string retrieved at runtime:
 
 ```bash
-./scripts/collector-azuremonitor-up.sh
+node agentops-cli/src/index.js collector start --mode auto --privacy strict
 ```
 
 Send a privacy-safe OTLP trace through the local collector:
 
 ```bash
-node agentops-cli/src/index.js smoke --wait 2m --poll 10s
+node agentops-cli/src/index.js experimental smoke --wait 2m --poll 10s
 ./scripts/otlp-smoke-trace.sh
 ```
 
@@ -84,7 +78,7 @@ az monitor log-analytics query \
 Stop the Azure Monitor collector after testing:
 
 ```bash
-docker compose -f collector/docker-compose.azuremonitor.yaml down
+node agentops-cli/src/index.js collector stop --mode auto
 ```
 
 The collector helper retrieves the Application Insights connection string at runtime and does not write it to the repository.
@@ -101,9 +95,9 @@ copilot-observe --help
 For a real telemetry run, execute a small Copilot CLI task through `copilot-observe`. Keep content capture disabled.
 
 ```bash
-./scripts/collector-azuremonitor-up.sh
-./copilot/copilot-observe -p "Reply with exactly: agentops real telemetry smoke."
-docker compose -f collector/docker-compose.azuremonitor.yaml down
+node agentops-cli/src/index.js collector start --mode auto --privacy strict
+node agentops-cli/src/index.js copilot -p "Reply with exactly: agentops real telemetry smoke."
+node agentops-cli/src/index.js collector stop --mode auto
 ```
 
 ## Always-On Copilot Collection
@@ -112,9 +106,8 @@ For daily use, install the AgentOps shim and use `copilot-agentops` instead of s
 
 ```bash
 node agentops-cli/src/index.js install --shadow-copilot
-./scripts/install-copilot-agentops-shim.sh
 export PATH="$HOME/.local/bin:$PATH"
-copilot-agentops --help
+copilot --help
 ```
 
 PowerShell:
@@ -127,7 +120,7 @@ copilot-agentops --help
 
 The shim checks whether the Azure Monitor collector is already running. If it is not, it retrieves the Application Insights connection string at runtime, starts the collector, and then launches Copilot CLI through `copilot-observe` with content capture disabled.
 
-If the Azure Monitor collector cannot start because the configured Azure resources are missing or unavailable, the shim warns and launches the real Copilot CLI without AgentOps telemetry.
+If the Azure Monitor collector cannot start because the configured Azure resources are missing or unavailable, the shim fails closed unless `AGENTOPS_ALLOW_UNOBSERVED_FALLBACK=1` is set.
 
 The wrapper preserves user-supplied OpenTelemetry settings where possible. It sets safe defaults for `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_SERVICE_NAME`, `COPILOT_OTEL_SOURCE_NAME`, and `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT`, then prepends AgentOps metadata to existing `OTEL_RESOURCE_ATTRIBUTES` instead of replacing them.
 
@@ -189,7 +182,7 @@ copilot --help
 The shadow shim stores the real Copilot CLI path in `COPILOT_CLI_BIN` before routing through AgentOps, which avoids recursive calls. Stop the collector when you want collection off:
 
 ```bash
-docker compose -f collector/docker-compose.azuremonitor.yaml down
+node agentops-cli/src/index.js collector stop --mode auto
 ```
 
 Query recent real Copilot CLI spans:

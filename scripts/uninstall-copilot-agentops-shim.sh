@@ -80,6 +80,9 @@ fi
 
 cat <<'MSG'
 
-Stop the Azure Monitor collector with:
-  docker compose -f collector/docker-compose.azuremonitor.yaml down
+Stop the local Collector with:
+  agentops collector stop --mode auto
+
+Remove the installed Collector binary with:
+  agentops collector uninstall-binary
 MSG

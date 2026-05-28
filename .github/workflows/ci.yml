@@ -11,8 +11,15 @@ permissions:
   contents: read
 
 jobs:
-  agentops-cli:
-    runs-on: ubuntu-latest
+  offline:
+    name: offline (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -23,31 +30,67 @@ jobs:
       - name: Run CLI tests
         run: npm --prefix agentops-cli test
 
-      - name: Validate JSON assets
+      - name: Validate JavaScript syntax
         run: |
-          node - <<'NODE'
-          const fs = require('node:fs');
-          const path = require('node:path');
+          node --check agentops-cli/src/index.js
+          node --check agentops-cli/src/lib/collector-manager.js
+          node --check agentops-cli/src/commands/e2e.js
+          node --check scripts/build-grafana-dashboard-pack.js
+          node --check scripts/validate-grafana-dashboard-kql.js
+          node --check scripts/validate-json-assets.js
 
-          const files = [
-            'plugin/.mcp.json',
-            'copilot/mcp.azure-monitor.sample.json',
-            'copilot/mcp.grafana.sample.json',
-            '.github/plugin/marketplace.json',
-            ...fs.readdirSync('grafana')
-              .filter(file => file.endsWith('.json'))
-              .map(file => path.join('grafana', file))
-          ];
+      - name: Validate JSON assets
+        run: node scripts/validate-json-assets.js
 
-          for (const file of files) {
-            JSON.parse(fs.readFileSync(file, 'utf8'));
+      - name: Validate Bash scripts
+        if: runner.os == 'Linux'
+        run: bash -n setup-agentops.sh install-agentops.sh uninstall-agentops.sh scripts/*.sh copilot/copilot-observe
+
+      - name: Validate PowerShell scripts
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $files = @(
+            "setup-agentops.ps1",
+            "install-agentops.ps1",
+            "uninstall-agentops.ps1",
+            "scripts/install-copilot-agentops-shim.ps1",
+            "scripts/uninstall-copilot-agentops-shim.ps1",
+            "scripts/copilot-agentops.ps1",
+            "scripts/collector-azuremonitor-up.ps1"
+          )
+          foreach ($file in $files) {
+            $null = [scriptblock]::Create((Get-Content -Raw $file))
+            Write-Host "parsed $file"
           }
-
-          console.log(`validated ${files.length} JSON files`);
-          NODE
 
       - name: AgentOps local doctor
         run: node agentops-cli/src/index.js doctor --local-only
 
+      - name: Strict privacy smoke
+        run: node agentops-cli/src/index.js collector smoke --privacy strict --poison --json
+
       - name: AgentOps scan
-        run: node agentops-cli/src/index.js scan > /tmp/agentops-scan.json
+        run: node agentops-cli/src/index.js experimental scan
+
+  collector-binary:
+    name: collector binary install
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      AGENTOPS_COLLECTOR_HOME: ${{ github.workspace }}/.agentops-collector
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Collector binary with checksum verification
+        run: node agentops-cli/src/index.js collector install-binary --version 0.151.0 --json
+
+      - name: Validate strict Collector config
+        run: node agentops-cli/src/index.js collector validate --mode auto --privacy strict --json
+
+      - name: Run strict poison smoke through debug Collector
+        run: node agentops-cli/src/index.js collector smoke --privacy strict --poison --json

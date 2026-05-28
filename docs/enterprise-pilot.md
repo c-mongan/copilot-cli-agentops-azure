@@ -190,7 +190,7 @@ Budget references:
 Disable collection locally:
 
 ```bash
-agentops disable-shadow
+agentops experimental disable-shadow
 agentops collector stop
 ```
 
@@ -203,7 +203,7 @@ agentops uninstall
 Stop Azure ingestion without deleting historical data:
 
 ```bash
-docker compose -f collector/docker-compose.azuremonitor.yaml down
+agentops collector stop --mode auto
 ```
 
 Delete the pilot resource group only after the owner confirms that retention/export requirements are satisfied:

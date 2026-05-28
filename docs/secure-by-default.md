@@ -1,17 +1,44 @@
 # Secure By Default
 
-Defaults:
+Security posture:
+
+```text
+content capture off at Copilot runtime
++ local collector privacy scrub
++ localhost-only host binding
++ no secret persistence
++ Azure ingestion caps / RBAC / disabled automation by default
+```
+
+## Defaults
 
 - `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=false`
-- Collector binds only to `127.0.0.1`.
-- Repo URL is hashed in `copilot-observe`.
-- MCP samples use read-only Azure Monitor scope.
-- Azure MCP is scoped to `--namespace monitor` with `--read-only true`.
-- Grafana MCP uses the Azure Managed Grafana endpoint with tokens supplied through environment variables.
-- Agents produce patch plans before edits.
-- Agent recommendations must include evidence, observed pattern, proposed files, expected metric movement, validation, and rollback.
-- Hook scripts do not call remote services.
-- Entra group RBAC assignments are optional and disabled by default.
-- Azure Consumption budget creation is optional and disabled by default.
+- `COPILOT_OTEL_CAPTURE_CONTENT=false`
+- `AGENTOPS_PRIVACY_MODE=strict`
+- `AGENTOPS_COLLECTOR_MODE=auto`
+- Collector host ports bind to `127.0.0.1`.
+- Application Insights connection strings are retrieved at runtime and not stored in repo config.
+- Alert rules, actioners, RBAC assignment automation, and budgets are opt-in.
 
-Never commit secrets, Grafana tokens, Azure credentials, `.env` files, or raw prompt/tool content telemetry.
+## Not Captured By Default
+
+- prompts
+- responses
+- code or file contents
+- tool arguments or tool results
+- system instructions
+- request/response bodies
+- full URLs
+- secrets
+
+## Unsafe Modes
+
+`AGENTOPS_COLLECTOR_MODE=none` is unsafe because no local scrub guarantee exists. It requires `AGENTOPS_ALLOW_NO_COLLECTOR=1` or `--unsafe-no-collector`.
+
+Content capture requires an explicit local debug override and should not be used for normal Azure export.
+
+## Policy Hooks
+
+The bundled hooks are transparent demo guardrails. They can block obvious risky patterns, but they are not comprehensive security enforcement.
+
+Never commit secrets, Grafana tokens, Azure credentials, `.env` files, or raw prompt/tool-content telemetry.

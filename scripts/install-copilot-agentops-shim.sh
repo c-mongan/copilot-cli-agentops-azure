@@ -43,13 +43,6 @@ ln -sf "${repo_root}/agentops-cli/src/index.js" "${install_dir}/agentops"
 ln -sf "${repo_root}/scripts/copilot-agentops" "${install_dir}/copilot-agentops"
 ln -sf "${repo_root}/scripts/agentops-codex" "${install_dir}/agentops-codex"
 
-if command -v node >/dev/null 2>&1; then
-  node "${repo_root}/agentops-cli/src/index.js" plugin install
-else
-  echo "WARNING: node was not found, so AgentOps Copilot plugin files were not installed." >&2
-  echo "Install Node.js, then run: node ${repo_root}/agentops-cli/src/index.js plugin install" >&2
-fi
-
 if [[ "${mode}" == "shadow" ]]; then
   real_copilot="$(PATH="$(printf '%s' "$PATH" | tr ':' '\n' | grep -vx "${install_dir}" | paste -sd ':' -)" command -v copilot || true)"
 
@@ -99,4 +92,10 @@ cat <<MSG
 
 Make sure your shell can see ${install_dir}. For zsh, add this if needed:
   export PATH="${install_dir}:\$PATH"
+
+Plugin files are optional and reversible. To install them explicitly:
+  agentops plugin install
+
+Remove plugin files later with:
+  agentops plugin uninstall
 MSG
