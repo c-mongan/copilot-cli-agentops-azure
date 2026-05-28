@@ -799,11 +799,11 @@ function qualityDashboard() {
 
 function dataQualityDashboard() {
   const panels = [
-    textPanel(1, 0, 0, 24, 2, '## Data Quality\nField discovery, token rollup, collector health, and smoke-ingestion checks for validating dashboard assumptions against real Copilot CLI telemetry.'),
+    textPanel(1, 0, 0, 24, 2, '## Data Quality\nField discovery, token rollup, collector health, and real-ingestion checks for validating dashboard assumptions against real Copilot CLI telemetry.'),
     tablePanel(10, 'Token rollup audit', 0, 2, 24, 13, fs.readFileSync(path.join(repoRoot, 'kql', '13-token-rollup-audit.kql'), 'utf8'), [
       byNameUnit('TokenOvercountRatio', 'short', 2),
     ]),
-    tablePanel(20, 'Collector health and smoke ingestion', 0, 15, 24, 8, fs.readFileSync(path.join(repoRoot, 'kql', '21-collector-health.kql'), 'utf8')),
+    tablePanel(20, 'Collector health and real ingestion', 0, 15, 24, 8, fs.readFileSync(path.join(repoRoot, 'kql', '21-collector-health.kql'), 'utf8')),
     tablePanel(30, 'Observed property fields', 0, 23, 24, 14, `AppDependencies | where $__timeFilter(TimeGenerated) | where ${baseFilter} | extend fields = bag_keys(Properties) | mv-expand field = fields to typeof(string) | extend value = tostring(Properties[field]) | summarize observed=count(), example_values=make_set_if(value, isnotempty(value), 5) by field | order by observed desc, field asc`),
   ];
   return baseDashboard('agentops-data-quality', 'AgentOps Data Quality', panels, false, { variables: [] });

@@ -69,6 +69,7 @@ node src/index.js validate-azure --last 2h
 copilot plugin install c-mongan/copilot-cli-agentops-azure:plugin
 node src/index.js copilot --agent agentops-orchestrator --allow-tool=bash --add-dir . --no-ask-user --no-remote -p "Do not edit files. Use read-only shell commands: pwd and ls docs | head."
 node src/index.js custom emit --event agent.delegation.started --agent investigator --parent-agent agentops-orchestrator --delegation-id real-delegation --workflow investigation --step delegate --outcome started
+node src/index.js custom emit --event agent.policy.blocked --agent policy-reviewer --workflow safety-review --step pre-tool --outcome blocked --risk policy --attribute github.copilot.policy.decision=blocked
 node src/index.js open
 ```
 
@@ -90,7 +91,9 @@ Open **Overview** first, then **Sessions**, **Traces / Spans**, and **Tools & MC
 
 For Runtime Events, Safety & Policy, Permission Friction, and Alert Tuning, prefer real signals: install the Copilot plugin, run an observed agent task, and trigger a safe policy-block check with a fake Key Vault secret-read command. Compaction and truncation panels stay quiet until a real run actually hits context pressure.
 
-`collector-health` prints a KQL query for smoke span counts, latest Copilot span, and collector error/warning signals.
+`custom emit --attribute key=value` is the explicit opt-in path for first-class dashboard fields from trusted agents or scripts. It only accepts known telemetry namespaces such as `agentops.*`, `gen_ai.*`, and `github.copilot.*`; use `--custom key=value` for generic private dimensions.
+
+`collector-health` prints a KQL query for latest real Copilot/AgentOps spans and collector error/warning signals.
 
 `attribution` prints KQL that groups usage, failures, tokens, cost, and tools by custom agent, skill, MCP server, and script/hook attribution fields.
 

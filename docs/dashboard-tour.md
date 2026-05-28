@@ -25,7 +25,7 @@ Overview
 
 Use this as the front door. It answers: **is Copilot/agent activity flowing, how much did it cost, how many tools ran, and are failures rising?**
 
-Good for daily health checks and quick demos. If this page is empty after setup, run the smoke test first.
+Good for daily health checks and quick demos. If this page is empty after setup, run the real quick-start Copilot check first.
 
 ![AgentOps overview dashboard](screenshots/agentops-overview-live.png)
 
@@ -140,7 +140,7 @@ Use this before enabling real alerts. It answers: **what thresholds are reasonab
 
 The alert rules are disabled by default. This page is evidence for choosing thresholds, not an emergency console on day one.
 
-This page needs enough history before it becomes visually interesting. On a fresh install, it may have little to recommend. Run real traffic, smoke tests, and the safe policy-block check over time, then use the recommendations here before turning on scheduled-query alerts.
+This page needs enough history before it becomes visually interesting. On a fresh install, it may have little to recommend. Run real traffic, real custom lifecycle events, and the safe policy-block check over time, then use the recommendations here before turning on scheduled-query alerts.
 
 ![AgentOps alert tuning dashboard](screenshots/agentops-alert-tuning-live.png)
 
@@ -162,7 +162,7 @@ Run `agentops benchmark run ...` or label real runs with experiment metadata, th
 
 ## Data Quality
 
-Use this when something looks wrong. It answers: **are the fields, token rollups, collector health, and smoke-ingestion assumptions valid?**
+Use this when something looks wrong. It answers: **are the fields, token rollups, collector health, and real-ingestion assumptions valid?**
 
 This is the troubleshooting dashboard for schema drift and ingestion issues.
 

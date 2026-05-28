@@ -681,6 +681,7 @@ test('custom emit dry run creates privacy-safe agent lifecycle telemetry', async
     entityIdHash: 'hashed-pr-001',
     tags: ['real-run', 'ci-pattern'],
     custom: { 'agentops.custom.signal': 'build-log' },
+    attributes: { 'agentops.content_capture.signal': 'true' },
     workspaceId: 'workspace-123'
   });
   const output = renderCustom(result);
@@ -695,6 +696,7 @@ test('custom emit dry run creates privacy-safe agent lifecycle telemetry', async
   assert.equal(result.events[0].entityType, 'pull-request');
   assert.equal(result.events[0].entityIdHash, 'hashed-pr-001');
   assert.equal(result.events[0].custom['agentops.custom.signal'], 'build-log');
+  assert.equal(result.events[0].attributes['agentops.content_capture.signal'], 'true');
   assert.match(result.azure_query, /agentops-custom-test/);
   assert.match(output, /AgentOps custom telemetry/);
 });
@@ -710,7 +712,8 @@ test('custom OTLP payload maps generic fields to dashboard attributes', () => {
     session: 'session-123',
     outcome: 'passed',
     score: 0.91,
-    custom: { 'agentops.custom.eval_name': 'release' }
+    custom: { 'agentops.custom.eval_name': 'release' },
+    attributes: { 'github.copilot.policy.decision': 'allowed' }
   }], {
     id: 'agentops-custom-payload',
     nowMs: Date.parse('2026-05-26T12:00:00Z')
@@ -727,6 +730,7 @@ test('custom OTLP payload maps generic fields to dashboard attributes', () => {
   assert.equal(attrs['agentops.workflow.name'], 'release-gate');
   assert.equal(attrs['agentops.score'], 0.91);
   assert.equal(attrs['content.capture.enabled'], false);
+  assert.equal(attrs['github.copilot.policy.decision'], 'allowed');
 });
 
 test('custom import maps JSONL agent rows without CI-specific coupling', async () => {
@@ -734,7 +738,7 @@ test('custom import maps JSONL agent rows without CI-specific coupling', async (
   const file = path.join(tempDir, 'events.jsonl');
   try {
     fs.writeFileSync(file, [
-      JSON.stringify({ event_name: 'agent.run.started', agent: 'portable-agent', workflow: 'analysis', session_id: 'session-a' }),
+      JSON.stringify({ event_name: 'agent.run.started', agent: 'portable-agent', workflow: 'analysis', session_id: 'session-a', attributes: { 'agentops.content_capture.signal': 'true' } }),
       JSON.stringify({ event_name: 'agent.decision.made', agent: 'portable-agent', workflow: 'analysis', step: 'rank', outcome: 'selected', metrics: { confidence: 0.82 } })
     ].join('\n'));
 
@@ -747,6 +751,7 @@ test('custom import maps JSONL agent rows without CI-specific coupling', async (
     assert.equal(result.ok, true);
     assert.equal(result.rows, 2);
     assert.equal(result.events[0].event, 'agent.run.started');
+    assert.equal(result.events[0].attributes['agentops.content_capture.signal'], 'true');
     assert.equal(result.events[1].custom['agentops.custom.confidence'], 0.82);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
@@ -754,7 +759,7 @@ test('custom import maps JSONL agent rows without CI-specific coupling', async (
 });
 
 test('custom args parse repeated tags and delegation dimensions', () => {
-  const args = parseCustomArgs(['emit', '--event', 'agent.step.started', '--agent', 'portable-agent', '--parent-agent', 'orchestrator', '--delegation-id', 'delegation-1', '--tag', 'real-run', '--tag', 'ci-pattern', '--custom', 'queue=main', '--score', '0.7']);
+  const args = parseCustomArgs(['emit', '--event', 'agent.step.started', '--agent', 'portable-agent', '--parent-agent', 'orchestrator', '--delegation-id', 'delegation-1', '--tag', 'real-run', '--tag', 'ci-pattern', '--custom', 'queue=main', '--attribute', 'agentops.content_capture.signal=true', '--attr', 'github.copilot.policy.decision=blocked', '--score', '0.7']);
 
   assert.equal(args.subcommand, 'emit');
   assert.equal(args.event, 'agent.step.started');
@@ -762,6 +767,8 @@ test('custom args parse repeated tags and delegation dimensions', () => {
   assert.equal(args.delegationId, 'delegation-1');
   assert.deepEqual(args.tags, ['real-run', 'ci-pattern']);
   assert.equal(args.custom['agentops.custom.queue'], 'main');
+  assert.equal(args.attributes['agentops.content_capture.signal'], 'true');
+  assert.equal(args.attributes['github.copilot.policy.decision'], 'blocked');
   assert.equal(args.score, 0.7);
 });
 
@@ -945,11 +952,12 @@ test('verifySmokeInAzure returns query failure details', async () => {
   assert.equal(result.attempts[0].error, 'not logged in');
 });
 
-test('collector health query summarizes collector and smoke signals', () => {
+test('collector health query summarizes collector and real ingestion signals', () => {
   const query = collectorHealthQuery('12h');
 
   assert.match(query, /let lookback = 12h/);
-  assert.match(query, /SmokeSpans/);
+  assert.match(query, /AgentOpsSpans/);
+  assert.match(query, /agentops\.smoke_id/);
   assert.match(query, /collector_errors/);
 });
 

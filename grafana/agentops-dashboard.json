@@ -2243,7 +2243,7 @@
     {
       "id": 60,
       "type": "row",
-      "title": "Smoke health",
+      "title": "Real ingestion health",
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -2255,7 +2255,7 @@
         {
           "id": 61,
           "type": "stat",
-          "title": "Smoke events",
+          "title": "Observed spans",
           "gridPos": {
             "h": 5,
             "w": 6,
@@ -2310,7 +2310,7 @@
                   "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
                 ],
                 "resultFormat": "time_series",
-                "query": "AppEvents | where $__timeFilter(TimeGenerated) | where Name == 'AgentOpsSmokeTest' | summarize Count=count() by bin(TimeGenerated, $__interval) | order by TimeGenerated asc"
+                "query": "AppDependencies | where $__timeFilter(TimeGenerated) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or Properties has 'agentops.' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['agent.runtime']) in ('codex', 'openai-codex-cli')) | where isempty(tostring(Properties['agentops.smoke_id'])) and tostring(Properties['agentops.profile']) !has 'smoke' and isempty(tostring(Properties['agentops.test.kind'])) | summarize Count=count() by bin(TimeGenerated, $__interval) | order by TimeGenerated asc"
               }
             }
           ]
@@ -2318,7 +2318,7 @@
         {
           "id": 62,
           "type": "table",
-          "title": "Recent smoke events",
+          "title": "Recent observed spans",
           "gridPos": {
             "h": 9,
             "w": 18,
@@ -2349,7 +2349,7 @@
                   "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
                 ],
                 "resultFormat": "table",
-                "query": "AppEvents | where $__timeFilter(TimeGenerated) | where Name == 'AgentOpsSmokeTest' | project TimeGenerated, Name, Properties | order by TimeGenerated desc | take 50"
+                "query": "AppDependencies | where $__timeFilter(TimeGenerated) | where (Properties has 'github.copilot' or Properties has 'gen_ai.operation.name' or Properties has 'agentops.' or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['agent.runtime']) in ('codex', 'openai-codex-cli')) | where isempty(tostring(Properties['agentops.smoke_id'])) and tostring(Properties['agentops.profile']) !has 'smoke' and isempty(tostring(Properties['agentops.test.kind'])) | extend operation=tostring(Properties['gen_ai.operation.name']), agent=coalesce(tostring(Properties['agentops.agent.name']), tostring(Properties['gen_ai.agent.name'])), tool=tostring(Properties['gen_ai.tool.name']), error=tostring(Properties['error.type']) | project TimeGenerated, Name, operation, agent, tool, Success, error, OperationId | order by TimeGenerated desc | take 50"
               }
             }
           ]

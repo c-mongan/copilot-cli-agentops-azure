@@ -1,14 +1,18 @@
-// Collector health and smoke-ingestion check for Copilot CLI AgentOps.
-// Use with the collector health endpoint and `agentops smoke` to verify the full path.
+// Collector health and real-ingestion check for Copilot CLI AgentOps.
+// Use after an observed Copilot, SDK, Codex, or custom telemetry run.
 let lookback = 24h;
 let copilot =
 AppDependencies
 | where TimeGenerated > ago(lookback)
 | where (Properties has "github.copilot" or Properties has "gen_ai.operation.name" or Properties has "agentops." or AppRoleName in ("github-copilot", "copilot-chat", "github-copilot-cli", "codex", "openai-codex", "openai-codex-cli") or tostring(Properties["service.name"]) in ("github-copilot", "copilot-chat", "github-copilot-cli", "codex", "openai-codex", "openai-codex-cli") or tostring(Properties["agent.runtime"]) in ("codex", "openai-codex-cli"))
+| where isempty(tostring(Properties["agentops.smoke_id"]))
+    and tostring(Properties["agentops.profile"]) !has "smoke"
+    and isempty(tostring(Properties["agentops.test.kind"]))
 | summarize
     LastCopilotSpan=max(TimeGenerated),
     CopilotSpans=count(),
-    SmokeSpans=countif(Properties has "agentops.smoke_id");
+    FailedSpans=countif(Success == false or tostring(Success) =~ "false" or isnotempty(tostring(Properties["error.type"]))),
+    AgentOpsSpans=countif(Properties has "agentops.");
 let collectorLogs =
 AppTraces
 | where TimeGenerated > ago(lookback)
@@ -20,5 +24,5 @@ AppTraces
 copilot
 | extend joinKey=1
 | join kind=fullouter (collectorLogs | extend joinKey=1) on joinKey
-| project LastCopilotSpan, CopilotSpans, SmokeSpans, LastCollectorLog, CollectorErrors, CollectorWarnings
+| project LastCopilotSpan, CopilotSpans, AgentOpsSpans, FailedSpans, LastCollectorLog, CollectorErrors, CollectorWarnings
 | extend Health=case(isnull(LastCopilotSpan), "no_copilot_spans", CollectorErrors > 0, "collector_errors", "healthy")

@@ -78,6 +78,15 @@ agentops custom emit --event agent.delegation.started --agent investigator --par
 agentops custom emit --event agent.delegation.completed --agent investigator --parent-agent agentops-orchestrator --delegation-id investigate-001 --workflow investigation --step delegate --outcome completed
 ```
 
+For trusted agents or scripts that need to light up first-class safety panels, use explicit telemetry attributes:
+
+```bash
+agentops custom emit --event agent.policy.blocked --agent policy-reviewer --workflow safety-review --step pre-tool --outcome blocked --risk policy --attribute github.copilot.policy.decision=blocked
+agentops custom emit --event agent.content.signal --agent debug-agent --workflow local-debug --step capture-check --outcome observed --risk content --attribute agentops.content_capture.signal=true
+```
+
+Keep raw prompt, response, tool argument, and file content out of these attributes unless you are doing a trusted local debugging session.
+
 For JSONL-producing agents:
 
 ```bash

@@ -282,6 +282,8 @@ agentops custom emit --event agent.eval.scored --agent my-agent --workflow eval-
 agentops custom import ./agent-events.jsonl --agent my-agent --workflow investigation
 ```
 
+Use `--custom key=value` for private dimensions. Use `--attribute key=value` only when a trusted agent or script intentionally needs to populate first-class dashboard fields such as `agentops.content_capture.signal=true` or `github.copilot.policy.decision=blocked`.
+
 Run a benchmark:
 
 ```bash

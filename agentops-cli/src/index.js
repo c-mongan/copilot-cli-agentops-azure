@@ -33,7 +33,7 @@ function usage() {
     'scan [--json]',
     'primitives [--last <duration>] [--root <path>]',
     'import-jsonl <file>',
-    'custom emit --event <name> --agent <name> [--parent-agent <name>] [--delegation-id <id>] [--workflow <name>] [--step <name>] [--outcome <value>] [--risk <value>] [--score <number>] [--tag <tag>] [--custom key=value] [--dry-run] [--json]',
+    'custom emit --event <name> --agent <name> [--parent-agent <name>] [--delegation-id <id>] [--workflow <name>] [--step <name>] [--outcome <value>] [--risk <value>] [--score <number>] [--tag <tag>] [--custom key=value] [--attribute key=value] [--dry-run] [--json]',
     'custom import <file> [--agent <name>] [--workflow <name>] [--dry-run] [--json]',
     'configure show|set|import-azd [--json]',
     'install [--shadow-copilot]',
@@ -91,6 +91,7 @@ const portalLogsUrl = process.env.AGENTOPS_AZURE_PORTAL_LOGS_URL || agentopsConf
 const agentServiceNames = '("github-copilot", "copilot-chat", "github-copilot-cli", "codex", "openai-codex", "openai-codex-cli")';
 const baseFilter = `(Properties has "github.copilot" or Properties has "gen_ai.operation.name" or Properties has "agentops." or AppRoleName in ${agentServiceNames} or tostring(Properties["service.name"]) in ${agentServiceNames} or tostring(Properties["agent.runtime"]) in ("codex", "openai-codex-cli"))`;
 const copilotOtelFilter = baseFilter;
+const customAttributePrefixes = ['agentops.', 'gen_ai.', 'github.copilot.', 'content.capture.', 'event.', 'error.'];
 const copilotMetricNames = [
   'gen_ai.client.operation.duration',
   'gen_ai.client.token.usage',
@@ -181,7 +182,10 @@ function collectorHealthQuery(last = '24h') {
 let copilot = AppDependencies
 | where TimeGenerated > ago(lookback)
 | where ${copilotOtelFilter}
-| summarize LastCopilotSpan=max(TimeGenerated), CopilotSpans=count(), SmokeSpans=countif(Properties has "agentops.smoke_id");
+| where isempty(tostring(Properties["agentops.smoke_id"]))
+    and tostring(Properties["agentops.profile"]) !has "smoke"
+    and isempty(tostring(Properties["agentops.test.kind"]))
+| summarize LastCopilotSpan=max(TimeGenerated), CopilotSpans=count(), AgentOpsSpans=countif(Properties has "agentops."), FailedSpans=countif(Success == false or tostring(Success) =~ "false" or isnotempty(tostring(Properties["error.type"])));
 let collectorLogs = AppTraces
 | where TimeGenerated > ago(lookback)
 | where Message has_any ("otelcol", "azuremonitor", "exporter", "dropped", "retry", "queue", "refused", "timeout")
@@ -189,7 +193,7 @@ let collectorLogs = AppTraces
 copilot
 | extend joinKey=1
 | join kind=fullouter (collectorLogs | extend joinKey=1) on joinKey
-| project LastCopilotSpan, CopilotSpans, SmokeSpans, LastCollectorLog, CollectorErrors, CollectorWarnings
+| project LastCopilotSpan, CopilotSpans, AgentOpsSpans, FailedSpans, LastCollectorLog, CollectorErrors, CollectorWarnings
 | extend Health=case(isnull(LastCopilotSpan), "no_copilot_spans", CollectorErrors > 0, "collector_errors", "healthy")`;
 }
 
@@ -3118,6 +3122,21 @@ function parseKeyValues(values, prefix) {
   return attrs;
 }
 
+function parseTelemetryAttributes(values) {
+  const attrs = {};
+  for (const value of values) {
+    const separator = value.indexOf('=');
+    if (separator <= 0) throw new Error('Expected attribute value as key=value');
+    const key = value.slice(0, separator).trim();
+    if (!/^[A-Za-z0-9_.-]+$/.test(key)) throw new Error(`Invalid attribute key: ${key}`);
+    if (!customAttributePrefixes.some(prefix => key.startsWith(prefix))) {
+      throw new Error(`Unsupported attribute key: ${key}`);
+    }
+    attrs[key] = value.slice(separator + 1);
+  }
+  return attrs;
+}
+
 function customAttributeKey(key) {
   return key.startsWith('agentops.custom.') ? key : `agentops.custom.${key}`;
 }
@@ -3148,6 +3167,10 @@ function parseCustomArgs(args) {
     framework: optionValue(rest, ['--framework']) || process.env.AGENTOPS_FRAMEWORK || 'github-copilot',
     tags: optionValues(rest, '--tag'),
     custom: parseKeyValues(optionValues(rest, '--custom'), 'agentops.custom'),
+    attributes: parseTelemetryAttributes([
+      ...optionValues(rest, '--attribute'),
+      ...optionValues(rest, '--attr')
+    ]),
     dryRun: rest.includes('--dry-run'),
     verify: !rest.includes('--no-verify'),
     last: parseLastArg(rest, '2h'),
@@ -3167,6 +3190,10 @@ function normalizeCustomEvent(row = {}, defaults = {}, index = 0) {
   const custom = {
     ...(row.custom || {}),
     ...(row.metrics || {})
+  };
+  const attributes = {
+    ...(row.attributes || {}),
+    ...(row.attrs || {})
   };
   const event = row.event || row.event_name || row.name || attrs['agentops.event.name'] || attrs['event.name'] || defaults.event || 'agent.event';
   const agent = row.agent || row.agent_name || attrs['agentops.agent.name'] || attrs['gen_ai.agent.name'] || defaults.agent || 'custom-agent';
@@ -3193,7 +3220,10 @@ function normalizeCustomEvent(row = {}, defaults = {}, index = 0) {
     custom: {
       ...Object.fromEntries(Object.entries(custom).map(([key, value]) => [customAttributeKey(key), value])),
       'agentops.custom.row_index': index
-    }
+    },
+    attributes: parseTelemetryAttributes(
+      Object.entries(attributes).map(([key, value]) => `${key}=${value}`)
+    )
   };
 }
 
@@ -3211,7 +3241,8 @@ function customEventAttributes(event, defaults = {}) {
     'agentops.agent.name': event.agent,
     'gen_ai.conversation.id': event.session || defaults.session || defaults.id,
     'content.capture.enabled': false,
-    ...event.custom
+    ...event.custom,
+    ...event.attributes
   };
   if (event.workflow) attrs['agentops.workflow.name'] = event.workflow;
   if (event.parentAgent) attrs['agentops.parent_agent.name'] = event.parentAgent;
@@ -3296,7 +3327,8 @@ async function agentopsCustomEmit(options = {}) {
     entityType: options.entityType,
     entityIdHash: options.entityIdHash,
     tags: options.tags || [],
-    custom: options.custom || {}
+    custom: options.custom || {},
+    attributes: options.attributes || {}
   };
   const { normalized, payload } = otlpCustomEventPayload([event], { ...options, id });
   const result = {
