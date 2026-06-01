@@ -83,6 +83,9 @@ const workspaceId = configuredWorkspaceId || '00000000-0000-0000-0000-0000000000
 const grafanaBaseUrl = (process.env.AGENTOPS_GRAFANA_BASE_URL || agentopsConfig.grafanaBaseUrl || 'https://your-grafana.grafana.azure.com').replace(/\/$/, '');
 const mainGrafanaDashboardUrl = `${grafanaBaseUrl}/d/copilot-agentops/copilot-cli-agentops`;
 const sessionsGrafanaDashboardUrl = `${grafanaBaseUrl}/d/agentops-sessions/agentops-sessions`;
+const v2HomeGrafanaDashboardUrl = `${grafanaBaseUrl}/d/agentops-v2-home`;
+const v2RunsGrafanaDashboardUrl = `${grafanaBaseUrl}/d/agentops-v2-runs-explorer`;
+const v2ReplayGrafanaDashboardUrl = `${grafanaBaseUrl}/d/agentops-v2-run-replay`;
 const grafanaDatasourceUid = process.env.AGENTOPS_GRAFANA_DATASOURCE_UID || agentopsConfig.grafanaDatasourceUid || 'azure-monitor-oob';
 const azureSubscriptionId = process.env.AGENTOPS_AZURE_SUBSCRIPTION_ID || process.env.AZURE_SUBSCRIPTION_ID || agentopsConfig.subscriptionId || '00000000-0000-0000-0000-000000000000';
 const azureResourceGroup = process.env.AGENTOPS_AZURE_RESOURCE_GROUP || process.env.AZURE_RESOURCE_GROUP || agentopsConfig.resourceGroup || 'rg-agentops-dev';
@@ -1257,6 +1260,7 @@ function agentopsSetupGuide(options = {}) {
   const grafanaConfigured = isConfiguredValue(cloud.grafanaBaseUrl, /your-grafana|<your-grafana>|^$/);
   const cloudConfigured = workspaceConfigured && grafanaConfigured;
   const azd = azdEnvironmentStatus(options, toolByName.azd.ok);
+  const dashboardCloud = cloudConfigured ? cloud : { ...cloud, ...azd.values };
 
   const phases = [
     {
@@ -1306,6 +1310,28 @@ function agentopsSetupGuide(options = {}) {
     }
   ];
 
+  const firstRun = {
+    name: 'First-run loop',
+    ready: cloudConfigured && shim.agentops_cli_installed && shim.copilot_agentops_installed,
+    read_only: true,
+    setup_command: 'agentops setup',
+    bind_command: cloudConfigured
+      ? 'agentops configure show'
+      : azd.ok
+      ? 'agentops configure import-azd'
+      : 'az login && azd provision && agentops configure import-azd',
+    privacy_smoke_command: 'agentops collector smoke --privacy strict --poison --json',
+    smoke_command: 'agentops smoke --real-copilot --wait 2m --poll 10s',
+    run_command: realCopilotSmokeCommand(),
+    latest_command: 'agentops latest --last 2h',
+    replay_command: 'agentops replay latest --last 2h',
+    open_command: 'agentops open latest --last 2h',
+    dashboard_import_command: grafanaDashboardImportCommand(dashboardCloud),
+    dashboard_verify_command: 'agentops dashboard verify --live --last 24h --json',
+    content_command: 'agentops content status --json',
+    privacy_note: 'Prompts and responses stay off by default. Use agentops content opt-in only when you intentionally want transcript rows.'
+  };
+
   const next = [];
   const missingTools = tools.filter(tool => !tool.ok).map(tool => tool.name);
   if (missingTools.length > 0) {
@@ -1343,6 +1369,7 @@ function agentopsSetupGuide(options = {}) {
     tools,
     azd,
     shim,
+    first_run: firstRun,
     cloud: {
       resource_group: cloud.resourceGroup,
       workspace_id_configured: workspaceConfigured,
@@ -1374,6 +1401,14 @@ function renderSetupGuide(result) {
   lines.push('', `azd environment: ${result.azd.ok ? 'AgentOps outputs found' : result.azd.detail}`);
   lines.push(`Local shim: agentops=${result.shim.agentops_cli_installed ? 'installed' : 'missing'}, copilot-agentops=${result.shim.copilot_agentops_installed ? 'installed' : 'missing'}, plain copilot=${result.shim.plain_copilot_observed ? 'observed' : 'not observed'}.`);
   lines.push(`Cloud config: workspace=${result.cloud.workspace_id_configured ? 'set' : 'missing'}, grafana=${result.cloud.grafana_url_configured ? 'set' : 'missing'}.`);
+
+  lines.push('', 'One-minute first run:');
+  lines.push(`1. Setup/bind: ${result.first_run.bind_command}`);
+  lines.push(`2. Privacy smoke: ${result.first_run.privacy_smoke_command}`);
+  lines.push(`3. Real smoke: ${result.first_run.smoke_command}`);
+  lines.push(`4. See it: ${result.first_run.latest_command} && ${result.first_run.open_command}`);
+  lines.push(`5. Dashboards: ${result.first_run.dashboard_import_command} && ${result.first_run.dashboard_verify_command}`);
+  lines.push(`Privacy: ${result.first_run.privacy_note}`);
 
   lines.push('', 'Fastest path:');
   for (const phase of result.phases) {
@@ -1803,12 +1838,15 @@ function configuredCloudValues(options = {}) {
 }
 
 function listGrafanaDashboardFiles(options = {}) {
-  const dir = options.grafanaDir || path.join(root, 'grafana');
-  if (!fs.existsSync(dir)) return [];
-  return fs.readdirSync(dir)
-    .filter(file => file.endsWith('.json'))
-    .map(file => {
-      const fullPath = path.join(dir, file);
+  const dirs = [options.grafanaDir || path.join(root, 'grafana')];
+  if (options.includeV2 !== false) dirs.push(path.join(root, 'grafana', 'dashboards', 'v2'));
+  return dirs.flatMap(dir => {
+    if (!fs.existsSync(dir)) return [];
+    return fs.readdirSync(dir)
+      .filter(file => file.endsWith('.json'))
+      .map(file => path.join(dir, file));
+  })
+    .map(fullPath => {
       const dashboard = readJson(fullPath);
       return {
         file: path.relative(root, fullPath),
@@ -1834,11 +1872,36 @@ function grafanaItemUid(item) {
 }
 
 function grafanaDashboardImportCommand(cloud) {
-  const envPrefix = [
-    `AZURE_RESOURCE_GROUP=${cloud.resourceGroup}`,
-    cloud.grafanaName ? `GRAFANA_NAME=${cloud.grafanaName}` : null
-  ].filter(Boolean).join(' ');
-  return `${envPrefix} ./scripts/grafana-import-dashboard.sh`;
+  const args = [
+    'agentops dashboard import --yes',
+    cloud.resourceGroup ? `--resource-group ${cloud.resourceGroup}` : null,
+    cloud.grafanaName ? `--grafana-name ${cloud.grafanaName}` : null
+  ].filter(Boolean);
+  return args.join(' ');
+}
+
+function runGrafanaDashboardImportRemediation(cloud, options = {}) {
+  const args = [
+    path.join(root, 'agentops-cli', 'src', 'index.js'),
+    'dashboard',
+    'import',
+    '--yes',
+    ...(cloud.resourceGroup ? ['--resource-group', cloud.resourceGroup] : []),
+    ...(cloud.grafanaName ? ['--grafana-name', cloud.grafanaName] : [])
+  ];
+  const spawnSync = options.spawnDashboardImport || options.spawnSync || childProcess.spawnSync;
+  const result = spawnSync(process.execPath, args, {
+    encoding: 'utf8',
+    maxBuffer: 20 * 1024 * 1024
+  });
+  return {
+    ok: result.status === 0,
+    command: grafanaDashboardImportCommand(cloud),
+    status: result.status,
+    stdout: result.stdout || '',
+    stderr: result.stderr || '',
+    error: result.error?.message || null
+  };
 }
 
 function isConfiguredValue(value, placeholderPattern) {
@@ -1851,7 +1914,74 @@ function parseInitArgs(args) {
     forceSkills: args.includes('--force-skills') || args.includes('--force'),
     json: args.includes('--json'),
     noSkills: args.includes('--no-skills') || args.includes('--no-plugin'),
+    provisionCloud: args.includes('--provision-cloud'),
     copilotHome: optionValue(args, ['--copilot-home', '--home'])
+  };
+}
+
+function runInitCloudProvision(options = {}) {
+  const spawnSync = options.spawnSync || childProcess.spawnSync;
+  const command = options.azdCommand || 'azd';
+  const provisionArgs = options.azdProvisionArgs || ['provision'];
+  const commandText = `${command} ${provisionArgs.join(' ')}`;
+  if (options.dryRun) {
+    return {
+      requested: true,
+      dry_run: true,
+      ok: true,
+      command: commandText,
+      import_result: { dryRun: true, action: 'import-azd' },
+      failing_stage: null,
+      next: []
+    };
+  }
+
+  const provision = spawnSync(command, provisionArgs, {
+    encoding: 'utf8',
+    maxBuffer: 20 * 1024 * 1024
+  });
+  const provisionOk = provision.status === 0 && !provision.error;
+  const importResult = provisionOk
+    ? agentopsConfigure({
+        subcommand: 'import-azd',
+        configPath: options.configPath,
+        dryRun: false,
+        spawnSync
+      })
+    : null;
+  const importOk = importResult?.ok === true;
+  const failingStage = !provisionOk ? 'azd provision' : importOk ? null : 'agentops configure import-azd';
+  const next = !provisionOk
+    ? [
+        'az login',
+        'azd env list',
+        commandText,
+        'agentops init --dry-run --provision-cloud'
+      ]
+    : importOk
+      ? []
+      : [
+          'azd env get-values',
+          'agentops configure import-azd',
+          'agentops configure set --workspace-id "<workspace-id>"',
+          'agentops configure set --grafana-url "https://<your-grafana>.grafana.azure.com"'
+        ];
+
+  return {
+    requested: true,
+    dry_run: false,
+    ok: provisionOk && importOk,
+    command: commandText,
+    failing_stage: failingStage,
+    provision: {
+      ok: provisionOk,
+      status: provision.status,
+      stdout: provision.stdout || '',
+      stderr: provision.stderr || '',
+      error: provision.error?.message || null
+    },
+    import_result: importResult,
+    next
   };
 }
 
@@ -1876,6 +2006,16 @@ function agentopsInit(options = {}) {
       });
   const workspaceConfigured = isConfiguredValue(cloud.workspaceId, /^0{8}-0{4}-0{4}-0{4}-0{12}$/);
   const grafanaConfigured = isConfiguredValue(cloud.grafanaBaseUrl, /your-grafana|<your-grafana>|^$/);
+  const azdTool = setupToolStatus('azd', options);
+  const azd = azdEnvironmentStatus(options, azdTool.ok);
+  const cloudProvision = options.provisionCloud
+    ? runInitCloudProvision(options)
+    : {
+        requested: false,
+        dry_run: Boolean(options.dryRun),
+        ok: null,
+        command: 'agentops init --provision-cloud'
+      };
   const next = [];
 
   if (!shim.agentops_cli_installed) {
@@ -1884,24 +2024,34 @@ function agentopsInit(options = {}) {
   if (!shim.plain_copilot_observed) {
     next.push('node agentops-cli/src/index.js enable-shadow');
   }
-  if (!workspaceConfigured) {
-    next.push('agentops configure set --workspace-id "<workspace-id>"');
+  if (!workspaceConfigured || !grafanaConfigured) {
+    if (azd.ok) {
+      next.push('agentops configure import-azd');
+    } else if (!options.provisionCloud) {
+      next.push('agentops init --provision-cloud');
+    } else {
+      if (!workspaceConfigured) {
+        next.push('agentops configure set --workspace-id "<workspace-id>"');
+      }
+      if (!grafanaConfigured) {
+        next.push('agentops configure set --grafana-url "https://<your-grafana>.grafana.azure.com"');
+      }
+    }
   }
-  if (!grafanaConfigured) {
-    next.push('agentops configure set --grafana-url "https://<your-grafana>.grafana.azure.com"');
-  }
-  next.push('node agentops-cli/src/index.js validate-azure');
-  next.push('node agentops-cli/src/index.js collector smoke --privacy strict --poison');
-  next.push('node agentops-cli/src/index.js experimental smoke --wait 2m --poll 10s');
-  next.push('copilot -p "Reply with exactly: agentops smoke."');
+  next.push('node agentops-cli/src/index.js validate-azure --import-dashboards --last 24h');
+  next.push('node agentops-cli/src/index.js collector smoke --privacy strict --poison --json');
+  next.push('node agentops-cli/src/index.js smoke --real-copilot --wait 2m --poll 10s');
   next.push('node agentops-cli/src/index.js latest --last 2h');
-  next.push('node agentops-cli/src/index.js experimental ask-context latest --last 2h');
+  next.push('node agentops-cli/src/index.js open latest --last 2h');
+  next.push('node agentops-cli/src/index.js triage latest --out .agentops/triage/latest --json');
   next.push('node agentops-cli/src/index.js plugin uninstall');
 
   return {
     ok: status.ok && Boolean(shim.agentops_cli_installed) && Boolean(shim.copilot_agentops_installed) && workspaceConfigured && grafanaConfigured,
     mode: options.dryRun ? 'dry-run' : 'local-init',
     local_status: status,
+    azd,
+    cloud_provision: cloudProvision,
     skills,
     agents,
     shim,
@@ -1929,8 +2079,20 @@ function renderInit(result) {
       ? 'Collector config: localhost confirmed.'
       : 'Collector config: localhost not confirmed.',
     `Shim: agentops=${result.shim.agentops_cli_installed ? 'installed' : 'missing'}, copilot-agentops=${result.shim.copilot_agentops_installed ? 'installed' : 'missing'}, plain copilot=${result.shim.plain_copilot_observed ? 'observed' : 'not observed'}.`,
-    `Cloud config: workspace=${result.cloud.workspace_id_configured ? 'set' : 'missing'}, grafana=${result.cloud.grafana_url_configured ? 'set' : 'missing'}.`
+    `Cloud config: workspace=${result.cloud.workspace_id_configured ? 'set' : 'missing'}, grafana=${result.cloud.grafana_url_configured ? 'set' : 'missing'}.`,
+    `azd environment: ${result.azd.ok ? 'AgentOps outputs found.' : result.azd.detail}`
   ];
+
+  if (result.cloud_provision.requested) {
+    lines.push(`Cloud provision: ${result.cloud_provision.ok ? 'ready' : 'needs review'} (${result.cloud_provision.command}).`);
+    if (!result.cloud_provision.ok && result.cloud_provision.failing_stage) {
+      lines.push(`Cloud provision failed at: ${result.cloud_provision.failing_stage}.`);
+    }
+    if (!result.cloud_provision.ok && result.cloud_provision.next?.length) {
+      lines.push('Cloud provision next:');
+      for (const command of result.cloud_provision.next) lines.push(`- ${command}`);
+    }
+  }
 
   if (result.skills) {
     lines.push(`Skills: ${plural(result.skills.installed, 'new skill')}; ${plural(result.skills.updated.length, 'updated skill')}; skipped ${plural(result.skills.skipped.length, 'existing skill')}.`);
@@ -1941,6 +2103,7 @@ function renderInit(result) {
 
   lines.push('', 'Next commands:');
   for (const command of result.next) lines.push(`- ${command}`);
+  lines.push('', 'First value: run the real smoke, then open the V2 Run Replay link it prints.');
   lines.push('', 'Plugin files are reversible: run `agentops plugin uninstall` to remove only the bundled AgentOps agents and skills from Copilot home.');
   return `${lines.join('\n')}\n`;
 }
@@ -2249,10 +2412,112 @@ function parseSmokeArgs(args) {
     endpoint: optionValue(args, ['--endpoint']),
     id: optionValue(args, ['--id']),
     last: parseLastArg(args, '2h'),
+    realCopilot: args.includes('--real-copilot') || args.includes('--copilot'),
+    copilotTimeoutMs: durationToMs(optionValue(args, ['--timeout']), 120000),
     verify: !args.includes('--no-verify'),
     waitMs: durationToMs(optionValue(args, ['--wait']), 60000),
     pollMs: durationToMs(optionValue(args, ['--poll']), 10000),
     json: args.includes('--json')
+  };
+}
+
+function realCopilotSmokeArgs() {
+  return [
+    '--no-ask-user',
+    '--no-remote',
+    '--add-dir',
+    '.',
+    "--allow-tool=shell(pwd)",
+    "--allow-tool=shell(ls:*)",
+    '-p',
+    'Do not edit files. Run pwd and ls docs | head, then summarize.'
+  ];
+}
+
+function commandShellQuote(value) {
+  const text = String(value);
+  if (/^[A-Za-z0-9_./:=+-]+$/.test(text)) return text;
+  return `'${text.replace(/'/g, `'\\''`)}'`;
+}
+
+function realCopilotSmokeCommand() {
+  return `copilot ${realCopilotSmokeArgs().map(commandShellQuote).join(' ')}`;
+}
+
+function runRealCopilotSmoke(options = {}) {
+  const spawnSync = options.spawnSync || childProcess.spawnSync;
+  const command = options.copilotCommand || 'copilot';
+  const args = realCopilotSmokeArgs();
+  const started = Date.now();
+  const result = spawnSync(command, args, {
+    cwd: options.cwd || process.cwd(),
+    env: {
+      ...process.env,
+      AGENTOPS_PRIVACY_MODE: 'strict',
+      AGENTOPS_CAPTURE_CONTENT: 'false',
+      COPILOT_OTEL_CAPTURE_CONTENT: 'false',
+      OTEL_EXPORTER_OTLP_ENDPOINT: options.endpoint || 'http://127.0.0.1:4318'
+    },
+    encoding: 'utf8',
+    timeout: durationToMs(options.copilotTimeoutMs ?? options.timeout, 120000),
+    maxBuffer: 1024 * 1024
+  });
+  const status = result.status === null || result.status === undefined ? 1 : result.status;
+  return {
+    ok: status === 0 && !result.error,
+    status,
+    signal: result.signal || null,
+    error: result.error?.message || null,
+    duration_ms: Date.now() - started,
+    command: realCopilotSmokeCommand(),
+    cwd: options.cwd || process.cwd()
+  };
+}
+
+async function waitForLatestRunSummary(options = {}) {
+  const last = validateKqlDuration(options.last || '2h');
+  const waitMs = durationToMs(options.waitMs ?? options.wait, 60000);
+  const pollMs = Math.max(1, durationToMs(options.pollMs ?? options.poll, 10000));
+  const latestFn = options.latestSummary || (() => latestSummaryFromArgs(['--last', last], last));
+  const sleepFn = options.sleep || sleep;
+  const started = Date.now();
+  const attempts = [];
+
+  while (true) {
+    let summary;
+    try {
+      const value = latestFn({ last });
+      summary = typeof value?.then === 'function' ? await value : value;
+    } catch (error) {
+      summary = { session: null, error: error.message };
+    }
+    const visible = Boolean(summary?.session?.grafana_url);
+    attempts.push({
+      visible,
+      session_id: summary?.session?.id || null,
+      error: summary?.error || null
+    });
+    if (visible) {
+      return {
+        ok: true,
+        status: 'found',
+        summary,
+        attempts,
+        elapsed_ms: Date.now() - started
+      };
+    }
+
+    const elapsed = Date.now() - started;
+    if (waitMs === 0 || elapsed >= waitMs) break;
+    await sleepFn(Math.min(pollMs, waitMs - elapsed));
+  }
+
+  return {
+    ok: false,
+    status: attempts.some(attempt => !attempt.error) ? 'not_found' : 'query_failed',
+    summary: null,
+    attempts,
+    elapsed_ms: Date.now() - started
   };
 }
 
@@ -2321,12 +2586,14 @@ async function agentopsSmoke(options = {}) {
   const query = smokeAzureQuery(id, last);
   const waitMs = durationToMs(options.waitMs ?? options.wait, 60000);
   const pollMs = durationToMs(options.pollMs ?? options.poll, 10000);
+  const realCopilot = Boolean(options.realCopilot);
   const verify = options.verify !== false;
   const result = {
     smoke_kind: 'collector',
     smoke_id: id,
     endpoint,
     dry_run: Boolean(options.dryRun),
+    real_copilot: realCopilot,
     verify,
     wait_ms: waitMs,
     poll_ms: pollMs,
@@ -2340,22 +2607,43 @@ async function agentopsSmoke(options = {}) {
   };
 
   if (options.dryRun) {
+    const next = [
+      `POST ${endpoint}/v1/traces`,
+      'node agentops-cli/src/index.js validate-azure',
+      verify
+        ? `node agentops-cli/src/index.js smoke --id ${id} --wait ${Math.ceil(waitMs / 1000)}s --poll ${Math.ceil(pollMs / 1000)}s${realCopilot ? ' --real-copilot' : ''}`
+        : `az monitor log-analytics query --workspace "${result.workspace_id}" --analytics-query "<azure_query>"`
+    ];
+    if (realCopilot) {
+      next.push(realCopilotSmokeCommand());
+      next.push(`node agentops-cli/src/index.js open latest --last ${last}`);
+    }
     return {
       ...result,
       ok: true,
-      next: [
-        `POST ${endpoint}/v1/traces`,
-        'node agentops-cli/src/index.js validate-azure',
-        verify
-          ? `node agentops-cli/src/index.js smoke --id ${id} --wait ${Math.ceil(waitMs / 1000)}s --poll ${Math.ceil(pollMs / 1000)}s`
-          : `az monitor log-analytics query --workspace "${result.workspace_id}" --analytics-query "<azure_query>"`
-      ]
+      copilot_command: realCopilot ? realCopilotSmokeCommand() : null,
+      next
     };
   }
 
   const post = options.postJson || postJson;
   const response = await post(`${endpoint}/v1/traces`, otlpSmokeTracePayload(id, options.nowMs), options);
+  let copilotRun = null;
   let verification = null;
+  let latestVisibility = null;
+  let links = null;
+  if (response.ok && realCopilot) {
+    copilotRun = runRealCopilotSmoke({ ...options, endpoint });
+    if (copilotRun.ok) {
+      latestVisibility = await waitForLatestRunSummary({
+        ...options,
+        last,
+        waitMs,
+        pollMs
+      });
+      if (latestVisibility.ok) links = openLinksSummary(latestVisibility.summary);
+    }
+  }
   if (response.ok && verify) {
     verification = await verifySmokeInAzure(id, {
       ...options,
@@ -2365,23 +2653,27 @@ async function agentopsSmoke(options = {}) {
       pollMs
     });
   }
-  const ok = response.ok && (!verify || verification?.ok === true);
+  const ok = response.ok && (!realCopilot || copilotRun?.ok === true) && (!verify || verification?.ok === true);
   return {
     ...result,
     ok,
     collector_response: response,
+    copilot_run: copilotRun,
+    latest_visibility: latestVisibility,
     verification,
+    links,
     next: response.ok
       ? (verification?.ok
           ? [
               `Verified ${verification.rows} smoke row${verification.rows === 1 ? '' : 's'} in Log Analytics.`,
-              'node agentops-cli/src/index.js latest --last 2h'
+              realCopilot && links?.v2_replay_url ? `Open Run Replay: ${links.v2_replay_url}` : 'node agentops-cli/src/index.js latest --last 2h',
+              realCopilot ? `node agentops-cli/src/index.js open latest --last ${last}` : 'node agentops-cli/src/index.js latest --last 2h'
             ]
           : [
               verify
                 ? `Smoke was sent, but Log Analytics did not return ${id} before the wait expired.`
                 : `Run this Azure query after ingestion latency settles: ${query}`,
-              'node agentops-cli/src/index.js validate-azure'
+              realCopilot && links?.v2_replay_url ? `Open Run Replay: ${links.v2_replay_url}` : 'node agentops-cli/src/index.js validate-azure'
             ])
       : ['Start the collector with `node agentops-cli/src/index.js collector start` or `./scripts/collector-azuremonitor-up.sh`.']
   };
@@ -2567,6 +2859,20 @@ function renderSmoke(result) {
       : `Collector response: failed (${result.collector_response.error || result.collector_response.statusCode || 'unknown'}).`);
   }
 
+  if (result.copilot_run) {
+    lines.push(result.copilot_run.ok
+      ? `Real Copilot smoke: completed in ${result.copilot_run.duration_ms}ms.`
+      : `Real Copilot smoke: failed (${result.copilot_run.error || result.copilot_run.signal || `exit ${result.copilot_run.status}`}).`);
+  } else if (result.real_copilot && result.dry_run) {
+    lines.push(`Real Copilot smoke: planned (${result.copilot_command}).`);
+  }
+
+  if (result.latest_visibility) {
+    lines.push(result.latest_visibility.ok
+      ? `Latest Copilot run: visible after ${result.latest_visibility.attempts.length} attempt${result.latest_visibility.attempts.length === 1 ? '' : 's'}.`
+      : `Latest Copilot run: ${result.latest_visibility.status.replace(/_/g, ' ')} after ${result.latest_visibility.attempts.length} attempt${result.latest_visibility.attempts.length === 1 ? '' : 's'}.`);
+  }
+
   if (result.verification) {
     lines.push(result.verification.ok
       ? `Azure verification: found ${result.verification.rows} row${result.verification.rows === 1 ? '' : 's'} after ${result.verification.attempts.length} attempt${result.verification.attempts.length === 1 ? '' : 's'}.`
@@ -2577,6 +2883,9 @@ function renderSmoke(result) {
 
   if (result.grafana_url) {
     lines.push(`Grafana Live Replay: ${result.grafana_url}`);
+  }
+  if (result.links?.v2_replay_url) {
+    lines.push(`V2 Run Replay: ${result.links.v2_replay_url}`);
   }
   lines.push('', 'Azure verification query:', result.azure_query, '', 'Next:');
   for (const item of result.next || []) lines.push(`- ${item}`);
@@ -2736,6 +3045,17 @@ function validateAzure(options = {}) {
       }));
       if (dashboardResult.status !== 0 || missingDashboards.length > 0) {
         next.push(grafanaDashboardImportCommand(cloud));
+        if (options.importDashboards) {
+          const remediation = runGrafanaDashboardImportRemediation(cloud, options);
+          checks.push(checkResult('grafana-dashboard-import', remediation.ok, {
+            command: remediation.command,
+            detail: remediation.ok
+              ? 'import completed'
+              : (remediation.stderr || remediation.stdout || remediation.error || `dashboard import exited ${remediation.status}`).trim(),
+            remediation
+          }));
+          if (remediation.ok) next.push('agentops validate-azure --last 24h');
+        }
       }
     }
   } else if (!cloud.grafanaName) {
@@ -2774,6 +3094,10 @@ function renderValidateAzure(result) {
     const status = check.ok ? 'ok' : 'failed';
     const skipped = check.skipped ? ' skipped' : '';
     lines.push(`- ${check.name}: ${status}${skipped}${check.detail ? ` (${check.detail})` : ''}`);
+    if (check.name === 'grafana-dashboards' && !check.ok && Array.isArray(check.missing) && check.missing.length > 0) {
+      lines.push(`  missing: ${check.missing.join(', ')}`);
+      lines.push('  fix: agentops validate-azure --import-dashboards --last 24h');
+    }
   }
   lines.push('', result.ok ? 'Azure validation passed.' : 'Azure validation is incomplete.');
   lines.push('Next:');
@@ -3479,11 +3803,18 @@ function booleanAttribute(attrs, keys) {
 }
 
 function operationFromRow(row, attrs) {
-  return row.operation || row.name || attributeValue(attrs, ['gen_ai.operation.name', 'operation']) || 'unknown';
+  return row.operation
+    || row.EventName
+    || row.SpanName
+    || row.name
+    || attributeValue(attrs, ['gen_ai.operation.name', 'operation'])
+    || 'unknown';
 }
 
 function sessionFromRow(row, attrs) {
   return row.session
+    || row.SessionId
+    || row.session_id
     || row.Session
     || row.conversation
     || attributeValue(attrs, ['gen_ai.conversation.id', 'github.copilot.interaction_id', 'conversation'])
@@ -3492,10 +3823,12 @@ function sessionFromRow(row, attrs) {
 
 function isFailedRow(row, attrs) {
   const success = row.Success ?? row.success;
+  const status = row.Status ?? row.status ?? row.OutcomeStatus;
   const statusCode = row.status?.code || row.statusCode || row.ResultCode || row.resultCode;
   const error = attributeValue(attrs, ['error.type', 'exception.type', 'error']);
 
   if (success === false || (typeof success === 'string' && success.toLowerCase() === 'false')) return true;
+  if (['failed', 'failure', 'error', 'blocked', 'degraded'].includes(String(status || '').toLowerCase())) return true;
   if (String(statusCode || '').toUpperCase() === 'ERROR') return true;
   return Boolean(error);
 }
@@ -3507,6 +3840,7 @@ function summarizeSession(sessionId, spans, source = 'local') {
   const e2eIds = new Set();
   const allUsage = { inputTokens: 0, outputTokens: 0, credits: 0, count: 0 };
   const chatUsage = { inputTokens: 0, outputTokens: 0, credits: 0, count: 0 };
+  let estimatedUsd = 0;
   let toolCalls = 0;
   let failedTools = 0;
   let failures = 0;
@@ -3519,9 +3853,9 @@ function summarizeSession(sessionId, spans, source = 'local') {
   for (const row of spans) {
     const attrs = rowAttributes(row);
     const operation = operationFromRow(row, attrs);
-    const tool = attributeValue(attrs, ['gen_ai.tool.name', 'tool']);
-    const model = attributeValue(attrs, ['gen_ai.request.model', 'model']);
-    const agent = attributeValue(attrs, ['gen_ai.agent.name', 'agent']);
+    const tool = row.ToolName || attributeValue(attrs, ['gen_ai.tool.name', 'tool']);
+    const model = row.ModelActual || row.ModelRequested || attributeValue(attrs, ['gen_ai.request.model', 'gen_ai.response.model', 'model']);
+    const agent = row.AgentName || attributeValue(attrs, ['gen_ai.agent.name', 'agent']);
     const e2eId = attributeValue(attrs, ['agentops.e2e.id']);
     const message = `${row.Message || row.message || row.name || ''} ${JSON.stringify(attrs)}`;
     const failed = isFailedRow(row, attrs);
@@ -3536,16 +3870,21 @@ function summarizeSession(sessionId, spans, source = 'local') {
       toolCalls += 1;
       if (failed) failedTools += 1;
     }
+    toolCalls += numberValue(row.ToolCount);
+    failedTools += numberValue(row.ToolFailureCount);
     if (failed) failures += 1;
-    if (/preToolUse|policy|blocked|denied/i.test(message)) policyBlocks += 1;
+    if (/preToolUse|policy|blocked|denied/i.test(message) || Number(row.ToolDeniedCount || 0) > 0) policyBlocks += Number(row.ToolDeniedCount || 1);
     if (/truncation|compaction|too much context/i.test(message)) tokensRemoved += 1;
     if (booleanAttribute(attrs, ['content.capture.enabled', 'OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT'])) contentCaptureWarning = true;
     if (attributeValue(attrs, ['gen_ai.prompt', 'gen_ai.completion', 'prompt', 'completion'])) contentCaptureWarning = true;
+    if (row.ContentCaptureSignal === true || String(row.ContentCaptureSignal || '').toLowerCase() === 'true') contentCaptureWarning = true;
 
-    const inputTokenValue = numberAttribute(attrs, ['gen_ai.usage.input_tokens', 'InputTokens', 'input_tokens']);
-    const outputTokenValue = numberAttribute(attrs, ['gen_ai.usage.output_tokens', 'OutputTokens', 'output_tokens']);
+    const inputTokenValue = numberValue(row.InputTokens) || numberAttribute(attrs, ['gen_ai.usage.input_tokens', 'InputTokens', 'input_tokens']);
+    const outputTokenValue = numberValue(row.OutputTokens) || numberAttribute(attrs, ['gen_ai.usage.output_tokens', 'OutputTokens', 'output_tokens']);
     const creditValue = numberAttribute(attrs, ['github.copilot.cost', 'Credits', 'credits']);
-    if (inputTokenValue || outputTokenValue || creditValue) {
+    const estimatedUsdValue = numberValue(row.EstimatedCostUsd);
+    if (estimatedUsdValue) estimatedUsd += estimatedUsdValue;
+    if (inputTokenValue || outputTokenValue || creditValue || estimatedUsdValue) {
       allUsage.inputTokens += inputTokenValue;
       allUsage.outputTokens += outputTokenValue;
       allUsage.credits += creditValue;
@@ -3574,7 +3913,7 @@ function summarizeSession(sessionId, spans, source = 'local') {
   if (source === 'local') dataMissing.push('live Azure query');
   if (!latestTime) dataMissing.push('timestamps');
   if (inputTokens === 0 && outputTokens === 0) dataMissing.push('token totals');
-  if (credits === 0) dataMissing.push('cost');
+  if (credits === 0 && estimatedUsd === 0) dataMissing.push('cost');
 
   return {
     id: sessionId,
@@ -3593,7 +3932,7 @@ function summarizeSession(sessionId, spans, source = 'local') {
     input_tokens: inputTokens,
     output_tokens: outputTokens,
     credits,
-    est_usd: credits * 0.01,
+    est_usd: estimatedUsd || credits * 0.01,
     policy_blocks: policyBlocks,
     tokens_removed: tokensRemoved,
     content_capture_warning: contentCaptureWarning,
@@ -3862,6 +4201,11 @@ function openLinksSummary(summary = latestSessionSummary()) {
   return {
     main_dashboard_url: mainGrafanaDashboardUrl,
     sessions_dashboard_url: sessionsGrafanaDashboardUrl,
+    v2_home_url: v2HomeGrafanaDashboardUrl,
+    v2_runs_url: v2RunsGrafanaDashboardUrl,
+    v2_replay_url: latestSessionUrl
+      ? `${v2ReplayGrafanaDashboardUrl}?var-session_id=${encodeGrafanaValue(summary.session.id)}`
+      : v2ReplayGrafanaDashboardUrl,
     latest_session_url: latestSessionUrl,
     missing_latest_reason: latestSessionUrl
       ? null
@@ -3945,6 +4289,9 @@ function renderOpenLinks(links = openLinksSummary()) {
   const lines = [
     'Grafana links',
     '',
+    `AgentOps V2 Home: ${links.v2_home_url}`,
+    `V2 Runs Explorer: ${links.v2_runs_url}`,
+    `V2 Run Replay: ${links.v2_replay_url}`,
     `Main dashboard: ${links.main_dashboard_url}`,
     `Sessions dashboard: ${links.sessions_dashboard_url}`
   ];
@@ -5334,7 +5681,7 @@ async function main(argv) {
 
   if (command === 'validate-azure') {
     const last = parseLastArg(args, '2h');
-    const result = validateAzure({ last });
+    const result = validateAzure({ last, importDashboards: args.includes('--import-dashboards') });
     process.stdout.write(args.includes('--json') ? JSON.stringify(result, null, 2) + '\n' : renderValidateAzure(result));
     process.exitCode = result.ok ? 0 : 1;
     return;

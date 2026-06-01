@@ -1139,7 +1139,28 @@ A new Copilot CLI user can run one setup command, one smoke command, and see the
 Implemented first slice:
 
 - `agentops init --dry-run` for setup readiness, bundled skill install planning, and first-run next steps.
+- `agentops setup` now prints a read-only one-minute first-run loop: bind, strict poison smoke, `agentops smoke --real-copilot`, latest/open, dashboard import, and live dashboard verification.
+- `agentops smoke --real-copilot` sends the synthetic OTLP smoke, runs a safe no-edit Copilot prompt with content capture off, waits for the latest Copilot run to appear, then prints the V2 Run Replay link.
 - `agentops validate-azure` for read-only Azure CLI, subscription, resource group, workspace, App Insights, query, Grafana resource, datasource, and dashboard UID checks.
+- `agentops validate-azure --import-dashboards` for explicit remediation when validation finds missing Grafana dashboards.
+- `agentops init --dry-run` now points to the same core first-run loop instead of older experimental smoke/context commands.
+- `agentops init` is now a core command, so users do not need to know about `agentops experimental`.
+- `agentops init --dry-run` now detects azd AgentOps outputs and recommends `agentops configure import-azd` before manual workspace/Grafana binding.
+- `agentops init --provision-cloud` is the explicit guided cloud deploy/bind path: it runs `azd provision` and imports azd outputs into AgentOps config.
+- `agentops init --provision-cloud` now reports the failing setup stage and targeted remediation when `azd provision` or `agentops configure import-azd` fails.
+- `agentops product audit` now verifies the local control-room contract: schema, strict privacy, Copilot CLI/SDK, MCP, GitHub outcomes, evals/insights, V2 dashboards, drilldowns, transcript opt-in, KQL library, and first-run wiring.
+- `agentops product audit --live --last 2h --require-rows --json` now verifies that same contract plus live Azure resources and row-backed Grafana KQL checks. Latest observed result on 2026-05-31: 18/18 checks passed, live Azure verified, live Grafana verified, 19 live KQL checks, and 709 dashboard links checked.
+- `agentops product audit --live --last 2h --require-rows --require-visual --json` is the final completion gate. It adds rendered Grafana dashboard proof through the same strict browser visual check used by E2E.
+- `npm --prefix agentops-cli test` latest observed result on 2026-05-31: 171/171 tests passed.
+- Read-only live validation on 2026-05-31 found the Azure resource group, Log Analytics workspace, Application Insights component, Managed Grafana resource, Azure Monitor datasource, and all 24 expected dashboards.
+- `agentops dashboard verify --live --last 24h --json` passed 19 live KQL syntax checks, 10 V2 dashboard UX checks, and 709 dashboard links. Current live tables were mostly empty for run-specific panels, so row-presence proof still needs a fresh real Copilot smoke or demo ingest.
+- Fresh strict real-Copilot smoke on 2026-05-31 produced `agentops-smoke-20260531122930-30d7a7`, verified one Log Analytics smoke row, and printed a V2 Run Replay link for session `github-copilot-cli_6729a76812fbd25604f1fd345c2fc29c_20260531_1200`.
+- `agentops dashboard verify --live --last 2h --require-rows --json` then passed row-required live checks: 19 KQL checks, 10 V2 dashboards, 709 links, 16 row-required panels populated, and the explicit opt-in transcript/pattern panels allowed to remain empty.
+- Fresh live E2E on 2026-05-31 produced `agentops-e2e-20260531T123920Z`, forced `AGENTOPS_PRIVACY_MODE=strict`, `AGENTOPS_CAPTURE_CONTENT=false`, and `COPILOT_OTEL_CAPTURE_CONTENT=false`, matched session `61a403b4-c5ea-4fff-bd88-a3a4b75ae1e5`, and generated a PASS browser report screenshot.
+- Browser screenshot attempts against Azure Managed Grafana were blocked by Microsoft sign-in in this unauthenticated browser profile. The E2E checker records `auth-blocked` and no longer copies sign-in pages into `docs/screenshots/v2/`.
+- `agentops e2e browser-check --require-grafana-visible` is now the strict visual gate: auth-blocked pages are acceptable for local report QA, but they fail authenticated dashboard visual verification.
+- The strict visual gate now accepts `--browser-user-data-dir`, `--storage-state`, `--browser-executable`, and `--headed` so authenticated Grafana screenshot QA can reuse a deliberate signed-in browser profile instead of relying on the default automation profile.
+- When the strict visual gate hits Microsoft SSO, `.agentops/e2e/latest/browser-notes.md` now includes an Auth Remediation section with the exact one-time sign-in command and the exact rerun command for the same report/profile.
 - `agentops smoke --dry-run` plus live OTLP POST and Log Analytics polling for a privacy-safe synthetic trace.
 - `agentops ask-context` for a copyable telemetry-investigator context bundle.
 - direct installed `agentops` command through the installer.
@@ -1148,9 +1169,7 @@ Implemented first slice:
 
 Remaining work:
 
-- automatic dashboard import after validation detects missing dashboards
-- smoke command that can also launch a real Copilot prompt and print the exact latest-run URL
-- guided cloud deploy/bind inside `agentops init`
+- capture authenticated browser screenshots of the row-populated V2 dashboard path and keep polishing any visual issues found there.
 
 ### 2. Run-Centric UI
 

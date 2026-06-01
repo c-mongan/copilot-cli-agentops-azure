@@ -43,14 +43,15 @@ function createTelemetry({
   function timelineEventFromRow(row) {
     const attrs = rowAttributes(row);
     const operation = operationFromRow(row, attrs);
-    const tool = attributeValue(attrs, ['gen_ai.tool.name', 'tool']);
-    const model = attributeValue(attrs, ['gen_ai.request.model', 'gen_ai.response.model', 'model']);
+    const tool = row.ToolName || attributeValue(attrs, ['gen_ai.tool.name', 'tool']);
+    const model = row.ModelActual || row.ModelRequested || attributeValue(attrs, ['gen_ai.request.model', 'gen_ai.response.model', 'model']);
     const error = attributeValue(attrs, ['error.type', 'exception.type', 'error']);
     const message = `${row.Message || row.message || row.Name || row.name || ''} ${JSON.stringify(attrs)}`;
     const failed = isFailedRow(row, attrs);
-    const inputTokens = numberAttribute(attrs, ['gen_ai.usage.input_tokens', 'InputTokens', 'input_tokens']);
-    const outputTokens = numberAttribute(attrs, ['gen_ai.usage.output_tokens', 'OutputTokens', 'output_tokens']);
+    const inputTokens = numberValue(row.InputTokens) || numberAttribute(attrs, ['gen_ai.usage.input_tokens', 'InputTokens', 'input_tokens']);
+    const outputTokens = numberValue(row.OutputTokens) || numberAttribute(attrs, ['gen_ai.usage.output_tokens', 'OutputTokens', 'output_tokens']);
     const credits = numberAttribute(attrs, ['github.copilot.cost', 'Credits', 'credits']);
+    const estUsd = numberValue(row.EstimatedCostUsd) || roundNumber(credits * 0.01, 4);
     const tokensRemoved = numberAttribute(attrs, ['github.copilot.tokens_removed', 'tokens_removed']);
     const policy = /preToolUse|policy|blocked|denied/i.test(message);
     const context = /truncation|compaction|too much context/i.test(message) || tokensRemoved > 0;
@@ -61,7 +62,7 @@ function createTelemetry({
           ? 'context'
           : operation === 'invoke_agent'
             ? 'agent'
-            : operation === 'chat'
+            : operation === 'chat' || operation === 'gen_ai.chat'
               ? 'llm'
               : operation === 'execute_tool' || tool
                 ? 'tool'
@@ -74,9 +75,9 @@ function createTelemetry({
       session: sessionFromRow(row, attrs),
       type: eventType,
       event: operation,
-      name: row.Name || row.name || operation,
-      operationId: row.OperationId || row.operationId || row.trace_id || '',
-      spanId: row.Id || row.id || row.span_id || '',
+      name: row.Name || row.EventName || row.name || operation,
+      operationId: row.OperationId || row.TraceId || row.operationId || row.trace_id || '',
+      spanId: row.Id || row.SpanId || row.id || row.span_id || '',
       parentId: row.ParentId || row.parentId || row.parent_id || '',
       tool: tool || '',
       model: model || '',
@@ -86,7 +87,7 @@ function createTelemetry({
       inputTokens,
       outputTokens,
       credits,
-      estUsd: roundNumber(credits * 0.01, 4),
+      estUsd,
       tokensRemoved
     };
   }
@@ -117,8 +118,9 @@ function createTelemetry({
     const usage = primaryUsageEvents.reduce((totals, event) => ({
       inputTokens: totals.inputTokens + event.inputTokens,
       outputTokens: totals.outputTokens + event.outputTokens,
-      credits: totals.credits + event.credits
-    }), { inputTokens: 0, outputTokens: 0, credits: 0 });
+      credits: totals.credits + event.credits,
+      estUsd: totals.estUsd + event.estUsd
+    }), { inputTokens: 0, outputTokens: 0, credits: 0, estUsd: 0 });
 
     return {
       session: selectedSession,
@@ -133,7 +135,7 @@ function createTelemetry({
         input_tokens: usage.inputTokens,
         output_tokens: usage.outputTokens,
         credits: usage.credits,
-        est_usd: roundNumber(usage.credits * 0.01, 4),
+        est_usd: usage.estUsd || roundNumber(usage.credits * 0.01, 4),
         policy_blocks: selectedEvents.filter(event => event.type === 'policy').length,
         tokens_removed: selectedEvents.reduce((total, event) => total + event.tokensRemoved, 0)
       } : null

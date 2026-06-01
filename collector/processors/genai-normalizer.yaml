@@ -1,0 +1,13 @@
+# Normalize Copilot/SDK/Codex GenAI attributes into the AgentOps V2 vocabulary.
+processors:
+  transform/genai_normalizer:
+    error_mode: ignore
+    trace_statements:
+      - context: span
+        statements:
+          - set(attributes["gen_ai.operation.name"], "chat") where attributes["gen_ai.operation.name"] == nil and name == "chat"
+          - set(attributes["gen_ai.operation.name"], "execute_tool") where attributes["gen_ai.operation.name"] == nil and (name == "execute_tool" or attributes["gen_ai.tool.name"] != nil)
+          - set(attributes["gen_ai.provider.name"], "github.copilot") where attributes["gen_ai.provider.name"] == nil and (attributes["github.copilot.turn_count"] != nil or attributes["github.copilot.cost"] != nil)
+          - set(attributes["agentops.model.actual"], attributes["gen_ai.response.model"]) where attributes["agentops.model.actual"] == nil and attributes["gen_ai.response.model"] != nil
+          - set(attributes["agentops.model.actual"], attributes["gen_ai.request.model"]) where attributes["agentops.model.actual"] == nil and attributes["gen_ai.request.model"] != nil
+          - set(attributes["agentops.session.id"], attributes["gen_ai.conversation.id"]) where attributes["agentops.session.id"] == nil and attributes["gen_ai.conversation.id"] != nil

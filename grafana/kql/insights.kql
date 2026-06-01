@@ -1,0 +1,20 @@
+union isfuzzy=true AgentOpsInsights_CL
+| where TimeGenerated between ($__timeFrom() .. $__timeTo())
+| project
+    TimeGenerated,
+    InsightType,
+    Severity,
+    Summary,
+    RunId,
+    RepoHash,
+    ModelActual,
+    ToolName,
+    BaselineValue,
+    CurrentValue,
+    ConfigHash,
+    PatternId,
+    PatternKey,
+    PatternRuns,
+    PatternDimension,
+    SuggestedNextStep
+| order by TimeGenerated desc

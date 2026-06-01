@@ -1,0 +1,53 @@
+union isfuzzy=true
+  (AgentOpsContent_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo())),
+  (print
+      TimeGenerated=now(),
+      RunId='',
+      SessionId='',
+      TraceId='',
+      SpanId='',
+      TurnIndex=long(null),
+      Role='',
+      ContentKind='',
+      CaptureMode='',
+      RedactionStatus='',
+      ModelActual='',
+      ToolName='',
+      PromptText='',
+      ResponseText='',
+      ContentHash='',
+      ContentLength=long(null)
+    | where false)
+| where TimeGenerated between ($__timeFrom() .. $__timeTo())
+| where '$run_id' == '__all' or RunId == '$run_id'
+| extend
+    PromptText = tostring(column_ifexists('PromptText', '')),
+    ResponseText = tostring(column_ifexists('ResponseText', '')),
+    CaptureMode = tostring(column_ifexists('CaptureMode', '')),
+    RedactionStatus = tostring(column_ifexists('RedactionStatus', ''))
+| extend
+    MessageText = case(isnotempty(PromptText), PromptText, isnotempty(ResponseText), ResponseText, ''),
+    ViewerNote = case(
+      isempty(MessageText), 'no captured content',
+      CaptureMode == 'full', 'explicit opt-in: full content row',
+      CaptureMode == 'redacted', 'explicit opt-in: redacted content row',
+      'explicit opt-in content row'
+    )
+| project
+    TimeGenerated,
+    TurnIndex,
+    Role,
+    ContentKind,
+    MessageText,
+    CaptureMode,
+    RedactionStatus,
+    ViewerNote,
+    ModelActual,
+    ToolName,
+    ContentHash,
+    ContentLength,
+    RunId,
+    SessionId,
+    TraceId,
+    SpanId
+| order by TimeGenerated asc

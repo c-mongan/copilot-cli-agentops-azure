@@ -1,0 +1,244 @@
+# Grafana Dashboard Tour V2
+
+The V2 dashboards are the AgentOps control room. Use them like a Datadog trace product: start broad, click into one run, then follow model/tool/privacy/outcome drilldowns.
+
+## 1. AgentOps Home
+
+Start here when you want the answer in one screen.
+
+It shows:
+
+- runs, success rate, failed runs, policy blocks, privacy drops, estimated cost, input/output tokens, p95 duration, tests ran percent, PRs opened, and collector health;
+- recent failed runs;
+- recommended next actions from insight rows;
+- expensive runs;
+- GitHub outcome summary.
+
+Click a `RunId` to open Run Replay. Click a model, repo hash, tool, skill, or sub-agent to keep drilling with the same time range.
+
+## 2. Runs Explorer
+
+This is the trace-list equivalent.
+
+Use it to find:
+
+- expensive failed runs;
+- slow successful runs;
+- no-tests-after-edit runs;
+- policy-blocked runs;
+- privacy-drop runs;
+- PR-producing runs.
+
+The table keeps the fields operators need most: run/session/trace IDs, surface, repo hash, agent, skill, sub-agent, model, outcome, duration, tokens, cache, context pressure, permission wait, cost, tests, PR state, eval, and risk.
+
+Use the explicit `OpenReplay`, `OpenTrace`, and `OpenGithub` action cells when you want the shortest Datadog-style drilldown path from the trace list.
+
+## 3. Agent Run Replay
+
+This is the main debugging screen.
+
+It tells the story of one run using metadata that remains useful in strict privacy mode:
+
+- run summary;
+- replay timeline;
+- agent, skill, sub-agent, delegation, MCP, and tool lineage;
+- model/tool/test/policy/privacy events;
+- context/cache posture;
+- why the run likely failed and the next check to make;
+- Ask AgentOps context with a copyable metadata-only investigator prompt and `agentops triage` command;
+- GitHub outcome;
+- eval verdicts;
+- optional transcript availability.
+
+Prompt and response text appears only in `AgentOpsContent_CL`, which is explicit opt-in. In strict mode, the transcript panel stays empty and does not error. When content rows exist, the viewer renders them as a transcript with role, turn, content kind, message text, capture mode, redaction status, content hash, and content length.
+
+From the CLI, `agentops open latest --runs <AgentOpsRunSummary_CL.jsonl>` prints both the normal Run Replay URL and a dedicated prompt/response viewer URL for panel 26. That link is a drilldown target, not permission to collect content.
+
+Inside Grafana, the **Transcript availability** panel has an `OpenTranscript` cell that jumps to the same prompt/response viewer while preserving the dashboard time range.
+
+## 4. Models, Cost & Tokens
+
+Use this for model ROI.
+
+It answers:
+
+- which model is expensive for this task type;
+- which model fails more often;
+- which model wastes context or benefits from cache;
+- cost per successful run;
+- cost per PR or passing test when outcome rows exist.
+
+## 5. Tools & MCP Risk
+
+Use this for tool governance.
+
+It shows:
+
+- tool call volume;
+- failure rate;
+- denied rate;
+- p95 latency;
+- MCP server;
+- risk class;
+- bad-outcome correlation from failed or high-risk runs.
+
+Risk labels are metadata only: `read-only`, `write-file`, `shell`, `network`, `secret-access`, `browser-control`, `destructive`, and `privileged`.
+
+## 6. Safety, Privacy & Policy
+
+Use this as the trust screen.
+
+It shows:
+
+- strict runs;
+- content-like fields dropped;
+- secret-like drops;
+- unsafe attempts;
+- policy blocks;
+- poison-test health when emitted.
+
+Healthy strict-mode dashboards may be quiet here except for expected content-drop signals.
+
+## 7. Code Outcomes
+
+Use this to prove the agent affected software delivery, not just text generation.
+
+It shows:
+
+- PR opened/merged/closed/reverted;
+- CI status;
+- review comments;
+- commit count;
+- files changed;
+- time from agent run to PR;
+- time from agent run to merge;
+- edited files with no tests.
+
+## 8. Evals & Quality
+
+Use this for deterministic quality scoring.
+
+Scores cover:
+
+- overall quality;
+- test discipline;
+- tool efficiency;
+- security;
+- reliability;
+- code outcome.
+
+Low-score runs link back into Run Replay.
+
+Use `agentops triage latest --runs <AgentOpsRunSummary_CL.jsonl> --events <AgentOpsEvents_CL.jsonl> --tools <AgentOpsToolCalls_CL.jsonl> --evals <AgentOpsEval_CL.jsonl> --insights <AgentOpsInsights_CL.jsonl>` to package links, evidence counts, a safe investigator prompt, and one recommendation.
+
+Use `agentops ask-context latest --runs <AgentOpsRunSummary_CL.jsonl> --events <AgentOpsEvents_CL.jsonl> --evals <AgentOpsEval_CL.jsonl> --insights <AgentOpsInsights_CL.jsonl>` when you only need the investigator prompt.
+
+Use `agentops recommend latest --runs <AgentOpsRunSummary_CL.jsonl> --evals <AgentOpsEval_CL.jsonl> --insights <AgentOpsInsights_CL.jsonl>` when you want one evidence-backed next action with direct dashboard links.
+
+## 9. Insights & Regressions
+
+Use this for Watchdog/Lapdog-style surfacing.
+
+It shows anomalies and regressions for:
+
+- failures;
+- cost;
+- recurring metadata-only patterns;
+- latency;
+- tool behavior;
+- privacy/policy signals;
+- eval drops;
+- model/config/instruction changes when available.
+
+Recurring pattern rows include `OpenPattern`, `OpenReplay`, and `PatternKey` so operators can keep drilling into one repeated behavior without learning KQL.
+
+## 10. Collector Health
+
+Use this when the dashboards look wrong.
+
+It shows:
+
+- last span received;
+- export success;
+- export errors;
+- dropped content count;
+- collector mode;
+- privacy mode;
+- OTLP endpoint;
+- Azure/Grafana/schema/dashboard version.
+
+## Recommended Path
+
+```text
+Home
+  -> click failed RunId
+  -> Run Replay
+  -> click failed ToolName
+  -> Tools & MCP Risk
+  -> click ModelActual
+  -> Models, Cost & Tokens
+  -> click PrNumberHash or CiStatus
+  -> Code Outcomes
+```
+
+Open the same path from local V2 table files:
+
+```bash
+agentops open latest --runs .agentops/demo/latest/AgentOpsRunSummary_CL.jsonl
+```
+
+## Content Viewer
+
+Default strict mode:
+
+- prompts are not stored;
+- responses are not stored;
+- tool arguments/results are not stored;
+- source code and file contents are not stored;
+- the transcript panel is empty by design.
+
+Explicit content mode:
+
+- generate or ingest `AgentOpsContent_CL`;
+- check it with `agentops content status --dir <dir>`;
+- review `agentops content opt-in`;
+- run `agentops azure-ingest plan --dir <dir> --allow-content --json`;
+- use a restricted workspace, restricted Grafana permissions, and short retention.
+
+Synthetic preview:
+
+```bash
+agentops demo generate --runs 10 --with-content --json
+agentops content status --dir .agentops/demo/latest --allow-content
+agentops azure-ingest plan --dir .agentops/demo/latest --allow-content --json
+```
+
+## Validation
+
+```bash
+agentops dashboard validate
+agentops dashboard links-check
+agentops dashboard ux-check
+agentops dashboard verify
+agentops dashboard kql-check --last 24h
+```
+
+For a live Azure workspace with recent telemetry:
+
+```bash
+agentops dashboard kql-check --last 24h --require-rows --json
+agentops dashboard verify --live --last 24h --json
+agentops validate-azure --last 24h --json
+```
+
+Refresh the V2 screenshots after signing into Azure Managed Grafana in the Playwright browser profile:
+
+```bash
+AGENTOPS_E2E_PLAYWRIGHT=1 agentops e2e browser-check \
+  --report .agentops/e2e/latest/report.html \
+  --playwright \
+  --grafana \
+  --grafana-v2-only \
+  --v2-docs-screenshots \
+  --json
+```

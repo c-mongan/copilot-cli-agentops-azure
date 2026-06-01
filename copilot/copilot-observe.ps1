@@ -220,15 +220,19 @@ if ($captureContentEnabled -ne "true" -and $env:AGENTOPS_ACTIVE_SKILLS) {
 		}
 	}
 }
-if ($captureContentEnabled -eq "true") {
+if ($captureContentEnabled -eq "true" -and $env:AGENTOPS_ALLOW_CONTENT_CAPTURE -eq "1") {
 	$env:OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT = "true"
 	$env:COPILOT_OTEL_CAPTURE_CONTENT = "true"
 	if ($captureContentScope -eq "default-off") {
 		$captureContentScope = "explicit"
 	}
 } else {
-	if (-not $env:OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT) { $env:OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT = "false" }
-	if (-not $env:COPILOT_OTEL_CAPTURE_CONTENT) { $env:COPILOT_OTEL_CAPTURE_CONTENT = "false" }
+	$captureContentEnabled = "false"
+	if ($captureContentScope -ne "default-off") {
+		$captureContentScope = "blocked-by-default"
+	}
+	$env:OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT = "false"
+	$env:COPILOT_OTEL_CAPTURE_CONTENT = "false"
 }
 $agentopsResourceAttributes = "$agentopsResourceAttributes,agentops.content_capture.enabled=$captureContentEnabled,agentops.content_capture.scope=$(Safe-AttrValue $captureContentScope)"
 if ($cliEffort) {

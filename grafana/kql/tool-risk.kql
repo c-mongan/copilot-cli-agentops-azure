@@ -1,0 +1,15 @@
+union isfuzzy=true AgentOpsToolCalls_CL, AgentOpsMcpCalls_CL
+| where TimeGenerated between ($__timeFrom() .. $__timeTo())
+| extend McpServer=case(isnotempty(tostring(column_ifexists("McpServer", ""))), tostring(column_ifexists("McpServer", "")), isnotempty(tostring(column_ifexists("McpServerName", ""))), tostring(column_ifexists("McpServerName", "")), tostring(column_ifexists("ServerName", "")))
+| extend OutputBytes=coalesce(todouble(column_ifexists("OutputSizeBytes", real(null))), todouble(column_ifexists("ResultSizeBytes", real(null))))
+| summarize
+    Calls = count(),
+    Failures = countif(Status != "success"),
+    Denied = countif(Allowed == false),
+    P95DurationMs = percentile(DurationMs, 95),
+    AvgOutputSizeBytes = avg(OutputBytes)
+  by ToolName, ToolType, ToolRisk, McpServer
+| extend
+    FailureRate = todouble(Failures) / todouble(Calls),
+    DeniedRate = todouble(Denied) / todouble(Calls)
+| order by FailureRate desc, DeniedRate desc

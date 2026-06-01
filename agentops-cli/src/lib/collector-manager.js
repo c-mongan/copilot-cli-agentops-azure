@@ -16,7 +16,7 @@ const {
   repoRoot
 } = require('./paths');
 const { commandCandidates, commandExists, isExecutable, run } = require('./shell');
-const { makePoisonAttributes, poisonCheck } = require('./privacy');
+const { contentLikeKeys, makePoisonAttributes, poisonCheck, sanitizeAttributesStrict } = require('./privacy');
 
 const collectorModes = ['auto', 'docker', 'binary', 'none'];
 const privacyModes = ['strict', 'compat'];
@@ -239,6 +239,80 @@ function validateBinaryConfig(binaryPath, privacy = 'strict') {
   };
 }
 
+function validateCollectorArtifacts(options = {}) {
+  const root = options.root || repoRoot;
+  const collectorRoot = path.join(root, 'collector');
+  const processorsDir = path.join(collectorRoot, 'processors');
+  const fixturesDir = path.join(collectorRoot, 'tests', 'privacy-poison-fixtures');
+  const requiredProcessors = [
+    'strict-allowlist.yaml',
+    'content-signal.yaml',
+    'genai-normalizer.yaml',
+    'mcp-normalizer.yaml',
+    'span-to-run-summary.yaml'
+  ];
+  const requiredFixtures = ['content-poison.json', 'mcp-poison.json'];
+  const errors = [];
+  const warnings = [];
+
+  for (const file of requiredProcessors) {
+    const fullPath = path.join(processorsDir, file);
+    if (!fs.existsSync(fullPath)) {
+      errors.push(`missing collector processor fragment: ${fullPath}`);
+      continue;
+    }
+    const body = fs.readFileSync(fullPath, 'utf8');
+    if (file === 'strict-allowlist.yaml' && !body.includes('keep_keys')) errors.push(`${file}: missing keep_keys allowlist`);
+    if (file === 'content-signal.yaml' && !body.includes('agentops.content_capture.signal')) errors.push(`${file}: missing content capture signal`);
+    if (file === 'genai-normalizer.yaml' && !body.includes('gen_ai.operation.name')) errors.push(`${file}: missing GenAI operation mapping`);
+    if (file === 'mcp-normalizer.yaml' && !body.includes('mcp.method.name')) errors.push(`${file}: missing MCP method mapping`);
+    if (file === 'span-to-run-summary.yaml' && !body.includes('AgentOpsRunSummary_CL')) errors.push(`${file}: missing run summary table contract`);
+  }
+
+  const fixtureResults = [];
+  for (const file of requiredFixtures) {
+    const fullPath = path.join(fixturesDir, file);
+    if (!fs.existsSync(fullPath)) {
+      errors.push(`missing poison fixture: ${fullPath}`);
+      continue;
+    }
+    let fixture;
+    try {
+      fixture = JSON.parse(fs.readFileSync(fullPath, 'utf8'));
+    } catch (error) {
+      errors.push(`${file}: invalid JSON: ${error.message}`);
+      continue;
+    }
+    const sanitized = sanitizeAttributesStrict(fixture);
+    const serialized = JSON.stringify(sanitized);
+    const leaked = serialized.match(/SECRET_[A-Z_]+|api_key=|cat ~\/\.ssh\/id_rsa|this should never leave local machine/g) || [];
+    const observedContent = Object.keys(fixture).some(key => contentLikeKeys.includes(key) || /argument|result|message|prompt|secret|token|url/i.test(key));
+    const ok = leaked.length === 0 && (!observedContent || sanitized['agentops.content_capture.signal'] === true);
+    if (!ok) errors.push(`${file}: strict sanitizer did not drop all poison content`);
+    fixtureResults.push({
+      file,
+      ok,
+      leaked,
+      content_signal: sanitized['agentops.content_capture.signal'] === true
+    });
+  }
+
+  const strictConfigs = ['otelcol.azuremonitor.strict.yaml', 'otelcol.binary.strict.yaml', 'otelcol.local.strict.yaml'];
+  for (const file of strictConfigs) {
+    const fullPath = path.join(collectorRoot, file);
+    if (!fs.existsSync(fullPath)) errors.push(`missing strict collector config: ${fullPath}`);
+    else if (!fs.readFileSync(fullPath, 'utf8').includes('transform/privacy_strict')) warnings.push(`${file}: does not reference transform/privacy_strict`);
+  }
+
+  return {
+    ok: errors.length === 0,
+    processors: requiredProcessors.map(file => path.join(processorsDir, file)),
+    fixtures: fixtureResults,
+    errors,
+    warnings
+  };
+}
+
 function parseChecksumFile(text, fileName) {
   const escaped = String(fileName).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const pattern = new RegExp(`^([a-fA-F0-9]{64})\\s+\\*?${escaped}$`, 'm');
@@ -421,6 +495,15 @@ function findCollectorProcessByConfig(configPath, binaryPath = null) {
 
 function findManagedCollectorProcess(binaryPath, configPath) {
   return findCollectorProcessByConfig(configPath, binaryPath);
+}
+
+function findRunningBinaryCollector(binaryPath = null) {
+  for (const privacy of privacyModes) {
+    const config = configPathFor('binary', privacy);
+    const pid = binaryPath ? findManagedCollectorProcess(binaryPath, config) : findCollectorProcessByConfig(config);
+    if (pid) return { pid, privacy, config };
+  }
+  return null;
 }
 
 function healthCheck(url = healthUrl, timeoutMs = 1000) {
@@ -618,14 +701,12 @@ async function status(options = {}) {
   const health = await healthCheck();
   const binary = findCollectorBinary();
   const pid = readPid();
-  const autoBinaryConfig = configPathFor('binary', privacy);
-  const autoBinaryPid = requestedMode === 'auto' && health.ok
-    ? findCollectorProcessByConfig(autoBinaryConfig)
-    : null;
-  const effectiveMode = auto.mode || (autoBinaryPid ? 'binary' : requestedMode);
-  const config = configPathFor(effectiveMode === 'binary' ? 'binary' : 'docker', privacy);
+  const runningBinary = requestedMode === 'auto' && health.ok ? findRunningBinaryCollector(binary.path) : null;
+  const effectiveMode = auto.mode || (runningBinary ? 'binary' : requestedMode);
+  const effectivePrivacy = runningBinary?.privacy || privacy;
+  const config = runningBinary?.config || configPathFor(effectiveMode === 'binary' ? 'binary' : 'docker', effectivePrivacy);
   const discoveredPid = effectiveMode === 'binary'
-    ? (binary.path ? findManagedCollectorProcess(binary.path, config) : findCollectorProcessByConfig(config))
+    ? (runningBinary?.pid || (binary.path ? findManagedCollectorProcess(binary.path, config) : findCollectorProcessByConfig(config)))
     : null;
   const effectivePid = processAlive(pid) ? pid : discoveredPid;
   const dockerAvailable = dockerCliAvailable();
@@ -647,7 +728,7 @@ async function status(options = {}) {
     endpoint: otlpHttpEndpoint,
     healthUrl,
     safeLocalhostBinding: composeHasLocalhostBindings(),
-    privacyMode: privacy,
+    privacyMode: effectivePrivacy,
     config: fs.existsSync(config)
       ? config
       : null,
@@ -837,24 +918,26 @@ function stop(options = {}) {
 function validate(options = {}) {
   const mode = normalizeMode(options.mode || 'auto');
   const privacy = normalizePrivacy(options.privacy || 'strict');
+  const artifactValidation = validateCollectorArtifacts();
   const resolved = mode === 'auto' ? resolveAutoMode() : { mode, reason: 'explicit mode' };
-  if (!resolved.mode) return { ok: false, skipped: true, mode, privacyMode: privacy, error: resolved.reason };
-  if (resolved.mode === 'none') return { ok: false, skipped: true, mode: 'none', error: 'No collector config is validated in none mode.' };
+  if (!resolved.mode) return { ok: false, skipped: true, mode, privacyMode: privacy, artifact_validation: artifactValidation, error: resolved.reason };
+  if (resolved.mode === 'none') return { ok: false, skipped: true, mode: 'none', artifact_validation: artifactValidation, error: 'No collector config is validated in none mode.' };
 
   const config = configPathFor(resolved.mode, privacy);
-  if (!fs.existsSync(config)) return { ok: false, mode: resolved.mode, privacyMode: privacy, config, error: `Config not found: ${config}` };
+  if (!fs.existsSync(config)) return { ok: false, mode: resolved.mode, privacyMode: privacy, config, artifact_validation: artifactValidation, error: `Config not found: ${config}` };
 
   if (resolved.mode === 'binary') {
     const binary = findCollectorBinary();
-    if (!binary.ok) return { ok: false, skipped: true, mode: 'binary', privacyMode: privacy, config, error: binary.error };
+    if (!binary.ok) return { ok: false, skipped: true, mode: 'binary', privacyMode: privacy, config, artifact_validation: artifactValidation, error: binary.error };
     const result = run(binary.path, ['validate', '--config', config], { timeout: 30000 });
     return {
-      ok: result.status === 0,
+      ok: result.status === 0 && artifactValidation.ok,
       mode: 'binary',
       privacyMode: privacy,
       config,
+      artifact_validation: artifactValidation,
       command: `${binary.path} validate --config ${config}`,
-      error: result.status === 0 ? null : (result.stderr || result.stdout || `collector validate exited ${result.status}`).trim()
+      error: result.status === 0 && artifactValidation.ok ? null : (artifactValidation.errors[0] || result.stderr || result.stdout || `collector validate exited ${result.status}`).trim()
     };
   }
 
@@ -865,6 +948,7 @@ function validate(options = {}) {
       mode: 'docker',
       privacyMode: privacy,
       config,
+      artifact_validation: artifactValidation,
       error: 'Docker daemon is not reachable; start Docker/OrbStack or use binary mode.'
     };
   }
@@ -880,12 +964,13 @@ function validate(options = {}) {
     `/etc/agentops/${path.basename(config)}`
   ], { timeout: 60000 });
   return {
-    ok: result.status === 0,
+    ok: result.status === 0 && artifactValidation.ok,
     mode: 'docker',
     privacyMode: privacy,
     config,
     image,
-    error: result.status === 0 ? null : (result.stderr || result.stdout || `docker validate exited ${result.status}`).trim()
+    artifact_validation: artifactValidation,
+    error: result.status === 0 && artifactValidation.ok ? null : (artifactValidation.errors[0] || result.stderr || result.stdout || `docker validate exited ${result.status}`).trim()
   };
 }
 
@@ -934,5 +1019,6 @@ module.exports = {
   uninstallBinary,
   validate,
   validateBinaryConfig,
+  validateCollectorArtifacts,
   verifyChecksum
 };
