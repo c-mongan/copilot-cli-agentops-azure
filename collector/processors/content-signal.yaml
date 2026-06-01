@@ -1,0 +1,15 @@
+# Detect content-like fields and convert them to metadata-only signals.
+processors:
+  transform/content_signal:
+    error_mode: ignore
+    trace_statements:
+      - context: span
+        statements:
+          - set(attributes["agentops.content_capture.signal"], true) where attributes["content.capture.enabled"] == true or attributes["gen_ai.input.messages"] != nil or attributes["gen_ai.output.messages"] != nil or attributes["gen_ai.system_instructions"] != nil or attributes["gen_ai.tool.definitions"] != nil or attributes["gen_ai.tool.call.arguments"] != nil or attributes["gen_ai.tool.call.result"] != nil or attributes["github.copilot.message"] != nil or attributes["http.request.body.content"] != nil or attributes["http.response.body.content"] != nil or attributes["url.full"] != nil or attributes["code.filepath"] != nil
+          - set(attributes["agentops.content_capture.action"], "dropped") where attributes["agentops.content_capture.signal"] == true
+          - set(attributes["agentops.content_capture.kind"], "prompt") where attributes["gen_ai.input.messages"] != nil or attributes["gen_ai.prompt"] != nil
+          - set(attributes["agentops.content_capture.kind"], "output") where attributes["gen_ai.output.messages"] != nil or attributes["gen_ai.completion"] != nil
+          - set(attributes["agentops.content_capture.kind"], "tool_args") where attributes["gen_ai.tool.call.arguments"] != nil
+          - set(attributes["agentops.content_capture.kind"], "tool_result") where attributes["gen_ai.tool.call.result"] != nil
+          - set(attributes["agentops.content_capture.kind"], "file_content") where attributes["code.filepath"] != nil
+          - set(attributes["agentops.content_capture.kind"], "secret_like") where IsMatch(attributes["gen_ai.input.messages"], "SECRET|TOKEN|PASSWORD|API_KEY") or IsMatch(attributes["gen_ai.tool.call.arguments"], "SECRET|TOKEN|PASSWORD|API_KEY")

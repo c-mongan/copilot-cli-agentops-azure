@@ -1,0 +1,19 @@
+union isfuzzy=true AgentOpsEval_CL
+| where TimeGenerated between ($__timeFrom() .. $__timeTo())
+| extend RepoHash=tostring(column_ifexists("RepoHash", ""))
+| extend ModelActual=tostring(column_ifexists("ModelActual", ""))
+| extend TaskType=tostring(column_ifexists("TaskType", ""))
+| project
+    TimeGenerated,
+    RunId,
+    RepoHash,
+    ModelActual,
+    TaskType,
+    EvalOverall,
+    TestDiscipline,
+    ToolEfficiency,
+    Security,
+    Reliability,
+    CodeOutcome,
+    EvalReason
+| order by TimeGenerated desc

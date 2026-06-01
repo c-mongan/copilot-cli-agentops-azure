@@ -1,0 +1,49 @@
+union isfuzzy=true AgentOpsRunSummary_CL
+| where TimeGenerated between ($__timeFrom() .. $__timeTo())
+| extend SkillName=tostring(column_ifexists("SkillName", ""))
+| extend ParentAgentName=tostring(column_ifexists("ParentAgentName", ""))
+| extend SubAgentName=tostring(column_ifexists("SubAgentName", ""))
+| extend DelegationId=tostring(column_ifexists("DelegationId", ""))
+| project
+    TimeGenerated,
+    RunId,
+    SessionId,
+    TraceId,
+    Surface,
+    RepoHash,
+    BranchHash,
+    TaskType,
+    AgentName,
+    SkillName,
+    ParentAgentName,
+    SubAgentName,
+    DelegationId,
+    ModelRequested,
+    ModelActual,
+    PrivacyMode,
+    ContentCaptureMode,
+    OutcomeStatus,
+    OutcomeReason,
+    DurationMs,
+    InputTokens,
+    OutputTokens,
+    ReasoningTokens,
+    CacheReadTokens,
+    CacheCreationTokens,
+    ContextWindowPct,
+    TokensRemoved,
+    PermissionWaitMs,
+    EstimatedCostUsd,
+    ToolCount,
+    ToolFailureCount,
+    ToolDeniedCount,
+    TestsRan,
+    TestsPassed,
+    FilesReadCount,
+    FilesEditedCount,
+    PrOpened,
+    PrNumberHash,
+    CiStatus,
+    EvalOverall,
+    RiskScore
+| order by TimeGenerated desc

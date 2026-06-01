@@ -53,6 +53,16 @@ function runAgentops(args, options = {}) {
   };
 }
 
+function safeE2eEnv(extra = {}) {
+  return {
+    AGENTOPS_PRIVACY_MODE: 'strict',
+    AGENTOPS_CAPTURE_CONTENT: 'false',
+    AGENTOPS_DISABLE_CONTENT_CAPTURE_OVERRIDE: '1',
+    COPILOT_OTEL_CAPTURE_CONTENT: 'false',
+    ...extra
+  };
+}
+
 async function waitForLatestE2eSession(e2eId, last, options = {}) {
   const timeoutMs = options.timeoutMs || 180000;
   const intervalMs = options.intervalMs || 10000;
@@ -172,7 +182,111 @@ function reportPathFromArgs(args = []) {
   return path.resolve(optionValue(args, ['--report', '--in'], path.join(latestEvidenceDir(), 'report.html')));
 }
 
-async function playwrightBrowserCheck({ reportPath, outDir, grafana = false }) {
+function screenshotSlug(label = '') {
+  return String(label)
+    .replace(/&/g, 'and')
+    .replace(/[^a-z0-9_-]+/gi, '-')
+    .replace(/^-|-$/g, '')
+    .toLowerCase() || 'grafana';
+}
+
+const V2_SCREENSHOT_NAMES = {
+  'AgentOps V2 Home': 'agentops-v2-home-live.png',
+  'V2 Runs Explorer': 'agentops-v2-runs-explorer-live.png',
+  'V2 Run Replay': 'agentops-v2-run-replay-live.png'
+};
+
+function grafanaScreenshotTargets(links = [], options = {}) {
+  const v2Only = Boolean(options.v2Only);
+  return links
+    .filter(link => /grafana\.azure\.com/i.test(link.href || link.url || ''))
+    .map(link => ({
+      label: link.text || link.label || 'Grafana',
+      url: link.href || link.url,
+      fileName: V2_SCREENSHOT_NAMES[link.text || link.label] || `${screenshotSlug(link.text || link.label)}.png`,
+      v2Tour: Boolean(V2_SCREENSHOT_NAMES[link.text || link.label])
+    }))
+    .filter(target => !v2Only || target.v2Tour);
+}
+
+function grafanaVisualOk(items = [], requireVisible = false) {
+  return items.every(item => requireVisible ? item.dashboardVisible : (item.dashboardVisible || item.authBlocked));
+}
+
+function browserProfileOptionsFromArgs(args = [], env = process.env) {
+  return {
+    browserExecutable: optionValue(args, '--browser-executable', env.AGENTOPS_BROWSER_EXECUTABLE || ''),
+    browserUserDataDir: optionValue(args, '--browser-user-data-dir', env.AGENTOPS_BROWSER_USER_DATA_DIR || ''),
+    storageState: optionValue(args, '--storage-state', env.AGENTOPS_BROWSER_STORAGE_STATE || ''),
+    headed: args.includes('--headed') || env.AGENTOPS_BROWSER_HEADED === '1'
+  };
+}
+
+function grafanaAuthRemediation(options = {}) {
+  const reportPath = options.reportPath || '.agentops/e2e/latest/report.html';
+  const browserExecutable = options.browserExecutable || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+  const browserUserDataDir = options.browserUserDataDir || '$HOME/.agentops/browser/grafana-profile';
+  const grafanaUrl = options.grafanaUrl || 'https://graf-copilotagentops-de-a4czh7g5aueyf4e0.neu.grafana.azure.com/d/agentops-v2-home';
+  return {
+    reason: 'Azure Managed Grafana redirected to Microsoft sign-in.',
+    sign_in_once: [
+      `mkdir -p ${path.dirname(browserUserDataDir)}`,
+      `"${browserExecutable}" --user-data-dir="${browserUserDataDir}" "${grafanaUrl}"`
+    ],
+    verify_after_sign_in: [
+      'AGENTOPS_PLAYWRIGHT_MODULE_DIR=/Users/conormongan/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules',
+      `agentops e2e browser-check --report ${reportPath} --playwright --grafana --grafana-v2-only --require-grafana-visible --browser-executable "${browserExecutable}" --browser-user-data-dir "${browserUserDataDir}" --json`
+    ],
+    note: 'The strict visual gate cannot pass until the supplied browser profile can open the V2 dashboards without Microsoft SSO.'
+  };
+}
+
+function e2eAuthProfile(args = []) {
+  const reportPath = reportPathFromArgs(args);
+  const profile = browserProfileOptionsFromArgs(args);
+  const grafanaUrl = optionValue(args, '--url', 'https://graf-copilotagentops-de-a4czh7g5aueyf4e0.neu.grafana.azure.com/d/agentops-v2-home');
+  return {
+    ok: true,
+    reportPath,
+    browserProfile: {
+      browserExecutable: profile.browserExecutable || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+      browserUserDataDir: profile.browserUserDataDir || '$HOME/.agentops/browser/grafana-profile',
+      storageState: profile.storageState || '',
+      headed: profile.headed
+    },
+    remediation: grafanaAuthRemediation({
+      reportPath,
+      browserExecutable: profile.browserExecutable || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+      browserUserDataDir: profile.browserUserDataDir || '$HOME/.agentops/browser/grafana-profile',
+      grafanaUrl
+    })
+  };
+}
+
+function renderAuthProfile(result) {
+  return [
+    'Grafana browser profile setup',
+    '',
+    'Sign in once:',
+    ...result.remediation.sign_in_once.map(command => `- ${command}`),
+    '',
+    'Verify after sign-in:',
+    ...result.remediation.verify_after_sign_in.map(command => `- ${command}`)
+  ].join('\n') + '\n';
+}
+
+async function playwrightBrowserCheck({
+  reportPath,
+  outDir,
+  grafana = false,
+  grafanaV2Only = false,
+  docsScreenshotDir = null,
+  requireGrafanaVisible = false,
+  browserExecutable = process.env.AGENTOPS_BROWSER_EXECUTABLE || '',
+  browserUserDataDir = process.env.AGENTOPS_BROWSER_USER_DATA_DIR || '',
+  storageState = process.env.AGENTOPS_BROWSER_STORAGE_STATE || '',
+  headed = process.env.AGENTOPS_BROWSER_HEADED === '1'
+}) {
   let playwright;
   try {
     playwright = require('playwright');
@@ -186,10 +300,24 @@ async function playwrightBrowserCheck({ reportPath, outDir, grafana = false }) {
     if (!playwright) return { status: 'skipped', reason: `Playwright is not available: ${error.message}` };
   }
 
-  const launch = { headless: true };
-  if (process.env.AGENTOPS_BROWSER_EXECUTABLE) launch.executablePath = process.env.AGENTOPS_BROWSER_EXECUTABLE;
-  const browser = await playwright.chromium.launch(launch);
-  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+  const viewport = { width: 1440, height: 1000 };
+  const launch = { headless: !headed };
+  if (browserExecutable) launch.executablePath = browserExecutable;
+  let browser = null;
+  let context = null;
+  if (browserUserDataDir) {
+    context = await playwright.chromium.launchPersistentContext(path.resolve(browserUserDataDir), {
+      ...launch,
+      viewport
+    });
+  } else {
+    browser = await playwright.chromium.launch(launch);
+    context = await browser.newContext({
+      viewport,
+      ...(storageState ? { storageState: path.resolve(storageState) } : {})
+    });
+  }
+  const page = context.pages()[0] || await context.newPage();
   const url = pathToFileURL(reportPath).toString();
   await page.goto(url, { waitUntil: 'networkidle' });
   fs.mkdirSync(outDir, { recursive: true });
@@ -201,26 +329,38 @@ async function playwrightBrowserCheck({ reportPath, outDir, grafana = false }) {
     reportScreenshot,
     passVisible: /\bPASS\b/.test(text),
     secretLooking: /(SECRET_[A-Z_]+|InstrumentationKey=|CONNECTION_STRING=|PASSWORD=|TOKEN=|KEY=)/i.test(text),
-    grafana: []
+    grafana: [],
+    browserProfile: {
+      persistent: Boolean(browserUserDataDir),
+      storageState: Boolean(storageState),
+      headed: Boolean(headed)
+    }
   };
 
   if (grafana) {
     const links = await page.locator('a').evaluateAll(nodes => nodes.map(node => ({
       href: node.href,
       text: node.textContent.trim()
-    })).filter(link => /grafana\.azure\.com/i.test(link.href)));
-    for (const link of links) {
-      const dashboard = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
-      await dashboard.goto(link.href, { waitUntil: 'domcontentloaded', timeout: 45000 }).catch(() => {});
+    })));
+    for (const target of grafanaScreenshotTargets(links, { v2Only: grafanaV2Only })) {
+      const dashboard = await context.newPage();
+      await dashboard.goto(target.url, { waitUntil: 'domcontentloaded', timeout: 45000 }).catch(() => {});
       await dashboard.waitForTimeout(5000);
       const body = await dashboard.locator('body').innerText({ timeout: 5000 }).catch(() => '');
-      const label = link.text.replace(/[^a-z0-9_-]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() || 'grafana';
-      const screenshot = path.join(outDir, `${label}.png`);
+      const screenshot = path.join(outDir, target.fileName);
       await dashboard.screenshot({ path: screenshot, fullPage: true }).catch(() => {});
+      let docsScreenshot = null;
+      if (docsScreenshotDir && target.v2Tour && fs.existsSync(screenshot) && !/Sign in|Can.t access your account|login.microsoftonline.com/i.test(body + dashboard.url())) {
+        fs.mkdirSync(docsScreenshotDir, { recursive: true });
+        docsScreenshot = path.join(docsScreenshotDir, target.fileName);
+        fs.copyFileSync(screenshot, docsScreenshot);
+      }
       browserResult.grafana.push({
-        label: link.text,
-        url: link.href,
+        label: target.label,
+        url: target.url,
         screenshot,
+        docsScreenshot,
+        v2Tour: target.v2Tour,
         authBlocked: /Sign in|Can.t access your account|login.microsoftonline.com/i.test(body + dashboard.url()),
         dashboardVisible: /AgentOps|Copilot|Sessions|Session Detail|No data/i.test(body)
       });
@@ -228,9 +368,20 @@ async function playwrightBrowserCheck({ reportPath, outDir, grafana = false }) {
     }
   }
 
-  await browser.close();
+  await context.close();
+  if (browser) await browser.close();
   browserResult.ok = browserResult.passVisible && !browserResult.secretLooking &&
-    (!grafana || browserResult.grafana.every(item => item.dashboardVisible || item.authBlocked));
+    (!grafana || grafanaVisualOk(browserResult.grafana, requireGrafanaVisible));
+  if (grafana) browserResult.requireGrafanaVisible = requireGrafanaVisible;
+  if (grafana && requireGrafanaVisible && browserResult.grafana.some(item => item.authBlocked)) {
+    const firstBlocked = browserResult.grafana.find(item => item.authBlocked);
+    browserResult.authRemediation = grafanaAuthRemediation({
+      reportPath,
+      browserExecutable,
+      browserUserDataDir,
+      grafanaUrl: firstBlocked?.url
+    });
+  }
   return browserResult;
 }
 
@@ -248,10 +399,26 @@ function writeBrowserNotes(filePath, result) {
   ];
   if (result.playwright.reason) lines.push(`- Playwright reason: ${result.playwright.reason}`);
   if (result.playwright.reportScreenshot) lines.push(`- Report screenshot: ${result.playwright.reportScreenshot}`);
+  if (result.playwright.browserProfile) {
+    lines.push(`- Browser profile: ${result.playwright.browserProfile.persistent ? 'persistent profile' : result.playwright.browserProfile.storageState ? 'storage state' : 'fresh context'}`);
+  }
   if (result.playwright.grafana?.length) {
     lines.push('', '## Grafana');
     for (const item of result.playwright.grafana) {
       lines.push(`- ${item.label}: ${item.dashboardVisible ? 'visible' : item.authBlocked ? 'auth-blocked' : 'not verified'} (${item.url})`);
+    }
+    if (result.playwright.requireGrafanaVisible && result.playwright.grafana.some(item => !item.dashboardVisible)) {
+      lines.push('- Required visible dashboards: failed. Sign in with an authenticated Grafana browser profile and rerun.');
+    }
+    if (result.playwright.authRemediation) {
+      lines.push('', '## Auth Remediation', '', result.playwright.authRemediation.reason, '');
+      lines.push('Sign in once:');
+      lines.push('```bash');
+      for (const command of result.playwright.authRemediation.sign_in_once) lines.push(command);
+      lines.push('```', '', 'Verify after sign-in:');
+      lines.push('```bash');
+      for (const command of result.playwright.authRemediation.verify_after_sign_in) lines.push(command);
+      lines.push('```');
     }
   }
   fs.writeFileSync(filePath, `${lines.join('\n')}\n`);
@@ -259,6 +426,9 @@ function writeBrowserNotes(filePath, result) {
 
 function grafanaLinksFromOpenSummary(summary = legacy.openLinksSummary()) {
   return [
+    { label: 'AgentOps V2 Home', url: summary.v2_home_url },
+    { label: 'V2 Runs Explorer', url: summary.v2_runs_url },
+    { label: 'V2 Run Replay', url: summary.v2_replay_url },
     { label: 'Overview', url: summary.main_dashboard_url },
     { label: 'Sessions', url: summary.sessions_dashboard_url },
     { label: 'Latest Session', url: summary.latest_session_url }
@@ -276,7 +446,8 @@ async function e2eRun(args = []) {
   fs.mkdirSync(path.dirname(latestDir), { recursive: true });
   fs.symlinkSync(dir, latestDir, 'dir');
 
-  const doctor = runAgentops(['doctor', '--json']);
+  const e2eEnv = safeE2eEnv();
+  const doctor = runAgentops(['doctor', '--json'], { env: e2eEnv });
   const collectorStart = await collector.start({ mode: 'auto', privacy: 'strict' });
   const collectorStatus = await collector.status({ mode: 'auto', privacy: 'strict' });
   const poison = await collector.smoke({ privacy: 'strict', poison: true });
@@ -311,7 +482,7 @@ async function e2eRun(args = []) {
   if (live) {
     copilot = runAgentops(copilotArgs, {
       timeout: 300000,
-      env: { AGENTOPS_E2E_ID: e2eId }
+      env: safeE2eEnv({ AGENTOPS_E2E_ID: e2eId })
     });
     writeJson(path.join(dir, 'copilot.json'), copilot);
     outputs.push(copilot);
@@ -326,16 +497,16 @@ async function e2eRun(args = []) {
 
     latestSessionId = latestPayload?.session?.id || latestPayload?.session_id || null;
     if (latestSessionId) {
-      replay = runAgentops(['replay', 'latest', '--last', last]);
+      replay = runAgentops(['replay', 'latest', '--last', last], { env: e2eEnv });
       writeJson(path.join(dir, 'replay.json'), replay);
       outputs.push(replay);
     }
 
-    validateAzure = runAgentops(['validate-azure', '--last', last, '--json']);
+    validateAzure = runAgentops(['validate-azure', '--last', last, '--json'], { env: e2eEnv });
     writeJson(path.join(dir, 'validate-azure.json'), validateAzure);
     outputs.push(validateAzure);
 
-    open = runAgentops(['open', '--last', last, '--json']);
+    open = runAgentops(['open', '--last', last, '--json'], { env: e2eEnv });
     writeJson(path.join(dir, 'open.json'), open);
     outputs.push(open);
   }
@@ -346,7 +517,7 @@ async function e2eRun(args = []) {
     e2eId,
     evidenceDir: dir,
     privacyMode: 'strict',
-    environment: redactedEnvSummary(),
+    environment: redactedEnvSummary(safeE2eEnv({ AGENTOPS_E2E_ID: e2eId })),
     doctor,
     collectorStart,
     collector: collectorStatus,
@@ -406,15 +577,26 @@ async function e2eBrowserCheck(args = []) {
   const reportPath = reportPathFromArgs(args);
   const out = path.resolve(optionValue(args, '--out', path.join(path.dirname(reportPath), 'browser-notes.md')));
   const screenshotDir = path.resolve(optionValue(args, '--screenshot-dir', path.join(path.dirname(out), 'screenshots')));
+  const docsScreenshotDir = args.includes('--v2-docs-screenshots')
+    ? path.resolve(optionValue(args, '--v2-docs-screenshot-dir', path.join(repoRoot, 'docs', 'screenshots', 'v2')))
+    : null;
   const allowCheckStatus = args.includes('--allow-check-status');
   if (!fs.existsSync(reportPath)) throw new Error(`Report not found: ${reportPath}`);
   const staticCheck = checkReportHtml(fs.readFileSync(reportPath, 'utf8'), { allowCheckStatus });
   const wantsPlaywright = args.includes('--playwright') || process.env.AGENTOPS_E2E_PLAYWRIGHT === '1';
   const playwright = wantsPlaywright
-    ? await playwrightBrowserCheck({ reportPath, outDir: screenshotDir, grafana: args.includes('--grafana') })
+    ? await playwrightBrowserCheck({
+        reportPath,
+        outDir: screenshotDir,
+        grafana: args.includes('--grafana'),
+        grafanaV2Only: args.includes('--grafana-v2-only'),
+        docsScreenshotDir,
+        requireGrafanaVisible: args.includes('--require-grafana-visible'),
+        ...browserProfileOptionsFromArgs(args)
+      })
     : { status: 'skipped', reason: 'Pass --playwright or set AGENTOPS_E2E_PLAYWRIGHT=1 to capture browser screenshots.' };
   const result = {
-    ok: staticCheck.ok && (playwright.ok !== false),
+    ok: staticCheck.ok && (wantsPlaywright ? playwright.ok === true : playwright.ok !== false),
     reportPath,
     static: staticCheck,
     playwright
@@ -444,16 +626,28 @@ async function e2eCommand(args = []) {
     process.exitCode = result.ok ? 0 : 1;
     return;
   }
-  throw new Error('e2e requires run, report, or browser-check');
+  if (subcommand === 'auth-profile') {
+    const result = e2eAuthProfile(args.slice(1));
+    process.stdout.write(args.includes('--json') ? `${JSON.stringify(result, null, 2)}\n` : renderAuthProfile(result));
+    return;
+  }
+  throw new Error('e2e requires run, report, browser-check, or auth-profile');
 }
 
 module.exports = {
   checkReportHtml,
+  browserProfileOptionsFromArgs,
   e2eCommand,
   e2eBrowserCheck,
+  e2eAuthProfile,
   e2eReport,
   e2eRun,
+  grafanaAuthRemediation,
+  grafanaVisualOk,
+  grafanaScreenshotTargets,
   grafanaLinksFromOpenSummary,
   htmlLinks,
-  renderReportHtml
+  renderReportHtml,
+  renderAuthProfile,
+  safeE2eEnv
 };

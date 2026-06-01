@@ -1,0 +1,47 @@
+union isfuzzy=true
+  (AgentOpsRecommendations_CL | where TimeGenerated > ago(24h)),
+  (
+    AgentOpsInsights_CL
+    | where TimeGenerated > ago(24h)
+    | extend
+        PatternId=tostring(column_ifexists("PatternId", "")),
+        PatternKey=tostring(column_ifexists("PatternKey", "")),
+        PatternRuns=tolong(column_ifexists("PatternRuns", long(null))),
+        PatternDimension=tostring(column_ifexists("PatternDimension", ""))
+    | extend Action=case(
+        InsightType startswith "recurring-", "triage_recurring_pattern",
+        InsightType has "test", "run_validation",
+        InsightType has "tool", "investigate_tool",
+        InsightType has "collector", "check_collector",
+        InsightType has_any ("policy", "privacy"), "review_policy",
+        InsightType has_any ("cost", "context"), "reduce_context_or_cost",
+        InsightType has "ci", "fix_ci",
+        InsightType has_any ("eval", "instruction", "config"), "compare_regression",
+        "investigate")
+    | project
+        TimeGenerated,
+        RecommendationId=coalesce(tostring(column_ifexists("RecommendationId", "")), tostring(column_ifexists("InsightId", ""))),
+        RunId,
+        SessionId="",
+        TraceId,
+        Action,
+        Severity,
+        ObservedPattern=Summary,
+        NextAction=SuggestedNextStep,
+        PatternId,
+        PatternKey,
+        PatternRuns,
+        PatternDimension,
+        EvalOverall=real(null),
+        EvalBucket="",
+        BenchmarkRunId="",
+        BenchmarkDecision="",
+        BenchmarkPassRatePct=real(null),
+        BenchmarkAverageScore=real(null),
+        BenchmarkSafetyViolationCount=long(null),
+        ChangeTargetRefs=dynamic([]),
+        DashboardCount=2,
+        Validation=dynamic(["agentops dashboard kql-check --last 24h --json"]),
+        RollbackCondition="Rollback the agent, skill, MCP, model, or instruction change if eval score drops, failures rise, privacy drops appear unexpectedly, or CI worsens."
+  )
+| order by TimeGenerated desc

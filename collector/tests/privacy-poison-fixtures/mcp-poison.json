@@ -1,0 +1,16 @@
+{
+  "agentops.poison_id": "fixture-mcp-poison",
+  "mcp.method.name": "tools/call",
+  "mcp.session.id": "mcp-fixture-session",
+  "mcp.transport": "stdio",
+  "mcp.server.name": "playwright",
+  "gen_ai.operation.name": "execute_tool",
+  "gen_ai.tool.name": "browser_click",
+  "gen_ai.tool.call.arguments": {
+    "selector": "#token",
+    "secret": "SECRET_FAKE_TEST_VALUE"
+  },
+  "gen_ai.tool.call.result": {
+    "text": "api_key=SECRET_FAKE_TEST_VALUE"
+  }
+}

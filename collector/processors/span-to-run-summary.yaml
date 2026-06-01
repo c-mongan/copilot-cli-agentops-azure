@@ -1,0 +1,23 @@
+# Collector-side rollup design note.
+#
+# OpenTelemetry Collector transform processors cannot currently build durable
+# cross-span custom-table rows by themselves. AgentOps performs this rollup in
+# `agentops run-summary generate` and can ingest the resulting AgentOps*_CL
+# files into Log Analytics. This fragment names the intended processor boundary
+# so deployments can replace the CLI rollup with an OTel connector/exporter later
+# without changing dashboard contracts.
+agentops_span_to_run_summary:
+  input:
+    - traces
+  output_tables:
+    - AgentOpsRunSummary_CL
+    - AgentOpsEvents_CL
+    - AgentOpsToolCalls_CL
+    - AgentOpsMcpCalls_CL
+    - AgentOpsPrivacy_CL
+    - AgentOpsEval_CL
+    - AgentOpsGithubOutcomes_CL
+    - AgentOpsInsights_CL
+    - AgentOpsCollectorHealth_CL
+  command_equivalent:
+    - agentops run-summary generate --file <otel-jsonl> --json

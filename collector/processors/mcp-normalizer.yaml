@@ -1,0 +1,12 @@
+# Normalize MCP tool calls to both MCP and GenAI execute_tool semantics.
+processors:
+  transform/mcp_normalizer:
+    error_mode: ignore
+    trace_statements:
+      - context: span
+        statements:
+          - set(attributes["gen_ai.operation.name"], "execute_tool") where attributes["mcp.method.name"] == "tools/call"
+          - set(attributes["mcp.transport"], "stdio") where attributes["mcp.method.name"] != nil and attributes["mcp.transport"] == nil
+          - set(attributes["agentops.mcp.allowed"], true) where attributes["mcp.method.name"] == "tools/call" and attributes["agentops.mcp.allowed"] == nil
+          - set(attributes["agentops.mcp.tool.risk"], "read-only") where attributes["gen_ai.tool.name"] != nil and attributes["agentops.mcp.tool.risk"] == nil
+          - set(attributes["agentops.mcp.server.hash"], attributes["mcp.server.name"]) where attributes["mcp.server.name"] != nil and attributes["agentops.mcp.server.hash"] == nil

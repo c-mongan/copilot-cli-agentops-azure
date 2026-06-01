@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Imports / updates the Copilot CLI AgentOps dashboards in Azure Managed Grafana.
-# Source of truth: grafana/agentops-dashboard.json and grafana/agentops-*.json
+# Source of truth: grafana/agentops-dashboard.json, grafana/agentops-*.json,
+# and grafana/dashboards/v2/*.json.
 #
 # Required env (auto-resolved from azd env when run as an azd hook):
 #   AZURE_RESOURCE_GROUP   e.g. rg-agentops-dev
@@ -8,12 +9,18 @@
 # Optional:
 #   GRAFANA_FOLDER         folder title (default: "AgentOps")
 #   DASHBOARD_JSON         path to one dashboard JSON (default: import the full dashboard pack)
+#   AGENTOPS_INCLUDE_V2    include V2 control-room dashboards (default: true)
+#   AGENTOPS_V2_ONLY       import only V2 control-room dashboards (default: false)
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-GRAFANA_FOLDER="${GRAFANA_FOLDER:-AgentOps}"
+if [[ "${AGENTOPS_V2_ONLY:-false}" == "true" ]]; then
+  GRAFANA_FOLDER="${GRAFANA_FOLDER:-AgentOps for Azure}"
+else
+  GRAFANA_FOLDER="${GRAFANA_FOLDER:-AgentOps}"
+fi
 
 # Pull from azd env if not set explicitly
 if [[ -z "${AZURE_RESOURCE_GROUP:-}" || -z "${GRAFANA_NAME:-}" ]]; then
@@ -43,6 +50,11 @@ if [[ -n "${DASHBOARD_JSON:-}" ]]; then
     exit 2
   fi
   DASHBOARD_FILES=("${DASHBOARD_JSON}")
+elif [[ "${AGENTOPS_V2_ONLY:-false}" == "true" ]]; then
+  DASHBOARD_FILES=()
+  while IFS= read -r dashboard_file; do
+    DASHBOARD_FILES+=("${dashboard_file}")
+  done < <(find "${REPO_ROOT}/grafana/dashboards/v2" -maxdepth 1 -name '*.json' -type f | sort)
 else
   DASHBOARD_FILES=(
     "${REPO_ROOT}/grafana/agentops-dashboard.json"
@@ -60,6 +72,11 @@ else
     "${REPO_ROOT}/grafana/agentops-experiments.json"
     "${REPO_ROOT}/grafana/agentops-data-quality.json"
   )
+  if [[ "${AGENTOPS_INCLUDE_V2:-true}" == "true" && -d "${REPO_ROOT}/grafana/dashboards/v2" ]]; then
+    while IFS= read -r dashboard_file; do
+      DASHBOARD_FILES+=("${dashboard_file}")
+    done < <(find "${REPO_ROOT}/grafana/dashboards/v2" -maxdepth 1 -name '*.json' -type f | sort)
+  fi
 fi
 
 for dashboard_file in "${DASHBOARD_FILES[@]}"; do
