@@ -40,7 +40,7 @@ const {
   scoreTestDiscipline,
   scoreToolEfficiency
 } = require('../src/lib/evals');
-const { patternRows, renderPatterns } = require('../src/commands/insights');
+const { normalizeInsightsArgs, patternRows, renderPatterns } = require('../src/commands/insights');
 const { generateInsights } = require('../src/lib/insights/deterministic-insights');
 const { detectCostOutlier, detectLatencyOutlier } = require('../src/lib/insights/outlier-detector');
 const { detectEvalRegression, detectToolRegression } = require('../src/lib/insights/regression-detector');
@@ -938,6 +938,11 @@ test('insights generate privacy-safe recurring pattern rows', () => {
   assert.doesNotMatch(JSON.stringify(recurring), /prompt|SECRET_FAKE_TEST_VALUE|file contents/);
   assert.equal(patternRows(result.insights)[0].PatternRuns, 4);
   assert.match(renderPatterns(result.insights), /PatternKey:/);
+});
+
+test('insights default command stays useful for documented quickstart form', () => {
+  assert.deepEqual(normalizeInsightsArgs(['--last', '7d']), ['patterns', '--last', '7d']);
+  assert.deepEqual(normalizeInsightsArgs(['--runs', 'runs.jsonl']), ['generate', '--runs', 'runs.jsonl']);
 });
 
 test('deterministic eval modules score each quality dimension', () => {

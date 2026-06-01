@@ -108,7 +108,7 @@ Core commands:
   demo generate|verify [--runs <n>] [--out <dir>] [--with-content] [--json]
   github-enrich [--limit <n>] [--runs <AgentOpsRunSummary_CL.jsonl>] [--out <dir>] [--json]
   explain latest|<run-id> [--runs <jsonl>] [--evals <jsonl>] [--insights <jsonl>] [--json]
-  insights generate|patterns --runs <jsonl> [--insights <jsonl>] [--tools <jsonl>] [--privacy <jsonl>] [--github <jsonl>] [--out <dir>] [--json]
+  insights [generate|patterns] [--runs <jsonl>] [--insights <jsonl>] [--tools <jsonl>] [--privacy <jsonl>] [--github <jsonl>] [--out <dir>] [--json]
   init [--dry-run] [--provision-cloud] [--force-skills] [--no-skills] [--json]
   recommend latest|<run-id> [--runs <jsonl>] [--evals <jsonl>] [--insights <jsonl>] [--benchmark-run <id>] [--benchmark-report <json>] [--out <dir>] [--json]
   triage latest|<run-id> [--runs <jsonl>] [--events <jsonl>] [--tools <jsonl>] [--privacy <jsonl>] [--github <jsonl>] [--evals <jsonl>] [--insights <jsonl>] [--benchmark-run <id>] [--out <dir>] [--json]

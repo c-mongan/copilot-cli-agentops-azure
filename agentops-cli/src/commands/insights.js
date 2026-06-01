@@ -28,12 +28,21 @@ function renderPatterns(rows = []) {
   return `${lines.join('\n')}\n`;
 }
 
+function normalizeInsightsArgs(args = []) {
+  const [first] = args;
+  if (!first || first.startsWith('--')) {
+    return [hasFlag(args, '--runs') ? 'generate' : 'patterns', ...args];
+  }
+  return args;
+}
+
 function insightsCommand(args = []) {
-  const [subcommand = 'generate'] = args;
+  const normalizedArgs = normalizeInsightsArgs(args);
+  const [subcommand = 'patterns'] = normalizedArgs;
   if (!['generate', 'patterns'].includes(subcommand)) throw new Error('insights supports: generate|patterns');
 
   if (subcommand === 'patterns') {
-    const insightsFile = optionValue(args, '--insights', path.join(repoRoot, '.agentops', 'insights', 'latest', 'AgentOpsInsights_CL.jsonl'));
+    const insightsFile = optionValue(normalizedArgs, '--insights', path.join(repoRoot, '.agentops', 'insights', 'latest', 'AgentOpsInsights_CL.jsonl'));
     const patterns = patternRows(readJsonl(path.resolve(insightsFile)));
     const payload = {
       ok: true,
@@ -45,21 +54,21 @@ function insightsCommand(args = []) {
         'Open the Insights & Regressions dashboard and click OpenPattern.'
       ]
     };
-    process.stdout.write(hasFlag(args, '--json') ? `${JSON.stringify(payload, null, 2)}\n` : renderPatterns(patterns));
+    process.stdout.write(hasFlag(normalizedArgs, '--json') ? `${JSON.stringify(payload, null, 2)}\n` : renderPatterns(patterns));
     return;
   }
 
-  const runsFile = optionValue(args, '--runs');
+  const runsFile = optionValue(normalizedArgs, '--runs');
   if (!runsFile) throw new Error('insights generate requires --runs <AgentOpsRunSummary_CL.jsonl>');
 
-  const outDir = path.resolve(optionValue(args, '--out', path.join(repoRoot, '.agentops', 'insights', 'latest')));
+  const outDir = path.resolve(optionValue(normalizedArgs, '--out', path.join(repoRoot, '.agentops', 'insights', 'latest')));
   const result = generateInsights({
     runs: readJsonl(path.resolve(runsFile)),
-    tools: readJsonl(optionValue(args, '--tools')),
-    privacy: readJsonl(optionValue(args, '--privacy')),
-    github: readJsonl(optionValue(args, '--github')),
-    evals: readJsonl(optionValue(args, '--baseline-evals')),
-    baselineTools: readJsonl(optionValue(args, '--baseline-tools'))
+    tools: readJsonl(optionValue(normalizedArgs, '--tools')),
+    privacy: readJsonl(optionValue(normalizedArgs, '--privacy')),
+    github: readJsonl(optionValue(normalizedArgs, '--github')),
+    evals: readJsonl(optionValue(normalizedArgs, '--baseline-evals')),
+    baselineTools: readJsonl(optionValue(normalizedArgs, '--baseline-tools'))
   });
   const written = writeInsights(result, outDir);
   const payload = {
@@ -69,12 +78,12 @@ function insightsCommand(args = []) {
     insights_file: written.insightsFile,
     table_counts: result.table_counts,
     next: [
-      `agentops replay latest --file ${optionValue(args, '--events', '.agentops/demo/latest/AgentOpsEvents_CL.jsonl')}`,
+      `agentops replay latest --file ${optionValue(normalizedArgs, '--events', '.agentops/demo/latest/AgentOpsEvents_CL.jsonl')}`,
       'agentops dashboard validate'
     ]
   };
 
-  if (hasFlag(args, '--json')) {
+  if (hasFlag(normalizedArgs, '--json')) {
     process.stdout.write(`${JSON.stringify(payload, null, 2)}\n`);
   } else {
     process.stdout.write(`Generated ${payload.table_counts.AgentOpsEval_CL} eval row${payload.table_counts.AgentOpsEval_CL === 1 ? '' : 's'} and ${payload.table_counts.AgentOpsInsights_CL} insight row${payload.table_counts.AgentOpsInsights_CL === 1 ? '' : 's'}.\n`);
@@ -84,6 +93,7 @@ function insightsCommand(args = []) {
 
 module.exports = {
   insightsCommand,
+  normalizeInsightsArgs,
   patternRows,
   renderPatterns
 };
