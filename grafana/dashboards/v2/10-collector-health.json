@@ -1119,7 +1119,7 @@
         "name": "surface",
         "type": "custom",
         "label": "surface",
-        "query": "__all",
+        "query": "__all,cli,sdk,vscode_mcp,github_action,cloud_agent,custom",
         "current": {
           "selected": true,
           "text": "All",
@@ -1207,7 +1207,7 @@
         "name": "task_type",
         "type": "custom",
         "label": "task type",
-        "query": "__all",
+        "query": "__all,explain,review,test,fix,refactor,docs,debug_ci,unknown",
         "current": {
           "selected": true,
           "text": "All",
@@ -1229,7 +1229,7 @@
         "name": "tool_risk",
         "type": "custom",
         "label": "tool risk",
-        "query": "__all",
+        "query": "__all,read-only,write-file,shell,network,secret-access,browser-control,destructive,privileged",
         "current": {
           "selected": true,
           "text": "All",
@@ -1251,7 +1251,7 @@
         "name": "privacy_mode",
         "type": "custom",
         "label": "privacy mode",
-        "query": "__all",
+        "query": "__all,strict,compat,unsafe",
         "current": {
           "selected": true,
           "text": "All",
@@ -1262,7 +1262,7 @@
         "name": "outcome_status",
         "type": "custom",
         "label": "outcome status",
-        "query": "__all",
+        "query": "__all,success,failed,cancelled,blocked,unknown,not_run,passed,failed_ci",
         "current": {
           "selected": true,
           "text": "All",
@@ -1273,7 +1273,7 @@
         "name": "eval_bucket",
         "type": "custom",
         "label": "eval bucket",
-        "query": "__all",
+        "query": "__all,ok,review,poor",
         "current": {
           "selected": true,
           "text": "All",

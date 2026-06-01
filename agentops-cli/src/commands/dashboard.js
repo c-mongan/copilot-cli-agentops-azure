@@ -172,6 +172,14 @@ function validateDashboardLinks() {
 function validateDashboardFilters() {
   const dashboards = v2DashboardBodies();
   const errors = [];
+  const requiredChoices = {
+    surface: ['__all', 'cli', 'sdk', 'vscode_mcp', 'github_action', 'cloud_agent', 'custom'],
+    task_type: ['__all', 'explain', 'review', 'test', 'fix', 'refactor', 'docs', 'debug_ci', 'unknown'],
+    tool_risk: ['__all', 'read-only', 'write-file', 'shell', 'network', 'secret-access', 'browser-control', 'destructive', 'privileged'],
+    privacy_mode: ['__all', 'strict', 'compat', 'unsafe'],
+    outcome_status: ['__all', 'success', 'failed', 'cancelled', 'blocked', 'unknown'],
+    eval_bucket: ['__all', 'ok', 'review', 'poor']
+  };
   const queryFilterContracts = {
     'agentops-v2-home': ['run_id', 'session_id', 'trace_id', 'surface', 'repo_hash', 'branch_hash', 'model', 'agent_name', 'skill_name', 'sub_agent', 'task_type', 'privacy_mode', 'outcome_status', 'eval_bucket'],
     'agentops-v2-runs-explorer': ['run_id', 'session_id', 'trace_id', 'surface', 'repo_hash', 'branch_hash', 'model', 'agent_name', 'skill_name', 'sub_agent', 'task_type', 'privacy_mode', 'outcome_status', 'eval_bucket'],
@@ -199,6 +207,17 @@ function validateDashboardFilters() {
       if (!queryText.includes(`$${variable}`) && !queryText.includes(`\${${variable}}`)) {
         errors.push(`${file}: filter ${variable} is not wired into any panel query`);
       }
+    }
+    for (const [name, values] of Object.entries(requiredChoices)) {
+      const variable = (body.templating?.list || []).find(item => item.name === name);
+      if (!variable) continue;
+      const choices = String(variable.query || '').split(',').map(value => value.trim()).filter(Boolean);
+      for (const value of values) {
+        if (!choices.includes(value)) errors.push(`${file}: filter ${name} missing dropdown value ${value}`);
+      }
+    }
+    if (expected.includes('eval_bucket') && !queryText.includes("iff('$eval_bucket' == 'ok', 'good', '$eval_bucket')")) {
+      errors.push(`${file}: eval_bucket filter must accept ok as the user-facing alias for good`);
     }
     for (const link of body.links || []) {
       if (link.uid && link.includeVars !== true) errors.push(`${file}: nav link ${link.uid} does not carry filters`);
