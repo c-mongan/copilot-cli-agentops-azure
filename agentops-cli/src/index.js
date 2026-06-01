@@ -104,7 +104,7 @@ Core commands:
   content status|opt-in [--dir <AgentOps table dir>] [--runs <jsonl>] [--allow-content] [--json]
   copilot [copilot-args...]
   schema validate|print [--file <json>]
-  dashboard validate|links-check|ux-check|kql-check|verify|import [--last <duration>] [--live] [--yes] [--all] [--folder <name>] [--resource-group <rg>] [--grafana-name <name>]
+  dashboard validate|links-check|filters-check|ux-check|kql-check|verify|import [--last <duration>] [--live] [--yes] [--all] [--folder <name>] [--resource-group <rg>] [--grafana-name <name>]
   demo generate|verify [--runs <n>] [--out <dir>] [--with-content] [--json]
   github-enrich [--limit <n>] [--runs <AgentOpsRunSummary_CL.jsonl>] [--out <dir>] [--json]
   explain latest|<run-id> [--runs <jsonl>] [--evals <jsonl>] [--insights <jsonl>] [--json]

@@ -13,7 +13,9 @@
       "type": "link",
       "icon": "dashboard",
       "url": "/d/agentops-v2-home",
-      "targetBlank": false
+      "targetBlank": false,
+      "keepTime": true,
+      "includeVars": true
     },
     {
       "title": "Runs",
@@ -21,7 +23,9 @@
       "type": "link",
       "icon": "dashboard",
       "url": "/d/agentops-v2-runs-explorer",
-      "targetBlank": false
+      "targetBlank": false,
+      "keepTime": true,
+      "includeVars": true
     },
     {
       "title": "Replay",
@@ -29,7 +33,9 @@
       "type": "link",
       "icon": "dashboard",
       "url": "/d/agentops-v2-run-replay",
-      "targetBlank": false
+      "targetBlank": false,
+      "keepTime": true,
+      "includeVars": true
     },
     {
       "title": "Models",
@@ -37,7 +43,9 @@
       "type": "link",
       "icon": "dashboard",
       "url": "/d/agentops-v2-models-cost-tokens",
-      "targetBlank": false
+      "targetBlank": false,
+      "keepTime": true,
+      "includeVars": true
     },
     {
       "title": "Tools",
@@ -45,7 +53,9 @@
       "type": "link",
       "icon": "dashboard",
       "url": "/d/agentops-v2-tools-mcp-risk",
-      "targetBlank": false
+      "targetBlank": false,
+      "keepTime": true,
+      "includeVars": true
     },
     {
       "title": "Privacy",
@@ -53,7 +63,9 @@
       "type": "link",
       "icon": "dashboard",
       "url": "/d/agentops-v2-safety-privacy-policy",
-      "targetBlank": false
+      "targetBlank": false,
+      "keepTime": true,
+      "includeVars": true
     },
     {
       "title": "Outcomes",
@@ -61,7 +73,9 @@
       "type": "link",
       "icon": "dashboard",
       "url": "/d/agentops-v2-code-outcomes",
-      "targetBlank": false
+      "targetBlank": false,
+      "keepTime": true,
+      "includeVars": true
     },
     {
       "title": "Evals",
@@ -69,7 +83,9 @@
       "type": "link",
       "icon": "dashboard",
       "url": "/d/agentops-v2-evals-quality",
-      "targetBlank": false
+      "targetBlank": false,
+      "keepTime": true,
+      "includeVars": true
     },
     {
       "title": "Insights",
@@ -77,7 +93,9 @@
       "type": "link",
       "icon": "dashboard",
       "url": "/d/agentops-v2-insights-regressions",
-      "targetBlank": false
+      "targetBlank": false,
+      "keepTime": true,
+      "includeVars": true
     },
     {
       "title": "Collector",
@@ -85,7 +103,9 @@
       "type": "link",
       "icon": "dashboard",
       "url": "/d/agentops-v2-collector-health",
-      "targetBlank": false
+      "targetBlank": false,
+      "keepTime": true,
+      "includeVars": true
     }
   ],
   "panels": [
@@ -530,7 +550,7 @@
               "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
             ],
             "resultFormat": "table",
-            "query": "union isfuzzy=true (AgentOpsCollectorHealth_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo())), (AppDependencies | where TimeGenerated between ($__timeFrom() .. $__timeTo()) | where tostring(Properties) has_any ('github.copilot', 'gen_ai.operation.name', 'agentops.', 'codex') or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') | summarize LastSpanReceived=max(TimeGenerated), SpanRows=count(), ExportErrors=countif(Success == false or tostring(Success) =~ 'false') | extend TimeGenerated=now(), Component='appinsights-compat', CheckName='live-ingestion', Status=iff(SpanRows > 0, 'healthy', 'empty'), Detail=strcat('Existing Application Insights telemetry rows: ', tostring(SpanRows)), PrivacyMode='strict', CollectorMode='compat', OtlpEndpoint='application-insights', AzureConfigured=true, GrafanaConfigured=true, DashboardVersion='v2', SchemaVersion='2', DroppedContentCount=0, LastExportSuccess=LastSpanReceived | project TimeGenerated, Component, CheckName, Status, Detail, PrivacyMode, CollectorMode, OtlpEndpoint, AzureConfigured, GrafanaConfigured, DashboardVersion, SchemaVersion, LastSpanReceived, LastExportSuccess, ExportErrors, DroppedContentCount) | project TimeGenerated, CheckName, Status, Detail, PrivacyMode, CollectorMode, OtlpEndpoint, AzureConfigured, GrafanaConfigured, DashboardVersion, SchemaVersion | order by TimeGenerated desc | take 500"
+            "query": "union isfuzzy=true (AgentOpsCollectorHealth_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo())), (AppDependencies | where TimeGenerated between ($__timeFrom() .. $__timeTo()) | where tostring(Properties) has_any ('github.copilot', 'gen_ai.operation.name', 'agentops.', 'codex') or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') | summarize LastSpanReceived=max(TimeGenerated), SpanRows=count(), ExportErrors=countif(Success == false or tostring(Success) =~ 'false') | extend TimeGenerated=now(), Component='appinsights-compat', CheckName='live-ingestion', Status=iff(SpanRows > 0, 'healthy', 'empty'), Detail=strcat('Existing Application Insights telemetry rows: ', tostring(SpanRows)), PrivacyMode='strict', CollectorMode='compat', OtlpEndpoint='application-insights', AzureConfigured=true, GrafanaConfigured=true, DashboardVersion='v2', SchemaVersion='2', DroppedContentCount=0, LastExportSuccess=LastSpanReceived | project TimeGenerated, Component, CheckName, Status, Detail, PrivacyMode, CollectorMode, OtlpEndpoint, AzureConfigured, GrafanaConfigured, DashboardVersion, SchemaVersion, LastSpanReceived, LastExportSuccess, ExportErrors, DroppedContentCount) | project TimeGenerated, CheckName, Status, Detail, PrivacyMode, CollectorMode, OtlpEndpoint, AzureConfigured, GrafanaConfigured, DashboardVersion, SchemaVersion | where ('$privacy_mode' == '__all' or tostring(column_ifexists('PrivacyMode', '')) == '$privacy_mode') | order by TimeGenerated desc | take 500"
           }
         }
       ]
@@ -582,7 +602,7 @@
               "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
             ],
             "resultFormat": "time_series",
-            "query": "union isfuzzy=true (AgentOpsCollectorHealth_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo())), (AppDependencies | where TimeGenerated between ($__timeFrom() .. $__timeTo()) | where tostring(Properties) has_any ('github.copilot', 'gen_ai.operation.name', 'agentops.', 'codex') or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') | summarize LastSpanReceived=max(TimeGenerated), SpanRows=count(), ExportErrors=countif(Success == false or tostring(Success) =~ 'false') | extend TimeGenerated=now(), Component='appinsights-compat', CheckName='live-ingestion', Status=iff(SpanRows > 0, 'healthy', 'empty'), Detail=strcat('Existing Application Insights telemetry rows: ', tostring(SpanRows)), PrivacyMode='strict', CollectorMode='compat', OtlpEndpoint='application-insights', AzureConfigured=true, GrafanaConfigured=true, DashboardVersion='v2', SchemaVersion='2', DroppedContentCount=0, LastExportSuccess=LastSpanReceived | project TimeGenerated, Component, CheckName, Status, Detail, PrivacyMode, CollectorMode, OtlpEndpoint, AzureConfigured, GrafanaConfigured, DashboardVersion, SchemaVersion, LastSpanReceived, LastExportSuccess, ExportErrors, DroppedContentCount) | summarize ExportErrors=sum(ExportErrors), DroppedContent=sum(DroppedContentCount) by TimeGenerated=bin(TimeGenerated, $__interval) | order by TimeGenerated asc"
+            "query": "union isfuzzy=true (AgentOpsCollectorHealth_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo())), (AppDependencies | where TimeGenerated between ($__timeFrom() .. $__timeTo()) | where tostring(Properties) has_any ('github.copilot', 'gen_ai.operation.name', 'agentops.', 'codex') or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') | summarize LastSpanReceived=max(TimeGenerated), SpanRows=count(), ExportErrors=countif(Success == false or tostring(Success) =~ 'false') | extend TimeGenerated=now(), Component='appinsights-compat', CheckName='live-ingestion', Status=iff(SpanRows > 0, 'healthy', 'empty'), Detail=strcat('Existing Application Insights telemetry rows: ', tostring(SpanRows)), PrivacyMode='strict', CollectorMode='compat', OtlpEndpoint='application-insights', AzureConfigured=true, GrafanaConfigured=true, DashboardVersion='v2', SchemaVersion='2', DroppedContentCount=0, LastExportSuccess=LastSpanReceived | project TimeGenerated, Component, CheckName, Status, Detail, PrivacyMode, CollectorMode, OtlpEndpoint, AzureConfigured, GrafanaConfigured, DashboardVersion, SchemaVersion, LastSpanReceived, LastExportSuccess, ExportErrors, DroppedContentCount) | where ('$privacy_mode' == '__all' or tostring(column_ifexists('PrivacyMode', '')) == '$privacy_mode') | summarize ExportErrors=sum(ExportErrors), DroppedContent=sum(DroppedContentCount) by TimeGenerated=bin(TimeGenerated, $__interval) | order by TimeGenerated asc"
           }
         }
       ]
@@ -1013,7 +1033,7 @@
               "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
             ],
             "resultFormat": "table",
-            "query": "union isfuzzy=true (AgentOpsCollectorHealth_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo())), (AppDependencies | where TimeGenerated between ($__timeFrom() .. $__timeTo()) | where tostring(Properties) has_any ('github.copilot', 'gen_ai.operation.name', 'agentops.', 'codex') or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') | summarize LastSpanReceived=max(TimeGenerated), SpanRows=count(), ExportErrors=countif(Success == false or tostring(Success) =~ 'false') | extend TimeGenerated=now(), Component='appinsights-compat', CheckName='live-ingestion', Status=iff(SpanRows > 0, 'healthy', 'empty'), Detail=strcat('Existing Application Insights telemetry rows: ', tostring(SpanRows)), PrivacyMode='strict', CollectorMode='compat', OtlpEndpoint='application-insights', AzureConfigured=true, GrafanaConfigured=true, DashboardVersion='v2', SchemaVersion='2', DroppedContentCount=0, LastExportSuccess=LastSpanReceived | project TimeGenerated, Component, CheckName, Status, Detail, PrivacyMode, CollectorMode, OtlpEndpoint, AzureConfigured, GrafanaConfigured, DashboardVersion, SchemaVersion, LastSpanReceived, LastExportSuccess, ExportErrors, DroppedContentCount) | summarize LastSpanReceived=max(LastSpanReceived), LastExportSuccess=max(LastExportSuccess), LatestStatus=arg_max(TimeGenerated, Status) by CollectorMode, PrivacyMode, OtlpEndpoint | order by LastSpanReceived desc"
+            "query": "union isfuzzy=true (AgentOpsCollectorHealth_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo())), (AppDependencies | where TimeGenerated between ($__timeFrom() .. $__timeTo()) | where tostring(Properties) has_any ('github.copilot', 'gen_ai.operation.name', 'agentops.', 'codex') or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') | summarize LastSpanReceived=max(TimeGenerated), SpanRows=count(), ExportErrors=countif(Success == false or tostring(Success) =~ 'false') | extend TimeGenerated=now(), Component='appinsights-compat', CheckName='live-ingestion', Status=iff(SpanRows > 0, 'healthy', 'empty'), Detail=strcat('Existing Application Insights telemetry rows: ', tostring(SpanRows)), PrivacyMode='strict', CollectorMode='compat', OtlpEndpoint='application-insights', AzureConfigured=true, GrafanaConfigured=true, DashboardVersion='v2', SchemaVersion='2', DroppedContentCount=0, LastExportSuccess=LastSpanReceived | project TimeGenerated, Component, CheckName, Status, Detail, PrivacyMode, CollectorMode, OtlpEndpoint, AzureConfigured, GrafanaConfigured, DashboardVersion, SchemaVersion, LastSpanReceived, LastExportSuccess, ExportErrors, DroppedContentCount) | where ('$privacy_mode' == '__all' or tostring(column_ifexists('PrivacyMode', '')) == '$privacy_mode') | summarize LastSpanReceived=max(LastSpanReceived), LastExportSuccess=max(LastExportSuccess), LatestStatus=arg_max(TimeGenerated, Status) by CollectorMode, PrivacyMode, OtlpEndpoint | order by LastSpanReceived desc"
           }
         }
       ]

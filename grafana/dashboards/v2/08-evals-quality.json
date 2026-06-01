@@ -13,7 +13,9 @@
       "type": "link",
       "icon": "dashboard",
       "url": "/d/agentops-v2-home",
-      "targetBlank": false
+      "targetBlank": false,
+      "keepTime": true,
+      "includeVars": true
     },
     {
       "title": "Runs",
@@ -21,7 +23,9 @@
       "type": "link",
       "icon": "dashboard",
       "url": "/d/agentops-v2-runs-explorer",
-      "targetBlank": false
+      "targetBlank": false,
+      "keepTime": true,
+      "includeVars": true
     },
     {
       "title": "Replay",
@@ -29,7 +33,9 @@
       "type": "link",
       "icon": "dashboard",
       "url": "/d/agentops-v2-run-replay",
-      "targetBlank": false
+      "targetBlank": false,
+      "keepTime": true,
+      "includeVars": true
     },
     {
       "title": "Models",
@@ -37,7 +43,9 @@
       "type": "link",
       "icon": "dashboard",
       "url": "/d/agentops-v2-models-cost-tokens",
-      "targetBlank": false
+      "targetBlank": false,
+      "keepTime": true,
+      "includeVars": true
     },
     {
       "title": "Tools",
@@ -45,7 +53,9 @@
       "type": "link",
       "icon": "dashboard",
       "url": "/d/agentops-v2-tools-mcp-risk",
-      "targetBlank": false
+      "targetBlank": false,
+      "keepTime": true,
+      "includeVars": true
     },
     {
       "title": "Privacy",
@@ -53,7 +63,9 @@
       "type": "link",
       "icon": "dashboard",
       "url": "/d/agentops-v2-safety-privacy-policy",
-      "targetBlank": false
+      "targetBlank": false,
+      "keepTime": true,
+      "includeVars": true
     },
     {
       "title": "Outcomes",
@@ -61,7 +73,9 @@
       "type": "link",
       "icon": "dashboard",
       "url": "/d/agentops-v2-code-outcomes",
-      "targetBlank": false
+      "targetBlank": false,
+      "keepTime": true,
+      "includeVars": true
     },
     {
       "title": "Evals",
@@ -69,7 +83,9 @@
       "type": "link",
       "icon": "dashboard",
       "url": "/d/agentops-v2-evals-quality",
-      "targetBlank": false
+      "targetBlank": false,
+      "keepTime": true,
+      "includeVars": true
     },
     {
       "title": "Insights",
@@ -77,7 +93,9 @@
       "type": "link",
       "icon": "dashboard",
       "url": "/d/agentops-v2-insights-regressions",
-      "targetBlank": false
+      "targetBlank": false,
+      "keepTime": true,
+      "includeVars": true
     },
     {
       "title": "Collector",
@@ -85,7 +103,9 @@
       "type": "link",
       "icon": "dashboard",
       "url": "/d/agentops-v2-collector-health",
-      "targetBlank": false
+      "targetBlank": false,
+      "keepTime": true,
+      "includeVars": true
     }
   ],
   "panels": [

@@ -134,6 +134,8 @@ function validateDashboardLinks() {
     for (const link of body.links || []) {
       if (link.uid && !uidSet.has(link.uid)) errors.push(`${file}: nav target ${link.uid} does not exist`);
       if (link.uid && link.url !== `/d/${link.uid}`) errors.push(`${file}: nav link ${link.uid} should use /d/${link.uid}`);
+      if (link.uid && link.keepTime !== true) errors.push(`${file}: nav link ${link.uid} must preserve the active time range`);
+      if (link.uid && link.includeVars !== true) errors.push(`${file}: nav link ${link.uid} must preserve active dashboard filters`);
     }
 
     const panelLinks = (body.panels || []).flatMap(panel => collectPanelLinks(panel));
@@ -163,6 +165,50 @@ function validateDashboardLinks() {
     ok: errors.length === 0,
     dashboards: dashboards.length,
     checked_links: dashboards.reduce((total, item) => total + (item.body.links || []).length + (item.body.panels || []).flatMap(panel => collectPanelLinks(panel)).length, 0),
+    errors
+  };
+}
+
+function validateDashboardFilters() {
+  const dashboards = v2DashboardBodies();
+  const errors = [];
+  const queryFilterContracts = {
+    'agentops-v2-home': ['run_id', 'session_id', 'trace_id', 'surface', 'repo_hash', 'branch_hash', 'model', 'agent_name', 'skill_name', 'sub_agent', 'task_type', 'privacy_mode', 'outcome_status', 'eval_bucket'],
+    'agentops-v2-runs-explorer': ['run_id', 'session_id', 'trace_id', 'surface', 'repo_hash', 'branch_hash', 'model', 'agent_name', 'skill_name', 'sub_agent', 'task_type', 'privacy_mode', 'outcome_status', 'eval_bucket'],
+    'agentops-v2-run-replay': ['run_id', 'session_id', 'trace_id', 'surface', 'repo_hash', 'branch_hash', 'model', 'agent_name', 'skill_name', 'sub_agent', 'task_type', 'privacy_mode', 'outcome_status', 'eval_bucket'],
+    'agentops-v2-models-cost-tokens': ['run_id', 'session_id', 'trace_id', 'surface', 'repo_hash', 'branch_hash', 'model', 'agent_name', 'skill_name', 'sub_agent', 'task_type', 'privacy_mode', 'outcome_status', 'eval_bucket'],
+    'agentops-v2-tools-mcp-risk': ['run_id', 'trace_id', 'surface', 'agent_name', 'mcp_server', 'tool_name', 'tool_risk'],
+    'agentops-v2-safety-privacy-policy': ['run_id', 'session_id', 'trace_id', 'surface', 'repo_hash', 'branch_hash', 'model', 'agent_name', 'skill_name', 'sub_agent', 'task_type', 'privacy_mode', 'outcome_status', 'eval_bucket'],
+    'agentops-v2-code-outcomes': ['run_id', 'repo_hash', 'branch_hash', 'outcome_status'],
+    'agentops-v2-evals-quality': ['run_id', 'repo_hash', 'model', 'task_type', 'eval_bucket'],
+    'agentops-v2-insights-regressions': ['run_id', 'repo_hash', 'model', 'task_type', 'tool_name', 'pattern_key', 'eval_bucket'],
+    'agentops-v2-collector-health': ['privacy_mode']
+  };
+
+  for (const { file, body } of dashboards) {
+    const variables = new Set((body.templating?.list || []).map(item => item.name));
+    const queryText = (body.panels || [])
+      .flatMap(panel => [panel, ...(panel.panels || [])])
+      .flatMap(panel => panel.targets || [])
+      .map(target => target.azureLogAnalytics?.query || target.query || '')
+      .join('\n');
+    const expected = queryFilterContracts[body.uid] || [];
+
+    for (const variable of expected) {
+      if (!variables.has(variable)) errors.push(`${file}: missing filter variable ${variable}`);
+      if (!queryText.includes(`$${variable}`) && !queryText.includes(`\${${variable}}`)) {
+        errors.push(`${file}: filter ${variable} is not wired into any panel query`);
+      }
+    }
+    for (const link of body.links || []) {
+      if (link.uid && link.includeVars !== true) errors.push(`${file}: nav link ${link.uid} does not carry filters`);
+      if (link.uid && link.keepTime !== true) errors.push(`${file}: nav link ${link.uid} does not carry time range`);
+    }
+  }
+
+  return {
+    ok: errors.length === 0,
+    dashboards: dashboards.length,
     errors
   };
 }
@@ -422,6 +468,7 @@ function dashboardVerify(args = [], options = {}) {
   const checks = {
     validate: validateDashboards(),
     links: validateDashboardLinks(),
+    filters: validateDashboardFilters(),
     ux: validateDashboardUx()
   };
   if (includeLive) checks.kql = dashboardKqlCheck(args, options);
@@ -436,6 +483,7 @@ function dashboardVerify(args = [], options = {}) {
       dashboards: checks.validate.dashboards,
       v2_dashboards: checks.links.dashboards,
       checked_links: checks.links.checked_links,
+      filter_dashboards: checks.filters.dashboards,
       ux_contracts: checks.ux.contracts,
       kql_checks: checks.kql?.checks?.length || 0
     },
@@ -448,6 +496,7 @@ function dashboardVerify(args = [], options = {}) {
       : [
         'agentops dashboard validate',
         'agentops dashboard links-check',
+        'agentops dashboard filters-check',
         'agentops dashboard ux-check',
         'agentops dashboard kql-check --last 24h'
       ]
@@ -525,9 +574,11 @@ function runDashboardImport(args = [], options = {}) {
 
 function dashboardCommand(args = []) {
   const [subcommand = 'validate'] = args;
-  if (!['validate', 'links-check', 'ux-check', 'kql-check', 'verify', 'import'].includes(subcommand)) throw new Error('dashboard supports: validate|links-check|ux-check|kql-check|verify|import');
+  if (!['validate', 'links-check', 'filters-check', 'ux-check', 'kql-check', 'verify', 'import'].includes(subcommand)) throw new Error('dashboard supports: validate|links-check|filters-check|ux-check|kql-check|verify|import');
   const result = subcommand === 'links-check'
     ? validateDashboardLinks()
+    : subcommand === 'filters-check'
+      ? validateDashboardFilters()
     : subcommand === 'ux-check'
       ? validateDashboardUx()
     : subcommand === 'verify'
@@ -549,6 +600,7 @@ module.exports = {
   runDashboardImport,
   substituteGrafanaMacros,
   validateDashboardLinks,
+  validateDashboardFilters,
   validateDashboardUx,
   validateDashboards
 };

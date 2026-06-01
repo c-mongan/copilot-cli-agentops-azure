@@ -20,7 +20,7 @@ const { normalizeMcpAttributes } = require('../src/lib/otel/mcp-normalizer');
 const { buildAskContext, hasV2AskArgs } = require('../src/commands/ask-context');
 const { buildContentStatus, renderOptInGuide } = require('../src/commands/content');
 const { removeAgentOpsCopilotFlags } = require('../src/commands/copilot');
-const { dashboardImportPlan, dashboardKqlCheck, dashboardVerify, runDashboardImport, validateDashboardLinks, validateDashboardUx, validateDashboards } = require('../src/commands/dashboard');
+const { dashboardImportPlan, dashboardKqlCheck, dashboardVerify, runDashboardImport, validateDashboardFilters, validateDashboardLinks, validateDashboardUx, validateDashboards } = require('../src/commands/dashboard');
 const { browserProfileOptionsFromArgs, checkReportHtml, e2eAuthProfile, grafanaAuthRemediation, grafanaScreenshotTargets, grafanaVisualOk, renderAuthProfile, renderReportHtml, safeE2eEnv } = require('../src/commands/e2e');
 const { hasV2Args } = require('../src/commands/explain');
 const { openV2FromFiles, renderOpenV2 } = require('../src/commands/open');
@@ -2632,6 +2632,18 @@ test('V2 dashboard links preserve drilldown contracts', () => {
   assert.match(JSON.stringify(insightsDashboard), /OpenPattern/);
   assert.match(JSON.stringify(insightsDashboard), /Recommendation artifacts/);
   assert.match(JSON.stringify(insightsDashboard), /var-pattern_key/);
+});
+
+test('V2 dashboard filters are wired into queries and nav preserves filter state', () => {
+  const result = validateDashboardFilters();
+  assert.equal(result.ok, true, result.errors.join('\n'));
+  assert.equal(result.dashboards, 10);
+
+  const homeDashboard = JSON.parse(fs.readFileSync(path.join(root, 'grafana', 'dashboards', 'v2', '01-agentops-home.json'), 'utf8'));
+  for (const link of homeDashboard.links) {
+    assert.equal(link.keepTime, true, `${link.title} should preserve time range`);
+    assert.equal(link.includeVars, true, `${link.title} should preserve active filters`);
+  }
 });
 
 test('dashboard import plans V2 managed Grafana import safely by default', () => {
