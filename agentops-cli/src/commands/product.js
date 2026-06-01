@@ -7,6 +7,18 @@ const { e2eBrowserCheck } = require('./e2e');
 const legacy = require('../legacy');
 
 const repoRoot = path.resolve(__dirname, '..', '..', '..');
+const requiredVisualDashboards = [
+  'agentops-v2-home',
+  'agentops-v2-runs-explorer',
+  'agentops-v2-run-replay',
+  'agentops-v2-models-cost-tokens',
+  'agentops-v2-tools-mcp-risk',
+  'agentops-v2-safety-privacy-policy',
+  'agentops-v2-code-outcomes',
+  'agentops-v2-evals-quality',
+  'agentops-v2-insights-regressions',
+  'agentops-v2-collector-health'
+];
 
 function exists(relativePath) {
   return fs.existsSync(path.join(repoRoot, relativePath));
@@ -269,9 +281,102 @@ function visualAuditRecoveryCommands(reportPath) {
   ];
 }
 
+function validateVisualEvidence(evidencePath) {
+  const resolved = path.resolve(evidencePath || '');
+  if (!evidencePath || !fs.existsSync(resolved)) {
+    return {
+      ok: false,
+      evidencePath: resolved,
+      dashboards: [],
+      visible: [],
+      missing: [`Visual evidence file not found: ${resolved}`]
+    };
+  }
+
+  let payload;
+  try {
+    payload = JSON.parse(fs.readFileSync(resolved, 'utf8'));
+  } catch (error) {
+    return {
+      ok: false,
+      evidencePath: resolved,
+      dashboards: [],
+      visible: [],
+      missing: [`Visual evidence file is not valid JSON: ${error.message}`]
+    };
+  }
+
+  const dashboards = Array.isArray(payload.dashboards) ? payload.dashboards : [];
+  const byUid = new Map(dashboards.map(item => [String(item.uid || ''), item]));
+  const missing = [];
+  const visible = [];
+  for (const uid of requiredVisualDashboards) {
+    const item = byUid.get(uid);
+    if (!item) {
+      missing.push(`${uid}: missing`);
+      continue;
+    }
+    const screenshotPath = item.screenshot ? path.resolve(path.dirname(resolved), item.screenshot) : '';
+    const screenshotOk = screenshotPath && fs.existsSync(screenshotPath) && fs.statSync(screenshotPath).size > 1000;
+    if (item.authBlocked) missing.push(`${uid}: auth-blocked`);
+    if (!item.dashboardVisible) missing.push(`${uid}: not visible`);
+    if ((item.errors || []).length) missing.push(`${uid}: ${item.errors.join(', ')}`);
+    if (!screenshotOk) missing.push(`${uid}: screenshot missing or too small`);
+    if (!String(item.url || '').includes(`/d/${uid}`)) missing.push(`${uid}: URL does not match dashboard UID`);
+    if (!item.authBlocked && item.dashboardVisible && !(item.errors || []).length && screenshotOk) visible.push(uid);
+  }
+
+  return {
+    ok: missing.length === 0,
+    evidencePath: resolved,
+    dashboards,
+    visible,
+    missing
+  };
+}
+
 async function productAuditWithVisual(options = {}) {
   const result = productAudit(options);
   if (!options.requireVisual) return result;
+
+  if (options.visualEvidencePath) {
+    const evidence = validateVisualEvidence(options.visualEvidencePath);
+    const visualCheck = check(
+      'visual-grafana-rendered-dashboards',
+      evidence.ok,
+      evidence.visible,
+      evidence.missing
+    );
+    const checks = [...result.checks, visualCheck];
+    const failed = checks.filter(item => !item.ok);
+    return {
+      ...result,
+      ok: failed.length === 0,
+      scope: options.live ? 'local-live-and-visual-product-contract' : 'local-and-visual-product-contract',
+      visual_grafana_verified: evidence.ok,
+      summary: {
+        ...result.summary,
+        checks: checks.length,
+        passed: checks.length - failed.length,
+        failed: failed.length,
+        visual_dashboards: evidence.dashboards.length,
+        visual_dashboards_visible: evidence.visible.length
+      },
+      checks,
+      visual: {
+        ok: evidence.ok,
+        evidencePath: evidence.evidencePath,
+        status: 'evidence-file',
+        dashboards: evidence.dashboards
+      },
+      next: evidence.ok
+        ? result.next
+        : [
+            'Regenerate authenticated Grafana visual evidence from a signed-in browser.',
+            ...visualAuditRecoveryCommands(options.reportPath || path.join(repoRoot, '.agentops', 'e2e', 'latest', 'report.html'))
+          ]
+    };
+  }
 
   const runBrowserCheck = options.browserCheck || e2eBrowserCheck;
   const reportPath = options.reportPath || path.join(repoRoot, '.agentops', 'e2e', 'latest', 'report.html');
@@ -382,6 +487,7 @@ async function productCommand(args = []) {
     browserExecutable: optionValue(args, '--browser-executable', process.env.AGENTOPS_BROWSER_EXECUTABLE || ''),
     browserUserDataDir: optionValue(args, '--browser-user-data-dir', process.env.AGENTOPS_BROWSER_USER_DATA_DIR || ''),
     storageState: optionValue(args, '--storage-state', process.env.AGENTOPS_BROWSER_STORAGE_STATE || ''),
+    visualEvidencePath: optionValue(args, '--visual-evidence', ''),
     headed: hasFlag(args, '--headed') || process.env.AGENTOPS_BROWSER_HEADED === '1'
   });
   process.stdout.write(hasFlag(args, '--json') ? `${JSON.stringify(result, null, 2)}\n` : renderProductAudit(result));
@@ -393,5 +499,6 @@ module.exports = {
   productAuditWithVisual,
   productCommand,
   renderProductAudit,
+  validateVisualEvidence,
   visualAuditRecoveryCommands
 };

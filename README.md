@@ -131,6 +131,7 @@ agentops product audit --live --last 24h --require-rows --require-visual --json
 ```
 
 The visual gate is strict: it only passes after Playwright opens the V2 Grafana dashboard pages and sees them rendered. If it reports Microsoft sign-in, run the `agentops e2e auth-profile` sign-in command once, then rerun the audit with the suggested browser profile flags.
+If you generate dashboard screenshots with another authenticated browser harness, pass its validated evidence file with `--visual-evidence <json>`.
 
 To roll up a raw local span export into the same V2 table shape:
 

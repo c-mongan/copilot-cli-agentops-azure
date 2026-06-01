@@ -89,4 +89,4 @@ agentops product audit \
   --json
 ```
 
-This gate requires real rendered dashboard pages. Static report links alone do not count. If the report file is missing, the visual product audit returns the recovery commands to regenerate live E2E evidence before rerunning the visual gate. If Grafana redirects to Microsoft sign-in, run `agentops e2e auth-profile` and sign in once with the printed browser profile before rerunning the visual gate.
+This gate requires real rendered dashboard pages. Static report links alone do not count. If the report file is missing, the visual product audit returns the recovery commands to regenerate live E2E evidence before rerunning the visual gate. If Grafana redirects to Microsoft sign-in, run `agentops e2e auth-profile` and sign in once with the printed browser profile before rerunning the visual gate. If screenshots come from another authenticated browser harness, pass the generated evidence JSON with `--visual-evidence <json>`; every V2 dashboard must be visible, unblocked, and backed by a screenshot file.

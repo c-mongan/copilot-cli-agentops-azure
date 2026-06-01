@@ -24,7 +24,7 @@ const { dashboardImportPlan, dashboardKqlCheck, dashboardVerify, runDashboardImp
 const { browserProfileOptionsFromArgs, checkReportHtml, e2eAuthProfile, grafanaAuthRemediation, grafanaScreenshotTargets, grafanaVisualOk, renderAuthProfile, renderReportHtml, safeE2eEnv } = require('../src/commands/e2e');
 const { hasV2Args } = require('../src/commands/explain');
 const { openV2FromFiles, renderOpenV2 } = require('../src/commands/open');
-const { productAudit, productAuditWithVisual, renderProductAudit, visualAuditRecoveryCommands } = require('../src/commands/product');
+const { productAudit, productAuditWithVisual, renderProductAudit, validateVisualEvidence, visualAuditRecoveryCommands } = require('../src/commands/product');
 const { benchmarkEvidenceFromReport, firstPositional: firstRecommendPositional, recommendFromFiles, recommendationRow, renderRecommendationV2, writeRecommendation } = require('../src/commands/recommend');
 const { demoOptionsFromArgs, demoVerifyCommand } = require('../src/commands/demo');
 const { buildTriage, renderTriage, writeTriage } = require('../src/commands/triage');
@@ -2565,6 +2565,50 @@ test('product visual audit fails when no dashboard was actually rendered', async
   assert.equal(result.visual_grafana_verified, false);
   assert.equal(visualCheck.ok, false);
   assert.ok(visualCheck.missing.some(item => item.includes('No Grafana dashboards')));
+});
+
+test('product visual audit accepts authenticated dashboard evidence file', async () => {
+  const evidenceDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-visual-'));
+  const screenshotsDir = path.join(evidenceDir, 'screenshots');
+  fs.mkdirSync(screenshotsDir, { recursive: true });
+  const required = [
+    'agentops-v2-home',
+    'agentops-v2-runs-explorer',
+    'agentops-v2-run-replay',
+    'agentops-v2-models-cost-tokens',
+    'agentops-v2-tools-mcp-risk',
+    'agentops-v2-safety-privacy-policy',
+    'agentops-v2-code-outcomes',
+    'agentops-v2-evals-quality',
+    'agentops-v2-insights-regressions',
+    'agentops-v2-collector-health'
+  ];
+  const dashboards = required.map(uid => {
+    const screenshot = path.join('screenshots', `${uid}.png`);
+    fs.writeFileSync(path.join(evidenceDir, screenshot), Buffer.alloc(2048, 1));
+    return {
+      uid,
+      title: uid,
+      url: `https://example.grafana.azure.com/d/${uid}`,
+      dashboardVisible: true,
+      authBlocked: false,
+      errors: [],
+      screenshot
+    };
+  });
+  const evidencePath = path.join(evidenceDir, 'visual-evidence.json');
+  fs.writeFileSync(evidencePath, JSON.stringify({ dashboards }, null, 2));
+
+  const evidence = validateVisualEvidence(evidencePath);
+  const result = await productAuditWithVisual({
+    requireVisual: true,
+    visualEvidencePath: evidencePath
+  });
+
+  assert.equal(evidence.ok, true, evidence.missing.join(', '));
+  assert.equal(result.ok, true, result.checks.filter(check => !check.ok).map(check => check.name).join(', '));
+  assert.equal(result.visual_grafana_verified, true);
+  assert.equal(result.summary.visual_dashboards_visible, 10);
 });
 
 test('product visual audit returns auth remediation when Grafana is SSO-blocked', async () => {
