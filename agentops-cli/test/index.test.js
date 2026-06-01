@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
-const { spawnSync } = require('node:child_process');
+const { spawn, spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -9,9 +9,46 @@ const test = require('node:test');
 process.env.AGENTOPS_CONFIG_PATH = path.join(os.tmpdir(), `agentops-test-config-${process.pid}.json`);
 const collectorManager = require('../src/lib/collector-manager');
 const copilotResolver = require('../src/lib/copilot-resolver');
+const { createRunMetadata } = require('../src/lib/copilot/run-metadata');
+const { parseCopilotSessionRows } = require('../src/lib/copilot/session-parser');
+const { summarizeCopilotRun } = require('../src/lib/copilot/run-summary');
+const { classifyToolName, summarizeAllowedTools } = require('../src/lib/copilot/tool-classifier');
 const privacy = require('../src/lib/privacy');
+const { validateAgentRun, validateMcpSpan } = require('../src/lib/schema/agent-run-schema');
+const { normalizeGenAiAttributes } = require('../src/lib/otel/genai-normalizer');
+const { normalizeMcpAttributes } = require('../src/lib/otel/mcp-normalizer');
+const { buildAskContext, hasV2AskArgs } = require('../src/commands/ask-context');
+const { buildContentStatus, renderOptInGuide } = require('../src/commands/content');
 const { removeAgentOpsCopilotFlags } = require('../src/commands/copilot');
-const { checkReportHtml, renderReportHtml } = require('../src/commands/e2e');
+const { dashboardImportPlan, dashboardKqlCheck, dashboardVerify, runDashboardImport, validateDashboardLinks, validateDashboardUx, validateDashboards } = require('../src/commands/dashboard');
+const { browserProfileOptionsFromArgs, checkReportHtml, e2eAuthProfile, grafanaAuthRemediation, grafanaScreenshotTargets, grafanaVisualOk, renderAuthProfile, renderReportHtml, safeE2eEnv } = require('../src/commands/e2e');
+const { hasV2Args } = require('../src/commands/explain');
+const { openV2FromFiles, renderOpenV2 } = require('../src/commands/open');
+const { productAudit, productAuditWithVisual, renderProductAudit, visualAuditRecoveryCommands } = require('../src/commands/product');
+const { benchmarkEvidenceFromReport, firstPositional: firstRecommendPositional, recommendFromFiles, recommendationRow, renderRecommendationV2, writeRecommendation } = require('../src/commands/recommend');
+const { demoOptionsFromArgs, demoVerifyCommand } = require('../src/commands/demo');
+const { buildTriage, renderTriage, writeTriage } = require('../src/commands/triage');
+const { buildAzureIngestPlan } = require('../src/lib/azure/v2-ingest-plan');
+const { generateDemoData, tableNames, writeDemoData } = require('../src/lib/demo/agentops-demo-data');
+const { ciStatusFromChecks, enrichGithubOutcomes, rowFromPullRequest, stableHash } = require('../src/lib/github/outcome-enricher');
+const { isRevertPullRequest } = require('../src/lib/github/revert-detector');
+const {
+  evaluateRunQuality,
+  scoreCodeOutcome,
+  scoreReliability,
+  scoreSecurity,
+  scoreTestDiscipline,
+  scoreToolEfficiency
+} = require('../src/lib/evals');
+const { patternRows, renderPatterns } = require('../src/commands/insights');
+const { generateInsights } = require('../src/lib/insights/deterministic-insights');
+const { detectCostOutlier, detectLatencyOutlier } = require('../src/lib/insights/outlier-detector');
+const { detectEvalRegression, detectToolRegression } = require('../src/lib/insights/regression-detector');
+const { explainRun, renderV2Explanation } = require('../src/lib/explain/v2-explain');
+const { createMcpHttpProxyObserver } = require('../src/lib/mcp/proxy-http');
+const { createMcpProxyObserver } = require('../src/lib/mcp/proxy-stdio');
+const { classifyMcpToolRisk } = require('../src/lib/mcp/risk-classifier');
+const { rollupSpanRows } = require('../src/lib/rollup/span-to-agentops-tables');
 
 const {
   agentopsAttributionSmoke,
@@ -129,10 +166,24 @@ test('CLI help exposes small core surface and hides experimental commands', () =
 
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /collector start\|stop\|status\|validate\|smoke\|install-binary\|uninstall-binary/);
+  assert.match(result.stdout, /smoke \[--real-copilot\]/);
+  assert.match(result.stdout, /init \[--dry-run\]/);
   assert.match(result.stdout, /uninstall \[--keep-plugin\]/);
   assert.match(result.stdout, /agentops experimental <old-command>/);
   assert.doesNotMatch(result.stdout, /benchmark list/);
   assert.doesNotMatch(result.stdout, /saved-view add/);
+});
+
+test('init is a core command without experimental migration warning', () => {
+  const result = spawnSync(process.execPath, [path.join(root, 'agentops-cli', 'src', 'index.js'), 'init', '--dry-run', '--no-skills'], {
+    cwd: root,
+    encoding: 'utf8'
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /AgentOps init/);
+  assert.match(result.stdout, /smoke --real-copilot/);
+  assert.doesNotMatch(result.stderr, /experimental now/);
 });
 
 test('collector manager plans strict configs and absolute Docker compose paths', () => {
@@ -215,6 +266,1064 @@ test('strict privacy poison check drops unknown content fields and keeps safe me
   assert.equal(result.sanitized['unknown.future.content.field'], undefined);
 });
 
+test('collector privacy processor artifacts and poison fixtures are present', () => {
+  const result = collectorManager.validateCollectorArtifacts();
+  assert.equal(result.ok, true, result.errors.join('\n'));
+  assert.equal(result.fixtures.length, 2);
+  assert.ok(result.fixtures.every(fixture => fixture.ok));
+  assert.ok(result.fixtures.every(fixture => fixture.content_signal));
+  assert.ok(result.processors.some(file => file.endsWith('strict-allowlist.yaml')));
+  assert.ok(result.processors.some(file => file.endsWith('span-to-run-summary.yaml')));
+});
+
+test('Agent Run schema accepts metadata-only strict runs and rejects content export', () => {
+  const validAttrs = {
+    'agentops.schema.version': '2',
+    'agentops.run.id': 'run-1',
+    'agentops.session.id': 'session-1',
+    'agentops.surface': 'cli',
+    'agentops.privacy.mode': 'strict',
+    'agentops.content_capture.mode': 'off',
+    'agentops.content_capture.signal': false,
+    'agentops.repo.hash': 'repohash',
+    'agentops.branch.hash': 'branchhash',
+    'agentops.task.type': 'fix',
+    'agentops.outcome.status': 'success',
+    'agentops.duration.ms': 123,
+    'gen_ai.operation.name': 'chat',
+    'gen_ai.provider.name': 'github.copilot',
+    'gen_ai.conversation.id': 'session-1'
+  };
+  const valid = validateAgentRun(validAttrs);
+  assert.equal(valid.ok, true);
+
+  const invalid = validateAgentRun({
+    ...validAttrs,
+    'agentops.privacy.mode': 'strict',
+    'gen_ai.input.messages': 'do not export'
+  });
+  assert.equal(invalid.ok, false);
+  assert.ok(invalid.errors.some(error => error.includes('gen_ai.input.messages')));
+});
+
+test('OTel normalizers preserve safe GenAI and MCP shape', () => {
+  const genai = normalizeGenAiAttributes({
+    'agentops.run.id': 'run-1',
+    'agentops.session.id': 'session-1',
+    'agentops.repo.path': '/private/repo'
+  });
+  assert.equal(genai['gen_ai.operation.name'], 'chat');
+  assert.equal(genai['gen_ai.provider.name'], 'github.copilot');
+  assert.equal(genai['gen_ai.conversation.id'], 'session-1');
+  assert.ok(genai['agentops.repo.hash']);
+  assert.equal(genai['agentops.repo.path'], undefined);
+
+  const mcp = normalizeMcpAttributes({}, {
+    sessionId: 'session-1',
+    serverName: 'playwright',
+    toolName: 'browser_click',
+    argsSchema: { type: 'object' },
+    result: { ok: true }
+  });
+  assert.equal(validateMcpSpan(mcp).ok, true);
+  assert.equal(mcp['gen_ai.operation.name'], 'execute_tool');
+  assert.equal(mcp['agentops.mcp.tool.risk'], 'browser-control');
+  assert.ok(mcp['agentops.mcp.args_schema_hash']);
+  assert.ok(mcp['agentops.mcp.result_size_bytes'] > 0);
+});
+
+test('demo data generator emits metadata-only AgentOps custom table rows', () => {
+  const result = generateDemoData({ runs: 12 });
+  assert.equal(result.ok, true);
+  assert.equal(result.tables.AgentOpsRunSummary_CL.length, 12);
+  assert.ok(result.scenario_names.includes('successful-test-writing-run'));
+  assert.ok(result.scenario_names.includes('pr-opened-ci-failed'));
+  assert.ok(result.tables.AgentOpsRunSummary_CL.every(row => row.ScenarioName));
+  assert.equal(result.tables.AgentOpsPrivacy_CL.some(row => row.Action === 'dropped'), true);
+  assert.equal(result.tables.AgentOpsGithubOutcomes_CL.some(row => row.PrOpened === true), true);
+  assert.equal(result.tables.AgentOpsGithubOutcomes_CL.some(row => row.TimeToPrMinutes >= 0), true);
+  assert.equal(result.tables.AgentOpsGithubOutcomes_CL.some(row => row.PrMerged && row.TimeToMergeMinutes >= row.TimeToPrMinutes), true);
+  assert.equal(result.tables.AgentOpsMcpCalls_CL.some(row => row.McpServerHash), true);
+  assert.equal(result.tables.AgentOpsRunSummary_CL.some(row => row.ContextWindowPct >= 90), true);
+  assert.equal(result.tables.AgentOpsRunSummary_CL.some(row => row.CacheReadTokens > 0), true);
+  assert.equal(result.tables.AgentOpsEvents_CL.some(row => row.EventName === 'context.pressure'), true);
+
+  for (const table of tableNames) assert.ok(Array.isArray(result.tables[table]), table);
+
+  const serialized = JSON.stringify(result.tables);
+  assert.doesNotMatch(serialized, /gen_ai\.input\.messages|gen_ai\.output\.messages|system_instructions/);
+  assert.doesNotMatch(serialized, /SECRET_FAKE_TEST_VALUE|api_key=|cat ~\/\.ssh\/id_rsa|this should never leave local machine/);
+});
+
+test('demo flags explicitly control scenario families', () => {
+  assert.deepEqual(demoOptionsFromArgs(['--with-failures', '--with-privacy-drops', '--with-github-outcomes']), {
+    withFailures: true,
+    withPrivacyDrops: true,
+    withGithubOutcomes: true,
+    withContent: false
+  });
+  assert.equal(generateDemoData({
+    runs: 12,
+    withFailures: false,
+    withPrivacyDrops: false,
+    withGithubOutcomes: false
+  }).tables.AgentOpsRunSummary_CL.some(row => row.OutcomeStatus === 'failed' || row.PrOpened || row.ContentCaptureSignal), false);
+  assert.throws(() => demoOptionsFromArgs(['--with-failures', '--without-failures']), /either --with-failures or --without-failures/);
+});
+
+test('demo verify runs the local V2 control-room proof', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-demo-verify-'));
+  const originalWrite = process.stdout.write;
+  let output = '';
+  try {
+    process.stdout.write = chunk => {
+      output += String(chunk);
+      return true;
+    };
+    demoVerifyCommand(['--runs', '12', '--out', path.join(tempDir, 'demo'), '--insights-out', path.join(tempDir, 'insights'), '--json']);
+  } finally {
+    process.stdout.write = originalWrite;
+  }
+  const result = JSON.parse(output);
+  assert.equal(result.ok, true);
+  assert.equal(result.demo.runs, 12);
+  assert.equal(result.insights.table_counts.AgentOpsEval_CL, 12);
+  assert.equal(result.dashboard.ok, true);
+  assert.equal(result.links.ok, true);
+  assert.ok(result.explanation.headline);
+  assert.equal(result.open_links.ok, true);
+  assert.match(result.open_links.links.replay, /agentops-v2-run-replay/);
+  assert.equal(result.recommendation.ok, true);
+  assert.ok(result.recommendation.next_action);
+  assert.ok(result.next.some(command => command.includes('agentops open latest')));
+  assert.ok(result.next.some(command => command.includes('agentops recommend latest')));
+  assert.doesNotMatch(output, /SECRET_FAKE_TEST_VALUE|api_key=|gen_ai\.input\.messages/);
+  fs.rmSync(tempDir, { recursive: true, force: true });
+});
+
+test('azure-ingest plan validates V2 table files and privacy shape', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-azure-ingest-'));
+  try {
+    const demo = generateDemoData({ runs: 12 });
+    const { writeDemoData } = require('../src/lib/demo/agentops-demo-data');
+    writeDemoData(demo, tempDir);
+
+    const result = buildAzureIngestPlan({ dir: tempDir });
+    assert.equal(result.ok, true);
+    assert.equal(result.privacy.ok, true);
+    assert.equal(result.tables.AgentOpsRunSummary_CL.rows, 12);
+    assert.ok(result.tables.AgentOpsRunSummary_CL.columns.includes('RunId'));
+    assert.equal(result.tables.AgentOpsRunSummary_CL.stream_name, 'Custom-AgentOpsRunSummary_CL');
+    assert.equal(result.tables.AgentOpsRunSummary_CL.column_types.TimeGenerated, 'datetime');
+    assert.equal(result.tables.AgentOpsRunSummary_CL.column_types.RunId, 'string');
+    assert.equal(result.tables.AgentOpsRunSummary_CL.column_types.ToolCount, 'long');
+    assert.equal(result.tables.AgentOpsRunSummary_CL.column_types.EstimatedCostUsd, 'real');
+    assert.equal(result.tables.AgentOpsRunSummary_CL.column_types.PrOpened, 'boolean');
+    assert.equal(result.azure.streams.AgentOpsRunSummary_CL, 'Custom-AgentOpsRunSummary_CL');
+    assert.match(result.azure.ingestion_path, /Logs Ingestion API/);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('azure-ingest plan fails closed on content-like fields', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-azure-ingest-leak-'));
+  try {
+    const demo = generateDemoData({ runs: 2 });
+    const { writeDemoData } = require('../src/lib/demo/agentops-demo-data');
+    writeDemoData(demo, tempDir);
+    fs.appendFileSync(path.join(tempDir, 'AgentOpsEvents_CL.jsonl'), `${JSON.stringify({
+      TimeGenerated: '2026-05-29T12:00:00Z',
+      RunId: 'run-leak',
+      SessionId: 'session-leak',
+      EventName: 'gen_ai.chat',
+      'gen_ai.input.messages': 'SECRET_FAKE_TEST_VALUE'
+    })}\n`);
+
+    const result = buildAzureIngestPlan({ dir: tempDir });
+    assert.equal(result.ok, false);
+    assert.equal(result.privacy.ok, false);
+    assert.ok(result.privacy.leaks.some(leak => leak.table === 'AgentOpsEvents_CL'));
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('azure-ingest plan requires explicit opt-in for prompt response content rows', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-azure-ingest-content-'));
+  try {
+    const demo = generateDemoData({ runs: 3, withContent: true });
+    writeDemoData(demo, tempDir);
+
+    const blocked = buildAzureIngestPlan({ dir: tempDir });
+    assert.equal(blocked.ok, false);
+    assert.match(blocked.errors.join('\n'), /--allow-content/);
+
+    const allowed = buildAzureIngestPlan({ dir: tempDir, allowContent: true });
+    assert.equal(allowed.ok, true, allowed.errors.join('\n'));
+    assert.equal(allowed.content_capture.rows, 6);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('content status makes prompt response viewer opt-in explicit', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-content-status-'));
+  try {
+    const demo = generateDemoData({ runs: 3, withContent: true });
+    writeDemoData(demo, tempDir);
+
+    const blocked = buildContentStatus({
+      dir: tempDir,
+      allowContent: false
+    });
+    assert.equal(blocked.ok, false);
+    assert.equal(blocked.content_rows, 6);
+    assert.equal(blocked.allowed_for_ingest, false);
+    assert.match(blocked.status, /blocked/);
+    assert.match(blocked.transcript_viewer_url, /viewPanel=26/);
+    assert.ok(blocked.next.some(step => step.includes('--allow-content')));
+
+    const allowed = buildContentStatus({
+      dir: tempDir,
+      allowContent: true
+    });
+    assert.equal(allowed.ok, true);
+    assert.equal(allowed.allowed_for_ingest, true);
+    assert.equal(allowed.capture_modes.redacted, 6);
+    assert.equal(allowed.has_full_content, false);
+
+    const guide = renderOptInGuide();
+    assert.match(guide, /AGENTOPS_CAPTURE_CONTENT=false/);
+    assert.match(guide, /restricted to approved viewers/);
+    assert.match(guide, /--allow-content/);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('latest and replay understand V2 AgentOps custom table rows', () => {
+  const demo = generateDemoData({ runs: 12 });
+  const latest = latestSessionSummary({ rows: demo.tables.AgentOpsRunSummary_CL, source: 'demo' });
+  assert.ok(latest.session);
+  assert.ok(latest.session.input_tokens > 0);
+  assert.ok(latest.session.output_tokens > 0);
+  assert.ok(latest.session.est_usd > 0);
+  assert.ok(latest.session.tool_calls > 0);
+
+  const timeline = replayTimeline(demo.tables.AgentOpsEvents_CL, { sessionId: 'latest', source: 'demo' });
+  assert.ok(timeline.events.length > 0);
+  assert.ok(timeline.summary.input_tokens > 0);
+  assert.ok(timeline.summary.est_usd > 0);
+  assert.ok(timeline.events.some(event => event.event === 'gen_ai.chat'));
+});
+
+test('span rollup converts raw OTel JSONL rows into V2 AgentOps tables', () => {
+  const rows = [
+    {
+      name: 'invoke_agent',
+      attributes: {
+        'gen_ai.operation.name': 'invoke_agent',
+        'gen_ai.agent.name': 'agent-optimizer',
+        'gen_ai.conversation.id': 'conv-rollup',
+        'gen_ai.request.model': 'gpt-5.5',
+        'gen_ai.usage.input_tokens': 100,
+        'gen_ai.usage.output_tokens': 20,
+        'gen_ai.usage.cache_read.input_tokens': 25,
+        'agentops.context.window_pct': 92,
+        'agentops.context.tokens_removed': 11,
+        'agentops.permission.wait_ms': 1200,
+        'gen_ai.input.messages': 'must be dropped'
+      }
+    },
+    {
+      name: 'execute_tool',
+      attributes: {
+        'gen_ai.operation.name': 'execute_tool',
+        'gen_ai.tool.name': 'shell',
+        'error.type': 'command_failed'
+      },
+      status: { code: 'ERROR' }
+    },
+    {
+      name: 'mcp.tools.call',
+      attributes: {
+        'gen_ai.operation.name': 'execute_tool',
+        'gen_ai.tool.name': 'mcp__playwright__browser_click',
+        'mcp.method.name': 'tools/call',
+        'mcp.session.id': 'mcp-session-1',
+        'mcp.server.name': 'playwright',
+        'mcp.client.name': 'vscode',
+        'mcp.transport': 'stdio',
+        'agentops.mcp.sandboxed': true,
+        'agentops.mcp.result_size_bytes': 128
+      }
+    },
+    {
+      name: 'github.pr.outcome',
+      attributes: {
+        'agentops.pr.opened': true,
+        'agentops.pr.number_hash': 'pr_hash_123',
+        'agentops.pr.merged': true,
+        'agentops.ci.status': 'passed',
+        'agentops.pr.review_comment_count': 2,
+        'agentops.pr.commit_count': 3,
+        'agentops.pr.files_changed_count': 4
+      }
+    }
+  ];
+  const result = rollupSpanRows(rows, { baseTime: '2026-05-29T12:00:00Z' });
+  assert.equal(result.runs, 1);
+  assert.equal(result.tables.AgentOpsRunSummary_CL[0].SessionId, 'conv-rollup');
+  assert.equal(result.tables.AgentOpsRunSummary_CL[0].OutcomeStatus, 'failed');
+  assert.equal(result.tables.AgentOpsRunSummary_CL[0].ToolFailureCount, 1);
+  assert.equal(result.tables.AgentOpsRunSummary_CL[0].PrOpened, true);
+  assert.equal(result.tables.AgentOpsRunSummary_CL[0].CiStatus, 'passed');
+  assert.equal(result.tables.AgentOpsMcpCalls_CL[0].McpServerName, 'playwright');
+  assert.equal(result.tables.AgentOpsMcpCalls_CL[0].ToolName, 'browser_click');
+  assert.equal(result.tables.AgentOpsGithubOutcomes_CL[0].PrMerged, true);
+  assert.equal(result.tables.AgentOpsGithubOutcomes_CL[0].FilesChangedCount, 4);
+  assert.equal(result.tables.AgentOpsPrivacy_CL[0].Action, 'dropped');
+  assert.equal(result.tables.AgentOpsEvents_CL[0].InputTokens, 100);
+  assert.equal(result.tables.AgentOpsRunSummary_CL[0].CacheReadTokens, 25);
+  assert.equal(result.tables.AgentOpsRunSummary_CL[0].ContextWindowPct, 92);
+  assert.equal(result.tables.AgentOpsRunSummary_CL[0].TokensRemoved, 11);
+  assert.doesNotMatch(JSON.stringify(result.tables), /must be dropped|gen_ai\.input\.messages/);
+});
+
+test('mcp-proxy observes stdio tool calls without storing args or results', () => {
+  const observer = createMcpProxyObserver({
+    serverName: 'playwright',
+    runId: 'run-mcp-test',
+    sessionId: 'session-mcp-test'
+  });
+  const request = {
+    jsonrpc: '2.0',
+    id: 1,
+    method: 'tools/call',
+    params: {
+      name: 'browser_click',
+      arguments: {
+        selector: '#secret',
+        token: 'SECRET_FAKE_TEST_VALUE'
+      }
+    }
+  };
+  const observed = observer.observeClientMessage(request);
+  assert.equal(observed.observed, true);
+  assert.equal(observed.message.params._meta.traceparent.startsWith('00-'), true);
+
+  observer.observeServerMessage({
+    jsonrpc: '2.0',
+    id: 1,
+    result: {
+      content: [{ type: 'text', text: 'api_key=SECRET_FAKE_TEST_VALUE' }]
+    }
+  });
+
+  assert.equal(observer.rows.length, 1);
+  assert.equal(observer.rows[0].McpServerName, 'playwright');
+  assert.equal(observer.rows[0].ToolRisk, 'browser-control');
+  assert.ok(observer.rows[0].ResultSizeBytes > 0);
+  assert.doesNotMatch(JSON.stringify(observer.rows), /SECRET_FAKE_TEST_VALUE|api_key=|#secret/);
+});
+
+test('mcp HTTP observer injects trace context and stores metadata only', () => {
+  const observer = createMcpHttpProxyObserver({
+    serverName: 'http-demo',
+    runId: 'run-http-test',
+    sessionId: 'session-http-test',
+    transport: 'streamable_http'
+  });
+  const observed = observer.observeRequest({
+    jsonrpc: '2.0',
+    id: '42',
+    method: 'tools/call',
+    params: {
+      name: 'fetch_secret_url',
+      arguments: {
+        url: 'https://example.test/?token=SECRET_FAKE_TEST_VALUE'
+      }
+    }
+  });
+  const row = observer.observeResponse({
+    jsonrpc: '2.0',
+    id: '42',
+    result: {
+      content: [{ type: 'text', text: 'api_key=SECRET_FAKE_TEST_VALUE' }]
+    }
+  });
+
+  assert.equal(observed.observed, true);
+  assert.equal(observed.message.params._meta.traceparent.startsWith('00-'), true);
+  assert.equal(row.McpTransport, 'streamable_http');
+  assert.equal(row.ToolRisk, 'secret-access');
+  assert.ok(row.ResultSizeBytes > 0);
+  assert.doesNotMatch(JSON.stringify(observer.rows), /SECRET_FAKE_TEST_VALUE|api_key=|example\.test/);
+});
+
+test('mcp-proxy risk classifier covers sensitive and destructive tools', () => {
+  assert.equal(classifyMcpToolRisk('read_file'), 'read-only');
+  assert.equal(classifyMcpToolRisk('shell_exec'), 'shell');
+  assert.equal(classifyMcpToolRisk('delete_workspace'), 'destructive');
+  assert.equal(classifyMcpToolRisk('get_secret_token'), 'secret-access');
+});
+
+test('mcp-proxy smoke passes stdio traffic and writes safe MCP rows', async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-mcp-proxy-'));
+  const outFile = path.join(tempDir, 'AgentOpsMcpCalls_CL.jsonl');
+  const child = spawn(process.execPath, [
+    path.join(root, 'agentops-cli', 'src', 'index.js'),
+    'mcp-proxy',
+    '--server-name',
+    'demo',
+    '--out',
+    outFile,
+    '--',
+    process.execPath,
+    path.join(root, 'examples', 'mcp-proxy', 'demo-server.js')
+  ], {
+    cwd: root,
+    stdio: ['pipe', 'pipe', 'pipe']
+  });
+
+  let stdout = '';
+  let stderr = '';
+  child.stdout.on('data', chunk => { stdout += chunk.toString('utf8'); });
+  child.stderr.on('data', chunk => { stderr += chunk.toString('utf8'); });
+
+  child.stdin.write(`${JSON.stringify({
+    jsonrpc: '2.0',
+    id: 1,
+    method: 'tools/call',
+    params: {
+      name: 'read_file',
+      arguments: {
+        path: '/private/repo/secret.txt',
+        token: 'SECRET_FAKE_TEST_VALUE'
+      }
+    }
+  })}\n`);
+  child.stdin.end();
+
+  const code = await new Promise(resolve => child.on('close', resolve));
+  assert.equal(code, 0, stderr);
+  assert.match(stdout, /"jsonrpc":"2.0"/);
+  const rows = fs.readFileSync(outFile, 'utf8').trim().split(/\r?\n/).map(line => JSON.parse(line));
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].McpServerName, 'demo');
+  assert.equal(rows[0].ToolName, 'read_file');
+  assert.equal(rows[0].ToolRisk, 'read-only');
+  assert.doesNotMatch(JSON.stringify(rows), /SECRET_FAKE_TEST_VALUE|secret\.txt|\/private\/repo/);
+
+  fs.rmSync(tempDir, { recursive: true, force: true });
+});
+
+test('github outcome enricher hashes identifiers and keeps PR text out', () => {
+  const row = rowFromPullRequest({
+    number: 123,
+    title: 'Fix SECRET_FAKE_TEST_VALUE leak',
+    state: 'MERGED',
+    headRefName: 'user/private-branch',
+    updatedAt: '2026-05-29T12:00:00Z',
+    createdAt: '2026-05-29T11:50:00Z',
+    mergedAt: '2026-05-29T12:01:00Z',
+    changedFiles: 4,
+    commitsCount: 2,
+    reviewDecision: 'APPROVED',
+    statusCheckRollup: [{ conclusion: 'SUCCESS' }]
+  }, { repo: 'owner/private-repo', runStartedAt: '2026-05-29T11:45:00Z' });
+
+  assert.equal(row.PrOpened, true);
+  assert.equal(row.PrMerged, true);
+  assert.equal(row.CiStatus, 'passed');
+  assert.equal(row.FilesChangedCount, 4);
+  assert.equal(row.TimeToPrMinutes, 5);
+  assert.equal(row.TimeToMergeMinutes, 16);
+  const serialized = JSON.stringify(row);
+  assert.doesNotMatch(serialized, /owner\/private-repo|private-branch|SECRET_FAKE_TEST_VALUE|Fix /);
+});
+
+test('github PR mappers detect reverts and summarize checks without text leakage', () => {
+  const row = rowFromPullRequest({
+    number: 99,
+    title: 'Revert private customer fix',
+    headRefName: 'private/revert-branch',
+    updatedAt: '2026-05-29T12:00:00Z',
+    statusCheckRollup: [{ conclusion: 'SUCCESS' }],
+    labels: [{ name: 'rollback' }]
+  }, { repo: 'owner/private-repo' });
+
+  assert.equal(isRevertPullRequest({ labels: [{ name: 'reverted' }] }), true);
+  assert.equal(row.PrReverted, true);
+  assert.equal(row.CiStatus, 'passed');
+  assert.doesNotMatch(JSON.stringify(row), /private customer|private\/revert-branch|owner\/private-repo/);
+});
+
+test('github outcome enricher reads gh metadata with mocked CLI', () => {
+  const calls = [];
+  const result = enrichGithubOutcomes({
+    limit: 1,
+    spawnSync: (command, args) => {
+      calls.push([command, args]);
+      if (args[0] === 'repo') return { status: 0, stdout: JSON.stringify({ nameWithOwner: 'owner/private-repo' }), stderr: '' };
+      return {
+        status: 0,
+        stdout: JSON.stringify([{
+          number: 7,
+          state: 'OPEN',
+          title: 'Do not export this title',
+          headRefName: 'feature/private',
+          updatedAt: '2026-05-29T12:00:00Z',
+          changedFiles: 3,
+          commitsCount: 1,
+          statusCheckRollup: [{ conclusion: 'FAILURE' }]
+        }]),
+        stderr: ''
+      };
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.rows.length, 1);
+  assert.equal(result.rows[0].CiStatus, 'failed');
+  assert.equal(calls[0][0], 'gh');
+  assert.doesNotMatch(JSON.stringify(result), /owner\/private-repo|feature\/private|Do not export this title/);
+});
+
+test('github outcome enricher maps PR branches back to AgentOps run ids', () => {
+  const result = enrichGithubOutcomes({
+    limit: 1,
+    runRows: [{
+      TimeGenerated: '2026-05-29T12:00:01Z',
+      RunId: 'run-agentops-match',
+      RepoHash: stableHash('owner/private-repo', 'repo'),
+      BranchHash: stableHash('feature/private', 'branch')
+    }],
+    spawnSync: (_command, args) => {
+      if (args[0] === 'repo') return { status: 0, stdout: JSON.stringify({ nameWithOwner: 'owner/private-repo' }), stderr: '' };
+      return {
+        status: 0,
+        stdout: JSON.stringify([{
+          number: 8,
+          state: 'MERGED',
+          title: 'Private title must not export',
+          headRefName: 'feature/private',
+          updatedAt: '2026-05-29T12:02:00Z',
+          changedFiles: 2,
+          commits: [{ oid: 'a' }, { oid: 'b' }],
+          statusCheckRollup: [{ conclusion: 'SUCCESS' }]
+        }]),
+        stderr: ''
+      };
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.rows[0].RunId, 'run-agentops-match');
+  assert.equal(result.rows[0].CiStatus, 'passed');
+  assert.equal(result.rows[0].CommitCount, 2);
+  assert.doesNotMatch(JSON.stringify(result), /owner\/private-repo|feature\/private|Private title/);
+});
+
+test('github CI status summarizes check conclusions', () => {
+  assert.equal(ciStatusFromChecks([{ conclusion: 'SUCCESS' }]), 'passed');
+  assert.equal(ciStatusFromChecks([{ conclusion: 'FAILURE' }]), 'failed');
+  assert.equal(ciStatusFromChecks([{ conclusion: '' }]), 'pending');
+  assert.equal(ciStatusFromChecks([]), 'unknown');
+});
+
+test('deterministic insights score V2 rows and flag risky outcomes', () => {
+  const result = generateInsights({
+    runs: [{
+      TimeGenerated: '2026-05-29T12:00:00Z',
+      RunId: 'run-risk',
+      TraceId: 'trace-risk',
+      RepoHash: 'repo_hash',
+      ModelActual: 'gpt-5.5',
+      TaskType: 'fix',
+      OutcomeStatus: 'failed',
+      EstimatedCostUsd: 1.4,
+      ToolCount: 4,
+      ToolFailureCount: 1,
+      ToolDeniedCount: 1,
+      TestsRan: false,
+      TestsPassed: false,
+      FilesEditedCount: 2,
+      PrivacyMode: 'strict'
+    }],
+    tools: [{ RunId: 'run-risk', ToolName: 'shell', Status: 'failed', Allowed: true }],
+    privacy: [{ RunId: 'run-risk', DroppedCount: 2 }],
+    github: [{ RunId: 'run-risk', PrOpened: true, CiStatus: 'failed' }]
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.evals.length, 1);
+  assert.equal(result.evals[0].EvalBucket, 'poor');
+  assert.ok(result.insights.some(row => row.InsightType === 'test-discipline'));
+  assert.ok(result.insights.some(row => row.InsightType === 'tool-regression'));
+  assert.ok(result.insights.some(row => row.InsightType === 'privacy-drop'));
+  assert.ok(result.insights.some(row => row.InsightType === 'ci-failed'));
+  assert.ok(result.insights.some(row => row.InsightType === 'cost-anomaly'));
+  assert.doesNotMatch(JSON.stringify(result), /prompt|SECRET_FAKE_TEST_VALUE|file contents/);
+});
+
+test('outlier and regression detectors flag cost latency eval and tool changes', () => {
+  const run = {
+    RunId: 'run-current',
+    RepoHash: 'repo_hash',
+    TaskType: 'review',
+    ModelActual: 'gpt-5.5',
+    EstimatedCostUsd: 4.2,
+    DurationMs: 260000,
+    ConfigHash: 'config_hash_new'
+  };
+  const baselineRuns = [
+    { RunId: 'run-old-1', RepoHash: 'repo_hash', TaskType: 'review', ModelActual: 'gpt-5.5', EstimatedCostUsd: 0.9, DurationMs: 70000 },
+    { RunId: 'run-old-2', RepoHash: 'repo_hash', TaskType: 'review', ModelActual: 'gpt-5.5', EstimatedCostUsd: 1.1, DurationMs: 80000 }
+  ];
+  const tools = [
+    { RunId: 'run-current', ToolName: 'shell', Status: 'failed' },
+    { RunId: 'run-current', ToolName: 'read_file', Status: 'success' }
+  ];
+  const baselineTools = [
+    { RunId: 'run-old-1', ToolName: 'shell', Status: 'success' },
+    { RunId: 'run-old-2', ToolName: 'shell', Status: 'success' }
+  ];
+
+  assert.equal(detectCostOutlier(run, baselineRuns).type, 'cost-anomaly');
+  assert.equal(detectLatencyOutlier(run, baselineRuns).type, 'latency-anomaly');
+  assert.equal(detectToolRegression(run, tools, baselineTools).type, 'tool-regression');
+  assert.equal(detectEvalRegression(run, { EvalOverall: 50 }, [{ RunId: 'run-old-1', RepoHash: 'repo_hash', TaskType: 'review', EvalOverall: 88 }]).type, 'eval-regression');
+});
+
+test('insights include baseline-backed anomaly and regression evidence', () => {
+  const result = generateInsights({
+    runs: [
+      { TimeGenerated: '2026-05-29T10:00:00Z', RunId: 'run-old-1', RepoHash: 'repo_hash', TaskType: 'review', ModelActual: 'gpt-5.5', OutcomeStatus: 'success', EstimatedCostUsd: 1, DurationMs: 60000, ToolCount: 2, TestsRan: false, FilesEditedCount: 0, PrivacyMode: 'strict' },
+      { TimeGenerated: '2026-05-29T11:00:00Z', RunId: 'run-current', RepoHash: 'repo_hash', TaskType: 'review', ModelActual: 'gpt-5.5', OutcomeStatus: 'failed', EstimatedCostUsd: 4, DurationMs: 240000, ToolCount: 2, ToolFailureCount: 1, TestsRan: false, FilesEditedCount: 3, PrivacyMode: 'strict', ConfigHash: 'config_hash_new' }
+    ],
+    tools: [{ RunId: 'run-current', ToolName: 'shell', Status: 'failed' }],
+    evals: [{ RunId: 'run-old-1', RepoHash: 'repo_hash', TaskType: 'review', EvalOverall: 90 }]
+  });
+
+  assert.ok(result.insights.some(row => row.InsightType === 'cost-anomaly' && row.BaselineValue));
+  assert.ok(result.insights.some(row => row.InsightType === 'latency-anomaly' && row.BaselineValue));
+  assert.ok(result.insights.some(row => row.InsightType === 'eval-regression' && row.ConfigHash === 'config_hash_new'));
+});
+
+test('insights generate privacy-safe recurring pattern rows', () => {
+  const runs = Array.from({ length: 4 }, (_unused, index) => ({
+    TimeGenerated: `2026-05-29T12:0${index}:00Z`,
+    RunId: `run-pattern-${index}`,
+    RepoHash: 'repo_hash',
+    TaskType: 'fix',
+    ModelActual: 'gpt-5.5',
+    AgentName: 'agent-main',
+    OutcomeStatus: 'failed',
+    OutcomeReason: 'tool_failure',
+    EstimatedCostUsd: 1.5,
+    TestsRan: false,
+    FilesEditedCount: 2,
+    ToolDeniedCount: index % 2 === 0 ? 1 : 0,
+    PrivacyMode: 'strict'
+  }));
+  const result = generateInsights({ runs });
+  const recurring = result.insights.filter(row => row.InsightType.startsWith('recurring-'));
+
+  assert.ok(recurring.some(row => row.InsightType === 'recurring-failure-pattern'));
+  assert.ok(recurring.some(row => row.InsightType === 'recurring-no-tests-pattern'));
+  assert.ok(recurring.some(row => row.InsightType === 'recurring-cost-pattern'));
+  assert.ok(recurring.every(row => row.PatternId && row.PatternRuns >= 2 && row.PatternDimension));
+  assert.doesNotMatch(JSON.stringify(recurring), /prompt|SECRET_FAKE_TEST_VALUE|file contents/);
+  assert.equal(patternRows(result.insights)[0].PatternRuns, 4);
+  assert.match(renderPatterns(result.insights), /PatternKey:/);
+});
+
+test('deterministic eval modules score each quality dimension', () => {
+  const riskyRun = {
+    OutcomeStatus: 'failed',
+    PrivacyMode: 'strict',
+    ToolCount: 24,
+    ToolFailureCount: 2,
+    ToolDeniedCount: 1,
+    TestsRan: false,
+    TestsPassed: false,
+    FilesEditedCount: 3
+  };
+  const context = {
+    privacy: [{ DroppedCount: 2 }],
+    github: [{ PrOpened: true, CiStatus: 'failed' }]
+  };
+
+  assert.equal(scoreTestDiscipline(riskyRun), 35);
+  assert.equal(scoreToolEfficiency(riskyRun), 51);
+  assert.equal(scoreSecurity(riskyRun, context), 55);
+  assert.equal(scoreReliability(riskyRun), 42);
+  assert.equal(scoreCodeOutcome(riskyRun, context), 50);
+
+  const quality = evaluateRunQuality(riskyRun, context);
+  assert.equal(quality.EvalOverall, 47);
+  assert.equal(quality.EvalBucket, 'poor');
+});
+
+test('V2 explain uses eval and insight evidence', () => {
+  const run = {
+    RunId: 'run-risk',
+    OutcomeStatus: 'failed',
+    OutcomeReason: 'tool_failure',
+    TimeGenerated: '2026-05-29T12:00:00Z'
+  };
+  const explanation = explainRun(run, [{
+    RunId: 'run-risk',
+    EvalOverall: 42,
+    EvalBucket: 'poor',
+    TestDiscipline: 35,
+    ToolEfficiency: 40,
+    Security: 65,
+    Reliability: 42,
+    CodeOutcome: 30
+  }], [{
+    RunId: 'run-risk',
+    Severity: 'high',
+    InsightType: 'ci-failed',
+    Summary: 'A PR outcome had failing CI after the agent run.',
+    SuggestedNextStep: 'Open Code Outcomes.'
+  }]);
+
+  assert.equal(explanation.ok, true);
+  assert.match(explanation.headline, /failing CI/);
+  assert.match(renderV2Explanation(explanation), /Eval: 42/);
+  assert.equal(hasV2Args(['latest', '--runs', 'runs.jsonl']), true);
+});
+
+test('V2 recommend turns insights into dashboard-backed next actions', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-recommend-'));
+  try {
+    const runsFile = path.join(tempDir, 'AgentOpsRunSummary_CL.jsonl');
+    const evalsFile = path.join(tempDir, 'AgentOpsEval_CL.jsonl');
+    const insightsFile = path.join(tempDir, 'AgentOpsInsights_CL.jsonl');
+    fs.writeFileSync(runsFile, `${JSON.stringify({
+      TimeGenerated: '2026-05-29T12:00:00Z',
+      RunId: 'run-risk',
+      SessionId: 'session-risk',
+      TraceId: 'trace-risk',
+      OutcomeStatus: 'failed',
+      ModelActual: 'gpt-5.5',
+      ToolFailureCount: 1,
+      ToolDeniedCount: 0,
+      EstimatedCostUsd: 1.2
+    })}\n`);
+    fs.writeFileSync(evalsFile, `${JSON.stringify({
+      RunId: 'run-risk',
+      EvalOverall: 42,
+      EvalBucket: 'poor',
+      EvalReason: 'tool_failures'
+    })}\n`);
+    fs.writeFileSync(insightsFile, `${JSON.stringify({
+      TimeGenerated: '2026-05-29T12:00:01Z',
+      RunId: 'run-risk',
+      Severity: 'high',
+      InsightType: 'tool-regression',
+      ToolName: 'shell',
+      Summary: 'The shell tool failure rate regressed.',
+      SuggestedNextStep: 'Open Tools & MCP Risk filtered to shell.'
+    })}\n`);
+
+    const recommendation = recommendFromFiles({
+      runId: 'latest',
+      runsFile,
+      evalsFile,
+      insightsFile,
+      links: {
+        v2_home_url: 'https://graf.example/d/agentops-v2-home'
+      }
+    });
+
+    assert.equal(recommendation.ok, true);
+    assert.equal(recommendation.action, 'investigate_tool');
+    assert.equal(recommendation.severity, 'high');
+    assert.match(recommendation.evidence.dashboards[0].url, /^https:\/\/graf\.example\/d\/agentops-v2-run-replay/);
+    assert.ok(recommendation.evidence.dashboards.some(dashboard => dashboard.url.includes('var-tool_name=shell')));
+    assert.ok(recommendation.evidence.dashboards.some(dashboard => dashboard.url.includes('agentops-v2-insights-regressions?var-run_id=run-risk')));
+    assert.equal(firstRecommendPositional(['--runs', runsFile, '--json']), 'latest');
+    assert.equal(firstRecommendPositional(['run-risk', '--runs', runsFile]), 'run-risk');
+    assert.match(renderRecommendationV2(recommendation), /Open Tools & MCP Risk filtered to shell/);
+    assert.doesNotMatch(JSON.stringify(recommendation), /prompt|response|SECRET_FAKE_TEST_VALUE/);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('V2 recommend falls back to recurring pattern evidence', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-recommend-pattern-'));
+  try {
+    const runsFile = path.join(tempDir, 'AgentOpsRunSummary_CL.jsonl');
+    const insightsFile = path.join(tempDir, 'AgentOpsInsights_CL.jsonl');
+    fs.writeFileSync(runsFile, `${JSON.stringify({
+      TimeGenerated: '2026-05-29T12:00:00Z',
+      RunId: 'run-pattern-current',
+      SessionId: 'session-pattern',
+      TraceId: 'trace-pattern',
+      RepoHash: 'repo_hash',
+      TaskType: 'review',
+      ModelActual: 'gpt-5.5',
+      AgentName: 'agent-main',
+      OutcomeStatus: 'success',
+      EstimatedCostUsd: 3.5
+    })}\n`);
+    fs.writeFileSync(insightsFile, `${JSON.stringify({
+      TimeGenerated: '2026-05-29T12:00:01Z',
+      RunId: 'other-run',
+      Severity: 'high',
+      InsightType: 'recurring-cost-pattern',
+      Summary: '4 high-cost runs share the same model/task shape.',
+      SuggestedNextStep: 'Open Models, Cost & Tokens and compare cost per useful outcome.',
+      PatternId: 'pattern-cost-review',
+      PatternKey: 'cost|gpt-5.5|review',
+      PatternRuns: 4,
+      PatternDimension: 'model_task'
+    })}\n`);
+
+    const recommendation = recommendFromFiles({
+      runId: 'latest',
+      runsFile,
+      insightsFile,
+      links: {
+        v2_home_url: 'https://graf.example/d/agentops-v2-home'
+      }
+    });
+
+    assert.equal(recommendation.ok, true);
+    assert.equal(recommendation.action, 'triage_recurring_pattern');
+    assert.equal(recommendation.evidence.pattern.key, 'cost|gpt-5.5|review');
+    assert.equal(recommendation.evidence.pattern.runs, 4);
+    assert.ok(recommendation.evidence.dashboards.some(dashboard => dashboard.url.includes('var-pattern_key=cost%7Cgpt-5.5%7Creview')));
+    assert.match(renderRecommendationV2(recommendation), /Pattern: cost\|gpt-5\.5\|review/);
+
+    const written = writeRecommendation(recommendation, tempDir);
+    const rows = fs.readFileSync(written.file, 'utf8').trim().split(/\r?\n/).map(line => JSON.parse(line));
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].Action, 'triage_recurring_pattern');
+    assert.equal(rows[0].PatternKey, 'cost|gpt-5.5|review');
+    assert.equal(rows[0].PatternRuns, 4);
+    assert.ok(!JSON.stringify(rows[0]).includes('Demo prompt'));
+    assert.ok(Array.isArray(rows[0].DashboardTitles));
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('V2 recommend carries benchmark gate and change-target metadata', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-recommend-benchmark-'));
+  try {
+    const runsFile = path.join(tempDir, 'AgentOpsRunSummary_CL.jsonl');
+    const insightsFile = path.join(tempDir, 'AgentOpsInsights_CL.jsonl');
+    const evalsFile = path.join(tempDir, 'AgentOpsEval_CL.jsonl');
+    const benchmarkFile = path.join(tempDir, 'benchmark-report.json');
+    fs.writeFileSync(runsFile, `${JSON.stringify({
+      TimeGenerated: '2026-05-29T12:00:00Z',
+      RunId: 'run-benchmark-current',
+      SessionId: 'session-benchmark',
+      TraceId: 'trace-benchmark',
+      RepoHash: 'repo_hash',
+      TaskType: 'fix',
+      ModelActual: 'claude-sonnet-4.5',
+      OutcomeStatus: 'success',
+      FilesEditedCount: 2,
+      TestsRan: false
+    })}\n`);
+    fs.writeFileSync(insightsFile, `${JSON.stringify({
+      TimeGenerated: '2026-05-29T12:00:01Z',
+      RunId: 'run-benchmark-current',
+      Severity: 'high',
+      InsightType: 'test-discipline',
+      Summary: 'Files were edited without a recorded test run.',
+      SuggestedNextStep: 'Run the benchmark gate before promoting this change.'
+    })}\n`);
+    fs.writeFileSync(evalsFile, `${JSON.stringify({
+      RunId: 'run-benchmark-current',
+      EvalOverall: 58,
+      EvalBucket: 'poor'
+    })}\n`);
+    fs.writeFileSync(benchmarkFile, `${JSON.stringify({
+      runId: 'bench-candidate',
+      passRatePct: 50,
+      averageScore: 61,
+      safetyViolationCount: 0,
+      toolFailures: 1,
+      totalTokens: 12000,
+      cost: 0.42,
+      promotion: {
+        decision: 'reject',
+        validation: 'benchmark summary includes local checks',
+        rollback: 'do not promote until failures are explained'
+      }
+    })}\n`);
+
+    const recommendation = recommendFromFiles({
+      runId: 'latest',
+      runsFile,
+      evalsFile,
+      insightsFile,
+      benchmarkReportFile: benchmarkFile
+    });
+
+    assert.equal(recommendation.evidence.benchmark.run_id, 'bench-candidate');
+    assert.equal(recommendation.evidence.benchmark.decision, 'reject');
+    assert.ok(recommendation.evidence.file_refs.includes('tests_or_benchmark_suite'));
+    assert.match(renderRecommendationV2(recommendation), /Benchmark: bench-candidate/);
+    const row = recommendationRow(recommendation, '2026-05-29T12:00:02Z');
+    assert.equal(row.BenchmarkRunId, 'bench-candidate');
+    assert.equal(row.BenchmarkDecision, 'reject');
+    assert.equal(row.BenchmarkAverageScore, 61);
+    assert.ok(row.ChangeTargetRefs.includes('tests_or_benchmark_suite'));
+    assert.doesNotMatch(JSON.stringify(row), /prompt|source code|tool args/i);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('V2 recommend marks missing benchmark evidence without failing recommendation generation', () => {
+  const report = benchmarkEvidenceFromReport({ runId: 'missing-bench', ok: false, message: 'no benchmark summaries were found for this run' });
+  assert.equal(report.run_id, 'missing-bench');
+  assert.equal(report.decision, 'missing');
+  assert.match(report.validation, /no benchmark summaries/);
+  assert.match(report.rollback, /before promotion/);
+});
+
+test('V2 open builds run-scoped control-room links from run table rows', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-open-v2-'));
+  try {
+    const runsFile = path.join(tempDir, 'AgentOpsRunSummary_CL.jsonl');
+    fs.writeFileSync(runsFile, `${JSON.stringify({
+      TimeGenerated: '2026-05-29T12:00:00Z',
+      RunId: 'run-open',
+      SessionId: 'session-open',
+      TraceId: 'trace-open',
+      RepoHash: 'repo_hash',
+      AgentName: 'agent-main',
+      ModelActual: 'gpt-5.5',
+      OutcomeStatus: 'success'
+    })}\n`);
+
+    const result = openV2FromFiles({
+      runId: 'latest',
+      runsFile,
+      legacyLinks: {
+        v2_home_url: 'https://graf.example/d/agentops-v2-home',
+        v2_runs_url: 'https://graf.example/d/agentops-v2-runs-explorer',
+        v2_replay_url: 'https://graf.example/d/agentops-v2-run-replay'
+      }
+    });
+
+    assert.equal(result.ok, true);
+    assert.match(result.links.replay, /var-run_id=run-open/);
+    assert.match(result.links.replay, /var-session_id=session-open/);
+    assert.match(result.links.content_viewer, /viewPanel=26/);
+    assert.match(result.links.content_viewer, /var-run_id=run-open/);
+    assert.match(result.links.runs, /var-repo_hash=repo_hash/);
+    assert.match(result.links.models, /var-model=gpt-5\.5/);
+    assert.match(result.links.insights, /agentops-v2-insights-regressions/);
+    assert.match(renderOpenV2(result), /Run Replay:/);
+    assert.match(renderOpenV2(result), /Prompt\/response viewer \(explicit opt-in\):/);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('V2 ask-context builds a metadata-only investigation bundle', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-ask-context-'));
+  try {
+    const demo = generateDemoData({ runs: 12 });
+    const { writeDemoData } = require('../src/lib/demo/agentops-demo-data');
+    const written = writeDemoData(demo, tempDir);
+    const insightResult = generateInsights({
+      runs: demo.tables.AgentOpsRunSummary_CL,
+      tools: demo.tables.AgentOpsToolCalls_CL,
+      privacy: demo.tables.AgentOpsPrivacy_CL,
+      github: demo.tables.AgentOpsGithubOutcomes_CL
+    });
+    const insightDir = path.join(tempDir, 'insights');
+    const { writeInsights } = require('../src/lib/insights/deterministic-insights');
+    const insightFiles = writeInsights(insightResult, insightDir);
+
+    const result = buildAskContext({
+      runId: 'latest',
+      runsFile: written.files.AgentOpsRunSummary_CL,
+      eventsFile: written.files.AgentOpsEvents_CL,
+      toolsFile: written.files.AgentOpsToolCalls_CL,
+      privacyFile: written.files.AgentOpsPrivacy_CL,
+      githubFile: written.files.AgentOpsGithubOutcomes_CL,
+      evalsFile: insightFiles.evalFile,
+      insightsFile: insightFiles.insightsFile
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(hasV2AskArgs(['latest', '--runs', written.files.AgentOpsRunSummary_CL]), true);
+    assert.match(result.replay_url, /agentops-v2-run-replay/);
+    assert.ok(result.counts.events > 0);
+    assert.ok(result.prompt.includes('Do not request or enable prompt'));
+    assert.doesNotMatch(JSON.stringify(result), /gen_ai\.input\.messages|SECRET_FAKE_TEST_VALUE|api_key=/);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('V2 triage builds a single run packet with links prompt and recommendation', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-triage-'));
+  try {
+    const demo = generateDemoData({ runs: 12 });
+    const written = writeDemoData(demo, tempDir);
+    const insightResult = generateInsights({
+      runs: demo.tables.AgentOpsRunSummary_CL,
+      tools: demo.tables.AgentOpsToolCalls_CL,
+      privacy: demo.tables.AgentOpsPrivacy_CL,
+      github: demo.tables.AgentOpsGithubOutcomes_CL
+    });
+    const insightDir = path.join(tempDir, 'insights');
+    const { writeInsights } = require('../src/lib/insights/deterministic-insights');
+    const insightFiles = writeInsights(insightResult, insightDir);
+
+    const result = buildTriage({
+      runId: 'latest',
+      runsFile: written.files.AgentOpsRunSummary_CL,
+      eventsFile: written.files.AgentOpsEvents_CL,
+      toolsFile: written.files.AgentOpsToolCalls_CL,
+      privacyFile: written.files.AgentOpsPrivacy_CL,
+      githubFile: written.files.AgentOpsGithubOutcomes_CL,
+      evalsFile: insightFiles.evalFile,
+      insightsFile: insightFiles.insightsFile
+    });
+
+    assert.equal(result.ok, true);
+    assert.match(result.links.replay, /agentops-v2-run-replay/);
+    assert.equal(result.ask_agentops.prompt.includes('Use only the metadata'), true);
+    assert.ok(result.recommendation.action);
+    assert.ok(result.evidence_counts.events > 0);
+    assert.doesNotMatch(JSON.stringify(result), /gen_ai\.input\.messages|SECRET_FAKE_TEST_VALUE|api_key=/);
+    assert.match(renderTriage(result), /AgentOps triage/);
+    const artifact = writeTriage(result, tempDir);
+    assert.equal(fs.existsSync(artifact.file), true);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('V2 triage reports missing run rows clearly', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-triage-empty-'));
+  try {
+    const runsFile = path.join(tempDir, 'AgentOpsRunSummary_CL.jsonl');
+    fs.writeFileSync(runsFile, '');
+    const result = buildTriage({ runId: 'latest', runsFile });
+    assert.equal(result.ok, false);
+    assert.match(result.error, /no V2 run row/);
+    assert.match(renderTriage(result), /AgentOps triage/);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
 test('copilot resolver rejects AgentOps shim candidates', () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-shim-resolver-'));
   const shim = path.join(tempDir, 'copilot');
@@ -234,6 +1343,75 @@ test('copilot command strips AgentOps-only flags before invoking Copilot', () =>
     removeAgentOpsCopilotFlags(['--collector-mode', 'none', '--privacy=strict', '--unsafe-no-collector', '-p', 'hello']),
     ['-p', 'hello']
   );
+});
+
+test('Copilot run metadata hashes prompt and command without storing raw text', () => {
+  const metadata = createRunMetadata([
+    '--no-remote',
+    '--allow-tool',
+    'shell(npm test)',
+    '-p',
+    'SECRET_FAKE_TEST_VALUE fix the failing test'
+  ], {
+    now: '2026-05-29T12:00:00Z',
+    cwd: root,
+    privacyMode: 'strict'
+  });
+
+  assert.equal(metadata.surface, 'cli');
+  assert.equal(metadata.remote, false);
+  assert.equal(metadata.promptHash.startsWith('prompt_'), true);
+  assert.equal(metadata.commandHash.startsWith('cmd_'), true);
+  assert.equal(metadata.allowToolCount, 1);
+  assert.equal(metadata.allowedToolRisks.shell, 1);
+  assert.doesNotMatch(JSON.stringify(metadata), /SECRET_FAKE_TEST_VALUE|failing test|npm test/);
+});
+
+test('Copilot tool classifier and session parser produce safe run summaries', () => {
+  assert.equal(classifyToolName('browser_click'), 'browser-control');
+  assert.equal(classifyToolName('delete_workspace'), 'destructive');
+  assert.equal(summarizeAllowedTools(['--allow-tool=shell(pwd)', '--allow-tool', 'read_file']).risks.shell, 1);
+
+  const sessions = parseCopilotSessionRows([
+    {
+      TimeGenerated: '2026-05-29T12:00:00Z',
+      OperationId: 'trace-1',
+      Success: true,
+      Properties: JSON.stringify({
+        'agentops.run.id': 'run-1',
+        'agentops.session.id': 'session-1',
+        'gen_ai.operation.name': 'chat',
+        'gen_ai.usage.input_tokens': 10,
+        'gen_ai.usage.output_tokens': 3
+      })
+    },
+    {
+      TimeGenerated: '2026-05-29T12:00:01Z',
+      OperationId: 'trace-1',
+      Success: false,
+      Properties: {
+        'agentops.run.id': 'run-1',
+        'agentops.session.id': 'session-1',
+        'gen_ai.operation.name': 'execute_tool',
+        'gen_ai.tool.name': 'shell'
+      }
+    }
+  ]);
+  const summary = summarizeCopilotRun({
+    runId: 'run-1',
+    privacyMode: 'strict',
+    contentCaptureMode: 'off',
+    promptHash: 'prompt_hash',
+    commandHash: 'cmd_hash',
+    repoHash: 'repo_hash'
+  }, sessions[0], { exitCode: 0, durationMs: 1000 });
+
+  assert.equal(sessions.length, 1);
+  assert.equal(sessions[0].failures, 1);
+  assert.equal(sessions[0].toolCalls, 1);
+  assert.equal(summary.OutcomeStatus, 'failed');
+  assert.equal(summary.InputTokens, 10);
+  assert.doesNotMatch(JSON.stringify(summary), /prompt text|tool args|SECRET/);
 });
 
 test('scan finds plugin agents and skills', () => {
@@ -535,8 +1713,19 @@ test('setup guide recommends the shortest non-mutating setup path', () => {
 
     assert.equal(result.mutates, false);
     assert.equal(result.azd.ok, true);
+    assert.equal(result.first_run.read_only, true);
+    assert.equal(result.first_run.bind_command, 'agentops configure import-azd');
+    assert.match(result.first_run.privacy_smoke_command, /collector smoke --privacy strict --poison/);
+    assert.match(result.first_run.smoke_command, /smoke --real-copilot/);
+    assert.match(result.first_run.run_command, /--no-remote/);
+    assert.match(result.first_run.privacy_note, /Prompts and responses stay off by default/);
     assert.ok(result.next.includes('agentops configure import-azd'));
     assert.match(output, /This command is read-only/);
+    assert.match(output, /One-minute first run/);
+    assert.match(output, /Privacy smoke: agentops collector smoke --privacy strict --poison --json/);
+    assert.match(output, /Real smoke: agentops smoke --real-copilot --wait 2m --poll 10s/);
+    assert.match(output, /agentops latest --last 2h && agentops open latest --last 2h/);
+    assert.match(output, /agentops dashboard import --yes --resource-group rg-agentops-dev --grafana-name graf-agentops-dev/);
     assert.match(output, /Fastest path/);
     assert.match(output, /agentops collector smoke --privacy strict --poison/);
   } finally {
@@ -644,14 +1833,156 @@ test('init workflow installs skills in dry-run mode and returns first-run next s
     assert.equal(result.agents.dryRun, true);
     assert.equal(result.cloud.workspace_id_configured, false);
     assert.equal(result.cloud.grafana_url_configured, false);
-    assert.ok(result.next.includes('node agentops-cli/src/index.js validate-azure'));
-    assert.ok(result.next.includes('node agentops-cli/src/index.js experimental ask-context latest --last 2h'));
+    assert.equal(result.azd.ok, false);
+    assert.equal(result.cloud_provision.requested, false);
+    assert.ok(result.next.includes('agentops init --provision-cloud'));
+    assert.ok(result.next.includes('node agentops-cli/src/index.js validate-azure --import-dashboards --last 24h'));
+    assert.ok(result.next.includes('node agentops-cli/src/index.js smoke --real-copilot --wait 2m --poll 10s'));
+    assert.ok(result.next.includes('node agentops-cli/src/index.js open latest --last 2h'));
+    assert.ok(result.next.includes('node agentops-cli/src/index.js triage latest --out .agentops/triage/latest --json'));
     assert.ok(result.next.includes('node agentops-cli/src/index.js plugin uninstall'));
+    assert.ok(result.next.every(command => !command.includes('experimental')));
     assert.match(output, /AgentOps init/);
     assert.match(output, /Agents:/);
     assert.match(output, /Skills:/);
     assert.match(output, /Cloud config: workspace=missing, grafana=missing/);
+    assert.match(output, /azd environment:/);
+    assert.match(output, /First value: run the real smoke/);
     assert.match(output, /agentops plugin uninstall/);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('init prefers azd import when AgentOps deployment outputs exist', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-init-azd-'));
+  try {
+    const result = agentopsInit({
+      dryRun: true,
+      noSkills: true,
+      env: {},
+      workspaceId: '',
+      grafanaBaseUrl: '',
+      installDir: path.join(tempDir, 'bin'),
+      commandAvailability: { azd: true },
+      commandPaths: { azd: '/usr/local/bin/azd' },
+      azdValues: [
+        'AZURE_RESOURCE_GROUP="rg-agentops-dev"',
+        'LOG_ANALYTICS_WORKSPACE_ID="workspace-123"',
+        'GRAFANA_ENDPOINT="https://grafana.example"',
+        'GRAFANA_NAME="graf-agentops-dev"'
+      ].join('\n')
+    });
+
+    assert.equal(result.azd.ok, true);
+    assert.ok(result.next.includes('agentops configure import-azd'));
+    assert.equal(result.next.includes('agentops configure set --workspace-id "<workspace-id>"'), false);
+    assert.equal(result.next.includes('agentops configure set --grafana-url "https://<your-grafana>.grafana.azure.com"'), false);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('init provision-cloud can run azd provision then import outputs explicitly', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-init-provision-'));
+  const configPath = path.join(tempDir, 'config.json');
+  const calls = [];
+  try {
+    const result = agentopsInit({
+      provisionCloud: true,
+      noSkills: true,
+      env: {},
+      workspaceId: '',
+      grafanaBaseUrl: '',
+      configPath,
+      installDir: path.join(tempDir, 'bin'),
+      commandAvailability: { azd: true },
+      commandPaths: { azd: '/usr/local/bin/azd' },
+      spawnSync: (command, args) => {
+        calls.push([command, args]);
+        if (args[0] === 'provision') return { status: 0, stdout: 'provisioned\n', stderr: '' };
+        if (args[0] === 'env' && args[1] === 'get-values') {
+          return {
+            status: 0,
+            stdout: [
+              'AZURE_RESOURCE_GROUP="rg-agentops-dev"',
+              'LOG_ANALYTICS_WORKSPACE_ID="workspace-123"',
+              'GRAFANA_ENDPOINT="https://grafana.example"',
+              'GRAFANA_NAME="graf-agentops-dev"'
+            ].join('\n'),
+            stderr: ''
+          };
+        }
+        return { status: 1, stdout: '', stderr: 'unexpected command' };
+      }
+    });
+
+    assert.equal(result.cloud_provision.requested, true);
+    assert.equal(result.cloud_provision.ok, true);
+    assert.equal(result.cloud_provision.import_result.ok, true);
+    assert.ok(calls.some(([, args]) => args[0] === 'provision'));
+    assert.ok(calls.some(([, args]) => args[0] === 'env' && args[1] === 'get-values'));
+    assert.match(fs.readFileSync(configPath, 'utf8'), /workspace-123/);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('init provision-cloud reports azd provision failure with remediation', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-init-provision-fail-'));
+  try {
+    const result = agentopsInit({
+      provisionCloud: true,
+      noSkills: true,
+      env: {},
+      workspaceId: '',
+      grafanaBaseUrl: '',
+      installDir: path.join(tempDir, 'bin'),
+      commandAvailability: { azd: true },
+      commandPaths: { azd: '/usr/local/bin/azd' },
+      spawnSync: () => ({ status: 1, stdout: '', stderr: 'not logged in' })
+    });
+    const output = renderInit(result);
+
+    assert.equal(result.cloud_provision.ok, false);
+    assert.equal(result.cloud_provision.failing_stage, 'azd provision');
+    assert.ok(result.cloud_provision.next.includes('az login'));
+    assert.ok(result.cloud_provision.next.includes('azd env list'));
+    assert.ok(result.cloud_provision.next.includes('azd provision'));
+    assert.match(output, /Cloud provision failed at: azd provision/);
+    assert.match(output, /Cloud provision next:/);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('init provision-cloud reports azd import failure with manual binding remediation', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-init-import-fail-'));
+  try {
+    const result = agentopsInit({
+      provisionCloud: true,
+      noSkills: true,
+      env: {},
+      workspaceId: '',
+      grafanaBaseUrl: '',
+      configPath: path.join(tempDir, 'config.json'),
+      installDir: path.join(tempDir, 'bin'),
+      commandAvailability: { azd: true },
+      commandPaths: { azd: '/usr/local/bin/azd' },
+      spawnSync: (command, args) => {
+        if (args[0] === 'provision') return { status: 0, stdout: 'provisioned\n', stderr: '' };
+        if (args[0] === 'env' && args[1] === 'get-values') return { status: 1, stdout: '', stderr: 'no env selected' };
+        return { status: 1, stdout: '', stderr: 'unexpected command' };
+      }
+    });
+    const output = renderInit(result);
+
+    assert.equal(result.cloud_provision.ok, false);
+    assert.equal(result.cloud_provision.failing_stage, 'agentops configure import-azd');
+    assert.ok(result.cloud_provision.next.includes('azd env get-values'));
+    assert.ok(result.cloud_provision.next.includes('agentops configure import-azd'));
+    assert.ok(result.cloud_provision.next.includes('agentops configure set --workspace-id "<workspace-id>"'));
+    assert.match(output, /Cloud provision failed at: agentops configure import-azd/);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
@@ -759,6 +2090,56 @@ test('smoke live mode verifies synthetic telemetry in Azure', async () => {
   assert.match(output, /Azure verification: found 1 row/);
 });
 
+test('smoke real-copilot mode runs safe prompt and prints Run Replay link', async () => {
+  let copilotCall = null;
+  let latestCalls = 0;
+  const result = await agentopsSmoke({
+    id: 'agentops-smoke-real',
+    endpoint: 'http://collector.example',
+    last: '30m',
+    workspaceId: 'workspace-123',
+    waitMs: 100,
+    pollMs: 1,
+    realCopilot: true,
+    postJson: async () => ({ ok: true, statusCode: 200, body: '' }),
+    runQuery: query => {
+      assert.match(query, /agentops-smoke-real/);
+      return { ok: true, rows: [{ Name: 'agentops.smoke.agentops-smoke-real' }] };
+    },
+    spawnSync: (command, args, options) => {
+      copilotCall = { command, args, options };
+      return { status: 0, stdout: 'ok', stderr: '' };
+    },
+    latestSummary: () => {
+      latestCalls += 1;
+      if (latestCalls === 1) return { session: null };
+      return {
+        session: {
+          id: 'session-real',
+          grafana_url: 'https://grafana.example/d/agentops-sessions?var-conversation=session-real'
+        }
+      };
+    },
+    sleep: async () => {}
+  });
+  const output = renderSmoke(result);
+
+  assert.equal(result.ok, true);
+  assert.equal(result.real_copilot, true);
+  assert.equal(copilotCall.command, 'copilot');
+  assert.ok(copilotCall.args.includes('--no-ask-user'));
+  assert.ok(copilotCall.args.includes('--no-remote'));
+  assert.equal(copilotCall.options.env.AGENTOPS_CAPTURE_CONTENT, 'false');
+  assert.equal(copilotCall.options.env.OTEL_EXPORTER_OTLP_ENDPOINT, 'http://collector.example');
+  assert.equal(result.latest_visibility.ok, true);
+  assert.equal(result.latest_visibility.attempts.length, 2);
+  assert.match(result.links.v2_replay_url, /agentops-v2-run-replay/);
+  assert.match(result.links.v2_replay_url, /var-session_id=session-real/);
+  assert.match(output, /Real Copilot smoke: completed/);
+  assert.match(output, /Latest Copilot run: visible after 2 attempts/);
+  assert.match(output, /V2 Run Replay:/);
+});
+
 test('smoke live mode fails closed when Azure ingestion is not observed', async () => {
   const result = await agentopsSmoke({
     id: 'agentops-smoke-missing',
@@ -775,9 +2156,11 @@ test('smoke live mode fails closed when Azure ingestion is not observed', async 
 });
 
 test('smoke args parse verification wait and poll durations', () => {
-  const args = parseSmokeArgs(['--id', 'smoke-a', '--wait', '5s', '--poll', '500ms', '--no-verify', '--json']);
+  const args = parseSmokeArgs(['--id', 'smoke-a', '--wait', '5s', '--poll', '500ms', '--timeout', '9s', '--real-copilot', '--no-verify', '--json']);
 
   assert.equal(args.id, 'smoke-a');
+  assert.equal(args.realCopilot, true);
+  assert.equal(args.copilotTimeoutMs, 9000);
   assert.equal(args.verify, false);
   assert.equal(args.waitMs, 5000);
   assert.equal(args.pollMs, 500);
@@ -987,10 +2370,54 @@ test('validateAzure reports missing Grafana dashboards with import guidance', ()
     }
   });
   const byName = Object.fromEntries(result.checks.map(check => [check.name, check]));
+  const output = renderValidateAzure(result);
 
   assert.equal(result.ok, false);
   assert.deepEqual(byName['grafana-dashboards'].missing, ['agentops-sessions']);
-  assert.ok(result.next.some(command => command.includes('./scripts/grafana-import-dashboard.sh')));
+  assert.ok(result.next.some(command => command.includes('agentops dashboard import --yes --resource-group rg-agentops-dev --grafana-name graf-agentops-dev')));
+  assert.match(output, /fix: agentops validate-azure --import-dashboards --last 24h/);
+});
+
+test('validateAzure can import missing Grafana dashboards only when explicitly requested', () => {
+  const imports = [];
+  const result = validateAzure({
+    importDashboards: true,
+    workspaceId: 'workspace-123',
+    resourceGroup: 'rg-agentops-dev',
+    grafanaBaseUrl: 'https://grafana.example',
+    grafanaName: 'graf-agentops-dev',
+    appInsightsName: 'appi-agentops-dev',
+    expectedDashboards: [{ uid: 'agentops-sessions', title: 'Sessions' }],
+    last: '1h',
+    spawnDashboardImport: (command, args) => {
+      imports.push([command, args]);
+      return { status: 0, stdout: 'imported\n', stderr: '' };
+    },
+    spawnSync: (command, args) => {
+      if (args.includes('account') && args.includes('show')) {
+        return { status: 0, stdout: JSON.stringify({ id: 'sub-123', name: 'Demo Sub' }), stderr: '' };
+      }
+      if (args.includes('group') && args.includes('exists')) {
+        return { status: 0, stdout: 'true\n', stderr: '' };
+      }
+      if (args.includes('log-analytics') && args.includes('query')) {
+        return { status: 0, stdout: JSON.stringify([{ Rows: 0 }]), stderr: '' };
+      }
+      if (args.includes('data-source') && args.includes('list')) {
+        return { status: 0, stdout: JSON.stringify([{ uid: 'azure-monitor-oob' }]), stderr: '' };
+      }
+      if (args.includes('dashboard') && args.includes('list')) {
+        return { status: 0, stdout: JSON.stringify([]), stderr: '' };
+      }
+      return { status: 0, stdout: JSON.stringify({ name: 'ok' }), stderr: '' };
+    }
+  });
+  const byName = Object.fromEntries(result.checks.map(check => [check.name, check]));
+
+  assert.equal(imports.length, 1);
+  assert.equal(byName['grafana-dashboard-import'].ok, true);
+  assert.match(byName['grafana-dashboard-import'].command, /agentops dashboard import --yes --resource-group rg-agentops-dev --grafana-name graf-agentops-dev/);
+  assert.ok(result.next.includes('agentops validate-azure --last 24h'));
 });
 
 test('Grafana dashboard inventory reads stable dashboard UIDs from repo', () => {
@@ -1001,6 +2428,298 @@ test('Grafana dashboard inventory reads stable dashboard UIDs from repo', () => 
   assert.ok(uids.includes('agentops-session-detail'));
   assert.ok(uids.includes('agentops-live-replay'));
   assert.ok(uids.includes('agentops-attribution'));
+});
+
+test('V2 dashboard pack follows global AgentOps UX contract', () => {
+  const result = validateDashboards();
+  assert.equal(result.ok, true, result.errors.join('\n'));
+  assert.ok(result.dashboards >= 24);
+});
+
+test('V2 dashboard ux-check protects the Datadog-style operator flow', () => {
+  const result = validateDashboardUx();
+  assert.equal(result.ok, true, result.errors.join('\n'));
+  assert.equal(result.dashboards, 10);
+  assert.deepEqual(result.contracts.transcript_first_columns, ['Status', 'SafetyNote', 'OpenTranscript', 'ContentRows']);
+  assert.equal(result.contracts.code_outcome_timing, true);
+  assert.equal(result.contracts.empty_state_dashboards, 10);
+  assert.equal(result.contracts.pattern_drilldowns, true);
+  assert.equal(result.contracts.recommendation_artifacts, true);
+  assert.equal(result.contracts.ask_agentops_context, true);
+});
+
+test('product audit proves the local AgentOps control-room contract', () => {
+  const result = productAudit();
+  const output = renderProductAudit(result);
+  const byName = Object.fromEntries(result.checks.map(check => [check.name, check]));
+
+  assert.equal(result.ok, true, result.checks.filter(check => !check.ok).map(check => `${check.name}: ${check.missing.join(', ')}`).join('\n'));
+  assert.equal(result.scope, 'local-product-contract');
+  assert.equal(result.live_azure_verified, false);
+  assert.equal(result.live_grafana_verified, false);
+  assert.ok(result.summary.checked_links >= 100);
+  for (const name of [
+    'agent-run-schema',
+    'strict-privacy-pipeline',
+    'privacy-defaults',
+    'copilot-cli-surface',
+    'copilot-sdk-adapter',
+    'mcp-observability-proxy',
+    'github-outcomes',
+    'evals-insights-recommendations',
+    'grafana-v2-pack',
+    'kql-library',
+    'content-transcript-opt-in',
+    'first-run-loop'
+  ]) {
+    assert.equal(byName[name].ok, true, name);
+  }
+  assert.match(output, /AgentOps product audit/);
+  assert.match(output, /Live Azure verified: not in this audit/);
+  assert.ok(result.next.some(command => command.includes('product audit --live')));
+});
+
+test('product audit can include live Azure and Grafana gates', () => {
+  const result = productAudit({
+    live: true,
+    last: '2h',
+    requireRows: true,
+    dashboardVerify: args => ({
+      ok: args.includes('--live') && args.includes('--require-rows') && args.includes('2h'),
+      errors: [],
+      summary: {
+        kql_checks: 19,
+        checked_links: 709
+      }
+    }),
+    validateAzure: options => ({
+      ok: options.last === '2h',
+      checks: [
+        { name: 'resource-group', ok: true },
+        { name: 'grafana-dashboards', ok: true }
+      ]
+    })
+  });
+
+  assert.equal(result.ok, true, result.checks.filter(check => !check.ok).map(check => check.name).join(', '));
+  assert.equal(result.scope, 'local-and-live-product-contract');
+  assert.equal(result.live_azure_verified, true);
+  assert.equal(result.live_grafana_verified, true);
+  assert.equal(result.summary.live_kql_checks, 19);
+  assert.equal(result.checks.some(check => check.name === 'live-grafana-dashboard-queries'), true);
+  assert.equal(result.checks.some(check => check.name === 'live-azure-resources'), true);
+});
+
+test('product audit can require rendered Grafana visual proof', async () => {
+  const result = await productAuditWithVisual({
+    live: true,
+    requireVisual: true,
+    dashboardVerify: () => ({
+      ok: true,
+      errors: [],
+      summary: { kql_checks: 19, checked_links: 709 }
+    }),
+    validateAzure: () => ({
+      ok: true,
+      checks: [{ name: 'grafana-dashboards', ok: true }]
+    }),
+    browserCheck: async () => ({
+      ok: true,
+      playwright: {
+        grafana: [
+          { label: 'AgentOps V2 Home', dashboardVisible: true },
+          { label: 'V2 Runs Explorer', dashboardVisible: true },
+          { label: 'V2 Run Replay', dashboardVisible: true }
+        ]
+      }
+    })
+  });
+
+  assert.equal(result.ok, true, result.checks.filter(check => !check.ok).map(check => check.name).join(', '));
+  assert.equal(result.scope, 'local-live-and-visual-product-contract');
+  assert.equal(result.visual_grafana_verified, true);
+  assert.equal(result.summary.visual_dashboards, 3);
+  assert.equal(result.summary.visual_dashboards_visible, 3);
+  assert.equal(result.checks.some(check => check.name === 'visual-grafana-rendered-dashboards'), true);
+});
+
+test('product visual audit returns auth remediation when Grafana is SSO-blocked', async () => {
+  const result = await productAuditWithVisual({
+    requireVisual: true,
+    browserCheck: async () => ({
+      ok: false,
+      playwright: {
+        authRemediation: {
+          reason: 'Azure Managed Grafana redirected to Microsoft sign-in.',
+          sign_in_once: ['sign-in-command'],
+          verify_after_sign_in: ['rerun-command']
+        },
+        grafana: [
+          { label: 'AgentOps V2 Home', authBlocked: true, dashboardVisible: false }
+        ]
+      }
+    })
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.visual_grafana_verified, false);
+  assert.equal(result.checks.find(check => check.name === 'visual-grafana-rendered-dashboards').ok, false);
+  assert.ok(result.next.includes('sign-in-command'));
+  assert.ok(result.next.includes('rerun-command'));
+});
+
+test('product visual audit explains how to regenerate a missing report', async () => {
+  const result = await productAuditWithVisual({
+    requireVisual: true,
+    reportPath: '/tmp/missing-agentops-report.html',
+    browserCheck: async () => {
+      throw new Error('Report not found: /tmp/missing-agentops-report.html');
+    }
+  });
+  const recovery = visualAuditRecoveryCommands('/tmp/missing-agentops-report.html');
+
+  assert.equal(result.ok, false);
+  assert.ok(result.next.includes(recovery[0]));
+  assert.ok(result.next.includes(recovery[1]));
+  assert.ok(result.next.includes(recovery[2]));
+});
+
+test('dashboard verify combines static UX and optional live KQL gates', () => {
+  const offline = dashboardVerify();
+  assert.equal(offline.ok, true, offline.errors.join('\n'));
+  assert.equal(offline.live, false);
+  assert.equal(offline.summary.kql_checks, 0);
+  assert.ok(offline.next.some(command => command.includes('--live')));
+
+  const live = dashboardVerify(['--live', '--last', '24h', '--workspace-id', 'workspace-123'], {
+    runQuery: (_query, options) => ({ ok: options.workspaceId === 'workspace-123', rows: [{ ok: true }] })
+  });
+  assert.equal(live.ok, true, live.errors.join('\n'));
+  assert.equal(live.live, true);
+  assert.equal(live.summary.kql_checks, 19);
+});
+
+test('V2 dashboard links preserve drilldown contracts', () => {
+  const result = validateDashboardLinks();
+  assert.equal(result.ok, true, result.errors.join('\n'));
+  assert.equal(result.dashboards, 10);
+  assert.ok(result.checked_links >= 100);
+  const replayDashboard = JSON.parse(fs.readFileSync(path.join(root, 'grafana', 'dashboards', 'v2', '03-run-replay.json'), 'utf8'));
+  const runsDashboard = JSON.parse(fs.readFileSync(path.join(root, 'grafana', 'dashboards', 'v2', '02-runs-explorer.json'), 'utf8'));
+  const homeDashboard = JSON.parse(fs.readFileSync(path.join(root, 'grafana', 'dashboards', 'v2', '01-agentops-home.json'), 'utf8'));
+  const variables = homeDashboard.templating.list.map(item => item.name);
+  for (const variable of ['datasource', 'workspace', 'timeRange', 'branch_hash', 'pattern_key']) {
+    assert.ok(variables.includes(variable), `missing global variable: ${variable}`);
+  }
+  const homeTitles = homeDashboard.panels.map(panel => panel.title);
+  for (const title of ['Policy blocks', 'Input tokens', 'Output tokens', 'p95 duration', 'Tests ran %', 'PRs opened']) {
+    assert.ok(homeTitles.includes(title), `missing home stat: ${title}`);
+  }
+  assert.match(JSON.stringify(replayDashboard), /OpenTranscript/);
+  assert.match(JSON.stringify(replayDashboard), /viewPanel=26/);
+  assert.match(JSON.stringify(replayDashboard), /MessageText/);
+  assert.match(JSON.stringify(replayDashboard), /ViewerNote/);
+  assert.match(JSON.stringify(replayDashboard), /SafetyNote/);
+  assert.match(JSON.stringify(replayDashboard), /Ask AgentOps context/);
+  assert.match(JSON.stringify(replayDashboard), /TriageCommand/);
+  assert.match(JSON.stringify(replayDashboard), /Do not request or enable prompt/);
+  assert.match(JSON.stringify(replayDashboard), /project Status, SafetyNote, OpenTranscript, ContentRows/);
+  assert.match(JSON.stringify(runsDashboard), /OpenReplay/);
+  assert.match(JSON.stringify(runsDashboard), /OpenTrace/);
+  assert.match(JSON.stringify(runsDashboard), /OpenGithub/);
+  assert.match(JSON.stringify(runsDashboard), /PrNumberHash/);
+  const insightsDashboard = JSON.parse(fs.readFileSync(path.join(root, 'grafana', 'dashboards', 'v2', '09-insights-regressions.json'), 'utf8'));
+  assert.match(JSON.stringify(insightsDashboard), /OpenPattern/);
+  assert.match(JSON.stringify(insightsDashboard), /Recommendation artifacts/);
+  assert.match(JSON.stringify(insightsDashboard), /var-pattern_key/);
+});
+
+test('dashboard import plans V2 managed Grafana import safely by default', () => {
+  const plan = dashboardImportPlan([], {
+    env: {
+      AZURE_RESOURCE_GROUP: 'rg-agentops-dev',
+      GRAFANA_NAME: 'graf-agentops-dev'
+    }
+  });
+
+  assert.equal(plan.ok, true);
+  assert.equal(plan.dry_run, true);
+  assert.equal(plan.v2_only, true);
+  assert.equal(plan.folder, 'AgentOps for Azure');
+  assert.equal(plan.dashboards, 10);
+  assert.match(plan.command, /AGENTOPS_V2_ONLY=true/);
+  assert.ok(plan.files.every(file => file.includes(`${path.sep}dashboards${path.sep}v2${path.sep}`)));
+});
+
+test('dashboard import --yes invokes the import script with explicit env', () => {
+  const calls = [];
+  const result = runDashboardImport(['--yes', '--resource-group', 'rg-agentops-dev', '--grafana-name', 'graf-agentops-dev'], {
+    env: {},
+    spawnSync: (command, args, options) => {
+      calls.push({ command, args, options });
+      return { status: 0, stdout: 'imported\n', stderr: '' };
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.dry_run, false);
+  assert.equal(calls.length, 1);
+  assert.match(calls[0].command, /grafana-import-dashboard\.sh$/);
+  assert.equal(calls[0].options.env.AGENTOPS_V2_ONLY, 'true');
+  assert.equal(calls[0].options.env.GRAFANA_FOLDER, 'AgentOps for Azure');
+  assert.equal(calls[0].options.env.AZURE_RESOURCE_GROUP, 'rg-agentops-dev');
+  assert.equal(calls[0].options.env.GRAFANA_NAME, 'graf-agentops-dev');
+});
+
+test('dashboard kql-check renders representative V2 panel queries', () => {
+  const queries = [];
+  const result = dashboardKqlCheck(['--last', '24h', '--workspace-id', 'workspace-123'], {
+    runQuery: (query, options) => {
+      queries.push({ query, options });
+      return { ok: true, rows: [{ ok: true }] };
+    }
+  });
+
+  assert.equal(result.ok, true, result.errors.join('\n'));
+  assert.equal(result.checks.length, 19);
+  assert.ok(queries.every(item => item.options.workspaceId === 'workspace-123'));
+  assert.ok(queries.every(item => item.query.includes('ago(24h)')));
+  assert.ok(queries.every(item => !item.query.includes('$__timeFrom')));
+  assert.ok(queries.some(item => item.query.includes('AppDependencies')));
+  assert.ok(queries.some(item => item.query.includes('AgentOpsRunSummary_CL')));
+  assert.ok(queries.some(item => item.query.includes('AgentOpsContent_CL')));
+  assert.ok(queries.some(item => item.query.includes('OpenReplay')));
+  assert.ok(queries.some(item => item.query.includes('OpenGithub')));
+  assert.ok(queries.some(item => item.query.includes('OpenTranscript')));
+  assert.ok(queries.some(item => item.query.includes('AskPrompt')));
+  assert.ok(queries.some(item => item.query.includes('TriageCommand')));
+  assert.ok(queries.some(item => item.query.includes('MessageText')));
+  assert.ok(queries.some(item => item.query.includes('ViewerNote')));
+  assert.ok(queries.some(item => item.query.includes('SuggestedNextStep')));
+  assert.ok(queries.some(item => item.query.includes('PatternRuns')));
+  assert.ok(queries.some(item => item.query.includes('PatternDimension')));
+  assert.ok(queries.some(item => item.query.includes('AgentOpsRecommendations_CL')));
+  assert.ok(queries.some(item => item.query.includes('RecommendationId')));
+  assert.ok(queries.some(item => item.query.includes('BadOutcomeRuns')));
+  assert.ok(queries.some(item => item.query.includes('RunOutcomeStatus')));
+  assert.ok(queries.some(item => item.query.includes('TimeToPrMinutes')));
+  assert.ok(queries.some(item => item.query.includes('TimeToMergeMinutes')));
+  assert.ok(queries.some(item => item.query.includes("todouble(datetime_diff('minute'")));
+  assert.ok(queries.some(item => item.query.includes('order by Priority asc') && item.query.indexOf('order by Priority asc') < item.query.indexOf('project TimeGenerated, Severity')));
+  assert.ok(queries.some(item => item.query.includes('ContextWindowPct')));
+  assert.ok(queries.some(item => item.query.includes('DelegationId')));
+  assert.ok(queries.some(item => item.query.includes('McpServer')));
+});
+
+test('dashboard kql-check can require live rows', () => {
+  const result = dashboardKqlCheck(['--require-rows'], {
+    runQuery: () => ({ ok: true, rows: [] })
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.errors.length, 16);
+  assert.match(result.errors[0], /query returned no rows/);
+  assert.equal(result.checks.find(check => check.panel === 'Prompt and response viewer (explicit opt-in)').ok, true);
 });
 
 test('Grafana dashboards use Copilot OTel compatibility filters', () => {
@@ -1270,6 +2989,99 @@ test('E2E report browser check detects pass status, evidence links, and secret l
   const leaked = checkReportHtml(html.replace('</main>', '<p>SECRET_SHOULD_NOT_LEAVE</p></main>'));
   assert.equal(leaked.ok, false);
   assert.equal(leaked.secretLooking, true);
+});
+
+test('E2E live commands force strict privacy and content capture off', () => {
+  const env = safeE2eEnv({ AGENTOPS_E2E_ID: 'agentops-e2e-test' });
+
+  assert.equal(env.AGENTOPS_PRIVACY_MODE, 'strict');
+  assert.equal(env.AGENTOPS_CAPTURE_CONTENT, 'false');
+  assert.equal(env.AGENTOPS_DISABLE_CONTENT_CAPTURE_OVERRIDE, '1');
+  assert.equal(env.COPILOT_OTEL_CAPTURE_CONTENT, 'false');
+  assert.equal(env.AGENTOPS_E2E_ID, 'agentops-e2e-test');
+});
+
+test('E2E Grafana screenshot targets use stable V2 tour names', () => {
+  const targets = grafanaScreenshotTargets([
+    { label: 'AgentOps V2 Home', url: 'https://grafana.example.grafana.azure.com/d/agentops-v2-home' },
+    { label: 'V2 Runs Explorer', url: 'https://grafana.example.grafana.azure.com/d/agentops-v2-runs-explorer' },
+    { label: 'V2 Run Replay', url: 'https://grafana.example.grafana.azure.com/d/agentops-v2-run-replay' },
+    { label: 'Overview', url: 'https://grafana.example.grafana.azure.com/d/overview' }
+  ], { v2Only: true });
+
+  assert.deepEqual(targets.map(target => target.fileName), [
+    'agentops-v2-home-live.png',
+    'agentops-v2-runs-explorer-live.png',
+    'agentops-v2-run-replay-live.png'
+  ]);
+  assert.ok(targets.every(target => target.v2Tour));
+});
+
+test('E2E Grafana visual gate distinguishes auth-blocked from visible dashboards', () => {
+  const authBlocked = [
+    { label: 'AgentOps V2 Home', authBlocked: true, dashboardVisible: false },
+    { label: 'V2 Runs Explorer', authBlocked: true, dashboardVisible: false }
+  ];
+  const visible = [
+    { label: 'AgentOps V2 Home', authBlocked: false, dashboardVisible: true },
+    { label: 'V2 Runs Explorer', authBlocked: false, dashboardVisible: true }
+  ];
+
+  assert.equal(grafanaVisualOk(authBlocked, false), true);
+  assert.equal(grafanaVisualOk(authBlocked, true), false);
+  assert.equal(grafanaVisualOk(visible, true), true);
+});
+
+test('E2E browser profile args support authenticated Grafana visual QA', () => {
+  const options = browserProfileOptionsFromArgs([
+    '--browser-executable',
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    '--browser-user-data-dir',
+    '/tmp/agentops-grafana-profile',
+    '--storage-state',
+    '/tmp/storage-state.json',
+    '--headed'
+  ], {});
+
+  assert.equal(options.browserExecutable, '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome');
+  assert.equal(options.browserUserDataDir, '/tmp/agentops-grafana-profile');
+  assert.equal(options.storageState, '/tmp/storage-state.json');
+  assert.equal(options.headed, true);
+});
+
+test('E2E auth remediation prints sign-in and strict visual commands', () => {
+  const remediation = grafanaAuthRemediation({
+    reportPath: '.agentops/e2e/latest/report.html',
+    browserExecutable: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    browserUserDataDir: '$HOME/.agentops/browser/grafana-profile',
+    grafanaUrl: 'https://grafana.example.grafana.azure.com/d/agentops-v2-home'
+  });
+
+  assert.match(remediation.reason, /Microsoft sign-in/);
+  assert.ok(remediation.sign_in_once.some(command => command.includes('--user-data-dir="$HOME/.agentops/browser/grafana-profile"')));
+  assert.ok(remediation.sign_in_once.some(command => command.includes('/d/agentops-v2-home')));
+  assert.ok(remediation.verify_after_sign_in.some(command => command.includes('--require-grafana-visible')));
+  assert.ok(remediation.verify_after_sign_in.some(command => command.includes('--browser-user-data-dir "$HOME/.agentops/browser/grafana-profile"')));
+});
+
+test('E2E auth-profile command renders reusable Grafana sign-in profile steps', () => {
+  const result = e2eAuthProfile([
+    '--report',
+    '.agentops/e2e/latest/report.html',
+    '--browser-executable',
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    '--browser-user-data-dir',
+    '/tmp/agentops-grafana-profile',
+    '--url',
+    'https://grafana.example.grafana.azure.com/d/agentops-v2-home'
+  ]);
+  const text = renderAuthProfile(result);
+
+  assert.equal(result.ok, true);
+  assert.equal(result.browserProfile.browserUserDataDir, '/tmp/agentops-grafana-profile');
+  assert.ok(result.remediation.sign_in_once.some(command => command.includes('--user-data-dir="/tmp/agentops-grafana-profile"')));
+  assert.match(text, /Sign in once/);
+  assert.match(text, /Verify after sign-in/);
 });
 
 test('import-jsonl summarizes operations', () => {
@@ -1894,6 +3706,9 @@ test('open prints main Grafana and latest fixture session links', () => {
   const output = renderOpenLinks(openLinksSummary(summary));
 
   assert.match(output, /Main dashboard:/);
+  assert.match(output, /AgentOps V2 Home:/);
+  assert.match(output, /agentops-v2-home/);
+  assert.match(output, /V2 Run Replay:/);
   assert.match(output, /copilot-cli-agentops/);
   assert.match(output, /Latest session:/);
   assert.match(output, /var-conversation=conv-success/);

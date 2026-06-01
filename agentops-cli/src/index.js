@@ -2,10 +2,25 @@
 
 const legacy = require('./legacy');
 const { collectorCommand } = require('./commands/collector');
+const { azureIngestCommand } = require('./commands/azure-ingest');
+const { askContextCommand } = require('./commands/ask-context');
+const { contentCommand } = require('./commands/content');
 const { copilotCommand } = require('./commands/copilot');
+const { dashboardCommand } = require('./commands/dashboard');
+const { demoCommand } = require('./commands/demo');
 const { doctorCommand } = require('./commands/doctor');
 const { e2eCommand } = require('./commands/e2e');
+const { explainCommand } = require('./commands/explain');
+const { githubEnrichCommand } = require('./commands/github-enrich');
+const { insightsCommand } = require('./commands/insights');
+const { mcpProxyCommand } = require('./commands/mcp-proxy');
+const { openCommand } = require('./commands/open');
+const { productCommand } = require('./commands/product');
+const { recommendCommand } = require('./commands/recommend');
+const { runSummaryCommand } = require('./commands/run-summary');
+const { schemaCommand } = require('./commands/schema');
 const { statusCommand } = require('./commands/status');
+const { triageCommand } = require('./commands/triage');
 
 const coreCommands = [
   'setup',
@@ -15,20 +30,35 @@ const coreCommands = [
   'doctor',
   'configure',
   'collector',
+  'azure-ingest',
+  'ask-context',
+  'content',
   'copilot',
+  'dashboard',
+  'demo',
+  'explain',
+  'github-enrich',
+  'insights',
+  'init',
   'latest',
+  'mcp-proxy',
+  'recommend',
   'replay',
   'open',
+  'product',
   'validate-azure',
   'validate-enterprise',
   'plugin',
+  'run-summary',
+  'schema',
+  'smoke',
+  'triage',
   'e2e'
 ];
 
 const experimentalCommands = new Set([
   'agents',
   'alert',
-  'ask-context',
   'attribution',
   'attribution-smoke',
   'benchmark',
@@ -38,10 +68,8 @@ const experimentalCommands = new Set([
   'context',
   'custom',
   'enable-shadow',
-  'explain',
   'fields',
   'import-jsonl',
-  'init',
   'lineage',
   'link',
   'live',
@@ -51,11 +79,9 @@ const experimentalCommands = new Set([
   'permission-friction',
   'policy',
   'primitives',
-  'recommend',
   'saved-view',
   'scan',
   'skills',
-  'smoke',
   'tail',
   'token-rollup-audit',
   'validate-collector',
@@ -73,14 +99,30 @@ Core commands:
   doctor [--json]
   configure show|set|import-azd [--json]
   collector start|stop|status|validate|smoke|install-binary|uninstall-binary [--mode auto|docker|binary|none] [--privacy strict|compat] [--json]
+  azure-ingest plan [--dir <AgentOps table dir>] [--allow-content] [--json]
+  ask-context latest|<run-id> [--runs <jsonl>] [--events <jsonl>] [--tools <jsonl>] [--evals <jsonl>] [--insights <jsonl>] [--json]
+  content status|opt-in [--dir <AgentOps table dir>] [--runs <jsonl>] [--allow-content] [--json]
   copilot [copilot-args...]
+  schema validate|print [--file <json>]
+  dashboard validate|links-check|ux-check|kql-check|verify|import [--last <duration>] [--live] [--yes] [--all] [--folder <name>] [--resource-group <rg>] [--grafana-name <name>]
+  demo generate|verify [--runs <n>] [--out <dir>] [--with-content] [--json]
+  github-enrich [--limit <n>] [--runs <AgentOpsRunSummary_CL.jsonl>] [--out <dir>] [--json]
+  explain latest|<run-id> [--runs <jsonl>] [--evals <jsonl>] [--insights <jsonl>] [--json]
+  insights generate|patterns --runs <jsonl> [--insights <jsonl>] [--tools <jsonl>] [--privacy <jsonl>] [--github <jsonl>] [--out <dir>] [--json]
+  init [--dry-run] [--provision-cloud] [--force-skills] [--no-skills] [--json]
+  recommend latest|<run-id> [--runs <jsonl>] [--evals <jsonl>] [--insights <jsonl>] [--benchmark-run <id>] [--benchmark-report <json>] [--out <dir>] [--json]
+  triage latest|<run-id> [--runs <jsonl>] [--events <jsonl>] [--tools <jsonl>] [--privacy <jsonl>] [--github <jsonl>] [--evals <jsonl>] [--insights <jsonl>] [--benchmark-run <id>] [--out <dir>] [--json]
+  mcp-proxy --server-name <name> [--out <jsonl>] -- <server command> [args...]
   latest [--file <jsonl>] [--last <duration>] [--json]
   replay <session|latest> [--file <jsonl>] [--last <duration>]
-  open [--file <jsonl>] [--last <duration>] [--json]
-  validate-azure [--last <duration>] [--json]
+  open [latest|<run-id>] [--runs <jsonl>] [--file <jsonl>] [--last <duration>] [--json]
+  product audit [--live] [--last <duration>] [--require-rows] [--require-visual] [--report <html>] [--json]
+  validate-azure [--last <duration>] [--import-dashboards] [--json]
   validate-enterprise [--json]
   plugin install|uninstall [--copilot-home <path>] [--force] [--dry-run] [--json]
-  e2e run|report|browser-check [--json]
+  run-summary generate --file <jsonl> [--out <dir>] [--json]
+  smoke [--real-copilot] [--dry-run] [--wait <duration>] [--poll <duration>] [--json]
+  e2e run|report|browser-check|auth-profile [--json]
 
 Experimental:
   agentops experimental <old-command> [...]
@@ -113,16 +155,30 @@ async function main(argv) {
     return collectorCommand(collectorArgs);
   }
   if (command === 'copilot') return copilotCommand(args);
+  if (command === 'azure-ingest') return azureIngestCommand(args);
+  if (command === 'ask-context') return askContextCommand(args);
+  if (command === 'content') return contentCommand(args);
+  if (command === 'schema') return schemaCommand(args);
+  if (command === 'dashboard') return dashboardCommand(args);
+  if (command === 'demo') return demoCommand(args);
   if (command === 'e2e') return e2eCommand(args);
+  if (command === 'explain') return explainCommand(args);
+  if (command === 'github-enrich') return githubEnrichCommand(args);
+  if (command === 'insights') return insightsCommand(args);
+  if (command === 'mcp-proxy') return mcpProxyCommand(args);
+  if (command === 'recommend') {
+    if (args.includes('--runs')) return recommendCommand(args);
+    return legacy.main([command, ...args]);
+  }
+  if (command === 'run-summary') return runSummaryCommand(args);
+  if (command === 'triage') return triageCommand(args);
   if (command === 'latest' && args.includes('--json')) {
     process.stdout.write(`${JSON.stringify(legacy.latestSummaryFromArgs(args), null, 2)}\n`);
     return;
   }
-  if (command === 'open' && args.includes('--json')) {
-    const summary = legacy.latestSummaryFromArgs(args);
-    process.stdout.write(`${JSON.stringify(legacy.openLinksSummary(summary), null, 2)}\n`);
-    return;
-  }
+  if (command === 'open') return openCommand(args);
+  if (command === 'product') return productCommand(args);
+  if (command === 'smoke') return legacy.main([command, ...args]);
 
   if (experimentalCommands.has(command)) return legacyWithMigration(command, args);
 
@@ -144,9 +200,23 @@ module.exports = {
   coreCommands,
   experimentalCommands,
   collectorCommand,
+  azureIngestCommand,
+  askContextCommand,
+  contentCommand,
   copilotCommand,
+  dashboardCommand,
+  demoCommand,
   doctorCommand,
   e2eCommand,
+  explainCommand,
+  githubEnrichCommand,
+  insightsCommand,
+  mcpProxyCommand,
+  openCommand,
+  productCommand,
+  recommendCommand,
+  runSummaryCommand,
+  schemaCommand,
   statusCommand,
   usage
 };

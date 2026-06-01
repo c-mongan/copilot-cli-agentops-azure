@@ -1,0 +1,18 @@
+union isfuzzy=true AgentOpsGithubOutcomes_CL
+| where TimeGenerated between ($__timeFrom() .. $__timeTo())
+| project
+    TimeGenerated,
+    RunId,
+    RepoHash,
+    BranchHash,
+    PrOpened,
+    PrNumberHash,
+    PrMerged,
+    PrClosed,
+    PrReverted,
+    CiStatus,
+    ReviewCommentCount,
+    CommitCount,
+    FilesChangedCount
+| order by TimeGenerated desc
+

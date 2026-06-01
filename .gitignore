@@ -10,6 +10,7 @@ coverage/
 .DS_Store
 .pytest_cache/
 .agentops/
+.playwright-mcp/
 .azure/*
 !.azure/deployment-plan.md
 collector/*.local.out

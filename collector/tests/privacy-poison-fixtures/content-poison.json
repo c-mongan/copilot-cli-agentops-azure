@@ -1,0 +1,12 @@
+{
+  "agentops.poison_id": "fixture-content-poison",
+  "gen_ai.operation.name": "chat",
+  "gen_ai.request.model": "poison-model",
+  "gen_ai.usage.input_tokens": 11,
+  "gen_ai.usage.output_tokens": 7,
+  "gen_ai.input.messages": "prompt = \"this should never leave local machine\"",
+  "gen_ai.output.messages": "SECRET_RESPONSE_SHOULD_NOT_LEAVE",
+  "gen_ai.tool.call.arguments": "tool_args = \"cat ~/.ssh/id_rsa\"",
+  "gen_ai.tool.call.result": "file_content = \"api_key=SECRET_FAKE_TEST_VALUE\"",
+  "url.full": "https://example.test/?token=SECRET_URL_SHOULD_NOT_LEAVE"
+}

@@ -1,0 +1,28 @@
+union isfuzzy=true AgentOpsEvents_CL
+| where TimeGenerated between ($__timeFrom() .. $__timeTo())
+| where '$run_id' == '__all' or RunId == '$run_id'
+| extend SkillName=tostring(column_ifexists("SkillName", ""))
+| extend ParentAgentName=tostring(column_ifexists("ParentAgentName", ""))
+| extend SubAgentName=tostring(column_ifexists("SubAgentName", ""))
+| extend DelegationId=tostring(column_ifexists("DelegationId", ""))
+| project
+    TimeGenerated,
+    RunId,
+    TraceId,
+    SpanId,
+    ParentSpanId,
+    EventName,
+    EventType,
+    AgentName,
+    SkillName,
+    ParentAgentName,
+    SubAgentName,
+    DelegationId,
+    ToolName,
+    ModelActual,
+    Status,
+    DurationMs,
+    ErrorType,
+    OutcomeStatus,
+    Details
+| order by TimeGenerated asc

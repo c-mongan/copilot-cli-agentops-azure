@@ -1,0 +1,1275 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [
+    {
+      "title": "Home",
+      "uid": "agentops-v2-home",
+      "type": "link",
+      "icon": "dashboard",
+      "url": "/d/agentops-v2-home",
+      "targetBlank": false
+    },
+    {
+      "title": "Runs",
+      "uid": "agentops-v2-runs-explorer",
+      "type": "link",
+      "icon": "dashboard",
+      "url": "/d/agentops-v2-runs-explorer",
+      "targetBlank": false
+    },
+    {
+      "title": "Replay",
+      "uid": "agentops-v2-run-replay",
+      "type": "link",
+      "icon": "dashboard",
+      "url": "/d/agentops-v2-run-replay",
+      "targetBlank": false
+    },
+    {
+      "title": "Models",
+      "uid": "agentops-v2-models-cost-tokens",
+      "type": "link",
+      "icon": "dashboard",
+      "url": "/d/agentops-v2-models-cost-tokens",
+      "targetBlank": false
+    },
+    {
+      "title": "Tools",
+      "uid": "agentops-v2-tools-mcp-risk",
+      "type": "link",
+      "icon": "dashboard",
+      "url": "/d/agentops-v2-tools-mcp-risk",
+      "targetBlank": false
+    },
+    {
+      "title": "Privacy",
+      "uid": "agentops-v2-safety-privacy-policy",
+      "type": "link",
+      "icon": "dashboard",
+      "url": "/d/agentops-v2-safety-privacy-policy",
+      "targetBlank": false
+    },
+    {
+      "title": "Outcomes",
+      "uid": "agentops-v2-code-outcomes",
+      "type": "link",
+      "icon": "dashboard",
+      "url": "/d/agentops-v2-code-outcomes",
+      "targetBlank": false
+    },
+    {
+      "title": "Evals",
+      "uid": "agentops-v2-evals-quality",
+      "type": "link",
+      "icon": "dashboard",
+      "url": "/d/agentops-v2-evals-quality",
+      "targetBlank": false
+    },
+    {
+      "title": "Insights",
+      "uid": "agentops-v2-insights-regressions",
+      "type": "link",
+      "icon": "dashboard",
+      "url": "/d/agentops-v2-insights-regressions",
+      "targetBlank": false
+    },
+    {
+      "title": "Collector",
+      "uid": "agentops-v2-collector-health",
+      "type": "link",
+      "icon": "dashboard",
+      "url": "/d/agentops-v2-collector-health",
+      "targetBlank": false
+    }
+  ],
+  "panels": [
+    {
+      "id": 1,
+      "title": "Supportability",
+      "type": "text",
+      "gridPos": {
+        "h": 2,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "## Collector Health\nLocal collector, export, privacy poison, Azure, Grafana, schema, and dashboard version status. Uses AgentOps V2 custom tables when present and falls back to existing Copilot OpenTelemetry in Application Insights. If every panel is empty, run `agentops collector smoke --privacy strict --poison --json`; for local demos run `agentops demo generate --runs 50 --with-failures --with-privacy-drops --json`."
+      }
+    },
+    {
+      "id": 10,
+      "title": "Collector checks",
+      "type": "table",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "azure-monitor-oob"
+      },
+      "gridPos": {
+        "h": 12,
+        "w": 24,
+        "x": 0,
+        "y": 2
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "links": []
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "RunId"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Run Replay",
+                    "url": "/d/agentops-v2-run-replay?var-run_id=${__data.fields.RunId}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "SessionId"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Session Replay",
+                    "url": "/d/agentops-v2-run-replay?var-session_id=${__data.fields.SessionId}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "TraceId"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Trace Replay",
+                    "url": "/d/agentops-v2-run-replay?var-trace_id=${__data.fields.TraceId}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "ToolName"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Tools Risk",
+                    "url": "/d/agentops-v2-tools-mcp-risk?var-tool_name=${__data.fields.ToolName}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "McpServerName"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open MCP Server",
+                    "url": "/d/agentops-v2-tools-mcp-risk?var-mcp_server=${__data.fields.McpServerName}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "McpServer"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open MCP Server",
+                    "url": "/d/agentops-v2-tools-mcp-risk?var-mcp_server=${__data.fields.McpServer}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "ModelActual"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Models",
+                    "url": "/d/agentops-v2-models-cost-tokens?var-model=${__data.fields.ModelActual}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "AgentName"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Agent Runs",
+                    "url": "/d/agentops-v2-runs-explorer?var-agent_name=${__data.fields.AgentName}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "SkillName"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Skill Runs",
+                    "url": "/d/agentops-v2-runs-explorer?var-skill_name=${__data.fields.SkillName}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "SubAgentName"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Sub-agent Replay",
+                    "url": "/d/agentops-v2-run-replay?var-sub_agent=${__data.fields.SubAgentName}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "ParentAgentName"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Parent Agent Runs",
+                    "url": "/d/agentops-v2-runs-explorer?var-agent_name=${__data.fields.ParentAgentName}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "RepoHash"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Runs for Repo",
+                    "url": "/d/agentops-v2-runs-explorer?var-repo_hash=${__data.fields.RepoHash}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "PrNumberHash"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Code Outcomes",
+                    "url": "/d/agentops-v2-code-outcomes?var-repo_hash=${__data.fields.RepoHash}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "CiStatus"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Code Outcomes",
+                    "url": "/d/agentops-v2-code-outcomes?var-outcome_status=${__data.fields.CiStatus}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "EvalOverall"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Evals",
+                    "url": "/d/agentops-v2-evals-quality?var-run_id=${__data.fields.RunId}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "PatternKey"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Pattern",
+                    "url": "/d/agentops-v2-insights-regressions?var-pattern_key=${__data.fields.PatternKey}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "OpenTranscript"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open prompt/response viewer",
+                    "url": "/d/agentops-v2-run-replay?viewPanel=26&var-run_id=${__data.fields.RunId}&var-session_id=${__data.fields.SessionId}&var-trace_id=${__data.fields.TraceId}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "OpenReplay"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Run Replay",
+                    "url": "/d/agentops-v2-run-replay?var-run_id=${__data.fields.RunId}&var-session_id=${__data.fields.SessionId}&var-trace_id=${__data.fields.TraceId}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "OpenTrace"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Trace Replay",
+                    "url": "/d/agentops-v2-run-replay?var-trace_id=${__data.fields.TraceId}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "OpenGithub"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open GitHub Outcome",
+                    "url": "/d/agentops-v2-code-outcomes?var-run_id=${__data.fields.RunId}&var-repo_hash=${__data.fields.RepoHash}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "OpenPattern"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Pattern",
+                    "url": "/d/agentops-v2-insights-regressions?var-pattern_key=${__data.fields.PatternKey}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "cellHeight": "sm",
+        "showHeader": true,
+        "footer": {
+          "show": false
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor-oob"
+          },
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
+            ],
+            "resultFormat": "table",
+            "query": "union isfuzzy=true (AgentOpsCollectorHealth_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo())), (AppDependencies | where TimeGenerated between ($__timeFrom() .. $__timeTo()) | where tostring(Properties) has_any ('github.copilot', 'gen_ai.operation.name', 'agentops.', 'codex') or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') | summarize LastSpanReceived=max(TimeGenerated), SpanRows=count(), ExportErrors=countif(Success == false or tostring(Success) =~ 'false') | extend TimeGenerated=now(), Component='appinsights-compat', CheckName='live-ingestion', Status=iff(SpanRows > 0, 'healthy', 'empty'), Detail=strcat('Existing Application Insights telemetry rows: ', tostring(SpanRows)), PrivacyMode='strict', CollectorMode='compat', OtlpEndpoint='application-insights', AzureConfigured=true, GrafanaConfigured=true, DashboardVersion='v2', SchemaVersion='2', DroppedContentCount=0, LastExportSuccess=LastSpanReceived | project TimeGenerated, Component, CheckName, Status, Detail, PrivacyMode, CollectorMode, OtlpEndpoint, AzureConfigured, GrafanaConfigured, DashboardVersion, SchemaVersion, LastSpanReceived, LastExportSuccess, ExportErrors, DroppedContentCount) | project TimeGenerated, CheckName, Status, Detail, PrivacyMode, CollectorMode, OtlpEndpoint, AzureConfigured, GrafanaConfigured, DashboardVersion, SchemaVersion | order by TimeGenerated desc | take 500"
+          }
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "title": "Export errors and drops",
+      "type": "timeseries",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "azure-monitor-oob"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 14
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor-oob"
+          },
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
+            ],
+            "resultFormat": "time_series",
+            "query": "union isfuzzy=true (AgentOpsCollectorHealth_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo())), (AppDependencies | where TimeGenerated between ($__timeFrom() .. $__timeTo()) | where tostring(Properties) has_any ('github.copilot', 'gen_ai.operation.name', 'agentops.', 'codex') or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') | summarize LastSpanReceived=max(TimeGenerated), SpanRows=count(), ExportErrors=countif(Success == false or tostring(Success) =~ 'false') | extend TimeGenerated=now(), Component='appinsights-compat', CheckName='live-ingestion', Status=iff(SpanRows > 0, 'healthy', 'empty'), Detail=strcat('Existing Application Insights telemetry rows: ', tostring(SpanRows)), PrivacyMode='strict', CollectorMode='compat', OtlpEndpoint='application-insights', AzureConfigured=true, GrafanaConfigured=true, DashboardVersion='v2', SchemaVersion='2', DroppedContentCount=0, LastExportSuccess=LastSpanReceived | project TimeGenerated, Component, CheckName, Status, Detail, PrivacyMode, CollectorMode, OtlpEndpoint, AzureConfigured, GrafanaConfigured, DashboardVersion, SchemaVersion, LastSpanReceived, LastExportSuccess, ExportErrors, DroppedContentCount) | summarize ExportErrors=sum(ExportErrors), DroppedContent=sum(DroppedContentCount) by TimeGenerated=bin(TimeGenerated, $__interval) | order by TimeGenerated asc"
+          }
+        }
+      ]
+    },
+    {
+      "id": 21,
+      "title": "Last received/exported",
+      "type": "table",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "azure-monitor-oob"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 14
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "links": []
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "RunId"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Run Replay",
+                    "url": "/d/agentops-v2-run-replay?var-run_id=${__data.fields.RunId}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "SessionId"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Session Replay",
+                    "url": "/d/agentops-v2-run-replay?var-session_id=${__data.fields.SessionId}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "TraceId"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Trace Replay",
+                    "url": "/d/agentops-v2-run-replay?var-trace_id=${__data.fields.TraceId}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "ToolName"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Tools Risk",
+                    "url": "/d/agentops-v2-tools-mcp-risk?var-tool_name=${__data.fields.ToolName}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "McpServerName"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open MCP Server",
+                    "url": "/d/agentops-v2-tools-mcp-risk?var-mcp_server=${__data.fields.McpServerName}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "McpServer"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open MCP Server",
+                    "url": "/d/agentops-v2-tools-mcp-risk?var-mcp_server=${__data.fields.McpServer}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "ModelActual"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Models",
+                    "url": "/d/agentops-v2-models-cost-tokens?var-model=${__data.fields.ModelActual}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "AgentName"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Agent Runs",
+                    "url": "/d/agentops-v2-runs-explorer?var-agent_name=${__data.fields.AgentName}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "SkillName"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Skill Runs",
+                    "url": "/d/agentops-v2-runs-explorer?var-skill_name=${__data.fields.SkillName}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "SubAgentName"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Sub-agent Replay",
+                    "url": "/d/agentops-v2-run-replay?var-sub_agent=${__data.fields.SubAgentName}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "ParentAgentName"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Parent Agent Runs",
+                    "url": "/d/agentops-v2-runs-explorer?var-agent_name=${__data.fields.ParentAgentName}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "RepoHash"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Runs for Repo",
+                    "url": "/d/agentops-v2-runs-explorer?var-repo_hash=${__data.fields.RepoHash}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "PrNumberHash"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Code Outcomes",
+                    "url": "/d/agentops-v2-code-outcomes?var-repo_hash=${__data.fields.RepoHash}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "CiStatus"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Code Outcomes",
+                    "url": "/d/agentops-v2-code-outcomes?var-outcome_status=${__data.fields.CiStatus}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "EvalOverall"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Evals",
+                    "url": "/d/agentops-v2-evals-quality?var-run_id=${__data.fields.RunId}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "PatternKey"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Pattern",
+                    "url": "/d/agentops-v2-insights-regressions?var-pattern_key=${__data.fields.PatternKey}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "OpenTranscript"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open prompt/response viewer",
+                    "url": "/d/agentops-v2-run-replay?viewPanel=26&var-run_id=${__data.fields.RunId}&var-session_id=${__data.fields.SessionId}&var-trace_id=${__data.fields.TraceId}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "OpenReplay"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Run Replay",
+                    "url": "/d/agentops-v2-run-replay?var-run_id=${__data.fields.RunId}&var-session_id=${__data.fields.SessionId}&var-trace_id=${__data.fields.TraceId}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "OpenTrace"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Trace Replay",
+                    "url": "/d/agentops-v2-run-replay?var-trace_id=${__data.fields.TraceId}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "OpenGithub"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open GitHub Outcome",
+                    "url": "/d/agentops-v2-code-outcomes?var-run_id=${__data.fields.RunId}&var-repo_hash=${__data.fields.RepoHash}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "OpenPattern"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Pattern",
+                    "url": "/d/agentops-v2-insights-regressions?var-pattern_key=${__data.fields.PatternKey}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "cellHeight": "sm",
+        "showHeader": true,
+        "footer": {
+          "show": false
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor-oob"
+          },
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
+            ],
+            "resultFormat": "table",
+            "query": "union isfuzzy=true (AgentOpsCollectorHealth_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo())), (AppDependencies | where TimeGenerated between ($__timeFrom() .. $__timeTo()) | where tostring(Properties) has_any ('github.copilot', 'gen_ai.operation.name', 'agentops.', 'codex') or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') | summarize LastSpanReceived=max(TimeGenerated), SpanRows=count(), ExportErrors=countif(Success == false or tostring(Success) =~ 'false') | extend TimeGenerated=now(), Component='appinsights-compat', CheckName='live-ingestion', Status=iff(SpanRows > 0, 'healthy', 'empty'), Detail=strcat('Existing Application Insights telemetry rows: ', tostring(SpanRows)), PrivacyMode='strict', CollectorMode='compat', OtlpEndpoint='application-insights', AzureConfigured=true, GrafanaConfigured=true, DashboardVersion='v2', SchemaVersion='2', DroppedContentCount=0, LastExportSuccess=LastSpanReceived | project TimeGenerated, Component, CheckName, Status, Detail, PrivacyMode, CollectorMode, OtlpEndpoint, AzureConfigured, GrafanaConfigured, DashboardVersion, SchemaVersion, LastSpanReceived, LastExportSuccess, ExportErrors, DroppedContentCount) | summarize LastSpanReceived=max(LastSpanReceived), LastExportSuccess=max(LastExportSuccess), LatestStatus=arg_max(TimeGenerated, Status) by CollectorMode, PrivacyMode, OtlpEndpoint | order by LastSpanReceived desc"
+          }
+        }
+      ]
+    }
+  ],
+  "refresh": "1m",
+  "schemaVersion": 39,
+  "tags": [
+    "agentops",
+    "agentops-v2",
+    "copilot",
+    "azure"
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "type": "custom",
+        "label": "datasource",
+        "query": "azure-monitor-oob",
+        "current": {
+          "selected": true,
+          "text": "azure-monitor-oob",
+          "value": "azure-monitor-oob"
+        }
+      },
+      {
+        "name": "workspace",
+        "type": "custom",
+        "label": "workspace",
+        "query": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev",
+        "current": {
+          "selected": true,
+          "text": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev",
+          "value": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
+        }
+      },
+      {
+        "name": "timeRange",
+        "type": "custom",
+        "label": "timeRange",
+        "query": "24h",
+        "current": {
+          "selected": true,
+          "text": "24h",
+          "value": "24h"
+        }
+      },
+      {
+        "name": "run_id",
+        "type": "custom",
+        "label": "run id",
+        "query": "__all",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "__all"
+        }
+      },
+      {
+        "name": "session_id",
+        "type": "custom",
+        "label": "session id",
+        "query": "__all",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "__all"
+        }
+      },
+      {
+        "name": "trace_id",
+        "type": "custom",
+        "label": "trace id",
+        "query": "__all",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "__all"
+        }
+      },
+      {
+        "name": "surface",
+        "type": "custom",
+        "label": "surface",
+        "query": "__all",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "__all"
+        }
+      },
+      {
+        "name": "repo_hash",
+        "type": "custom",
+        "label": "repo hash",
+        "query": "__all",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "__all"
+        }
+      },
+      {
+        "name": "branch_hash",
+        "type": "custom",
+        "label": "branch hash",
+        "query": "__all",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "__all"
+        }
+      },
+      {
+        "name": "model",
+        "type": "custom",
+        "label": "model",
+        "query": "__all",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "__all"
+        }
+      },
+      {
+        "name": "agent_name",
+        "type": "custom",
+        "label": "agent name",
+        "query": "__all",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "__all"
+        }
+      },
+      {
+        "name": "skill_name",
+        "type": "custom",
+        "label": "skill name",
+        "query": "__all",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "__all"
+        }
+      },
+      {
+        "name": "mcp_server",
+        "type": "custom",
+        "label": "mcp server",
+        "query": "__all",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "__all"
+        }
+      },
+      {
+        "name": "sub_agent",
+        "type": "custom",
+        "label": "sub agent",
+        "query": "__all",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "__all"
+        }
+      },
+      {
+        "name": "task_type",
+        "type": "custom",
+        "label": "task type",
+        "query": "__all",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "__all"
+        }
+      },
+      {
+        "name": "tool_name",
+        "type": "custom",
+        "label": "tool name",
+        "query": "__all",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "__all"
+        }
+      },
+      {
+        "name": "tool_risk",
+        "type": "custom",
+        "label": "tool risk",
+        "query": "__all",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "__all"
+        }
+      },
+      {
+        "name": "pattern_key",
+        "type": "custom",
+        "label": "pattern key",
+        "query": "__all",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "__all"
+        }
+      },
+      {
+        "name": "privacy_mode",
+        "type": "custom",
+        "label": "privacy mode",
+        "query": "__all",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "__all"
+        }
+      },
+      {
+        "name": "outcome_status",
+        "type": "custom",
+        "label": "outcome status",
+        "query": "__all",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "__all"
+        }
+      },
+      {
+        "name": "eval_bucket",
+        "type": "custom",
+        "label": "eval bucket",
+        "query": "__all",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "__all"
+        }
+      }
+    ]
+  },
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Collector Health",
+  "uid": "agentops-v2-collector-health",
+  "version": 1,
+  "weekStart": ""
+}

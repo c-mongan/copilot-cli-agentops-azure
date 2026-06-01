@@ -26,26 +26,26 @@ processors:
           - set(attributes["agentops.content_capture.signal"], true) where attributes["content.capture.enabled"] == true or attributes["gen_ai.input.messages"] != nil or attributes["gen_ai.output.messages"] != nil or attributes["gen_ai.prompt"] != nil or attributes["gen_ai.completion"] != nil or attributes["gen_ai.tool.call.arguments"] != nil or attributes["gen_ai.tool.call.result"] != nil or attributes["github.copilot.message"] != nil
   attributes/privacy_safe:
     actions:
-      - key: gen_ai.system_instructions
-        action: delete
-      - key: gen_ai.input.messages
-        action: delete
-      - key: gen_ai.output.messages
-        action: delete
-      - key: gen_ai.prompt
-        action: delete
-      - key: gen_ai.completion
-        action: delete
-      - key: gen_ai.tool.input
-        action: delete
-      - key: gen_ai.tool.output
-        action: delete
-      - key: gen_ai.tool.call.arguments
-        action: delete
-      - key: gen_ai.tool.call.result
-        action: delete
-      - key: github.copilot.message
-        action: delete
+      # - key: gen_ai.system_instructions
+      #   action: delete
+      # - key: gen_ai.input.messages
+      #   action: delete
+      # - key: gen_ai.output.messages
+      #   action: delete
+      # - key: gen_ai.prompt
+      #   action: delete
+      # - key: gen_ai.completion
+      #   action: delete
+      # - key: gen_ai.tool.input
+      #   action: delete
+      # - key: gen_ai.tool.output
+      #   action: delete
+      # - key: gen_ai.tool.call.arguments
+      #   action: delete
+      # - key: gen_ai.tool.call.result
+      #   action: delete
+      # - key: github.copilot.message
+      #   action: delete
       - key: code.filepath
         action: hash
       - key: url.full

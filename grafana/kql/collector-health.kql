@@ -1,0 +1,20 @@
+union isfuzzy=true AgentOpsCollectorHealth_CL
+| where TimeGenerated between ($__timeFrom() .. $__timeTo())
+| project
+    TimeGenerated,
+    CheckName,
+    Status,
+    Detail,
+    PrivacyMode,
+    CollectorMode,
+    OtlpEndpoint,
+    AzureConfigured,
+    GrafanaConfigured,
+    DashboardVersion,
+    SchemaVersion,
+    ExportErrors,
+    DroppedContentCount,
+    LastSpanReceived,
+    LastExportSuccess
+| order by TimeGenerated desc
+

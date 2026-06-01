@@ -1,0 +1,26 @@
+{
+  "name": "@agentops/copilot-sdk",
+  "version": "0.1.0",
+  "description": "Privacy-safe AgentOps adapter helpers for GitHub Copilot SDK apps.",
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "files": [
+    "src",
+    "examples"
+  ],
+  "scripts": {
+    "test": "node --test"
+  },
+  "peerDependencies": {
+    "@github/copilot-sdk": "*"
+  },
+  "peerDependenciesMeta": {
+    "@github/copilot-sdk": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT"
+}

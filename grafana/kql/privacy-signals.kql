@@ -1,0 +1,9 @@
+union isfuzzy=true AgentOpsPrivacy_CL
+| where TimeGenerated between ($__timeFrom() .. $__timeTo())
+| summarize
+    Drops = sum(DroppedCount),
+    Redactions = sum(RedactedCount),
+    Runs = dcount(RunId)
+  by ContentKind, Surface, PrivacyMode, Action
+| order by Drops desc
+

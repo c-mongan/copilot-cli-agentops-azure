@@ -434,8 +434,8 @@ if [[ "$(lower_bool "${capture_content_enabled}")" != "true" && -n "${AGENTOPS_A
 	done
 fi
 capture_content_enabled="$(lower_bool "${capture_content_enabled}")"
-capture_override_enabled="$(lower_bool "${AGENTOPS_DISABLE_CONTENT_CAPTURE_OVERRIDE:-1}")"
-if [[ "${capture_content_enabled}" == "true" && "${capture_override_enabled}" == "0" ]]; then
+capture_override_enabled="$(lower_bool "${AGENTOPS_ALLOW_CONTENT_CAPTURE:-0}")"
+if [[ "${capture_content_enabled}" == "true" && "${capture_override_enabled}" == "1" ]]; then
 	export OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT="true"
 	export COPILOT_OTEL_CAPTURE_CONTENT="true"
 	if [[ "${capture_content_scope}" == "default-off" ]]; then
