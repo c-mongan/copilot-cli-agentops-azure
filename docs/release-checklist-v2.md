@@ -79,6 +79,7 @@ node agentops-cli/src/index.js open
 node agentops-cli/src/index.js e2e run --live --browser-report --last 2h --json
 node agentops-cli/src/index.js e2e report --last 2h --out .agentops/e2e/latest/report.html
 node agentops-cli/src/index.js e2e browser-check --report .agentops/e2e/latest/report.html --json
+node agentops-cli/src/index.js e2e auth-profile
 node agentops-cli/src/index.js e2e browser-check --report .agentops/e2e/latest/report.html --playwright --grafana --grafana-v2-only --require-grafana-visible --json
 node agentops-cli/src/index.js e2e browser-check --report .agentops/e2e/latest/report.html --playwright --grafana --grafana-v2-only --require-grafana-visible --browser-user-data-dir "$HOME/.agentops/browser/grafana-profile" --headed --json
 node agentops-cli/src/index.js product audit --live --last 2h --require-rows --require-visual --report .agentops/e2e/latest/report.html --browser-user-data-dir "$HOME/.agentops/browser/grafana-profile" --json

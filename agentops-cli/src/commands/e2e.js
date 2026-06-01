@@ -596,7 +596,7 @@ async function e2eBrowserCheck(args = []) {
       })
     : { status: 'skipped', reason: 'Pass --playwright or set AGENTOPS_E2E_PLAYWRIGHT=1 to capture browser screenshots.' };
   const result = {
-    ok: staticCheck.ok && (playwright.ok !== false),
+    ok: staticCheck.ok && (wantsPlaywright ? playwright.ok === true : playwright.ok !== false),
     reportPath,
     static: staticCheck,
     playwright

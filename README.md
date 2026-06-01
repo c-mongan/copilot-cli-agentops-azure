@@ -126,8 +126,11 @@ agentops product audit --live --last 24h --require-rows --json
 To require actual rendered Grafana dashboards from an authenticated browser profile:
 
 ```bash
+agentops e2e auth-profile
 agentops product audit --live --last 24h --require-rows --require-visual --json
 ```
+
+The visual gate is strict: it only passes after Playwright opens the V2 Grafana dashboard pages and sees them rendered. If it reports Microsoft sign-in, run the `agentops e2e auth-profile` sign-in command once, then rerun the audit with the suggested browser profile flags.
 
 To roll up a raw local span export into the same V2 table shape:
 

@@ -301,14 +301,16 @@ async function productAuditWithVisual(options = {}) {
   const grafanaItems = visual.playwright?.grafana || [];
   const authBlocked = grafanaItems.filter(item => item.authBlocked).map(item => item.label);
   const visible = grafanaItems.filter(item => item.dashboardVisible).map(item => item.label);
+  const visualVerified = Boolean(visual.ok) && grafanaItems.length > 0 && visible.length === grafanaItems.length;
   const visualCheck = check(
     'visual-grafana-rendered-dashboards',
-    visual.ok,
-    visible.length ? visible : [`report: ${reportPath}`],
-    visual.ok ? [] : [
+    visualVerified,
+    visible,
+    visualVerified ? [] : [
       visual.error || visual.playwright?.authRemediation?.reason || 'Grafana dashboards did not render in the browser profile',
+      grafanaItems.length === 0 ? 'No Grafana dashboards were rendered by the visual browser check.' : '',
       ...authBlocked.map(label => `${label}: auth-blocked`)
-    ]
+    ].filter(Boolean)
   );
 
   const checks = [...result.checks, visualCheck];
@@ -324,7 +326,7 @@ async function productAuditWithVisual(options = {}) {
     ...result,
     ok: failed.length === 0,
     scope: options.live ? 'local-live-and-visual-product-contract' : 'local-and-visual-product-contract',
-    visual_grafana_verified: Boolean(visual.ok),
+    visual_grafana_verified: visualVerified,
     summary: {
       ...result.summary,
       checks: checks.length,
@@ -335,7 +337,7 @@ async function productAuditWithVisual(options = {}) {
     },
     checks,
     visual,
-    next: visual.ok
+    next: visualVerified
       ? result.next
       : [
           ...recovery,

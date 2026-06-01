@@ -2548,6 +2548,25 @@ test('product audit can require rendered Grafana visual proof', async () => {
   assert.equal(result.checks.some(check => check.name === 'visual-grafana-rendered-dashboards'), true);
 });
 
+test('product visual audit fails when no dashboard was actually rendered', async () => {
+  const result = await productAuditWithVisual({
+    requireVisual: true,
+    browserCheck: async () => ({
+      ok: true,
+      playwright: {
+        status: 'skipped',
+        reason: 'Playwright is not available.'
+      }
+    })
+  });
+  const visualCheck = result.checks.find(check => check.name === 'visual-grafana-rendered-dashboards');
+
+  assert.equal(result.ok, false);
+  assert.equal(result.visual_grafana_verified, false);
+  assert.equal(visualCheck.ok, false);
+  assert.ok(visualCheck.missing.some(item => item.includes('No Grafana dashboards')));
+});
+
 test('product visual audit returns auth remediation when Grafana is SSO-blocked', async () => {
   const result = await productAuditWithVisual({
     requireVisual: true,
