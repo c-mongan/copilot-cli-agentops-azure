@@ -52,6 +52,9 @@ agentops-cli/src/commands/
 agentops-cli/src/lib/
   product logic and testable helpers
 
+agentops-cli/src/lib/collector-artifacts.js
+  static collector processor, config, and poison fixture validation
+
 collector/
   OpenTelemetry Collector configs and privacy processors
 

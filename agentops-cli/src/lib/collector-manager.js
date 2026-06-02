@@ -12,11 +12,11 @@ const legacy = require('../legacy');
 const {
   collectorConfigPath,
   collectorDir,
-  collectorHome,
-  repoRoot
+  collectorHome
 } = require('./paths');
 const { commandCandidates, commandExists, isExecutable, run } = require('./shell');
-const { contentLikeKeys, makePoisonAttributes, poisonCheck, sanitizeAttributesStrict } = require('./privacy');
+const { makePoisonAttributes, poisonCheck } = require('./privacy');
+const { validateCollectorArtifacts } = require('./collector-artifacts');
 
 const collectorModes = ['auto', 'docker', 'binary', 'none'];
 const privacyModes = ['strict', 'compat'];
@@ -236,80 +236,6 @@ function validateBinaryConfig(binaryPath, privacy = 'strict') {
     config,
     command: `${binaryPath} validate --config ${config}`,
     error: result.status === 0 ? null : (result.stderr || result.stdout || `collector validate exited ${result.status}`).trim()
-  };
-}
-
-function validateCollectorArtifacts(options = {}) {
-  const root = options.root || repoRoot;
-  const collectorRoot = path.join(root, 'collector');
-  const processorsDir = path.join(collectorRoot, 'processors');
-  const fixturesDir = path.join(collectorRoot, 'tests', 'privacy-poison-fixtures');
-  const requiredProcessors = [
-    'strict-allowlist.yaml',
-    'content-signal.yaml',
-    'genai-normalizer.yaml',
-    'mcp-normalizer.yaml',
-    'span-to-run-summary.yaml'
-  ];
-  const requiredFixtures = ['content-poison.json', 'mcp-poison.json'];
-  const errors = [];
-  const warnings = [];
-
-  for (const file of requiredProcessors) {
-    const fullPath = path.join(processorsDir, file);
-    if (!fs.existsSync(fullPath)) {
-      errors.push(`missing collector processor fragment: ${fullPath}`);
-      continue;
-    }
-    const body = fs.readFileSync(fullPath, 'utf8');
-    if (file === 'strict-allowlist.yaml' && !body.includes('keep_keys')) errors.push(`${file}: missing keep_keys allowlist`);
-    if (file === 'content-signal.yaml' && !body.includes('agentops.content_capture.signal')) errors.push(`${file}: missing content capture signal`);
-    if (file === 'genai-normalizer.yaml' && !body.includes('gen_ai.operation.name')) errors.push(`${file}: missing GenAI operation mapping`);
-    if (file === 'mcp-normalizer.yaml' && !body.includes('mcp.method.name')) errors.push(`${file}: missing MCP method mapping`);
-    if (file === 'span-to-run-summary.yaml' && !body.includes('AgentOpsRunSummary_CL')) errors.push(`${file}: missing run summary table contract`);
-  }
-
-  const fixtureResults = [];
-  for (const file of requiredFixtures) {
-    const fullPath = path.join(fixturesDir, file);
-    if (!fs.existsSync(fullPath)) {
-      errors.push(`missing poison fixture: ${fullPath}`);
-      continue;
-    }
-    let fixture;
-    try {
-      fixture = JSON.parse(fs.readFileSync(fullPath, 'utf8'));
-    } catch (error) {
-      errors.push(`${file}: invalid JSON: ${error.message}`);
-      continue;
-    }
-    const sanitized = sanitizeAttributesStrict(fixture);
-    const serialized = JSON.stringify(sanitized);
-    const leaked = serialized.match(/SECRET_[A-Z_]+|api_key=|cat ~\/\.ssh\/id_rsa|this should never leave local machine/g) || [];
-    const observedContent = Object.keys(fixture).some(key => contentLikeKeys.includes(key) || /argument|result|message|prompt|secret|token|url/i.test(key));
-    const ok = leaked.length === 0 && (!observedContent || sanitized['agentops.content_capture.signal'] === true);
-    if (!ok) errors.push(`${file}: strict sanitizer did not drop all poison content`);
-    fixtureResults.push({
-      file,
-      ok,
-      leaked,
-      content_signal: sanitized['agentops.content_capture.signal'] === true
-    });
-  }
-
-  const strictConfigs = ['otelcol.azuremonitor.strict.yaml', 'otelcol.binary.strict.yaml', 'otelcol.local.strict.yaml'];
-  for (const file of strictConfigs) {
-    const fullPath = path.join(collectorRoot, file);
-    if (!fs.existsSync(fullPath)) errors.push(`missing strict collector config: ${fullPath}`);
-    else if (!fs.readFileSync(fullPath, 'utf8').includes('transform/privacy_strict')) warnings.push(`${file}: does not reference transform/privacy_strict`);
-  }
-
-  return {
-    ok: errors.length === 0,
-    processors: requiredProcessors.map(file => path.join(processorsDir, file)),
-    fixtures: fixtureResults,
-    errors,
-    warnings
   };
 }
 
