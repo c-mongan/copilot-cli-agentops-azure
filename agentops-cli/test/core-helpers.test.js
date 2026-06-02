@@ -30,6 +30,10 @@ const {
   redactedEnvSummary,
   sanitizeAttributesStrict
 } = require('../src/lib/privacy');
+const {
+  validatePoisonFixture,
+  validateProcessorFragment
+} = require('../src/lib/collector-artifacts');
 const shell = require('../src/lib/shell');
 
 function withTempDir(fn) {
@@ -226,6 +230,31 @@ test('privacy helpers redact secret-like env values and drop unsafe content attr
     'agentops.content_capture.signal': true
   });
   assert.equal(poisonCheck().ok, true);
+});
+
+test('collector artifact helpers validate processor fragments and poison fixtures', () => {
+  assert.equal(validateProcessorFragment({
+    file: 'strict-allowlist.yaml',
+    body: 'processors:\n  transform/privacy_strict:\n    keep_keys: []\n'
+  }), null);
+  assert.match(validateProcessorFragment({
+    file: 'content-signal.yaml',
+    body: 'processors: {}\n'
+  }), /missing content capture signal/);
+
+  withTempDir((dir) => {
+    const fixture = path.join(dir, 'content-poison.json');
+    fs.writeFileSync(fixture, JSON.stringify({
+      prompt: 'this should never leave local machine',
+      token: 'SECRET_FAKE_TEST_VALUE',
+      'gen_ai.operation.name': 'chat'
+    }));
+
+    const result = validatePoisonFixture({ file: 'content-poison.json', fullPath: fixture });
+    assert.equal(result.ok, true);
+    assert.equal(result.content_signal, true);
+    assert.deepEqual(result.leaked, []);
+  });
 });
 
 test('shell helpers find candidates, check executability, and merge env for local commands', () => {
