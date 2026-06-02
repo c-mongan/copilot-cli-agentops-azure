@@ -70,8 +70,12 @@ The production gate verifies the deployed posture, not only the Bicep files:
 - Managed Grafana system-assigned identity and disabled API keys;
 - Managed Grafana least-privilege group RBAC;
 - Managed Grafana public access disabled;
+- Managed Grafana approved private endpoint connection;
 - Managed Grafana zone redundancy enabled;
-- AgentOps scheduled query alerts enabled and routed to action groups.
+- AgentOps scheduled query alerts enabled and routed to action groups;
+- routed action groups exist, are enabled, and have at least one receiver;
+- Azure Consumption budget configured for the AgentOps resource group;
+- optional content capture table has short retention and restricted workspace access when deployed.
 
 Use the non-production mode for pilots where public Grafana access or disabled alert rules are intentional.
 
@@ -144,6 +148,8 @@ AGENTOPS_GRAFANA_ZONE_REDUNDANCY=Enabled \
 
 Only disable public network access after private connectivity, DNS, and operator access have been tested. For pilots, keeping public access enabled behind Entra/RBAC can be acceptable. For regulated production, document the private access path before enabling content capture.
 
+`validate-azure --production` reads the Managed Grafana resource and expects disabled public access plus an approved private endpoint connection. The check is read-only; it does not create private endpoints or change network access.
+
 ## Alert Routing
 
 AgentOps alert rules are proposal-only and disabled by default.
@@ -166,6 +172,8 @@ References:
 
 - Azure Monitor action groups: https://learn.microsoft.com/azure/azure-monitor/alerts/action-groups
 - Azure Monitor alert best practices: https://learn.microsoft.com/azure/azure-monitor/alerts/best-practices-alerts
+
+`validate-azure --production` checks routed action group IDs with read-only Azure CLI calls. A routed group must exist, be enabled, and include at least one destination such as email, webhook, Azure Function, Logic App, ARM role, Event Hub, or another supported receiver.
 
 ## What-If Before Deploy
 
