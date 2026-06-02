@@ -99,6 +99,7 @@ Everything else is under `agentops experimental ...` or documented as experiment
 - Can I replay the run and drill into traces, tools, privacy signals, evals, or GitHub outcomes?
 
 The V2 control-room spec and dashboard pack live in [docs/grafana-ux-spec.md](docs/grafana-ux-spec.md), [docs/agent-run-data-model.md](docs/agent-run-data-model.md), and `grafana/dashboards/v2/`.
+V2 is the default product experience. The older `grafana/agentops-*.json` dashboards are legacy raw-OTel/debug views and are not imported by default.
 
 To populate a local demo dataset without live Copilot traffic:
 
@@ -232,6 +233,8 @@ To preview the Azure Managed Grafana import command:
 ```bash
 agentops dashboard import --json
 ```
+
+That imports only the V2 `AgentOps for Azure` folder by default. Use `agentops dashboard import --all --json` only when you also want the legacy raw-OTel dashboards for debugging.
 
 ## Safe Defaults
 
