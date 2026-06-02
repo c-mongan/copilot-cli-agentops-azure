@@ -2465,6 +2465,7 @@ test('validateAzure runs read-only Azure checks with mocked az output', () => {
       }
       if (args.includes('log-analytics') && args.includes('workspace') && args.includes('show')) {
         return { status: 0, stdout: JSON.stringify({
+          id: '/subscriptions/sub-123/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev',
           retentionInDays: 30,
           workspaceCapping: { dailyQuotaGb: 2 },
           features: { enableLogAccessUsingOnlyResourcePermissions: true }
@@ -2472,6 +2473,7 @@ test('validateAzure runs read-only Azure checks with mocked az output', () => {
       }
       if (args[0] === 'grafana' && args[1] === 'show') {
         return { status: 0, stdout: JSON.stringify({
+          id: '/subscriptions/sub-123/resourceGroups/rg-agentops-dev/providers/Microsoft.Dashboard/grafana/graf-agentops-dev',
           name: 'graf-agentops-dev',
           identity: { type: 'SystemAssigned' },
           properties: {
@@ -2480,6 +2482,20 @@ test('validateAzure runs read-only Azure checks with mocked az output', () => {
             zoneRedundancy: 'Disabled'
           }
         }), stderr: '' };
+      }
+      if (args[0] === 'role' && args[1] === 'assignment' && args.includes('list')) {
+        return { status: 0, stdout: JSON.stringify([
+          {
+            principalType: 'Group',
+            roleDefinitionId: '/subscriptions/sub-123/providers/Microsoft.Authorization/roleDefinitions/3b03c2da-16b3-4a49-8834-0f8130efdd3b',
+            roleDefinitionName: 'Log Analytics Data Reader'
+          },
+          {
+            principalType: 'Group',
+            roleDefinitionId: '/subscriptions/sub-123/providers/Microsoft.Authorization/roleDefinitions/60921a7e-fef1-4a43-9b16-a26c52ad4769',
+            roleDefinitionName: 'Grafana Viewer'
+          }
+        ]), stderr: '' };
       }
       if (args.includes('data-source') && args.includes('list')) {
         return { status: 0, stdout: JSON.stringify([{ uid: 'azure-monitor-oob', name: 'Azure Monitor' }]), stderr: '' };
@@ -2512,6 +2528,9 @@ test('validateAzure runs read-only Azure checks with mocked az output', () => {
   assert.equal(byName['application-insights'].ok, true);
   assert.equal(byName['grafana-resource'].ok, true);
   assert.equal(byName['grafana-production-posture'].ok, true);
+  assert.equal(byName['log-analytics-rbac-posture'].ok, true);
+  assert.equal(byName['grafana-rbac-posture'].ok, true);
+  assert.equal(byName['access-rbac-posture'].ok, true);
   assert.equal(byName['grafana-datasource'].ok, true);
   assert.equal(byName['grafana-dashboards'].ok, true);
   assert.equal(byName['alert-routing-posture'].ok, true);
@@ -2539,6 +2558,7 @@ test('validateAzure reports missing Grafana dashboards with import guidance', ()
       }
       if (args.includes('log-analytics') && args.includes('workspace') && args.includes('show')) {
         return { status: 0, stdout: JSON.stringify({
+          id: '/subscriptions/sub-123/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev',
           retentionInDays: 30,
           workspaceCapping: { dailyQuotaGb: 2 },
           features: { enableLogAccessUsingOnlyResourcePermissions: true }
@@ -2546,6 +2566,7 @@ test('validateAzure reports missing Grafana dashboards with import guidance', ()
       }
       if (args[0] === 'grafana' && args[1] === 'show') {
         return { status: 0, stdout: JSON.stringify({
+          id: '/subscriptions/sub-123/resourceGroups/rg-agentops-dev/providers/Microsoft.Dashboard/grafana/graf-agentops-dev',
           name: 'graf-agentops-dev',
           identity: { type: 'SystemAssigned' },
           properties: {
@@ -2554,6 +2575,20 @@ test('validateAzure reports missing Grafana dashboards with import guidance', ()
             zoneRedundancy: 'Disabled'
           }
         }), stderr: '' };
+      }
+      if (args[0] === 'role' && args[1] === 'assignment' && args.includes('list')) {
+        return { status: 0, stdout: JSON.stringify([
+          {
+            principalType: 'Group',
+            roleDefinitionId: '/subscriptions/sub-123/providers/Microsoft.Authorization/roleDefinitions/3b03c2da-16b3-4a49-8834-0f8130efdd3b',
+            roleDefinitionName: 'Log Analytics Data Reader'
+          },
+          {
+            principalType: 'Group',
+            roleDefinitionId: '/subscriptions/sub-123/providers/Microsoft.Authorization/roleDefinitions/60921a7e-fef1-4a43-9b16-a26c52ad4769',
+            roleDefinitionName: 'Grafana Viewer'
+          }
+        ]), stderr: '' };
       }
       if (args.includes('data-source') && args.includes('list')) {
         return { status: 0, stdout: JSON.stringify([{ uid: 'azure-monitor-oob' }]), stderr: '' };
@@ -2603,6 +2638,7 @@ test('validateAzure can import missing Grafana dashboards only when explicitly r
       }
       if (args.includes('log-analytics') && args.includes('workspace') && args.includes('show')) {
         return { status: 0, stdout: JSON.stringify({
+          id: '/subscriptions/sub-123/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev',
           retentionInDays: 30,
           workspaceCapping: { dailyQuotaGb: 2 },
           features: { enableLogAccessUsingOnlyResourcePermissions: true }
@@ -2610,6 +2646,7 @@ test('validateAzure can import missing Grafana dashboards only when explicitly r
       }
       if (args[0] === 'grafana' && args[1] === 'show') {
         return { status: 0, stdout: JSON.stringify({
+          id: '/subscriptions/sub-123/resourceGroups/rg-agentops-dev/providers/Microsoft.Dashboard/grafana/graf-agentops-dev',
           name: 'graf-agentops-dev',
           identity: { type: 'SystemAssigned' },
           properties: {
@@ -2618,6 +2655,15 @@ test('validateAzure can import missing Grafana dashboards only when explicitly r
             zoneRedundancy: 'Disabled'
           }
         }), stderr: '' };
+      }
+      if (args[0] === 'role' && args[1] === 'assignment' && args.includes('list')) {
+        return { status: 0, stdout: JSON.stringify([
+          {
+            principalType: 'User',
+            roleDefinitionId: '/subscriptions/sub-123/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c',
+            roleDefinitionName: 'Contributor'
+          }
+        ]), stderr: '' };
       }
       if (args.includes('data-source') && args.includes('list')) {
         return { status: 0, stdout: JSON.stringify([{ uid: 'azure-monitor-oob' }]), stderr: '' };
@@ -2703,8 +2749,97 @@ test('validateAzure production mode enforces Grafana and alert routing posture',
   assert.equal(result.ok, false);
   assert.equal(byName['grafana-production-posture'].ok, false);
   assert.equal(byName['grafana-production-posture'].production, true);
+  assert.equal(byName['access-rbac-posture'].ok, false);
+  assert.match(result.next.join('\n'), /RBAC/);
   assert.equal(byName['alert-routing-posture'].ok, false);
   assert.match(result.next.join('\n'), /action groups/);
+});
+
+test('validateAzure production mode accepts least-privilege group RBAC', () => {
+  const roleIds = {
+    logAnalyticsDataReader: '3b03c2da-16b3-4a49-8834-0f8130efdd3b',
+    grafanaViewer: '60921a7e-fef1-4a43-9b16-a26c52ad4769'
+  };
+  const result = validateAzure({
+    production: true,
+    workspaceId: 'workspace-123',
+    workspaceName: 'law-agentops-dev',
+    resourceGroup: 'rg-agentops-dev',
+    grafanaBaseUrl: 'https://grafana.example',
+    grafanaName: 'graf-agentops-dev',
+    appInsightsName: 'appi-agentops-dev',
+    expectedDashboards: [],
+    last: '1h',
+    spawnSync: (command, args) => {
+      if (args.includes('account') && args.includes('show')) {
+        return { status: 0, stdout: JSON.stringify({ id: 'sub-123', name: 'Demo Sub' }), stderr: '' };
+      }
+      if (args.includes('group') && args.includes('exists')) {
+        return { status: 0, stdout: 'true\n', stderr: '' };
+      }
+      if (args.includes('log-analytics') && args.includes('query')) {
+        return { status: 0, stdout: JSON.stringify([{ Rows: 1 }]), stderr: '' };
+      }
+      if (args.includes('log-analytics') && args.includes('workspace') && args.includes('show')) {
+        return { status: 0, stdout: JSON.stringify({
+          id: '/subscriptions/sub-123/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev',
+          retentionInDays: 30,
+          workspaceCapping: { dailyQuotaGb: 2 },
+          features: { enableLogAccessUsingOnlyResourcePermissions: true }
+        }), stderr: '' };
+      }
+      if (args[0] === 'grafana' && args[1] === 'show') {
+        return { status: 0, stdout: JSON.stringify({
+          id: '/subscriptions/sub-123/resourceGroups/rg-agentops-dev/providers/Microsoft.Dashboard/grafana/graf-agentops-dev',
+          name: 'graf-agentops-dev',
+          identity: { type: 'SystemAssigned' },
+          properties: {
+            apiKey: 'Disabled',
+            publicNetworkAccess: 'Disabled',
+            zoneRedundancy: 'Enabled'
+          }
+        }), stderr: '' };
+      }
+      if (args[0] === 'role' && args[1] === 'assignment' && args.includes('list')) {
+        const scope = args[args.indexOf('--scope') + 1];
+        const roleId = scope.includes('OperationalInsights')
+          ? roleIds.logAnalyticsDataReader
+          : roleIds.grafanaViewer;
+        return { status: 0, stdout: JSON.stringify([
+          {
+            principalType: 'Group',
+            roleDefinitionId: `/subscriptions/sub-123/providers/Microsoft.Authorization/roleDefinitions/${roleId}`,
+            roleDefinitionName: scope.includes('OperationalInsights') ? 'Log Analytics Data Reader' : 'Grafana Viewer'
+          }
+        ]), stderr: '' };
+      }
+      if (args.includes('data-source') && args.includes('list')) {
+        return { status: 0, stdout: JSON.stringify([{ uid: 'azure-monitor-oob' }]), stderr: '' };
+      }
+      if (args.includes('dashboard') && args.includes('list')) {
+        return { status: 0, stdout: JSON.stringify([]), stderr: '' };
+      }
+      if (args.includes('scheduled-query') && args.includes('list')) {
+        return { status: 0, stdout: JSON.stringify([
+          {
+            name: 'sqr-agentops-dev-failures',
+            properties: {
+              displayName: 'Copilot AgentOps failed spans',
+              enabled: true,
+              actions: { actionGroups: ['/subscriptions/sub-123/resourceGroups/rg-agentops-dev/providers/microsoft.insights/actionGroups/ag-agentops'] }
+            }
+          }
+        ]), stderr: '' };
+      }
+      return { status: 0, stdout: JSON.stringify({ name: 'ok' }), stderr: '' };
+    }
+  });
+  const byName = Object.fromEntries(result.checks.map(check => [check.name, check]));
+
+  assert.equal(result.ok, true);
+  assert.equal(byName['log-analytics-rbac-posture'].group_assignments, 1);
+  assert.equal(byName['grafana-rbac-posture'].group_assignments, 1);
+  assert.equal(byName['access-rbac-posture'].ok, true);
 });
 
 test('validateAzure remediation plan proposes safe Azure commands without mutating', () => {
@@ -2776,7 +2911,8 @@ test('validateAzure remediation plan proposes safe Azure commands without mutati
   assert.deepEqual(plan.actions.map(action => action.name), [
     'set-log-analytics-daily-cap',
     'harden-managed-grafana-network-and-availability',
-    'route-agentops-alerts-to-action-groups'
+    'route-agentops-alerts-to-action-groups',
+    'review-agentops-rbac-assignments'
   ]);
   assert.match(plan.actions[0].commands.join('\n'), /az monitor log-analytics workspace update/);
   assert.match(plan.actions[1].commands.join('\n'), /az grafana update/);

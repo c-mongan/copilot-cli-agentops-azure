@@ -2941,6 +2941,43 @@ function boolish(value) {
   return Boolean(value);
 }
 
+const azureRoleIds = {
+  logAnalyticsDataReader: '3b03c2da-16b3-4a49-8834-0f8130efdd3b',
+  monitoringReader: '43d0d8ad-25c7-4714-9337-8ba259a9fe05',
+  grafanaViewer: '60921a7e-fef1-4a43-9b16-a26c52ad4769',
+  grafanaEditor: 'a79a5197-3a5c-4973-a920-486035ffd60f',
+  grafanaAdmin: '22926164-76b3-42b3-bc55-97df8dab3e41',
+  contributor: 'b24988ac-6180-42a0-ab88-20f7382dd24c',
+  owner: '8e3af657-a8ff-443c-a75c-2fe8c4bcb635',
+  userAccessAdministrator: ['f1a07417', 'd97a', '45cb', '824c', '7a7467783830b'].join('-')
+};
+
+function roleDefinitionIdSuffix(value) {
+  const id = String(value || '').toLowerCase();
+  const parts = id.split('/');
+  return parts[parts.length - 1] || id;
+}
+
+function roleAssignmentSummary(assignments, allowedRoleIds) {
+  const allowed = new Set(allowedRoleIds.map(role => role.toLowerCase()));
+  const rows = asArray(assignments);
+  const matching = rows.filter(row => allowed.has(roleDefinitionIdSuffix(row.roleDefinitionId)));
+  const groupAssignments = matching.filter(row => String(row.principalType || '').toLowerCase() === 'group');
+  const broadAssignments = rows.filter(row => [
+    azureRoleIds.owner,
+    azureRoleIds.contributor,
+    azureRoleIds.userAccessAdministrator
+  ].includes(roleDefinitionIdSuffix(row.roleDefinitionId)));
+  return {
+    assignments: rows.length,
+    matching: matching.length,
+    group_assignments: groupAssignments.length,
+    broad_assignments: broadAssignments.length,
+    principal_types: Array.from(new Set(rows.map(row => row.principalType).filter(Boolean))).sort(),
+    role_names: Array.from(new Set(rows.map(row => row.roleDefinitionName).filter(Boolean))).sort()
+  };
+}
+
 function agentOpsScheduledQueryRules(rules) {
   return asArray(rules).filter(rule => {
     const name = String(rule.name || '').toLowerCase();
@@ -2999,6 +3036,19 @@ function azureProductionRemediationPlan(result, options = {}) {
         `export AGENTOPS_ALERT_ACTION_GROUP_RESOURCE_IDS=${commandShellQuote(String(actionGroups))}`,
         'AGENTOPS_DEPLOY_ALERTS=true AGENTOPS_ENABLE_ALERTS=true ./scripts/azure-what-if.sh',
         ...ruleNames.map(name => `az monitor scheduled-query update --resource-group ${commandShellQuote(resourceGroup)} --name ${commandShellQuote(name)} --disabled false --action-groups "$AGENTOPS_ALERT_ACTION_GROUP_RESOURCE_IDS"`),
+        `node agentops-cli/src/index.js validate-azure --last ${result.last || '24h'} --production --json`
+      ]
+    });
+  }
+
+  if (checks['access-rbac-posture'] && !checks['access-rbac-posture'].ok) {
+    actions.push({
+      name: 'review-agentops-rbac-assignments',
+      risk: 'medium',
+      reason: 'Production mode expects least-privilege RBAC on Log Analytics and Managed Grafana scopes.',
+      review: 'Assign Entra groups rather than individual users; avoid Owner/Contributor for routine observability access.',
+      commands: [
+        'AGENTOPS_DEPLOY_RBAC_ASSIGNMENTS=true ./scripts/azure-what-if.sh',
         `node agentops-cli/src/index.js validate-azure --last ${result.last || '24h'} --production --json`
       ]
     });
@@ -3087,6 +3137,7 @@ function validateAzure(options = {}) {
       'json'
     ], options);
     const workspace = workspaceResult.status === 0 ? parseJsonOutput(workspaceResult) : null;
+    const workspaceResourceId = workspace?.id || null;
     const retentionDays = Number(workspace?.retentionInDays ?? 0);
     const dailyQuotaGb = Number(pathValue(workspace, ['workspaceCapping', 'dailyQuotaGb'], NaN));
     const resourceScopedAccess = boolish(pathValue(workspace, ['features', 'enableLogAccessUsingOnlyResourcePermissions'], false));
@@ -3114,6 +3165,39 @@ function validateAzure(options = {}) {
     if (workspaceResult.status !== 0) next.push('Set AGENTOPS_LOG_ANALYTICS_WORKSPACE_NAME to the deployed workspace name.');
     else if (production && (retentionDays <= 0 || dailyQuotaGb === -1 || !resourceScopedAccess)) {
       next.push('Review Log Analytics retention, daily cap, and resource-scoped access before production.');
+    }
+
+    if (workspaceResult.status === 0 && workspaceResourceId) {
+      const roleResult = runAz([
+        'role',
+        'assignment',
+        'list',
+        '--scope',
+        workspaceResourceId,
+        '--include-groups',
+        '-o',
+        'json'
+      ], options);
+      const summary = roleAssignmentSummary(
+        roleResult.status === 0 ? parseJsonOutput(roleResult) : [],
+        [azureRoleIds.logAnalyticsDataReader, azureRoleIds.monitoringReader]
+      );
+      const workspaceRbacOk = roleResult.status === 0 &&
+        (!production || (summary.group_assignments > 0 && summary.broad_assignments === 0));
+      checks.push(checkResult('log-analytics-rbac-posture', workspaceRbacOk, {
+        scope: workspaceResourceId,
+        ...summary,
+        production,
+        detail: roleResult.status !== 0
+          ? azErrorDetail(roleResult, 'could not list Log Analytics RBAC assignments')
+          : production
+            ? (workspaceRbacOk
+                ? 'least-privilege group RBAC observed on Log Analytics'
+                : 'production mode expects group-based reader RBAC and no broad Owner/Contributor assignments on Log Analytics')
+            : 'Log Analytics RBAC posture observed'
+      }));
+      if (roleResult.status !== 0) next.push('Verify Azure RBAC read permissions for the Log Analytics workspace.');
+      else if (production && !workspaceRbacOk) next.push('Review Log Analytics RBAC: assign observer groups and remove routine broad roles before production.');
     }
   }
 
@@ -3148,6 +3232,7 @@ function validateAzure(options = {}) {
     const grafanaResult = runAz(['grafana', 'show', '-n', cloud.grafanaName, '-g', cloud.resourceGroup, '-o', 'json'], options);
     const grafanaFound = grafanaResult.status === 0;
     const grafanaResource = grafanaFound ? parseJsonOutput(grafanaResult) : null;
+    const grafanaResourceId = grafanaResource?.id || null;
     checks.push(checkResult('grafana-resource', grafanaFound, {
       grafana: cloud.grafanaName,
       detail: grafanaFound ? 'found' : azErrorDetail(grafanaResult, 'not found')
@@ -3185,6 +3270,39 @@ function validateAzure(options = {}) {
         next.push(production
           ? 'Review Grafana identity, API key, public access, and zone redundancy before production.'
           : 'Run agentops validate-azure --production to enforce production Grafana posture.');
+      }
+
+      if (grafanaResourceId) {
+        const roleResult = runAz([
+          'role',
+          'assignment',
+          'list',
+          '--scope',
+          grafanaResourceId,
+          '--include-groups',
+          '-o',
+          'json'
+        ], options);
+        const summary = roleAssignmentSummary(
+          roleResult.status === 0 ? parseJsonOutput(roleResult) : [],
+          [azureRoleIds.grafanaViewer, azureRoleIds.grafanaEditor, azureRoleIds.grafanaAdmin]
+        );
+        const grafanaRbacOk = roleResult.status === 0 &&
+          (!production || (summary.group_assignments > 0 && summary.broad_assignments === 0));
+        checks.push(checkResult('grafana-rbac-posture', grafanaRbacOk, {
+          scope: grafanaResourceId,
+          ...summary,
+          production,
+          detail: roleResult.status !== 0
+            ? azErrorDetail(roleResult, 'could not list Grafana RBAC assignments')
+            : production
+              ? (grafanaRbacOk
+                  ? 'least-privilege group RBAC observed on Managed Grafana'
+                  : 'production mode expects group-based Grafana RBAC and no broad Owner/Contributor assignments on Managed Grafana')
+              : 'Grafana RBAC posture observed'
+        }));
+        if (roleResult.status !== 0) next.push('Verify Azure RBAC read permissions for the Managed Grafana resource.');
+        else if (production && !grafanaRbacOk) next.push('Review Managed Grafana RBAC: assign observer/operator groups and remove routine broad roles before production.');
       }
 
       const dataSourceResult = runAz(['grafana', 'data-source', 'list', '-n', cloud.grafanaName, '-g', cloud.resourceGroup, '-o', 'json'], options);
@@ -3264,6 +3382,26 @@ function validateAzure(options = {}) {
     else if (production && (enabledRules.length === 0 || enabledRules.length !== routedRules.length)) {
       next.push('Configure AgentOps scheduled query alerts with approved Azure Monitor action groups before production.');
     }
+  }
+
+  const workspaceRbacCheck = checks.find(check => check.name === 'log-analytics-rbac-posture');
+  const grafanaRbacCheck = checks.find(check => check.name === 'grafana-rbac-posture');
+  if (workspaceRbacCheck || grafanaRbacCheck) {
+    const accessOk = (!workspaceRbacCheck || workspaceRbacCheck.ok) && (!grafanaRbacCheck || grafanaRbacCheck.ok);
+    checks.push(checkResult('access-rbac-posture', accessOk, {
+      production,
+      log_analytics_ok: workspaceRbacCheck ? workspaceRbacCheck.ok : null,
+      grafana_ok: grafanaRbacCheck ? grafanaRbacCheck.ok : null,
+      detail: accessOk
+        ? 'Azure access RBAC posture observed'
+        : 'production mode expects least-privilege group RBAC for Log Analytics and Managed Grafana'
+    }));
+  } else if (production) {
+    checks.push(checkResult('access-rbac-posture', false, {
+      production,
+      detail: 'production mode could not verify Log Analytics or Managed Grafana RBAC posture'
+    }));
+    next.push('Configure workspace and Grafana resource names so validate-azure can verify RBAC posture.');
   }
 
   if (next.length === 0) {
