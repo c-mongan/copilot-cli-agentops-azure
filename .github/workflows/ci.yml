@@ -39,6 +39,9 @@ jobs:
       - name: Check Copilot SDK package publish readiness
         run: npm --prefix packages/agentops-copilot-sdk run publish:check -- --json
 
+      - name: Check release distribution readiness
+        run: node scripts/check-release-distribution.js --json
+
       - name: Enforce coverage gate
         run: npm --prefix agentops-cli run coverage:check
 
