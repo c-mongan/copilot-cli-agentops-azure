@@ -336,7 +336,10 @@ See [E2E validation](docs/e2e-validation.md).
 
 ## Documentation
 
+- [Documentation index](docs/README.md)
+- [LLM map](docs/llm-map.md)
 - [Architecture](docs/architecture.md)
+- [Architecture PNG](docs/images/agentops-architecture-dataflow.png)
 - [Collector modes](docs/collector-modes.md)
 - [Privacy modes](docs/privacy-modes.md)
 - [Secure by default](docs/secure-by-default.md)
