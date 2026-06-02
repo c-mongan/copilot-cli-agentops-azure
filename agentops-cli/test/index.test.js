@@ -1441,6 +1441,7 @@ test('scan finds plugin agents and skills', () => {
   assert.ok(result.agents.length >= 5);
   assert.ok(result.skills.length >= 4);
   assert.ok(result.mcp_servers.includes('azure-mcp'));
+  assert.ok(result.mcp_servers.includes('microsoft-learn'));
   assert.equal(result.hooks.hooks.preToolUse[0].bash, 'node scripts/pre-tool-policy.js');
   assert.equal(result.hooks.hooks.postToolUseFailure[0].bash, 'node scripts/post-tool-failure-hints.js');
 });

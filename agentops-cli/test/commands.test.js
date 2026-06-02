@@ -294,3 +294,21 @@ test('collector render and command dispatch handle status, JSON output, and fail
     restore.reverse().forEach(fn => fn());
   }
 });
+
+test('static-check script validates repo syntax and local docs links', () => {
+  const result = childProcess.spawnSync(process.execPath, [
+    path.join(repoRoot, 'scripts', 'static-check.js'),
+    '--json'
+  ], {
+    cwd: repoRoot,
+    encoding: 'utf8'
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  const summary = JSON.parse(result.stdout);
+  assert.equal(summary.ok, true);
+  assert.equal(summary.failures.length, 0);
+  assert.ok(summary.checked.js > 0);
+  assert.ok(summary.checked.json > 0);
+  assert.ok(summary.checked.markdown > 0);
+});
