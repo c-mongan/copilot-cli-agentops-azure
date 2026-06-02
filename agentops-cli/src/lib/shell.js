@@ -21,9 +21,10 @@ function commandCandidates(command, options = {}) {
     for (const name of names) {
       const candidate = path.join(dir, name);
       const key = platform === 'win32' ? candidate.toLowerCase() : candidate;
+      if (!fs.existsSync(candidate)) continue;
       if (seen.has(key)) continue;
       seen.add(key);
-      if (fs.existsSync(candidate)) candidates.push(candidate);
+      candidates.push(candidate);
     }
   }
 

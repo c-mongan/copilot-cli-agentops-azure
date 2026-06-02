@@ -16,7 +16,7 @@ const {
 } = require('./paths');
 const { commandCandidates, commandExists, isExecutable, run } = require('./shell');
 const { makePoisonAttributes, poisonCheck } = require('./privacy');
-const { validateCollectorArtifacts } = require('./collector-artifacts');
+const { validateCollectorArtifacts, validateOwaspFixtures } = require('./collector-artifacts');
 
 const collectorModes = ['auto', 'docker', 'binary', 'none'];
 const privacyModes = ['strict', 'compat'];
@@ -946,5 +946,6 @@ module.exports = {
   validate,
   validateBinaryConfig,
   validateCollectorArtifacts,
+  validateOwaspFixtures,
   verifyChecksum
 };

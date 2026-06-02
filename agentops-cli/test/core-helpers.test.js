@@ -277,13 +277,15 @@ test('shell helpers find candidates, check executability, and merge env for loca
       pathValue: binA,
       platform: 'win32'
     });
-    assert.ok(windowsCandidates.includes(path.join(binA, 'demo.cmd')));
+    assert.ok(windowsCandidates.some(candidate => (
+      candidate.toLowerCase() === path.join(binA, 'demo.cmd').toLowerCase()
+    )));
 
     const executable = path.join(binA, 'executable');
     fs.writeFileSync(executable, '#!/bin/sh\nexit 0\n');
     fs.chmodSync(executable, 0o755);
     assert.equal(shell.isExecutable(executable), true);
-    assert.equal(shell.isExecutable(path.join(binA, 'demo.CMD')), false);
+    assert.equal(shell.isExecutable(path.join(binA, 'demo.CMD')), process.platform === 'win32');
     assert.equal(shell.isExecutable(path.join(binA, 'missing')), false);
   });
 

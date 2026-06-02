@@ -12,7 +12,8 @@
   "scripts": {
     "test": "node --test",
     "coverage": "node --test --experimental-test-coverage",
-    "coverage:check": "node --test --experimental-test-coverage --test-coverage-lines=80",
+    "coverage:check": "node ../scripts/coverage-check.js",
+    "static:check": "node ../scripts/static-check.js",
     "doctor": "node src/index.js doctor --local-only",
     "scan": "node src/index.js scan"
   },

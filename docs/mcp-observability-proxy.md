@@ -28,6 +28,22 @@ The proxy passes JSON-RPC messages through stdout/stdin and writes observations 
 .agentops/mcp-proxy/AgentOpsMcpCalls_CL.jsonl
 ```
 
+## Microsoft Learn MCP
+
+The repo includes an official Microsoft Learn MCP sample config:
+
+```bash
+copilot --additional-mcp-config @copilot/mcp.microsoft-learn.sample.json --allow-tool='microsoft-learn'
+```
+
+The endpoint is:
+
+```text
+https://learn.microsoft.com/api/mcp
+```
+
+It is a remote HTTP MCP server for Microsoft Learn documentation search/fetch and code sample search. The bundled plugin config also includes it as `microsoft-learn`.
+
 Smoke-test with the bundled demo server:
 
 ```bash

@@ -111,6 +111,7 @@ Fast checks:
 ```bash
 npm --prefix agentops-cli test
 npm --prefix agentops-cli run coverage:check
+npm --prefix agentops-cli run static:check
 node agentops-cli/src/index.js schema validate
 ```
 

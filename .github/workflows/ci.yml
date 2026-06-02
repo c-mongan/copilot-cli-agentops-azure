@@ -30,6 +30,12 @@ jobs:
       - name: Run CLI tests
         run: npm --prefix agentops-cli test
 
+      - name: Run static analysis
+        run: npm --prefix agentops-cli run static:check
+
+      - name: Enforce coverage gate
+        run: npm --prefix agentops-cli run coverage:check
+
       - name: Validate JavaScript syntax
         run: |
           node --check agentops-cli/src/index.js

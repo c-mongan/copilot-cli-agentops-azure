@@ -20,6 +20,7 @@ const { productCommand } = require('./commands/product');
 const { recommendCommand } = require('./commands/recommend');
 const { runSummaryCommand } = require('./commands/run-summary');
 const { schemaCommand } = require('./commands/schema');
+const { securityCommand } = require('./commands/security');
 const { statusCommand } = require('./commands/status');
 const { triageCommand } = require('./commands/triage');
 
@@ -53,6 +54,7 @@ const coreCommands = [
   'plugin',
   'run-summary',
   'schema',
+  'security',
   'smoke',
   'triage',
   'e2e'
@@ -107,6 +109,7 @@ Core commands:
   copilot [copilot-args...]
   copilot-session enrich <session-id> [--file <events.jsonl>] [--dry-run] [--json]
   schema validate|print [--file <json>]
+  security audit [--json] [--fail-on-warning]
   dashboard validate|links-check|filters-check|ux-check|kql-check|verify|import [--last <duration>] [--live] [--yes] [--all] [--folder <name>] [--resource-group <rg>] [--grafana-name <name>]
   demo generate|verify [--runs <n>] [--out <dir>] [--with-content] [--json]
   github-enrich [--limit <n>] [--runs <AgentOpsRunSummary_CL.jsonl>] [--out <dir>] [--json]
@@ -163,6 +166,7 @@ async function main(argv) {
   if (command === 'ask-context') return askContextCommand(args);
   if (command === 'content') return contentCommand(args);
   if (command === 'schema') return schemaCommand(args);
+  if (command === 'security') return securityCommand(args);
   if (command === 'dashboard') return dashboardCommand(args);
   if (command === 'demo') return demoCommand(args);
   if (command === 'e2e') return e2eCommand(args);
@@ -222,6 +226,7 @@ module.exports = {
   recommendCommand,
   runSummaryCommand,
   schemaCommand,
+  securityCommand,
   statusCommand,
   usage
 };

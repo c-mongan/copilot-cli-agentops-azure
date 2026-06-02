@@ -267,7 +267,7 @@ node agentops-cli/src/index.js alert recommend --last 14d
 Validate the MCP sample JSON before using it:
 
 ```bash
-node -e "JSON.parse(require('fs').readFileSync('plugin/.mcp.json', 'utf8')); JSON.parse(require('fs').readFileSync('copilot/mcp.azure-monitor.sample.json', 'utf8')); JSON.parse(require('fs').readFileSync('copilot/mcp.grafana.sample.json', 'utf8'))"
+node -e "JSON.parse(require('fs').readFileSync('plugin/.mcp.json', 'utf8')); JSON.parse(require('fs').readFileSync('copilot/mcp.azure-monitor.sample.json', 'utf8')); JSON.parse(require('fs').readFileSync('copilot/mcp.grafana.sample.json', 'utf8')); JSON.parse(require('fs').readFileSync('copilot/mcp.microsoft-learn.sample.json', 'utf8'))"
 ```
 
 Use Azure MCP in read-only Azure Monitor scope:
@@ -275,6 +275,12 @@ Use Azure MCP in read-only Azure Monitor scope:
 ```bash
 az login
 copilot --additional-mcp-config @copilot/mcp.azure-monitor.sample.json --allow-tool='azure-mcp'
+```
+
+Use Microsoft Learn MCP for official Microsoft documentation lookup:
+
+```bash
+copilot --additional-mcp-config @copilot/mcp.microsoft-learn.sample.json --allow-tool='microsoft-learn'
 ```
 
 Use Codex with the same read-only Azure Monitor MCP server:
