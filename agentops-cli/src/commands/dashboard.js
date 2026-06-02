@@ -3,6 +3,7 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 const { hasFlag, optionValue } = require('../lib/args');
+const { validateDashboardContentGuardrails } = require('../lib/dashboard-content-guardrails');
 const legacy = require('../legacy');
 
 const repoRoot = path.resolve(__dirname, '..', '..', '..');
@@ -488,7 +489,8 @@ function dashboardVerify(args = [], options = {}) {
     validate: validateDashboards(),
     links: validateDashboardLinks(),
     filters: validateDashboardFilters(),
-    ux: validateDashboardUx()
+    ux: validateDashboardUx(),
+    content: validateDashboardContentGuardrails()
   };
   if (includeLive) checks.kql = dashboardKqlCheck(args, options);
 
@@ -594,11 +596,13 @@ function runDashboardImport(args = [], options = {}) {
 
 function dashboardCommand(args = []) {
   const [subcommand = 'validate'] = args;
-  if (!['validate', 'links-check', 'filters-check', 'ux-check', 'kql-check', 'verify', 'import'].includes(subcommand)) throw new Error('dashboard supports: validate|links-check|filters-check|ux-check|kql-check|verify|import');
+  if (!['validate', 'links-check', 'filters-check', 'ux-check', 'content-check', 'kql-check', 'verify', 'import'].includes(subcommand)) throw new Error('dashboard supports: validate|links-check|filters-check|ux-check|content-check|kql-check|verify|import');
   const result = subcommand === 'links-check'
     ? validateDashboardLinks()
     : subcommand === 'filters-check'
       ? validateDashboardFilters()
+    : subcommand === 'content-check'
+      ? validateDashboardContentGuardrails()
     : subcommand === 'ux-check'
       ? validateDashboardUx()
     : subcommand === 'verify'
@@ -619,6 +623,7 @@ module.exports = {
   dashboardVerify,
   runDashboardImport,
   substituteGrafanaMacros,
+  validateDashboardContentGuardrails,
   validateDashboardLinks,
   validateDashboardFilters,
   validateDashboardUx,

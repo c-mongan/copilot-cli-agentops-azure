@@ -42,6 +42,7 @@ printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"r
 node agentops-cli/src/index.js dashboard validate
 node agentops-cli/src/index.js dashboard links-check
 node agentops-cli/src/index.js dashboard ux-check
+node agentops-cli/src/index.js dashboard content-check
 node agentops-cli/src/index.js dashboard verify
 node agentops-cli/src/index.js dashboard kql-check --last 24h
 node agentops-cli/src/index.js dashboard import --json
