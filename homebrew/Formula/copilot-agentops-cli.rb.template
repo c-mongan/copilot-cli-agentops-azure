@@ -1,0 +1,20 @@
+class CopilotAgentopsCli < Formula
+  desc "Privacy-first Copilot AgentOps observability for Azure and Grafana"
+  homepage "https://github.com/c-mongan/copilot-cli-agentops-azure"
+  url "{{URL}}"
+  sha256 "{{SHA256}}"
+  license "MIT"
+
+  depends_on "node@20"
+
+  def install
+    libexec.install Dir["*"]
+    bin.install_symlink libexec/"src/index.js" => "agentops"
+  end
+
+  test do
+    assert_match "Core commands:", shell_output("#{bin}/agentops --help")
+    assert_match "Doctor passed", shell_output("#{bin}/agentops doctor --local-only")
+    assert_match '"ok": true', shell_output("#{bin}/agentops dashboard verify")
+  end
+end

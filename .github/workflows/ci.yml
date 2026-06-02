@@ -45,6 +45,9 @@ jobs:
       - name: Check packed CLI install smoke
         run: node scripts/check-install-smoke.js --json
 
+      - name: Check Homebrew formula readiness
+        run: node scripts/check-homebrew-formula.js --json
+
       - name: Enforce coverage gate
         run: npm --prefix agentops-cli run coverage:check
 

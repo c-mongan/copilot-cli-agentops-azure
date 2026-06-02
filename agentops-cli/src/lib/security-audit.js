@@ -340,6 +340,7 @@ function ciGateCheck(options = {}) {
     'npm --prefix packages/agentops-copilot-sdk run publish:check',
     'node scripts/check-release-distribution.js --json',
     'node scripts/check-install-smoke.js --json',
+    'node scripts/check-homebrew-formula.js --json',
     'node agentops-cli/src/index.js security audit --json',
     'node agentops-cli/src/index.js security posture --json',
     'collector smoke --privacy strict --poison --json'
