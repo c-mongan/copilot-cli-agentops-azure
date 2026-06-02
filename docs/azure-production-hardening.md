@@ -126,7 +126,7 @@ team daily cap: 2 GB
 enterprise daily cap: 5 GB
 ```
 
-Optional content capture must use a separate restricted workspace or table, short retention, and approved viewers.
+Optional content capture must use a separate restricted workspace or table, short retention, approved viewers, and explicit RBAC or equivalent access-control review before ingestion.
 
 ## Private Access
 

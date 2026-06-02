@@ -27,6 +27,8 @@ The evaluator is deterministic and metadata-only. It scores:
 - reliability;
 - code outcome.
 
+Deterministic evals are not a substitute for code review, security review, compliance review, or production approval. They are evidence aids that point operators at runs worth investigating.
+
 It emits insight rows for patterns such as edited files without tests, failed tools, context pressure, policy denies, privacy drops, CI failures, and high estimated cost. It also emits recurring-pattern rows when multiple runs share the same metadata-only shape, such as repeated failures by task/model/outcome, repeated edits without tests by repo/task/agent, repeated policy denies by repo/task/privacy mode, or repeated high-cost model/task runs.
 
 List the recurring patterns directly from the generated insight rows:

@@ -49,12 +49,12 @@ COPILOT_OTEL_CAPTURE_CONTENT=false
 | OWASP risk area | Current coverage | Gap to close |
 | --- | --- | --- |
 | Prompt injection | Captures metadata and policy signals without exporting raw prompt text. | Add explicit red-team fixtures for injected tool instructions and MCP prompt-injection attempts. |
-| Sensitive information disclosure | Strict collector allowlist, content-signal drops, poison smoke, and dashboard content guardrails. | Add documented retention/RBAC requirements for optional content capture workspaces. |
+| Sensitive information disclosure | Strict collector allowlist, content-signal drops, poison smoke, dashboard content guardrails, and documented retention/RBAC requirements for optional content capture workspaces. | Keep content-capture operational guardrails in `agentops security audit`. |
 | Supply chain | No direct npm deps, committed npm lockfiles, dependency audit command, and collector binary checksum tests exist. | Pin SDK peer dependency expectations before publishing a stable SDK package. |
 | Excessive agency | Tool allow/deny counts, broad-permission flags, MCP risk dashboards. | Add policy tests for dangerous combinations such as broad tools plus content capture. |
 | Insecure output handling | Product does not execute model output directly. | Keep this explicit in docs and tests for SDK/MCP adapter examples. |
 | Vector/embedding weakness | Not currently a vector-store product. | No action unless vector/eval memory features are added. |
-| Misinformation / overreliance | Deterministic evals and code outcome checks exist. | Add docs that dashboards are evidence aids, not security/compliance guarantees. |
+| Misinformation / overreliance | Deterministic evals, code outcome checks, and explicit docs that dashboards are evidence aids, not security/compliance guarantees. | Keep evidence-disclaimer checks in `agentops security audit`. |
 | Model denial of service | Token/cost/latency dashboards exist. | Add budget guardrails and alert recommendations for runaway token/tool loops. |
 | Unbounded consumption | Cost, token, and p95 panels exist. | Add CI tests for cost anomaly query shape and budget threshold configuration. |
 | Agent/tool misuse | MCP risk classifier and dashboard filters exist. | Add an MCP abuse fixture covering network, shell, destructive, and secret-access tool classes. |
@@ -84,7 +84,7 @@ npm --prefix packages/agentops-copilot-sdk audit --omit=dev
 
 ### P1: Content capture needs stricter operational guardrails
 
-Status: partially covered, with dashboard exposure now guarded.
+Status: fixed.
 
 Content capture is off by default and requires explicit opt-in. The V2 dashboard pack now has an automated guardrail:
 
@@ -98,12 +98,13 @@ The guardrail permits `AgentOpsContent_CL` only in:
 - `Transcript availability`, which shows status and counts;
 - `Prompt and response viewer (explicit opt-in)`, which is the only panel allowed to project prompt/response text.
 
-Remaining production policy work:
+The production policy evidence is enforced by `agentops security audit`:
 
 - separate restricted workspace or table;
 - short retention;
 - explicit RBAC guidance;
-- tests proving strict mode never writes content rows.
+- tests proving strict mode never writes content rows;
+- explicit `--allow-content` ingestion review.
 
 ### P2: Add OWASP-specific abuse fixtures
 
@@ -153,15 +154,16 @@ OWASP LLM05 Improper Output Handling          covered
 OWASP LLM06 Excessive Agency                  covered
 OWASP LLM07 System Prompt Leakage             covered
 OWASP LLM08 Vector And Embedding Weaknesses   not-applicable
-OWASP LLM09 Misinformation                    partial
+OWASP LLM09 Misinformation                    covered
 OWASP LLM10 Unbounded Consumption             covered
 ASVS-SEC General AppSec Controls              covered
 ```
 
-The partial controls are not blockers for this product shape:
+The remaining partial control is not a blocker for this product shape:
 
 - `LLM04`: AgentOps is not a model training or vector memory pipeline; the current evidence is configuration/instruction hash regression detection.
-- `LLM09`: dashboards are evidence aids, not correctness or compliance guarantees; deterministic evals and code outcomes reduce overreliance but cannot eliminate it.
+
+`LLM09` is covered for current scope because dashboards and deterministic evals are documented as evidence aids, not correctness, compliance, or security guarantees.
 
 ### P2: Azure/Grafana production posture checklist
 
@@ -181,9 +183,9 @@ Added `docs/azure-production-hardening.md` and `validate-enterprise` checks for:
 
 ## Recommended Next PRs
 
-1. `content-retention-rbac`: document short retention and restricted access for optional content-capture workspaces.
-2. `sdk-publish-hardening`: pin SDK peer dependency expectations and add package-publish dry-run checks.
-3. `live-azure-posture-query`: add read-only live checks for deployed Grafana public access, zone redundancy, action groups, retention, and daily cap.
+1. `sdk-publish-hardening`: pin SDK peer dependency expectations and add package-publish dry-run checks.
+2. `content-retention-rbac-live`: add live checks for optional content-capture workspace retention/RBAC if content capture is deployed.
+3. `live-azure-posture-query`: keep expanding read-only live checks for deployed Grafana public access, zone redundancy, action groups, retention, and daily cap.
 
 ## Verification From Initial Audit
 
