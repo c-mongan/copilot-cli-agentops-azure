@@ -550,7 +550,7 @@
               "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
             ],
             "resultFormat": "table",
-            "query": "union isfuzzy=true (AgentOpsCollectorHealth_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo())), (AppDependencies | where TimeGenerated between ($__timeFrom() .. $__timeTo()) | where tostring(Properties) has_any ('github.copilot', 'gen_ai.operation.name', 'agentops.', 'codex') or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') | summarize LastSpanReceived=max(TimeGenerated), SpanRows=count(), ExportErrors=countif(Success == false or tostring(Success) =~ 'false') | extend TimeGenerated=now(), Component='appinsights-compat', CheckName='live-ingestion', Status=iff(SpanRows > 0, 'healthy', 'empty'), Detail=strcat('Existing Application Insights telemetry rows: ', tostring(SpanRows)), PrivacyMode='strict', CollectorMode='compat', OtlpEndpoint='application-insights', AzureConfigured=true, GrafanaConfigured=true, DashboardVersion='v2', SchemaVersion='2', DroppedContentCount=0, LastExportSuccess=LastSpanReceived | project TimeGenerated, Component, CheckName, Status, Detail, PrivacyMode, CollectorMode, OtlpEndpoint, AzureConfigured, GrafanaConfigured, DashboardVersion, SchemaVersion, LastSpanReceived, LastExportSuccess, ExportErrors, DroppedContentCount) | project TimeGenerated, CheckName, Status, Detail, PrivacyMode, CollectorMode, OtlpEndpoint, AzureConfigured, GrafanaConfigured, DashboardVersion, SchemaVersion | where ('$privacy_mode' == '__all' or tostring(column_ifexists('PrivacyMode', '')) == '$privacy_mode') | order by TimeGenerated desc | take 500"
+            "query": "union isfuzzy=true (AgentOpsCollectorHealth_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo())), (AppDependencies | where TimeGenerated between ($__timeFrom() .. $__timeTo()) | where tostring(Properties) has_any ('github.copilot', 'gen_ai.operation.name', 'agentops.', 'codex') or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') | summarize LastSpanReceived=max(TimeGenerated), SpanRows=count(), ExportErrors=countif(Success == false or tostring(Success) =~ 'false') | extend TimeGenerated=now(), Component='appinsights-compat', CheckName='live-ingestion', Status=iff(SpanRows > 0, 'healthy', 'empty'), Detail=strcat('Existing Application Insights telemetry rows: ', tostring(SpanRows)), PrivacyMode='strict', CollectorMode='compat', OtlpEndpoint='application-insights', AzureConfigured=true, GrafanaConfigured=true, DashboardVersion='v2', SchemaVersion='2', DroppedContentCount=0, LastExportSuccess=LastSpanReceived | project TimeGenerated, Component, CheckName, Status, Detail, PrivacyMode, CollectorMode, OtlpEndpoint, AzureConfigured, GrafanaConfigured, DashboardVersion, SchemaVersion, LastSpanReceived, LastExportSuccess, ExportErrors, DroppedContentCount) | where ('$privacy_mode' == '__all' or tostring(column_ifexists('PrivacyMode', '')) == '$privacy_mode') | project TimeGenerated, CheckName, Status, Detail, PrivacyMode, CollectorMode, OtlpEndpoint, AzureConfigured, GrafanaConfigured, DashboardVersion, SchemaVersion | order by TimeGenerated desc | take 500"
           }
         }
       ]
@@ -1122,8 +1122,8 @@
         "query": "__all,cli,sdk,vscode_mcp,github_action,cloud_agent,custom",
         "current": {
           "selected": true,
-          "text": "All",
-          "value": "__all"
+          "text": "__all,cli,sdk,vscode_mcp,github_action,cloud_agent,custom",
+          "value": "__all,cli,sdk,vscode_mcp,github_action,cloud_agent,custom"
         }
       },
       {
@@ -1210,8 +1210,8 @@
         "query": "__all,explain,review,test,fix,refactor,docs,debug_ci,unknown",
         "current": {
           "selected": true,
-          "text": "All",
-          "value": "__all"
+          "text": "__all,explain,review,test,fix,refactor,docs,debug_ci,unknown",
+          "value": "__all,explain,review,test,fix,refactor,docs,debug_ci,unknown"
         }
       },
       {
@@ -1232,8 +1232,8 @@
         "query": "__all,read-only,write-file,shell,network,secret-access,browser-control,destructive,privileged",
         "current": {
           "selected": true,
-          "text": "All",
-          "value": "__all"
+          "text": "__all,read-only,write-file,shell,network,secret-access,browser-control,destructive,privileged",
+          "value": "__all,read-only,write-file,shell,network,secret-access,browser-control,destructive,privileged"
         }
       },
       {
@@ -1254,19 +1254,19 @@
         "query": "__all,strict,compat,unsafe",
         "current": {
           "selected": true,
-          "text": "All",
-          "value": "__all"
+          "text": "__all,strict,compat,unsafe",
+          "value": "__all,strict,compat,unsafe"
         }
       },
       {
         "name": "outcome_status",
         "type": "custom",
         "label": "outcome status",
-        "query": "__all,success,failed,cancelled,blocked,unknown,not_run,passed,failed_ci",
+        "query": "__all,success,failed,cancelled,blocked,unknown",
         "current": {
           "selected": true,
-          "text": "All",
-          "value": "__all"
+          "text": "__all,success,failed,cancelled,blocked,unknown",
+          "value": "__all,success,failed,cancelled,blocked,unknown"
         }
       },
       {
@@ -1276,8 +1276,8 @@
         "query": "__all,ok,review,poor",
         "current": {
           "selected": true,
-          "text": "All",
-          "value": "__all"
+          "text": "__all,ok,review,poor",
+          "value": "__all,ok,review,poor"
         }
       }
     ]
