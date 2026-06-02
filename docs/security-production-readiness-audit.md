@@ -126,9 +126,10 @@ Command:
 
 ```bash
 agentops security audit --json
+agentops security posture --json
 ```
 
-It should wrap:
+`security audit` wraps:
 
 - static check;
 - gitleaks when installed;
@@ -138,6 +139,29 @@ It should wrap:
 - strict poison sanitizer checks;
 - OWASP abuse fixture validation.
 - V2 dashboard content guardrail validation.
+
+`security posture` maps the current repo evidence to OWASP LLM Top 10 2025 and ASVS-aligned controls. It is intentionally static and evidence-based: controls are reported as `covered`, `partial`, `gap`, or `not-applicable`, and missing evidence makes the command fail.
+
+Current posture summary:
+
+```text
+OWASP LLM01 Prompt Injection                  covered
+OWASP LLM02 Sensitive Information Disclosure  covered
+OWASP LLM03 Supply Chain                      covered
+OWASP LLM04 Data And Model Poisoning          partial
+OWASP LLM05 Improper Output Handling          covered
+OWASP LLM06 Excessive Agency                  covered
+OWASP LLM07 System Prompt Leakage             covered
+OWASP LLM08 Vector And Embedding Weaknesses   not-applicable
+OWASP LLM09 Misinformation                    partial
+OWASP LLM10 Unbounded Consumption             covered
+ASVS-SEC General AppSec Controls              covered
+```
+
+The partial controls are not blockers for this product shape:
+
+- `LLM04`: AgentOps is not a model training or vector memory pipeline; the current evidence is configuration/instruction hash regression detection.
+- `LLM09`: dashboards are evidence aids, not correctness or compliance guarantees; deterministic evals and code outcomes reduce overreliance but cannot eliminate it.
 
 ### P2: Azure/Grafana production posture checklist
 

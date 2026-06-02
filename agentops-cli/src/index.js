@@ -109,7 +109,7 @@ Core commands:
   copilot [copilot-args...]
   copilot-session enrich <session-id> [--file <events.jsonl>] [--dry-run] [--json]
   schema validate|print [--file <json>]
-  security audit [--json] [--fail-on-warning]
+  security audit|posture [--json] [--fail-on-warning]
   dashboard validate|links-check|filters-check|ux-check|content-check|kql-check|verify|import [--last <duration>] [--live] [--yes] [--all] [--folder <name>] [--resource-group <rg>] [--grafana-name <name>]
   demo generate|verify [--runs <n>] [--out <dir>] [--with-content] [--json]
   github-enrich [--limit <n>] [--runs <AgentOpsRunSummary_CL.jsonl>] [--out <dir>] [--json]

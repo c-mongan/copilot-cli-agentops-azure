@@ -51,7 +51,7 @@ const { createMcpHttpProxyObserver } = require('../src/lib/mcp/proxy-http');
 const { createMcpProxyObserver } = require('../src/lib/mcp/proxy-stdio');
 const { classifyMcpToolRisk } = require('../src/lib/mcp/risk-classifier');
 const { rollupSpanRows } = require('../src/lib/rollup/span-to-agentops-tables');
-const { securityAudit } = require('../src/lib/security-audit');
+const { securityAudit, securityPosture } = require('../src/lib/security-audit');
 
 const {
   agentopsAttributionSmoke,
@@ -299,6 +299,20 @@ test('security audit combines static, privacy, OWASP, and CI gates', () => {
   assert.equal(byName['ci-security-gates'].ok, true);
   assert.equal(byName['dependency-audit'].ok, true);
   assert.equal(byName['dashboard-content-guardrails'].ok, true);
+});
+
+test('security posture maps OWASP LLM and ASVS controls to repo evidence', () => {
+  const posture = securityPosture();
+  const byId = Object.fromEntries(posture.controls.map(control => [control.id, control]));
+
+  assert.equal(posture.ok, true);
+  assert.equal(posture.summary.gaps, 0);
+  assert.equal(byId.LLM01.status, 'covered');
+  assert.equal(byId.LLM02.status, 'covered');
+  assert.equal(byId.LLM04.status, 'partial');
+  assert.equal(byId.LLM08.status, 'not-applicable');
+  assert.equal(byId['ASVS-SEC'].status, 'covered');
+  assert.deepEqual(posture.controls.flatMap(control => control.missing), []);
 });
 
 test('strict collector allowlist preserves V2 hierarchy metadata', () => {
