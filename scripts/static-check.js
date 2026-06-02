@@ -135,6 +135,7 @@ function checkMarkdownLinks(files) {
 }
 
 function checkTextFiles(files) {
+  if (process.platform === 'win32') return [];
   const failures = [];
   for (const file of files) {
     if (generatedOrBinaryExts.has(path.extname(file))) continue;

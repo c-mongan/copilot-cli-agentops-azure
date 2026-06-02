@@ -285,7 +285,7 @@ test('shell helpers find candidates, check executability, and merge env for loca
     fs.writeFileSync(executable, '#!/bin/sh\nexit 0\n');
     fs.chmodSync(executable, 0o755);
     assert.equal(shell.isExecutable(executable), true);
-    assert.equal(shell.isExecutable(path.join(binA, 'demo.CMD')), false);
+    assert.equal(shell.isExecutable(path.join(binA, 'demo.CMD')), process.platform === 'win32');
     assert.equal(shell.isExecutable(path.join(binA, 'missing')), false);
   });
 
