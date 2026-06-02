@@ -2,6 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const { validateCollectorArtifacts, validateOwaspFixtures } = require('./collector-artifacts');
+const { validateDashboardContentGuardrails } = require('./dashboard-content-guardrails');
 const { poisonCheck } = require('./privacy');
 const { repoRoot } = require('./paths');
 const { commandExists, run } = require('./shell');
@@ -159,6 +160,19 @@ function owaspFixtureCheck(options = {}) {
   );
 }
 
+function dashboardContentGuardrailCheck(options = {}) {
+  const result = validateDashboardContentGuardrails({ root: options.root || repoRoot });
+  return finding(
+    'dashboard-content-guardrails',
+    result.ok,
+    result.ok
+      ? 'V2 dashboards keep optional prompt/response rows isolated to explicit opt-in panels'
+      : result.errors.join('; '),
+    'error',
+    result.allowed_content_panels
+  );
+}
+
 function securityAudit(options = {}) {
   const runGitleaksCheck = options.runGitleaks || runGitleaks;
   const runStatic = options.runStaticCheck || runStaticCheck;
@@ -169,7 +183,8 @@ function securityAudit(options = {}) {
     ciGateCheck(options),
     collectorPrivacyCheck(options),
     poisonRuntimeCheck(options),
-    owaspFixtureCheck(options)
+    owaspFixtureCheck(options),
+    dashboardContentGuardrailCheck(options)
   ];
   const blocking = checks.filter(check => !check.ok && check.severity === 'error');
   const warnings = checks.filter(check => check.severity === 'warning');
@@ -194,6 +209,7 @@ module.exports = {
   ciGateCheck,
   collectorPrivacyCheck,
   dependencyAudit,
+  dashboardContentGuardrailCheck,
   owaspFixtureCheck,
   poisonRuntimeCheck,
   runGitleaks,

@@ -59,7 +59,7 @@ agentops copilot [...args]
 agentops schema validate|print
 agentops ask-context
 agentops content status|opt-in
-agentops dashboard validate|links-check|ux-check|kql-check|verify|import
+agentops dashboard validate|links-check|ux-check|content-check|kql-check|verify|import
 agentops demo generate
 agentops demo verify
 agentops explain

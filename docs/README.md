@@ -81,7 +81,7 @@ Stable product surface:
 - `agentops collector ...`
 - `agentops copilot ...`
 - `agentops latest`, `replay`, `open`
-- `agentops dashboard validate|links-check|ux-check|verify|import`
+- `agentops dashboard validate|links-check|ux-check|content-check|verify|import`
 - V2 dashboards in `grafana/dashboards/v2/`
 - strict privacy mode and local collector boundary
 

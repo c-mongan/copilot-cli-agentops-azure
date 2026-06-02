@@ -22,7 +22,7 @@ const { buildAskContext, hasV2AskArgs } = require('../src/commands/ask-context')
 const { buildContentStatus, renderOptInGuide } = require('../src/commands/content');
 const { removeAgentOpsCopilotFlags } = require('../src/commands/copilot');
 const { buildCopilotSessionEnrichment } = require('../src/commands/copilot-session');
-const { dashboardImportPlan, dashboardKqlCheck, dashboardVerify, runDashboardImport, validateDashboardFilters, validateDashboardLinks, validateDashboardUx, validateDashboards } = require('../src/commands/dashboard');
+const { dashboardImportPlan, dashboardKqlCheck, dashboardVerify, runDashboardImport, validateDashboardContentGuardrails, validateDashboardFilters, validateDashboardLinks, validateDashboardUx, validateDashboards } = require('../src/commands/dashboard');
 const { browserProfileOptionsFromArgs, checkReportHtml, e2eAuthProfile, grafanaAuthRemediation, grafanaScreenshotTargets, grafanaVisualOk, renderAuthProfile, renderReportHtml, safeE2eEnv } = require('../src/commands/e2e');
 const { hasV2Args } = require('../src/commands/explain');
 const { openV2FromFiles, renderOpenV2 } = require('../src/commands/open');
@@ -298,6 +298,7 @@ test('security audit combines static, privacy, OWASP, and CI gates', () => {
   assert.equal(byName['owasp-abuse-fixtures'].ok, true);
   assert.equal(byName['ci-security-gates'].ok, true);
   assert.equal(byName['dependency-audit'].ok, true);
+  assert.equal(byName['dashboard-content-guardrails'].ok, true);
 });
 
 test('strict collector allowlist preserves V2 hierarchy metadata', () => {
@@ -2567,6 +2568,35 @@ test('V2 dashboard ux-check protects the Datadog-style operator flow', () => {
   assert.equal(result.contracts.pattern_drilldowns, true);
   assert.equal(result.contracts.recommendation_artifacts, true);
   assert.equal(result.contracts.ask_agentops_context, true);
+});
+
+test('V2 dashboard content guardrails isolate prompt response text to the opt-in viewer', () => {
+  const result = validateDashboardContentGuardrails();
+  const contentPanels = new Set(result.allowed_content_panels.map(item => item.panel));
+
+  assert.equal(result.ok, true, result.errors.join('\n'));
+  assert.equal(result.dashboards, 10);
+  assert.equal(contentPanels.has('Transcript availability'), true);
+  assert.equal(contentPanels.has('Prompt and response viewer (explicit opt-in)'), true);
+
+  const unsafe = validateDashboardContentGuardrails({
+    dashboards: [{
+      file: 'unsafe-dashboard.json',
+      body: {
+        uid: 'unsafe',
+        panels: [{
+          id: 1,
+          title: 'Runs',
+          targets: [{
+            query: "AppDependencies | extend Prompt=tostring(Properties['gen_ai.input.messages']) | project Prompt"
+          }]
+        }]
+      }
+    }]
+  });
+
+  assert.equal(unsafe.ok, false);
+  assert.match(unsafe.errors.join('\n'), /projects prompt\/response text/);
 });
 
 test('product audit proves the local AgentOps control-room contract', () => {

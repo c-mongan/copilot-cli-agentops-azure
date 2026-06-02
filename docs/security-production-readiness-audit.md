@@ -42,13 +42,14 @@ COPILOT_OTEL_CAPTURE_CONTENT=false
 - `gitleaks detect --no-git --redact` found no secrets in the working tree.
 - Runtime npm packages currently have no direct dependencies and have committed npm lockfiles.
 - The product tracks broad Copilot permission modes such as `--allow-all`, `--allow-all-tools`, `--allow-all-paths`, and `--allow-all-urls`.
+- V2 dashboards now have a content guardrail check that blocks prompt/response text outside the explicit opt-in viewer.
 
 ## OWASP LLM Risk Mapping
 
 | OWASP risk area | Current coverage | Gap to close |
 | --- | --- | --- |
 | Prompt injection | Captures metadata and policy signals without exporting raw prompt text. | Add explicit red-team fixtures for injected tool instructions and MCP prompt-injection attempts. |
-| Sensitive information disclosure | Strict collector allowlist, content-signal drops, poison smoke. | Add CI secret scanning and documented retention/RBAC requirements for optional content capture. |
+| Sensitive information disclosure | Strict collector allowlist, content-signal drops, poison smoke, and dashboard content guardrails. | Add documented retention/RBAC requirements for optional content capture workspaces. |
 | Supply chain | No direct npm deps, committed npm lockfiles, dependency audit command, and collector binary checksum tests exist. | Pin SDK peer dependency expectations before publishing a stable SDK package. |
 | Excessive agency | Tool allow/deny counts, broad-permission flags, MCP risk dashboards. | Add policy tests for dangerous combinations such as broad tools plus content capture. |
 | Insecure output handling | Product does not execute model output directly. | Keep this explicit in docs and tests for SDK/MCP adapter examples. |
@@ -83,14 +84,25 @@ npm --prefix packages/agentops-copilot-sdk audit --omit=dev
 
 ### P1: Content capture needs stricter operational guardrails
 
-Status: partially covered.
+Status: partially covered, with dashboard exposure now guarded.
 
-Content capture is off by default and requires explicit opt-in. For production readiness, optional prompt/response viewing should also require:
+Content capture is off by default and requires explicit opt-in. The V2 dashboard pack now has an automated guardrail:
+
+```bash
+agentops dashboard content-check
+agentops security audit --json
+```
+
+The guardrail permits `AgentOpsContent_CL` only in:
+
+- `Transcript availability`, which shows status and counts;
+- `Prompt and response viewer (explicit opt-in)`, which is the only panel allowed to project prompt/response text.
+
+Remaining production policy work:
 
 - separate restricted workspace or table;
 - short retention;
 - explicit RBAC guidance;
-- clear dashboard warning state;
 - tests proving strict mode never writes content rows.
 
 ### P2: Add OWASP-specific abuse fixtures
@@ -125,6 +137,7 @@ It should wrap:
 - collector privacy artifact validation;
 - strict poison sanitizer checks;
 - OWASP abuse fixture validation.
+- V2 dashboard content guardrail validation.
 
 ### P2: Azure/Grafana production posture checklist
 
@@ -144,8 +157,8 @@ Add a deployment checklist for:
 
 ## Recommended Next PRs
 
-1. `content-capture-guardrails`: enforce restricted opt-in UX and retention docs for prompt/response viewer.
-2. `azure-prod-hardening`: add Managed Grafana/RBAC/private networking checklist and validation queries.
+1. `azure-prod-hardening`: add Managed Grafana/RBAC/private networking checklist and validation queries.
+2. `content-retention-rbac`: document short retention and restricted access for optional content-capture workspaces.
 3. `sdk-publish-hardening`: pin SDK peer dependency expectations and add package-publish dry-run checks.
 
 ## Verification From Initial Audit
