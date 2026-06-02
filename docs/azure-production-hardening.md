@@ -66,7 +66,9 @@ The remediation plan prints commands to review. It does not mutate Azure. Treat 
 The production gate verifies the deployed posture, not only the Bicep files:
 
 - Log Analytics retention, daily cap, and resource-scoped access;
+- Log Analytics least-privilege group RBAC;
 - Managed Grafana system-assigned identity and disabled API keys;
+- Managed Grafana least-privilege group RBAC;
 - Managed Grafana public access disabled;
 - Managed Grafana zone redundancy enabled;
 - AgentOps scheduled query alerts enabled and routed to action groups.
@@ -98,6 +100,8 @@ azureAuthType: msi
 ```
 
 Do not use committed Grafana tokens. If a Grafana MCP token is needed for a local investigation, set it outside the repo and keep it short-lived or least-privilege.
+
+`validate-azure --production` reads Azure role assignments at the Log Analytics workspace and Managed Grafana scopes. It expects approved Microsoft Entra groups with least-privilege roles such as Log Analytics Data Reader, Monitoring Reader, Grafana Viewer, Grafana Editor, or break-glass Grafana Admin. It flags routine Owner, Contributor, or User Access Administrator assignments on those scopes as production posture issues.
 
 Reference:
 

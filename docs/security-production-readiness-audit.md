@@ -184,8 +184,8 @@ Added `docs/azure-production-hardening.md` and `validate-enterprise` checks for:
 ## Recommended Next PRs
 
 1. `sdk-publish-hardening`: pin SDK peer dependency expectations and add package-publish dry-run checks.
-2. `content-retention-rbac-live`: add live checks for optional content-capture workspace retention/RBAC if content capture is deployed.
-3. `live-azure-posture-query`: keep expanding read-only live checks for deployed Grafana public access, zone redundancy, action groups, retention, and daily cap.
+2. `content-retention-rbac-live`: add table/workspace-specific live checks if optional content capture is deployed.
+3. `live-azure-posture-query`: keep expanding read-only live checks for budgets, private endpoint reachability, and alert action-group destinations.
 
 ## Verification From Initial Audit
 
