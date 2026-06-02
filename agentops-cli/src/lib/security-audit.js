@@ -36,6 +36,13 @@ function evidenceStatus(root, evidence) {
   };
 }
 
+function fileIncludes(root, file, terms) {
+  const absolute = path.join(root, file);
+  if (!fs.existsSync(absolute)) return false;
+  const body = fs.readFileSync(absolute, 'utf8').toLowerCase();
+  return terms.every(term => body.includes(String(term).toLowerCase()));
+}
+
 const postureControls = [
   {
     id: 'LLM01',
@@ -54,11 +61,13 @@ const postureControls = [
     framework: 'OWASP LLM Top 10 2025',
     risk: 'Sensitive Information Disclosure',
     status: 'covered',
-    summary: 'Strict privacy mode drops content-like and secret-like fields; dashboards isolate optional transcript viewing behind explicit opt-in.',
+    summary: 'Strict privacy mode drops content-like and secret-like fields; optional transcript capture requires explicit restricted-workspace, short-retention, RBAC-style guardrails.',
     evidence: [
       evidenceItem('collector/tests/privacy-poison-fixtures/content-poison.json', 'content poison fixture'),
       evidenceItem('collector/tests/owasp-abuse-fixtures/secret-tool-result.json', 'secret-like tool result fixture'),
-      evidenceItem('agentops-cli/src/lib/dashboard-content-guardrails.js', 'dashboard content guardrail')
+      evidenceItem('agentops-cli/src/lib/dashboard-content-guardrails.js', 'dashboard content guardrail'),
+      evidenceItem('docs/privacy-modes.md', 'content capture restricted workspace guidance'),
+      evidenceItem('docs/azure-production-hardening.md', 'retention and RBAC production hardening')
     ]
   },
   {
@@ -134,12 +143,13 @@ const postureControls = [
     id: 'LLM09',
     framework: 'OWASP LLM Top 10 2025',
     risk: 'Misinformation',
-    status: 'partial',
-    summary: 'Dashboards are evidence aids with deterministic evals and code outcomes, but they are not a compliance or correctness guarantee.',
+    status: 'covered',
+    summary: 'Dashboards are evidence aids with deterministic evals and code outcomes, and docs explicitly warn they are not correctness, compliance, or security guarantees.',
     evidence: [
       evidenceItem('agentops-cli/src/lib/evals/index.js', 'deterministic eval modules'),
       evidenceItem('docs/evals-and-insights.md', 'eval documentation'),
-      evidenceItem('docs/security-production-readiness-audit.md', 'security caveats')
+      evidenceItem('docs/security-production-readiness-audit.md', 'security caveats'),
+      evidenceItem('docs/grafana-ux-spec.md', 'dashboard evidence disclaimer')
     ]
   },
   {
@@ -359,6 +369,66 @@ function dashboardContentGuardrailCheck(options = {}) {
   );
 }
 
+function contentCaptureOperationalGuardrailsCheck(options = {}) {
+  const root = options.root || repoRoot;
+  const evidence = [
+    {
+      file: 'docs/privacy-modes.md',
+      terms: ['restricted workspace', 'approved viewers', 'short retention']
+    },
+    {
+      file: 'docs/azure-production-hardening.md',
+      terms: ['Optional content capture', 'separate restricted workspace or table', 'short retention']
+    },
+    {
+      file: 'docs/azure-v2-ingestion.md',
+      terms: ['--allow-content', 'access-controlled workspace/dashboard']
+    },
+    {
+      file: 'agentops-cli/src/commands/content.js',
+      terms: ['restricted to approved viewers', 'AgentOpsContent_CL can contain sensitive text']
+    }
+  ];
+  const missing = evidence.filter(item => !fileIncludes(root, item.file, item.terms));
+  return finding(
+    'content-capture-operational-guardrails',
+    missing.length === 0,
+    missing.length === 0
+      ? 'optional content capture requires restricted workspace/viewers, short retention, and explicit --allow-content review'
+      : `missing content-capture guardrail evidence: ${missing.map(item => item.file).join(', ')}`,
+    'error',
+    evidence.map(item => ({ file: item.file, terms: item.terms }))
+  );
+}
+
+function dashboardEvidenceDisclaimerCheck(options = {}) {
+  const root = options.root || repoRoot;
+  const evidence = [
+    {
+      file: 'docs/grafana-ux-spec.md',
+      terms: ['evidence aids', 'not correctness, compliance, or security guarantees']
+    },
+    {
+      file: 'docs/evals-and-insights.md',
+      terms: ['deterministic evals', 'not a substitute']
+    },
+    {
+      file: 'docs/security-production-readiness-audit.md',
+      terms: ['evidence aids', 'not correctness, compliance, or security guarantees']
+    }
+  ];
+  const missing = evidence.filter(item => !fileIncludes(root, item.file, item.terms));
+  return finding(
+    'dashboard-evidence-disclaimer',
+    missing.length === 0,
+    missing.length === 0
+      ? 'dashboards and evals are documented as investigation evidence, not correctness/compliance guarantees'
+      : `missing dashboard/eval disclaimer evidence: ${missing.map(item => item.file).join(', ')}`,
+    'error',
+    evidence.map(item => ({ file: item.file, terms: item.terms }))
+  );
+}
+
 function securityAudit(options = {}) {
   const runGitleaksCheck = options.runGitleaks || runGitleaks;
   const runStatic = options.runStaticCheck || runStaticCheck;
@@ -370,7 +440,9 @@ function securityAudit(options = {}) {
     collectorPrivacyCheck(options),
     poisonRuntimeCheck(options),
     owaspFixtureCheck(options),
-    dashboardContentGuardrailCheck(options)
+    dashboardContentGuardrailCheck(options),
+    contentCaptureOperationalGuardrailsCheck(options),
+    dashboardEvidenceDisclaimerCheck(options)
   ];
   const blocking = checks.filter(check => !check.ok && check.severity === 'error');
   const warnings = checks.filter(check => check.severity === 'warning');
@@ -394,7 +466,9 @@ function securityAudit(options = {}) {
 module.exports = {
   ciGateCheck,
   collectorPrivacyCheck,
+  contentCaptureOperationalGuardrailsCheck,
   dependencyAudit,
+  dashboardEvidenceDisclaimerCheck,
   dashboardContentGuardrailCheck,
   owaspFixtureCheck,
   poisonRuntimeCheck,

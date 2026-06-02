@@ -299,6 +299,8 @@ test('security audit combines static, privacy, OWASP, and CI gates', () => {
   assert.equal(byName['ci-security-gates'].ok, true);
   assert.equal(byName['dependency-audit'].ok, true);
   assert.equal(byName['dashboard-content-guardrails'].ok, true);
+  assert.equal(byName['content-capture-operational-guardrails'].ok, true);
+  assert.equal(byName['dashboard-evidence-disclaimer'].ok, true);
 });
 
 test('security posture maps OWASP LLM and ASVS controls to repo evidence', () => {
@@ -311,7 +313,9 @@ test('security posture maps OWASP LLM and ASVS controls to repo evidence', () =>
   assert.equal(byId.LLM02.status, 'covered');
   assert.equal(byId.LLM04.status, 'partial');
   assert.equal(byId.LLM08.status, 'not-applicable');
+  assert.equal(byId.LLM09.status, 'covered');
   assert.equal(byId['ASVS-SEC'].status, 'covered');
+  assert.equal(posture.summary.partial, 1);
   assert.deepEqual(posture.controls.flatMap(control => control.missing), []);
 });
 

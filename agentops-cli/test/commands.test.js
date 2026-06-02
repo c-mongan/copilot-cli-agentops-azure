@@ -332,6 +332,8 @@ test('security audit reports production readiness checks as JSON', () => {
   assert.ok(audit.checks.some(check => check.name === 'owasp-abuse-fixtures' && check.ok));
   assert.ok(audit.checks.some(check => check.name === 'dependency-audit' && check.ok));
   assert.ok(audit.checks.some(check => check.name === 'dashboard-content-guardrails' && check.ok));
+  assert.ok(audit.checks.some(check => check.name === 'content-capture-operational-guardrails' && check.ok));
+  assert.ok(audit.checks.some(check => check.name === 'dashboard-evidence-disclaimer' && check.ok));
 });
 
 test('security posture reports OWASP and ASVS control coverage as JSON', () => {
@@ -353,6 +355,7 @@ test('security posture reports OWASP and ASVS control coverage as JSON', () => {
   assert.equal(byId.LLM02.status, 'covered');
   assert.equal(byId.LLM06.status, 'covered');
   assert.equal(byId.LLM08.status, 'not-applicable');
+  assert.equal(byId.LLM09.status, 'covered');
   assert.equal(byId['ASVS-SEC'].status, 'covered');
-  assert.ok(posture.summary.partial >= 1);
+  assert.equal(posture.summary.partial, 1);
 });

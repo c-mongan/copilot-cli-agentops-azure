@@ -53,6 +53,7 @@ Every V2 dashboard uses:
 - Empty states point to the smallest command that generates data.
 - Raw content never appears in dashboards by default.
 - Prompt/response text appears only in the opt-in `AgentOpsContent_CL` Run Replay panel. The viewer must present a transcript-style `MessageText` column with role, turn, content kind, capture mode, redaction status, content hash, and content length so operators can read a conversation without losing privacy context.
+- Dashboards and evals are evidence aids, not correctness, compliance, or security guarantees. They should guide investigation and review, not replace code review, threat modeling, approval workflows, or production change controls.
 
 ## Validation
 
