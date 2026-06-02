@@ -2935,6 +2935,71 @@ test('validateAzure production mode accepts least-privilege group RBAC', () => {
   assert.equal(byName['access-rbac-posture'].ok, true);
 });
 
+test('validateAzure production mode flags optional content table without short retention', () => {
+  const result = validateAzure({
+    production: true,
+    workspaceId: 'workspace-123',
+    workspaceName: 'law-agentops-dev',
+    resourceGroup: 'rg-agentops-dev',
+    grafanaBaseUrl: 'https://grafana.example',
+    expectedDashboards: [],
+    last: '1h',
+    spawnSync: (command, args) => {
+      if (args.includes('account') && args.includes('show')) {
+        return { status: 0, stdout: JSON.stringify({ id: 'sub-123', name: 'Demo Sub' }), stderr: '' };
+      }
+      if (args.includes('group') && args.includes('exists')) {
+        return { status: 0, stdout: 'true\n', stderr: '' };
+      }
+      if (args.includes('log-analytics') && args.includes('query')) {
+        return { status: 0, stdout: JSON.stringify([{ Rows: 1 }]), stderr: '' };
+      }
+      if (args.includes('log-analytics') && args.includes('workspace') && args.includes('show')) {
+        return { status: 0, stdout: JSON.stringify({
+          id: '/subscriptions/sub-123/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev',
+          retentionInDays: 90,
+          workspaceCapping: { dailyQuotaGb: 2 },
+          features: { enableLogAccessUsingOnlyResourcePermissions: true }
+        }), stderr: '' };
+      }
+      if (args.includes('log-analytics') && args.includes('workspace') && args.includes('table') && args.includes('list')) {
+        return { status: 0, stdout: JSON.stringify([
+          { name: 'AgentOpsContent_CL', retentionInDays: 90 }
+        ]), stderr: '' };
+      }
+      if (args[0] === 'role' && args[1] === 'assignment' && args.includes('list')) {
+        return { status: 0, stdout: JSON.stringify([
+          {
+            principalType: 'Group',
+            roleDefinitionId: '/subscriptions/sub-123/providers/Microsoft.Authorization/roleDefinitions/3b03c2da-16b3-4a49-8834-0f8130efdd3b',
+            roleDefinitionName: 'Log Analytics Data Reader'
+          }
+        ]), stderr: '' };
+      }
+      if (args.includes('scheduled-query') && args.includes('list')) {
+        return { status: 0, stdout: JSON.stringify([
+          {
+            name: 'sqr-agentops-dev-failures',
+            properties: {
+              displayName: 'Copilot AgentOps failed spans',
+              enabled: true,
+              actions: { actionGroups: ['/subscriptions/sub-123/resourceGroups/rg-agentops-dev/providers/microsoft.insights/actionGroups/ag-agentops'] }
+            }
+          }
+        ]), stderr: '' };
+      }
+      return { status: 0, stdout: JSON.stringify({ name: 'ok' }), stderr: '' };
+    }
+  });
+  const byName = Object.fromEntries(result.checks.map(check => [check.name, check]));
+
+  assert.equal(result.ok, false);
+  assert.equal(byName['content-capture-table-posture'].ok, false);
+  assert.equal(byName['content-capture-table-posture'].observed, true);
+  assert.deepEqual(byName['content-capture-table-posture'].issues, ['short_retention']);
+  assert.match(result.next.join('\n'), /AgentOpsContent_CL retention <=30 days/);
+});
+
 test('validateAzure remediation plan proposes safe Azure commands without mutating', () => {
   const result = validateAzure({
     production: true,

@@ -106,6 +106,12 @@ The production policy evidence is enforced by `agentops security audit`:
 - tests proving strict mode never writes content rows;
 - explicit `--allow-content` ingestion review.
 
+Production `validate-azure --production` now also performs a read-only live Log Analytics table check. If optional `AgentOpsContent_CL` transcript storage exists, validation expects:
+
+- content-table retention of 30 days or less;
+- workspace resource-scoped access enabled;
+- least-privilege group RBAC on the Log Analytics workspace.
+
 ### P2: Add OWASP-specific abuse fixtures
 
 Status: fixed in this branch.
@@ -183,9 +189,9 @@ Added `docs/azure-production-hardening.md` and `validate-enterprise` checks for:
 
 ## Recommended Next PRs
 
-1. `content-retention-rbac-live`: add table/workspace-specific live checks if optional content capture is deployed.
+1. `content-retention-rbac-live`: fixed in this branch. Production validation now flags optional `AgentOpsContent_CL` when retention or workspace access posture is not production-ready.
 2. `live-azure-posture-query`: keep expanding read-only live checks for budgets, private endpoint reachability, and alert action-group destinations.
-3. `homebrew-formula-hardening`: fixed in this branch. The formula template renders from the checked CLI release artifact URL and SHA256.
+3. `budget-guardrails`: add CI tests for cost anomaly query shape, budget threshold configuration, and runaway token/tool-loop alert recommendations.
 
 ## Verification From Initial Audit
 
