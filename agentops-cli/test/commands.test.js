@@ -333,3 +333,26 @@ test('security audit reports production readiness checks as JSON', () => {
   assert.ok(audit.checks.some(check => check.name === 'dependency-audit' && check.ok));
   assert.ok(audit.checks.some(check => check.name === 'dashboard-content-guardrails' && check.ok));
 });
+
+test('security posture reports OWASP and ASVS control coverage as JSON', () => {
+  const result = childProcess.spawnSync(process.execPath, [
+    path.join(repoRoot, 'agentops-cli', 'src', 'index.js'),
+    'security',
+    'posture',
+    '--json'
+  ], {
+    cwd: repoRoot,
+    encoding: 'utf8'
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  const posture = JSON.parse(result.stdout);
+  const byId = Object.fromEntries(posture.controls.map(control => [control.id, control]));
+  assert.equal(posture.ok, true);
+  assert.equal(byId.LLM01.status, 'covered');
+  assert.equal(byId.LLM02.status, 'covered');
+  assert.equal(byId.LLM06.status, 'covered');
+  assert.equal(byId.LLM08.status, 'not-applicable');
+  assert.equal(byId['ASVS-SEC'].status, 'covered');
+  assert.ok(posture.summary.partial >= 1);
+});

@@ -39,6 +39,9 @@ jobs:
       - name: AgentOps security audit
         run: node agentops-cli/src/index.js security audit --json
 
+      - name: AgentOps security posture
+        run: node agentops-cli/src/index.js security posture --json
+
       - name: Validate JavaScript syntax
         run: |
           node --check agentops-cli/src/index.js
