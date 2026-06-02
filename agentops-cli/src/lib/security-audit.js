@@ -100,7 +100,7 @@ function dependencyAudit(options = {}) {
     'dependency-audit',
     errors.length === 0,
     errors.concat(warnings).join('; ') || 'npm audit found no high or critical runtime vulnerabilities',
-    errors.length > 0 ? 'error' : 'warning',
+    errors.length > 0 ? 'error' : warnings.length > 0 ? 'warning' : 'info',
     results
   );
 }
@@ -113,6 +113,7 @@ function ciGateCheck(options = {}) {
   const required = [
     'npm --prefix agentops-cli run static:check',
     'npm --prefix agentops-cli run coverage:check',
+    'node agentops-cli/src/index.js security audit --json',
     'collector smoke --privacy strict --poison --json'
   ];
   const missing = required.filter(term => !body.includes(term));

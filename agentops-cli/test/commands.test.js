@@ -330,5 +330,5 @@ test('security audit reports production readiness checks as JSON', () => {
   assert.ok(audit.checks.some(check => check.name === 'static-check' && check.ok));
   assert.ok(audit.checks.some(check => check.name === 'ci-security-gates' && check.ok));
   assert.ok(audit.checks.some(check => check.name === 'owasp-abuse-fixtures' && check.ok));
-  assert.ok(audit.checks.some(check => check.name === 'dependency-audit' && check.severity === 'warning'));
+  assert.ok(audit.checks.some(check => check.name === 'dependency-audit' && check.ok));
 });

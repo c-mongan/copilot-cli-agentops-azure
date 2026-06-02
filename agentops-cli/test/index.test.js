@@ -297,7 +297,7 @@ test('security audit combines static, privacy, OWASP, and CI gates', () => {
   assert.equal(byName['strict-poison-sanitizer'].ok, true);
   assert.equal(byName['owasp-abuse-fixtures'].ok, true);
   assert.equal(byName['ci-security-gates'].ok, true);
-  assert.equal(byName['dependency-audit'].severity, 'warning');
+  assert.equal(byName['dependency-audit'].ok, true);
 });
 
 test('strict collector allowlist preserves V2 hierarchy metadata', () => {
