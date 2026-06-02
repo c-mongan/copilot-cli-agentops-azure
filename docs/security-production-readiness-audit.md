@@ -40,7 +40,7 @@ COPILOT_OTEL_CAPTURE_CONTENT=false
 - Runtime dashboards are metadata-first and avoid raw prompt/code content by default.
 - CI uses read-only GitHub permissions.
 - `gitleaks detect --no-git --redact` found no secrets in the working tree.
-- Runtime npm packages currently have no direct dependencies and have committed npm lockfiles.
+- Runtime npm packages currently have no direct dependencies, committed npm lockfiles, package-readiness checks, release artifact checksum checks, and clean-prefix install smoke tests.
 - The product tracks broad Copilot permission modes such as `--allow-all`, `--allow-all-tools`, `--allow-all-paths`, and `--allow-all-urls`.
 - V2 dashboards now have a content guardrail check that blocks prompt/response text outside the explicit opt-in viewer.
 
@@ -50,7 +50,7 @@ COPILOT_OTEL_CAPTURE_CONTENT=false
 | --- | --- | --- |
 | Prompt injection | Captures metadata and policy signals without exporting raw prompt text. | Add explicit red-team fixtures for injected tool instructions and MCP prompt-injection attempts. |
 | Sensitive information disclosure | Strict collector allowlist, content-signal drops, poison smoke, dashboard content guardrails, and documented retention/RBAC requirements for optional content capture workspaces. | Keep content-capture operational guardrails in `agentops security audit`. |
-| Supply chain | No direct npm deps, committed npm lockfiles, dependency audit command, collector binary checksum tests, CLI/SDK publish-readiness checks, and release artifact SHA256 checks exist. | Keep package and release distribution checks in CI before stable releases. |
+| Supply chain | No direct npm deps, committed npm lockfiles, dependency audit command, collector binary checksum tests, CLI/SDK publish-readiness checks, release artifact SHA256 checks, and clean-prefix install smoke checks exist. | Keep package, install smoke, and release distribution checks in CI before stable releases. |
 | Excessive agency | Tool allow/deny counts, broad-permission flags, MCP risk dashboards. | Add policy tests for dangerous combinations such as broad tools plus content capture. |
 | Insecure output handling | Product does not execute model output directly. | Keep this explicit in docs and tests for SDK/MCP adapter examples. |
 | Vector/embedding weakness | Not currently a vector-store product. | No action unless vector/eval memory features are added. |
@@ -185,7 +185,7 @@ Added `docs/azure-production-hardening.md` and `validate-enterprise` checks for:
 
 1. `content-retention-rbac-live`: add table/workspace-specific live checks if optional content capture is deployed.
 2. `live-azure-posture-query`: keep expanding read-only live checks for budgets, private endpoint reachability, and alert action-group destinations.
-3. `installer-smoke-hardening`: add clean-prefix install smoke tests for release artifacts and Homebrew-style installs.
+3. `homebrew-formula-hardening`: add or validate a formula/template that consumes the checked CLI artifact SHA256.
 
 ## Verification From Initial Audit
 

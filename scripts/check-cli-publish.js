@@ -55,8 +55,24 @@ function checkCliPublish(options = {}) {
 
   if (pkg.name !== 'copilot-agentops-cli') failures.push('package name must stay copilot-agentops-cli');
   if (pkg.bin?.agentops !== 'src/index.js') failures.push('bin.agentops must point to src/index.js');
-  if (!Array.isArray(pkg.files) || !pkg.files.includes('src') || !pkg.files.includes('README.md')) {
-    failures.push('files must include src and README.md');
+  const requiredPackageFiles = [
+    'README.md',
+    '.azure',
+    'azure.yaml',
+    'collector',
+    'copilot',
+    'docs',
+    'grafana',
+    'plugin',
+    'scripts',
+    'src'
+  ];
+  if (!Array.isArray(pkg.files)) {
+    failures.push('files must be an array');
+  } else {
+    for (const file of requiredPackageFiles) {
+      if (!pkg.files.includes(file)) failures.push(`files must include ${file}`);
+    }
   }
   if (!String(pkg.engines?.node || '').includes('>=20')) failures.push('engines.node must require Node >=20');
 
@@ -81,7 +97,19 @@ function checkCliPublish(options = {}) {
 
   const expectedFiles = [
     'README.md',
+    '.azure/deployment-plan.md',
+    'azure.yaml',
+    'collector/otelcol.binary.strict.yaml',
+    'collector/processors/strict-allowlist.yaml',
+    'collector/tests/privacy-poison-fixtures/content-poison.json',
+    'copilot/copilot-observe',
+    'docs/release-distribution.md',
+    'grafana/dashboards/v2/01-agentops-home.json',
     'package.json',
+    'plugin/plugin.json',
+    'plugin/hooks.json',
+    'scripts/copilot-agentops',
+    'scripts/install-copilot-agentops-shim.sh',
     'src/index.js',
     'src/legacy.js',
     'src/lib/privacy.js',

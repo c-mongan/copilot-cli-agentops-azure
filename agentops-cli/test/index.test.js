@@ -53,8 +53,10 @@ const { classifyMcpToolRisk } = require('../src/lib/mcp/risk-classifier');
 const { rollupSpanRows } = require('../src/lib/rollup/span-to-agentops-tables');
 const { securityAudit, securityPosture } = require('../src/lib/security-audit');
 const { checkCliPublish } = require('../../scripts/check-cli-publish');
+const { checkInstallSmoke } = require('../../scripts/check-install-smoke');
 const { checkReleaseDistribution } = require('../../scripts/check-release-distribution');
 const { checkSdkPublish, isWildcardRange } = require('../../scripts/check-sdk-publish');
+const { shouldCopy } = require('../../scripts/prepare-cli-package-assets');
 
 const {
   agentopsAttributionSmoke,
@@ -362,6 +364,25 @@ test('release distribution check builds artifacts with checksums', () => {
     assert.equal(artifact.sha256.length, 64);
     assert.ok(artifact.size > 0);
   }
+});
+
+test('CLI package asset copier excludes heavyweight and local-only files', () => {
+  assert.equal(shouldCopy(path.join(root, 'docs', 'release-distribution.md')), true);
+  assert.equal(shouldCopy(path.join(root, 'docs', 'screenshots', 'agentops-home.png')), false);
+  assert.equal(shouldCopy(path.join(root, 'docs', 'images', 'agentops-banner.png')), false);
+  assert.equal(shouldCopy(path.join(root, 'scripts', 'install-copilot-agentops-shim.sh')), true);
+  assert.equal(shouldCopy(path.join(root, 'scripts', 'check-install-smoke.js')), false);
+});
+
+test('packed CLI install smoke runs installed command from clean prefix', () => {
+  const result = checkInstallSmoke({ skipDocs: false });
+
+  assert.equal(result.ok, true, JSON.stringify(result, null, 2));
+  assert.ok(result.artifact.filename.startsWith('copilot-agentops-cli-'));
+  assert.equal(result.artifact.sha256.length, 64);
+  assert.ok(result.commands.some(command => command.name === 'agentops doctor --local-only --json' && command.ok));
+  assert.ok(result.commands.some(command => command.name === 'agentops dashboard verify' && command.ok));
+  assert.ok(result.commands.some(command => command.name === 'agentops collector validate --mode none --json' && command.ok));
 });
 
 test('strict collector allowlist preserves V2 hierarchy metadata', () => {

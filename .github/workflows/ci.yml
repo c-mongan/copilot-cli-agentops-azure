@@ -42,6 +42,9 @@ jobs:
       - name: Check release distribution readiness
         run: node scripts/check-release-distribution.js --json
 
+      - name: Check packed CLI install smoke
+        run: node scripts/check-install-smoke.js --json
+
       - name: Enforce coverage gate
         run: npm --prefix agentops-cli run coverage:check
 

@@ -12,8 +12,9 @@ const { createPrimitives } = require('./primitives');
 const { createRecommendations } = require('./recommendations');
 const { createSavedViews } = require('./saved-views');
 const { createTelemetry } = require('./telemetry');
+const { repoRoot } = require('./lib/paths');
 
-const root = path.resolve(__dirname, '..', '..');
+const root = repoRoot;
 
 function usage() {
   const commands = [
