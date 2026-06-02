@@ -14,6 +14,7 @@ Run this before creating a GitHub release:
 ```bash
 node scripts/check-release-distribution.js --json
 node scripts/check-install-smoke.js --json
+node scripts/check-homebrew-formula.js --json
 ```
 
 The check:
@@ -29,6 +30,13 @@ Then the install smoke:
 - installs the packed CLI into a clean temporary npm prefix;
 - runs the installed `agentops` command, not the repo checkout;
 - verifies `doctor`, dashboard verification, security audit, collector artifact validation, and plugin dry-run install.
+
+Then the Homebrew formula check:
+
+- renders `homebrew/Formula/copilot-agentops-cli.rb.template`;
+- uses the checked CLI release artifact filename and SHA256;
+- verifies the rendered formula URL points at the GitHub release asset;
+- verifies the formula has a meaningful `test do` block for `agentops`.
 
 The output includes an `artifacts` array. Each row contains the tarball filename, byte size, and SHA256.
 
@@ -50,6 +58,7 @@ Verification
 - npm --prefix packages/agentops-copilot-sdk run publish:check -- --json
 - node scripts/check-release-distribution.js --json
 - node scripts/check-install-smoke.js --json
+- node scripts/check-homebrew-formula.js --json
 - node agentops-cli/src/index.js collector smoke --privacy strict --poison --json
 ```
 
@@ -57,7 +66,7 @@ Do not attach generated telemetry, local `.agentops` data, private Azure identif
 
 ## Homebrew
 
-Homebrew distribution should point at the GitHub release asset for `copilot-agentops-cli-<version>.tgz`.
+Homebrew distribution should render `homebrew/Formula/copilot-agentops-cli.rb.template` and point at the GitHub release asset for `copilot-agentops-cli-<version>.tgz`.
 
 Formula update checklist:
 
@@ -70,6 +79,7 @@ Before publishing or updating a formula:
 
 - run `node scripts/check-release-distribution.js --json`;
 - run `node scripts/check-install-smoke.js --json`;
+- run `node scripts/check-homebrew-formula.js --json`;
 - verify the formula SHA256 matches the generated CLI artifact SHA256;
 - install into a clean temp prefix;
 - run `agentops doctor --local-only`;

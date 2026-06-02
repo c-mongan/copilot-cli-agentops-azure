@@ -53,6 +53,7 @@ const { classifyMcpToolRisk } = require('../src/lib/mcp/risk-classifier');
 const { rollupSpanRows } = require('../src/lib/rollup/span-to-agentops-tables');
 const { securityAudit, securityPosture } = require('../src/lib/security-audit');
 const { checkCliPublish } = require('../../scripts/check-cli-publish');
+const { checkHomebrewFormula, releaseUrl, renderFormula } = require('../../scripts/check-homebrew-formula');
 const { checkInstallSmoke } = require('../../scripts/check-install-smoke');
 const { checkReleaseDistribution } = require('../../scripts/check-release-distribution');
 const { checkSdkPublish, isWildcardRange } = require('../../scripts/check-sdk-publish');
@@ -364,6 +365,32 @@ test('release distribution check builds artifacts with checksums', () => {
     assert.equal(artifact.sha256.length, 64);
     assert.ok(artifact.size > 0);
   }
+});
+
+test('Homebrew formula check renders checked CLI artifact URL and SHA', () => {
+  const result = checkHomebrewFormula({ skipDocs: false });
+
+  assert.equal(result.ok, true, JSON.stringify(result, null, 2));
+  assert.equal(result.version, '0.1.0');
+  assert.equal(result.artifact.filename, 'copilot-agentops-cli-0.1.0.tgz');
+  assert.equal(result.artifact.sha256.length, 64);
+  assert.equal(result.artifact.url, releaseUrl(result.version, result.artifact.filename));
+  const rendered = fs.readFileSync(result.rendered, 'utf8');
+  assert.ok(rendered.includes(`url "${result.artifact.url}"`));
+  assert.ok(rendered.includes(`sha256 "${result.artifact.sha256}"`));
+  assert.ok(rendered.includes('agentops doctor --local-only'));
+});
+
+test('Homebrew formula renderer replaces all release placeholders', () => {
+  const rendered = renderFormula('url "{{URL}}"\nsha256 "{{SHA256}}"', {
+    filename: 'copilot-agentops-cli-1.2.3.tgz',
+    sha256: 'a'.repeat(64)
+  }, '1.2.3');
+
+  assert.equal(rendered.includes('{{URL}}'), false);
+  assert.equal(rendered.includes('{{SHA256}}'), false);
+  assert.ok(rendered.includes('releases/download/v1.2.3/copilot-agentops-cli-1.2.3.tgz'));
+  assert.ok(rendered.includes('sha256 "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"'));
 });
 
 test('CLI package asset copier excludes heavyweight and local-only files', () => {
