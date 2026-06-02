@@ -96,7 +96,7 @@ Content capture is off by default and requires explicit opt-in. For production r
 
 ### P2: Add OWASP-specific abuse fixtures
 
-Status: open.
+Status: fixed in this branch.
 
 Add fixture families:
 
@@ -109,9 +109,9 @@ Add fixture families:
 
 ### P2: Add security scan command group
 
-Status: open.
+Status: fixed in this branch.
 
-Recommended command:
+Command:
 
 ```bash
 agentops security audit --json
@@ -157,4 +157,3 @@ Add a deployment checklist for:
 gitleaks detect --no-git --source . --redact: no leaks found
 npm --prefix agentops-cli audit --omit=dev --json: blocked, no lockfile
 ```
-

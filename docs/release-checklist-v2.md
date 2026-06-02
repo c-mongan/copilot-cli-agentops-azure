@@ -6,6 +6,7 @@
 npm --prefix agentops-cli test
 npm --prefix agentops-cli run coverage:check
 npm --prefix agentops-cli run static:check
+node agentops-cli/src/index.js security audit --json
 node agentops-cli/src/index.js setup --json
 node agentops-cli/src/index.js init --dry-run --json
 node agentops-cli/src/index.js init --dry-run --provision-cloud --json

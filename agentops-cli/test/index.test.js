@@ -51,6 +51,7 @@ const { createMcpHttpProxyObserver } = require('../src/lib/mcp/proxy-http');
 const { createMcpProxyObserver } = require('../src/lib/mcp/proxy-stdio');
 const { classifyMcpToolRisk } = require('../src/lib/mcp/risk-classifier');
 const { rollupSpanRows } = require('../src/lib/rollup/span-to-agentops-tables');
+const { securityAudit } = require('../src/lib/security-audit');
 
 const {
   agentopsAttributionSmoke,
@@ -276,6 +277,27 @@ test('collector privacy processor artifacts and poison fixtures are present', ()
   assert.ok(result.fixtures.every(fixture => fixture.content_signal));
   assert.ok(result.processors.some(file => file.endsWith('strict-allowlist.yaml')));
   assert.ok(result.processors.some(file => file.endsWith('span-to-run-summary.yaml')));
+
+  const owasp = collectorManager.validateOwaspFixtures();
+  assert.equal(owasp.ok, true, owasp.errors.join('\n'));
+  assert.equal(owasp.fixtures.length, 5);
+  assert.ok(owasp.fixtures.every(fixture => fixture.ok));
+  assert.ok(owasp.fixtures.every(fixture => fixture.content_signal));
+});
+
+test('security audit combines static, privacy, OWASP, and CI gates', () => {
+  const audit = securityAudit({
+    runGitleaks: () => ({ name: 'secret-scan', ok: true, severity: 'info', detail: 'mock clean', evidence: [] })
+  });
+  const byName = Object.fromEntries(audit.checks.map(check => [check.name, check]));
+
+  assert.equal(audit.ok, true);
+  assert.equal(byName['static-check'].ok, true);
+  assert.equal(byName['collector-privacy-artifacts'].ok, true);
+  assert.equal(byName['strict-poison-sanitizer'].ok, true);
+  assert.equal(byName['owasp-abuse-fixtures'].ok, true);
+  assert.equal(byName['ci-security-gates'].ok, true);
+  assert.equal(byName['dependency-audit'].severity, 'warning');
 });
 
 test('strict collector allowlist preserves V2 hierarchy metadata', () => {

@@ -312,3 +312,23 @@ test('static-check script validates repo syntax and local docs links', () => {
   assert.ok(summary.checked.json > 0);
   assert.ok(summary.checked.markdown > 0);
 });
+
+test('security audit reports production readiness checks as JSON', () => {
+  const result = childProcess.spawnSync(process.execPath, [
+    path.join(repoRoot, 'agentops-cli', 'src', 'index.js'),
+    'security',
+    'audit',
+    '--json'
+  ], {
+    cwd: repoRoot,
+    encoding: 'utf8'
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  const audit = JSON.parse(result.stdout);
+  assert.equal(audit.ok, true);
+  assert.ok(audit.checks.some(check => check.name === 'static-check' && check.ok));
+  assert.ok(audit.checks.some(check => check.name === 'ci-security-gates' && check.ok));
+  assert.ok(audit.checks.some(check => check.name === 'owasp-abuse-fixtures' && check.ok));
+  assert.ok(audit.checks.some(check => check.name === 'dependency-audit' && check.severity === 'warning'));
+});

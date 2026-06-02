@@ -13,6 +13,13 @@ const requiredProcessors = [
 ];
 
 const requiredFixtures = ['content-poison.json', 'mcp-poison.json'];
+const requiredOwaspFixtures = [
+  'broad-tool-permissions.json',
+  'mcp-prompt-injection.json',
+  'prompt-injection.json',
+  'runaway-tool-loop.json',
+  'secret-tool-result.json'
+];
 const strictConfigs = ['otelcol.azuremonitor.strict.yaml', 'otelcol.binary.strict.yaml', 'otelcol.local.strict.yaml'];
 
 function validateProcessorFragment({ file, body }) {
@@ -108,11 +115,44 @@ function validateCollectorArtifacts(options = {}) {
   };
 }
 
+function validateOwaspFixtures(options = {}) {
+  const root = options.root || repoRoot;
+  const fixturesDir = path.join(root, 'collector', 'tests', 'owasp-abuse-fixtures');
+  const errors = [];
+  const results = [];
+
+  for (const file of requiredOwaspFixtures) {
+    const fullPath = path.join(fixturesDir, file);
+    if (!fs.existsSync(fullPath)) {
+      errors.push(`missing OWASP abuse fixture: ${fullPath}`);
+      continue;
+    }
+
+    const result = validatePoisonFixture({ file, fullPath });
+    if (result.error) errors.push(result.error);
+    if (!result.ok && !result.error) errors.push(`${file}: strict sanitizer did not drop all abuse fixture content`);
+    results.push({
+      file: result.file,
+      ok: result.ok,
+      leaked: result.leaked,
+      content_signal: result.content_signal
+    });
+  }
+
+  return {
+    ok: errors.length === 0,
+    fixtures: results,
+    errors
+  };
+}
+
 module.exports = {
   requiredFixtures,
+  requiredOwaspFixtures,
   requiredProcessors,
   strictConfigs,
   validateCollectorArtifacts,
+  validateOwaspFixtures,
   validatePoisonFixture,
   validateProcessorFragment
 };

@@ -1,0 +1,12 @@
+{
+  "agentops.poison_id": "fixture-owasp-runaway-tool-loop",
+  "agentops.run.id": "run-owasp-loop",
+  "agentops.session.id": "session-owasp-loop",
+  "agentops.surface": "cli",
+  "agentops.privacy.mode": "strict",
+  "agentops.tools.count": 900,
+  "agentops.tools.failed_count": 233,
+  "gen_ai.operation.name": "execute_tool",
+  "gen_ai.tool.name": "bash",
+  "gen_ai.tool.call.arguments": "while true; do echo SECRET_FAKE_TEST_VALUE; done"
+}
