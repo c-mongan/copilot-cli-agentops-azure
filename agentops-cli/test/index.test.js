@@ -2689,6 +2689,84 @@ test('validateAzure production mode enforces Grafana and alert routing posture',
   assert.match(result.next.join('\n'), /action groups/);
 });
 
+test('validateAzure remediation plan proposes safe Azure commands without mutating', () => {
+  const result = validateAzure({
+    production: true,
+    remediationPlan: true,
+    workspaceId: 'workspace-123',
+    workspaceName: 'law-agentops-dev',
+    resourceGroup: 'rg-agentops-dev',
+    grafanaBaseUrl: 'https://grafana.example',
+    grafanaName: 'graf-agentops-dev',
+    appInsightsName: 'appi-agentops-dev',
+    expectedDashboards: [],
+    last: '24h',
+    spawnSync: (command, args) => {
+      if (args.includes('account') && args.includes('show')) {
+        return { status: 0, stdout: JSON.stringify({ id: 'sub-123', name: 'Demo Sub' }), stderr: '' };
+      }
+      if (args.includes('group') && args.includes('exists')) {
+        return { status: 0, stdout: 'true\n', stderr: '' };
+      }
+      if (args.includes('log-analytics') && args.includes('query')) {
+        return { status: 0, stdout: JSON.stringify([{ Rows: 1 }]), stderr: '' };
+      }
+      if (args.includes('log-analytics') && args.includes('workspace') && args.includes('show')) {
+        return { status: 0, stdout: JSON.stringify({
+          retentionInDays: 30,
+          workspaceCapping: { dailyQuotaGb: -1 },
+          features: { enableLogAccessUsingOnlyResourcePermissions: true }
+        }), stderr: '' };
+      }
+      if (args[0] === 'grafana' && args[1] === 'show') {
+        return { status: 0, stdout: JSON.stringify({
+          name: 'graf-agentops-dev',
+          identity: { type: 'SystemAssigned' },
+          properties: {
+            apiKey: 'Disabled',
+            publicNetworkAccess: 'Enabled',
+            zoneRedundancy: 'Disabled'
+          }
+        }), stderr: '' };
+      }
+      if (args.includes('data-source') && args.includes('list')) {
+        return { status: 0, stdout: JSON.stringify([{ uid: 'azure-monitor-oob' }]), stderr: '' };
+      }
+      if (args.includes('dashboard') && args.includes('list')) {
+        return { status: 0, stdout: JSON.stringify([]), stderr: '' };
+      }
+      if (args.includes('scheduled-query') && args.includes('list')) {
+        return { status: 0, stdout: JSON.stringify([
+          {
+            name: 'sqr-agentops-dev-failures',
+            properties: {
+              displayName: 'Copilot AgentOps failed spans',
+              enabled: false,
+              actions: { actionGroups: [] }
+            }
+          }
+        ]), stderr: '' };
+      }
+      return { status: 0, stdout: JSON.stringify({ name: 'ok' }), stderr: '' };
+    }
+  });
+  const rendered = renderValidateAzure(result);
+  const plan = result.remediation_plan;
+
+  assert.equal(result.ok, false);
+  assert.equal(plan.mode, 'proposal-only');
+  assert.deepEqual(plan.actions.map(action => action.name), [
+    'set-log-analytics-daily-cap',
+    'harden-managed-grafana-network-and-availability',
+    'route-agentops-alerts-to-action-groups'
+  ]);
+  assert.match(plan.actions[0].commands.join('\n'), /az monitor log-analytics workspace update/);
+  assert.match(plan.actions[1].commands.join('\n'), /az grafana update/);
+  assert.match(plan.actions[2].commands.join('\n'), /az monitor scheduled-query update/);
+  assert.match(rendered, /Remediation plan/);
+  assert.match(rendered, /planner does not mutate Azure/);
+});
+
 test('Grafana dashboard inventory reads stable dashboard UIDs from repo', () => {
   const dashboards = listGrafanaDashboardFiles();
   const uids = dashboards.map(dashboard => dashboard.uid);
