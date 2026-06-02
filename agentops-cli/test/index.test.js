@@ -4866,6 +4866,10 @@ test('policy and mcp KQL queries expose documented Copilot dimensions', () => {
   const alerts = kqlFileQuery('18-alert-threshold-recommendations.kql', '21d');
   assert.match(alerts, /let lookback = 21d;/);
   assert.match(alerts, /suggested_threshold/);
+  assert.match(alerts, /p95_credits/);
+  assert.match(alerts, /cost-spike/);
+  assert.match(alerts, /p95_tool_calls/);
+  assert.match(alerts, /runaway-tool-loop/);
   assert.match(alerts, /content-capture/);
 
   const lineage = kqlFileQuery('19-agent-flow-lineage.kql', '24h');
@@ -4886,8 +4890,12 @@ test('alert recommendations expose proposal-only threshold evidence', () => {
 
   assert.equal(recommendations.mode, 'proposal-only');
   assert.equal(recommendations.last, '21d');
-  assert.equal(recommendations.rules.length, 3);
+  assert.equal(recommendations.rules.length, 5);
+  assert.ok(recommendations.rules.some(rule => rule.name === 'cost-spike' && rule.suggested_threshold === 'max(1, p95_credits * 2)'));
+  assert.ok(recommendations.rules.some(rule => rule.name === 'runaway-tool-loop' && rule.suggested_threshold === 'max(25, p95_tool_calls * 2)'));
   assert.ok(recommendations.rules.some(rule => rule.name === 'content-capture' && rule.suggested_threshold === 0));
   assert.match(recommendations.evidence_query, /let lookback = 21d;/);
+  assert.match(recommendations.evidence_query, /max_credits/);
+  assert.match(recommendations.evidence_query, /max_tool_calls/);
   assert.match(alertRecommendationQuery('7d'), /p99_aiu/);
 });
