@@ -6,6 +6,7 @@ const { azureIngestCommand } = require('./commands/azure-ingest');
 const { askContextCommand } = require('./commands/ask-context');
 const { contentCommand } = require('./commands/content');
 const { copilotCommand } = require('./commands/copilot');
+const { copilotSessionCommand } = require('./commands/copilot-session');
 const { dashboardCommand } = require('./commands/dashboard');
 const { demoCommand } = require('./commands/demo');
 const { doctorCommand } = require('./commands/doctor');
@@ -34,6 +35,7 @@ const coreCommands = [
   'ask-context',
   'content',
   'copilot',
+  'copilot-session',
   'dashboard',
   'demo',
   'explain',
@@ -103,6 +105,7 @@ Core commands:
   ask-context latest|<run-id> [--runs <jsonl>] [--events <jsonl>] [--tools <jsonl>] [--evals <jsonl>] [--insights <jsonl>] [--json]
   content status|opt-in [--dir <AgentOps table dir>] [--runs <jsonl>] [--allow-content] [--json]
   copilot [copilot-args...]
+  copilot-session enrich <session-id> [--file <events.jsonl>] [--dry-run] [--json]
   schema validate|print [--file <json>]
   dashboard validate|links-check|filters-check|ux-check|kql-check|verify|import [--last <duration>] [--live] [--yes] [--all] [--folder <name>] [--resource-group <rg>] [--grafana-name <name>]
   demo generate|verify [--runs <n>] [--out <dir>] [--with-content] [--json]
@@ -155,6 +158,7 @@ async function main(argv) {
     return collectorCommand(collectorArgs);
   }
   if (command === 'copilot') return copilotCommand(args);
+  if (command === 'copilot-session') return copilotSessionCommand(args);
   if (command === 'azure-ingest') return azureIngestCommand(args);
   if (command === 'ask-context') return askContextCommand(args);
   if (command === 'content') return contentCommand(args);
@@ -204,6 +208,7 @@ module.exports = {
   askContextCommand,
   contentCommand,
   copilotCommand,
+  copilotSessionCommand,
   dashboardCommand,
   demoCommand,
   doctorCommand,
