@@ -10,6 +10,7 @@ process.env.AGENTOPS_CONFIG_PATH = path.join(os.tmpdir(), `agentops-test-config-
 const collectorManager = require('../src/lib/collector-manager');
 const copilotResolver = require('../src/lib/copilot-resolver');
 const { createRunMetadata } = require('../src/lib/copilot/run-metadata');
+const { enrichCopilotSessionEvents } = require('../src/lib/copilot/session-enricher');
 const { parseCopilotSessionRows } = require('../src/lib/copilot/session-parser');
 const { summarizeCopilotRun } = require('../src/lib/copilot/run-summary');
 const { classifyToolName, summarizeAllowedTools } = require('../src/lib/copilot/tool-classifier');
@@ -20,6 +21,7 @@ const { normalizeMcpAttributes } = require('../src/lib/otel/mcp-normalizer');
 const { buildAskContext, hasV2AskArgs } = require('../src/commands/ask-context');
 const { buildContentStatus, renderOptInGuide } = require('../src/commands/content');
 const { removeAgentOpsCopilotFlags } = require('../src/commands/copilot');
+const { buildCopilotSessionEnrichment } = require('../src/commands/copilot-session');
 const { dashboardImportPlan, dashboardKqlCheck, dashboardVerify, runDashboardImport, validateDashboardFilters, validateDashboardLinks, validateDashboardUx, validateDashboards } = require('../src/commands/dashboard');
 const { browserProfileOptionsFromArgs, checkReportHtml, e2eAuthProfile, grafanaAuthRemediation, grafanaScreenshotTargets, grafanaVisualOk, renderAuthProfile, renderReportHtml, safeE2eEnv } = require('../src/commands/e2e');
 const { hasV2Args } = require('../src/commands/explain');
@@ -274,6 +276,21 @@ test('collector privacy processor artifacts and poison fixtures are present', ()
   assert.ok(result.fixtures.every(fixture => fixture.content_signal));
   assert.ok(result.processors.some(file => file.endsWith('strict-allowlist.yaml')));
   assert.ok(result.processors.some(file => file.endsWith('span-to-run-summary.yaml')));
+});
+
+test('strict collector allowlist preserves V2 hierarchy metadata', () => {
+  const config = fs.readFileSync(path.join(root, 'collector', 'otelcol.binary.strict.yaml'), 'utf8');
+  for (const key of [
+    'agentops.agent.name',
+    'agentops.skill.name',
+    'agentops.mcp.server',
+    'agentops.mcp.tool',
+    'agentops.event.name',
+    'gen_ai.conversation.id',
+    'gen_ai.tool.name'
+  ]) {
+    assert.match(config, new RegExp(key.replaceAll('.', '\\.')));
+  }
 });
 
 test('Agent Run schema accepts metadata-only strict runs and rejects content export', () => {
@@ -2262,6 +2279,82 @@ test('custom import maps JSONL agent rows without CI-specific coupling', async (
     assert.equal(result.events[0].event, 'agent.run.started');
     assert.equal(result.events[0].attributes['agentops.content_capture.signal'], 'true');
     assert.equal(result.events[1].custom['agentops.custom.confidence'], 0.82);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('Copilot session enricher extracts agent skill and MCP metadata without content', () => {
+  const rows = enrichCopilotSessionEvents([
+    {
+      type: 'subagent.selected',
+      data: {
+        agentName: 'agentops-kitchen-sink-smoke',
+        tools: ['bash', 'azure-mcp/*', 'agentops-attribution']
+      }
+    },
+    {
+      type: 'user.message',
+      data: {
+        content: 'SECRET_PROMPT_SHOULD_NOT_EXPORT',
+        transformedContent: 'SECRET_SYSTEM_SHOULD_NOT_EXPORT'
+      }
+    },
+    {
+      type: 'skill.invoked',
+      data: {
+        name: 'agentops-attribution',
+        path: '/private/path/SKILL.md',
+        content: 'SECRET_SKILL_CONTENT_SHOULD_NOT_EXPORT'
+      }
+    },
+    {
+      type: 'assistant.message',
+      data: {
+        content: 'SECRET_RESPONSE_SHOULD_NOT_EXPORT',
+        toolRequests: [{
+          name: 'azure-mcp-monitor',
+          mcpServerName: 'azure-mcp',
+          mcpToolName: 'monitor',
+          arguments: { query: 'SECRET_KQL_SHOULD_NOT_EXPORT' }
+        }]
+      }
+    }
+  ], { sessionId: 'session-native' });
+
+  const text = JSON.stringify(rows);
+  assert.equal(rows.some(row => row.event === 'agent.selected' && row.agent === 'agentops-kitchen-sink-smoke'), true);
+  assert.equal(rows.some(row => row.event === 'skill.invoked' && row.attributes['agentops.skill.name'] === 'agentops-attribution'), true);
+  assert.equal(rows.some(row => row.event === 'mcp.tools.call' && row.attributes['agentops.mcp.server'] === 'azure-mcp'), true);
+  assert.doesNotMatch(text, /SECRET_/);
+  assert.doesNotMatch(text, /private\/path/);
+});
+
+test('copilot-session enrich dry run converts events.jsonl into custom telemetry rows', async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-copilot-session-test-'));
+  const file = path.join(tempDir, 'events.jsonl');
+  try {
+    fs.writeFileSync(file, [
+      JSON.stringify({ type: 'subagent.selected', data: { agentName: 'agentops-kitchen-sink-smoke', tools: ['bash', 'azure-mcp/*'] } }),
+      JSON.stringify({ type: 'skill.invoked', data: { name: 'agentops-attribution', content: 'SECRET_SKILL_CONTENT_SHOULD_NOT_EXPORT' } }),
+      JSON.stringify({ type: 'assistant.message', data: { toolRequests: [{ name: 'azure-mcp-monitor', mcpServerName: 'azure-mcp', mcpToolName: 'monitor', arguments: { query: 'SECRET_KQL_SHOULD_NOT_EXPORT' } }] } })
+    ].join('\n'));
+
+    const result = await buildCopilotSessionEnrichment({
+      subcommand: 'enrich',
+      sessionId: 'session-native',
+      file,
+      id: 'agentops-copilot-session-test',
+      dryRun: true
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.session_id, 'session-native');
+    assert.equal(result.enriched_rows, 3);
+    assert.equal(result.event_counts['agent.selected'], 1);
+    assert.equal(result.event_counts['skill.invoked'], 1);
+    assert.equal(result.event_counts['mcp.tools.call'], 1);
+    assert.doesNotMatch(JSON.stringify(result), /SECRET_/);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
