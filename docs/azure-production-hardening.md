@@ -41,6 +41,30 @@ node agentops-cli/src/index.js security audit --json
 node agentops-cli/src/index.js dashboard verify
 ```
 
+## Validate The Live Azure Posture
+
+After provisioning, run the read-only Azure check:
+
+```bash
+node agentops-cli/src/index.js validate-azure --last 24h --json
+```
+
+For production readiness, add `--production`:
+
+```bash
+node agentops-cli/src/index.js validate-azure --last 24h --production --json
+```
+
+The production gate verifies the deployed posture, not only the Bicep files:
+
+- Log Analytics retention, daily cap, and resource-scoped access;
+- Managed Grafana system-assigned identity and disabled API keys;
+- Managed Grafana public access disabled;
+- Managed Grafana zone redundancy enabled;
+- AgentOps scheduled query alerts enabled and routed to action groups.
+
+Use the non-production mode for pilots where public Grafana access or disabled alert rules are intentional.
+
 ## Managed Grafana Access
 
 Use Microsoft Entra groups, not individual users.
@@ -158,7 +182,7 @@ Deploy only after the what-if output is approved:
 ## Final Gate
 
 ```bash
-node agentops-cli/src/index.js validate-azure --last 24h --json
+node agentops-cli/src/index.js validate-azure --last 24h --production --json
 node agentops-cli/src/index.js product audit --live --last 24h --require-rows --json
 node agentops-cli/src/index.js product audit --live --last 24h --require-rows --require-visual --json
 ```

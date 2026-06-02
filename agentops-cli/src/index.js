@@ -123,7 +123,7 @@ Core commands:
   replay <session|latest> [--file <jsonl>] [--last <duration>]
   open [latest|<run-id>] [--runs <jsonl>] [--file <jsonl>] [--last <duration>] [--json]
   product audit [--live] [--last <duration>] [--require-rows] [--require-visual] [--report <html>] [--json]
-  validate-azure [--last <duration>] [--import-dashboards] [--json]
+  validate-azure [--last <duration>] [--import-dashboards] [--production] [--json]
   validate-enterprise [--json]
   plugin install|uninstall [--copilot-home <path>] [--force] [--dry-run] [--json]
   run-summary generate --file <jsonl> [--out <dir>] [--json]

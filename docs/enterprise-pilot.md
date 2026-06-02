@@ -161,6 +161,14 @@ AGENTOPS_GRAFANA_ZONE_REDUNDANCY=Enabled \
 
 Only disable public access after private connectivity, DNS, and operator access have been tested.
 
+After deployment, verify the live posture:
+
+```bash
+agentops validate-azure --last 24h --production --json
+```
+
+Use normal `agentops validate-azure --last 24h` during pilots when public access or disabled alerts are intentional.
+
 ## Alert Routing
 
 AgentOps scheduled query rules are disabled by default and should stay that way until thresholds are tuned from real traffic.

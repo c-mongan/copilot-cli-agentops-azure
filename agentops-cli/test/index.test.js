@@ -2445,11 +2445,41 @@ test('validateAzure runs read-only Azure checks with mocked az output', () => {
       if (args.includes('log-analytics') && args.includes('query')) {
         return { status: 0, stdout: JSON.stringify([{ Rows: 3 }]), stderr: '' };
       }
+      if (args.includes('log-analytics') && args.includes('workspace') && args.includes('show')) {
+        return { status: 0, stdout: JSON.stringify({
+          retentionInDays: 30,
+          workspaceCapping: { dailyQuotaGb: 2 },
+          features: { enableLogAccessUsingOnlyResourcePermissions: true }
+        }), stderr: '' };
+      }
+      if (args[0] === 'grafana' && args[1] === 'show') {
+        return { status: 0, stdout: JSON.stringify({
+          name: 'graf-agentops-dev',
+          identity: { type: 'SystemAssigned' },
+          properties: {
+            apiKey: 'Disabled',
+            publicNetworkAccess: 'Enabled',
+            zoneRedundancy: 'Disabled'
+          }
+        }), stderr: '' };
+      }
       if (args.includes('data-source') && args.includes('list')) {
         return { status: 0, stdout: JSON.stringify([{ uid: 'azure-monitor-oob', name: 'Azure Monitor' }]), stderr: '' };
       }
       if (args.includes('dashboard') && args.includes('list')) {
         return { status: 0, stdout: JSON.stringify(expectedDashboards), stderr: '' };
+      }
+      if (args.includes('scheduled-query') && args.includes('list')) {
+        return { status: 0, stdout: JSON.stringify([
+          {
+            name: 'sqr-agentops-dev-failures',
+            properties: {
+              displayName: 'Copilot AgentOps failed spans',
+              enabled: false,
+              actions: { actionGroups: [] }
+            }
+          }
+        ]), stderr: '' };
       }
       return { status: 0, stdout: JSON.stringify({ name: args[args.length - 3] || 'ok' }), stderr: '' };
     }
@@ -2460,10 +2490,13 @@ test('validateAzure runs read-only Azure checks with mocked az output', () => {
   assert.equal(byName['azure-account'].ok, true);
   assert.equal(byName['resource-group'].ok, true);
   assert.equal(byName['log-analytics-query'].rows, 3);
+  assert.equal(byName['log-analytics-posture'].ok, true);
   assert.equal(byName['application-insights'].ok, true);
   assert.equal(byName['grafana-resource'].ok, true);
+  assert.equal(byName['grafana-production-posture'].ok, true);
   assert.equal(byName['grafana-datasource'].ok, true);
   assert.equal(byName['grafana-dashboards'].ok, true);
+  assert.equal(byName['alert-routing-posture'].ok, true);
   assert.ok(calls.some(([, args]) => args.includes('log-analytics') && args.includes('query')));
 });
 
@@ -2486,10 +2519,31 @@ test('validateAzure reports missing Grafana dashboards with import guidance', ()
       if (args.includes('log-analytics') && args.includes('query')) {
         return { status: 0, stdout: JSON.stringify([{ Rows: 0 }]), stderr: '' };
       }
+      if (args.includes('log-analytics') && args.includes('workspace') && args.includes('show')) {
+        return { status: 0, stdout: JSON.stringify({
+          retentionInDays: 30,
+          workspaceCapping: { dailyQuotaGb: 2 },
+          features: { enableLogAccessUsingOnlyResourcePermissions: true }
+        }), stderr: '' };
+      }
+      if (args[0] === 'grafana' && args[1] === 'show') {
+        return { status: 0, stdout: JSON.stringify({
+          name: 'graf-agentops-dev',
+          identity: { type: 'SystemAssigned' },
+          properties: {
+            apiKey: 'Disabled',
+            publicNetworkAccess: 'Enabled',
+            zoneRedundancy: 'Disabled'
+          }
+        }), stderr: '' };
+      }
       if (args.includes('data-source') && args.includes('list')) {
         return { status: 0, stdout: JSON.stringify([{ uid: 'azure-monitor-oob' }]), stderr: '' };
       }
       if (args.includes('dashboard') && args.includes('list')) {
+        return { status: 0, stdout: JSON.stringify([]), stderr: '' };
+      }
+      if (args.includes('scheduled-query') && args.includes('list')) {
         return { status: 0, stdout: JSON.stringify([]), stderr: '' };
       }
       return { status: 0, stdout: JSON.stringify({ name: 'ok' }), stderr: '' };
@@ -2529,10 +2583,31 @@ test('validateAzure can import missing Grafana dashboards only when explicitly r
       if (args.includes('log-analytics') && args.includes('query')) {
         return { status: 0, stdout: JSON.stringify([{ Rows: 0 }]), stderr: '' };
       }
+      if (args.includes('log-analytics') && args.includes('workspace') && args.includes('show')) {
+        return { status: 0, stdout: JSON.stringify({
+          retentionInDays: 30,
+          workspaceCapping: { dailyQuotaGb: 2 },
+          features: { enableLogAccessUsingOnlyResourcePermissions: true }
+        }), stderr: '' };
+      }
+      if (args[0] === 'grafana' && args[1] === 'show') {
+        return { status: 0, stdout: JSON.stringify({
+          name: 'graf-agentops-dev',
+          identity: { type: 'SystemAssigned' },
+          properties: {
+            apiKey: 'Disabled',
+            publicNetworkAccess: 'Enabled',
+            zoneRedundancy: 'Disabled'
+          }
+        }), stderr: '' };
+      }
       if (args.includes('data-source') && args.includes('list')) {
         return { status: 0, stdout: JSON.stringify([{ uid: 'azure-monitor-oob' }]), stderr: '' };
       }
       if (args.includes('dashboard') && args.includes('list')) {
+        return { status: 0, stdout: JSON.stringify([]), stderr: '' };
+      }
+      if (args.includes('scheduled-query') && args.includes('list')) {
         return { status: 0, stdout: JSON.stringify([]), stderr: '' };
       }
       return { status: 0, stdout: JSON.stringify({ name: 'ok' }), stderr: '' };
@@ -2544,6 +2619,74 @@ test('validateAzure can import missing Grafana dashboards only when explicitly r
   assert.equal(byName['grafana-dashboard-import'].ok, true);
   assert.match(byName['grafana-dashboard-import'].command, /agentops dashboard import --yes --resource-group rg-agentops-dev --grafana-name graf-agentops-dev/);
   assert.ok(result.next.includes('agentops validate-azure --last 24h'));
+});
+
+test('validateAzure production mode enforces Grafana and alert routing posture', () => {
+  const result = validateAzure({
+    production: true,
+    workspaceId: 'workspace-123',
+    resourceGroup: 'rg-agentops-dev',
+    grafanaBaseUrl: 'https://grafana.example',
+    grafanaName: 'graf-agentops-dev',
+    appInsightsName: 'appi-agentops-dev',
+    expectedDashboards: [],
+    last: '1h',
+    spawnSync: (command, args) => {
+      if (args.includes('account') && args.includes('show')) {
+        return { status: 0, stdout: JSON.stringify({ id: 'sub-123', name: 'Demo Sub' }), stderr: '' };
+      }
+      if (args.includes('group') && args.includes('exists')) {
+        return { status: 0, stdout: 'true\n', stderr: '' };
+      }
+      if (args.includes('log-analytics') && args.includes('query')) {
+        return { status: 0, stdout: JSON.stringify([{ Rows: 1 }]), stderr: '' };
+      }
+      if (args.includes('log-analytics') && args.includes('workspace') && args.includes('show')) {
+        return { status: 0, stdout: JSON.stringify({
+          retentionInDays: 30,
+          workspaceCapping: { dailyQuotaGb: 2 },
+          features: { enableLogAccessUsingOnlyResourcePermissions: true }
+        }), stderr: '' };
+      }
+      if (args[0] === 'grafana' && args[1] === 'show') {
+        return { status: 0, stdout: JSON.stringify({
+          name: 'graf-agentops-dev',
+          identity: { type: 'SystemAssigned' },
+          properties: {
+            apiKey: 'Disabled',
+            publicNetworkAccess: 'Enabled',
+            zoneRedundancy: 'Disabled'
+          }
+        }), stderr: '' };
+      }
+      if (args.includes('data-source') && args.includes('list')) {
+        return { status: 0, stdout: JSON.stringify([{ uid: 'azure-monitor-oob' }]), stderr: '' };
+      }
+      if (args.includes('dashboard') && args.includes('list')) {
+        return { status: 0, stdout: JSON.stringify([]), stderr: '' };
+      }
+      if (args.includes('scheduled-query') && args.includes('list')) {
+        return { status: 0, stdout: JSON.stringify([
+          {
+            name: 'sqr-agentops-dev-failures',
+            properties: {
+              displayName: 'Copilot AgentOps failed spans',
+              enabled: true,
+              actions: { actionGroups: [] }
+            }
+          }
+        ]), stderr: '' };
+      }
+      return { status: 0, stdout: JSON.stringify({ name: 'ok' }), stderr: '' };
+    }
+  });
+  const byName = Object.fromEntries(result.checks.map(check => [check.name, check]));
+
+  assert.equal(result.ok, false);
+  assert.equal(byName['grafana-production-posture'].ok, false);
+  assert.equal(byName['grafana-production-posture'].production, true);
+  assert.equal(byName['alert-routing-posture'].ok, false);
+  assert.match(result.next.join('\n'), /action groups/);
 });
 
 test('Grafana dashboard inventory reads stable dashboard UIDs from repo', () => {
