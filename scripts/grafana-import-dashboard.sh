@@ -1,25 +1,38 @@
 #!/usr/bin/env bash
-# Imports / updates the Copilot CLI AgentOps dashboards in Azure Managed Grafana.
-# Source of truth: grafana/agentops-dashboard.json, grafana/agentops-*.json,
-# and grafana/dashboards/v2/*.json.
+# Imports / updates the Copilot AgentOps dashboards in Azure Managed Grafana.
+# Source of truth for the product experience: grafana/dashboards/v2/*.json.
+# Legacy raw-OTel dashboards remain available for debugging with
+# AGENTOPS_INCLUDE_LEGACY=true.
 #
 # Required env (auto-resolved from azd env when run as an azd hook):
 #   AZURE_RESOURCE_GROUP   e.g. rg-agentops-dev
 #   GRAFANA_NAME           e.g. graf-agentops-dev
 # Optional:
-#   GRAFANA_FOLDER         folder title (default: "AgentOps")
+#   GRAFANA_FOLDER         folder title (default: "AgentOps for Azure")
 #   DASHBOARD_JSON         path to one dashboard JSON (default: import the full dashboard pack)
 #   AGENTOPS_INCLUDE_V2    include V2 control-room dashboards (default: true)
-#   AGENTOPS_V2_ONLY       import only V2 control-room dashboards (default: false)
+#   AGENTOPS_INCLUDE_LEGACY include legacy raw-OTel dashboards (default: false)
+#   AGENTOPS_V2_ONLY       import only V2 control-room dashboards (default: true)
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-if [[ "${AGENTOPS_V2_ONLY:-false}" == "true" ]]; then
-  GRAFANA_FOLDER="${GRAFANA_FOLDER:-AgentOps for Azure}"
-else
+
+if [[ "${AGENTOPS_V2_ONLY:-true}" == "true" ]]; then
+  AGENTOPS_INCLUDE_V2="true"
+  AGENTOPS_INCLUDE_LEGACY="false"
+fi
+
+AGENTOPS_INCLUDE_V2="${AGENTOPS_INCLUDE_V2:-true}"
+AGENTOPS_INCLUDE_LEGACY="${AGENTOPS_INCLUDE_LEGACY:-false}"
+
+if [[ "${AGENTOPS_INCLUDE_LEGACY}" == "true" && "${AGENTOPS_INCLUDE_V2}" != "true" ]]; then
+  GRAFANA_FOLDER="${GRAFANA_FOLDER:-AgentOps Legacy}"
+elif [[ "${AGENTOPS_INCLUDE_LEGACY}" == "true" && "${AGENTOPS_INCLUDE_V2}" == "true" ]]; then
   GRAFANA_FOLDER="${GRAFANA_FOLDER:-AgentOps}"
+else
+  GRAFANA_FOLDER="${GRAFANA_FOLDER:-AgentOps for Azure}"
 fi
 
 # Pull from azd env if not set explicitly
@@ -50,29 +63,27 @@ if [[ -n "${DASHBOARD_JSON:-}" ]]; then
     exit 2
   fi
   DASHBOARD_FILES=("${DASHBOARD_JSON}")
-elif [[ "${AGENTOPS_V2_ONLY:-false}" == "true" ]]; then
-  DASHBOARD_FILES=()
-  while IFS= read -r dashboard_file; do
-    DASHBOARD_FILES+=("${dashboard_file}")
-  done < <(find "${REPO_ROOT}/grafana/dashboards/v2" -maxdepth 1 -name '*.json' -type f | sort)
 else
-  DASHBOARD_FILES=(
-    "${REPO_ROOT}/grafana/agentops-dashboard.json"
-    "${REPO_ROOT}/grafana/agentops-sessions.json"
-    "${REPO_ROOT}/grafana/agentops-session-detail.json"
-    "${REPO_ROOT}/grafana/agentops-live-replay.json"
-    "${REPO_ROOT}/grafana/agentops-traces-spans.json"
-    "${REPO_ROOT}/grafana/agentops-tools-mcp.json"
-    "${REPO_ROOT}/grafana/agentops-attribution.json"
-    "${REPO_ROOT}/grafana/agentops-runtime-events.json"
-    "${REPO_ROOT}/grafana/agentops-safety-policy.json"
-    "${REPO_ROOT}/grafana/agentops-permission-friction.json"
-    "${REPO_ROOT}/grafana/agentops-alert-tuning.json"
-    "${REPO_ROOT}/grafana/agentops-quality.json"
-    "${REPO_ROOT}/grafana/agentops-experiments.json"
-    "${REPO_ROOT}/grafana/agentops-data-quality.json"
-  )
-  if [[ "${AGENTOPS_INCLUDE_V2:-true}" == "true" && -d "${REPO_ROOT}/grafana/dashboards/v2" ]]; then
+  DASHBOARD_FILES=()
+  if [[ "${AGENTOPS_INCLUDE_LEGACY}" == "true" ]]; then
+    DASHBOARD_FILES+=(
+      "${REPO_ROOT}/grafana/agentops-dashboard.json"
+      "${REPO_ROOT}/grafana/agentops-sessions.json"
+      "${REPO_ROOT}/grafana/agentops-session-detail.json"
+      "${REPO_ROOT}/grafana/agentops-live-replay.json"
+      "${REPO_ROOT}/grafana/agentops-traces-spans.json"
+      "${REPO_ROOT}/grafana/agentops-tools-mcp.json"
+      "${REPO_ROOT}/grafana/agentops-attribution.json"
+      "${REPO_ROOT}/grafana/agentops-runtime-events.json"
+      "${REPO_ROOT}/grafana/agentops-safety-policy.json"
+      "${REPO_ROOT}/grafana/agentops-permission-friction.json"
+      "${REPO_ROOT}/grafana/agentops-alert-tuning.json"
+      "${REPO_ROOT}/grafana/agentops-quality.json"
+      "${REPO_ROOT}/grafana/agentops-experiments.json"
+      "${REPO_ROOT}/grafana/agentops-data-quality.json"
+    )
+  fi
+  if [[ "${AGENTOPS_INCLUDE_V2}" == "true" && -d "${REPO_ROOT}/grafana/dashboards/v2" ]]; then
     while IFS= read -r dashboard_file; do
       DASHBOARD_FILES+=("${dashboard_file}")
     done < <(find "${REPO_ROOT}/grafana/dashboards/v2" -maxdepth 1 -name '*.json' -type f | sort)

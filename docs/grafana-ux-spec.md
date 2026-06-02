@@ -69,3 +69,4 @@ agentops dashboard import
 `verify` runs the static dashboard gates together. Add `--live --last 24h` to include Azure KQL checks.
 
 `import` is a dry-run by default. Use `agentops dashboard import --yes --resource-group <rg> --grafana-name <name>` to import the V2 pack into the `AgentOps for Azure` folder.
+The V2 pack is the default product experience. Legacy raw-OTel dashboards under `grafana/agentops-*.json` are debug views and are imported only with `agentops dashboard import --all` or `AGENTOPS_INCLUDE_LEGACY=true`.

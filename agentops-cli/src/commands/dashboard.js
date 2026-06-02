@@ -533,7 +533,7 @@ function dashboardImportPlan(args = [], options = {}) {
     .filter(file => !v2Only || file.includes(`${path.sep}dashboards${path.sep}v2${path.sep}`));
   const command = [
     `GRAFANA_FOLDER=${JSON.stringify(folder)}`,
-    v2Only ? 'AGENTOPS_V2_ONLY=true' : 'AGENTOPS_INCLUDE_V2=true',
+    v2Only ? 'AGENTOPS_V2_ONLY=true' : 'AGENTOPS_V2_ONLY=false AGENTOPS_INCLUDE_V2=true AGENTOPS_INCLUDE_LEGACY=true',
     resourceGroup ? `AZURE_RESOURCE_GROUP=${JSON.stringify(resourceGroup)}` : 'AZURE_RESOURCE_GROUP=<resource-group>',
     grafanaName ? `GRAFANA_NAME=${JSON.stringify(grafanaName)}` : 'GRAFANA_NAME=<managed-grafana-name>',
     script
@@ -566,7 +566,8 @@ function runDashboardImport(args = [], options = {}) {
     ...(options.env || process.env),
     GRAFANA_FOLDER: plan.folder,
     AGENTOPS_V2_ONLY: plan.v2_only ? 'true' : 'false',
-    AGENTOPS_INCLUDE_V2: 'true'
+    AGENTOPS_INCLUDE_V2: 'true',
+    AGENTOPS_INCLUDE_LEGACY: plan.v2_only ? 'false' : 'true'
   };
   const resourceGroup = optionValue(args, '--resource-group', env.AZURE_RESOURCE_GROUP || '');
   const grafanaName = optionValue(args, '--grafana-name', env.GRAFANA_NAME || env.AGENTOPS_GRAFANA_NAME || '');
