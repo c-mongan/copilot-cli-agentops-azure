@@ -43,7 +43,7 @@ function usage() {
     'codex [codex-args...]',
     'compat-check [--last <duration>]',
     'validate-collector [endpoint]',
-    'validate-azure [--last <duration>] [--production] [--json]',
+    'validate-azure [--last <duration>] [--production] [--remediation-plan] [--json]',
     'init [--dry-run] [--force-skills] [--json]',
     'smoke [--dry-run] [--endpoint <url>] [--id <smoke-id>] [--last <duration>] [--wait <duration>] [--poll <duration>] [--no-verify] [--json]',
     'attribution-smoke [--dry-run] [--endpoint <url>] [--id <smoke-id>] [--last <duration>] [--wait <duration>] [--poll <duration>] [--no-verify] [--json]',
@@ -2949,6 +2949,71 @@ function agentOpsScheduledQueryRules(rules) {
   });
 }
 
+function azureProductionRemediationPlan(result, options = {}) {
+  const checks = Object.fromEntries((result.checks || []).map(check => [check.name, check]));
+  const config = result.config || {};
+  const resourceGroup = config.resource_group || '<resource-group>';
+  const workspaceName = config.workspace_name || '<workspace-name>';
+  const grafanaName = config.grafana_name || '<grafana-name>';
+  const desiredQuotaGb = Number(options.dailyQuotaGb || 5);
+  const actionGroups = options.actionGroupResourceIds || '["/subscriptions/<sub>/resourceGroups/<rg>/providers/microsoft.insights/actionGroups/<name>"]';
+  const actions = [];
+
+  if (checks['log-analytics-posture'] && !checks['log-analytics-posture'].ok) {
+    actions.push({
+      name: 'set-log-analytics-daily-cap',
+      risk: 'low',
+      reason: 'Production mode expects a finite Log Analytics daily ingestion cap.',
+      review: 'Confirm expected telemetry volume before applying the cap.',
+      commands: [
+        `az monitor log-analytics workspace update --resource-group ${commandShellQuote(resourceGroup)} --workspace-name ${commandShellQuote(workspaceName)} --quota ${desiredQuotaGb}`,
+        `node agentops-cli/src/index.js validate-azure --last ${result.last || '24h'} --production --json`
+      ]
+    });
+  }
+
+  if (checks['grafana-production-posture'] && !checks['grafana-production-posture'].ok) {
+    actions.push({
+      name: 'harden-managed-grafana-network-and-availability',
+      risk: 'medium',
+      reason: 'Production mode expects Managed Grafana private access and zone redundancy.',
+      review: 'Verify private connectivity, DNS, operator access, and regional zone-redundancy support before disabling public access.',
+      commands: [
+        `AGENTOPS_GRAFANA_PUBLIC_NETWORK_ACCESS=Disabled AGENTOPS_GRAFANA_ZONE_REDUNDANCY=Enabled ./scripts/azure-what-if.sh`,
+        `az grafana update --resource-group ${commandShellQuote(resourceGroup)} --name ${commandShellQuote(grafanaName)} --public-network-access Disabled --zone-redundancy Enabled`,
+        `node agentops-cli/src/index.js validate-azure --last ${result.last || '24h'} --production --json`
+      ]
+    });
+  }
+
+  if (checks['alert-routing-posture'] && !checks['alert-routing-posture'].ok) {
+    const ruleNames = asArray(checks['alert-routing-posture'].rule_names).length
+      ? asArray(checks['alert-routing-posture'].rule_names)
+      : ['sqr-<agentops-alert-name>'];
+    actions.push({
+      name: 'route-agentops-alerts-to-action-groups',
+      risk: 'medium',
+      reason: 'Production mode expects enabled AgentOps scheduled query alerts routed to Azure Monitor action groups.',
+      review: 'Create or approve action groups first, then tune thresholds against real traffic before enabling notifications.',
+      commands: [
+        `export AGENTOPS_ALERT_ACTION_GROUP_RESOURCE_IDS=${commandShellQuote(String(actionGroups))}`,
+        'AGENTOPS_DEPLOY_ALERTS=true AGENTOPS_ENABLE_ALERTS=true ./scripts/azure-what-if.sh',
+        ...ruleNames.map(name => `az monitor scheduled-query update --resource-group ${commandShellQuote(resourceGroup)} --name ${commandShellQuote(name)} --disabled false --action-groups "$AGENTOPS_ALERT_ACTION_GROUP_RESOURCE_IDS"`),
+        `node agentops-cli/src/index.js validate-azure --last ${result.last || '24h'} --production --json`
+      ]
+    });
+  }
+
+  return {
+    ok: actions.length === 0,
+    mode: 'proposal-only',
+    actions,
+    note: actions.length === 0
+      ? 'No production posture remediation is currently required.'
+      : 'Review these commands before running them. The planner does not mutate Azure.'
+  };
+}
+
 function validateAzure(options = {}) {
   const last = validateKqlDuration(options.last || '2h');
   const cloud = configuredCloudValues(options);
@@ -3032,6 +3097,11 @@ function validateAzure(options = {}) {
       retention_days: Number.isFinite(retentionDays) ? retentionDays : null,
       daily_quota_gb: Number.isFinite(dailyQuotaGb) ? dailyQuotaGb : null,
       resource_scoped_access: resourceScopedAccess,
+      issues: [
+        retentionDays <= 0 ? 'retention' : null,
+        dailyQuotaGb === -1 ? 'daily_cap' : null,
+        !resourceScopedAccess ? 'resource_scoped_access' : null
+      ].filter(Boolean),
       production,
       detail: workspaceResult.status !== 0
         ? azErrorDetail(workspaceResult, 'could not read Log Analytics workspace posture')
@@ -3098,6 +3168,12 @@ function validateAzure(options = {}) {
         api_key: apiKey || null,
         public_network_access: publicNetworkAccess,
         zone_redundancy: zoneRedundancy,
+        issues: [
+          !identityType.includes('SystemAssigned') ? 'managed_identity' : null,
+          apiKey !== 'Disabled' ? 'api_keys' : null,
+          publicNetworkAccess !== 'Disabled' ? 'public_network_access' : null,
+          zoneRedundancy !== 'Enabled' ? 'zone_redundancy' : null
+        ].filter(Boolean),
         production,
         detail: grafanaPostureOk
           ? (production ? 'managed identity and Grafana hardening posture verified' : 'pilot Grafana posture observed')
@@ -3168,11 +3244,15 @@ function validateAzure(options = {}) {
     const rules = alertResult.status === 0 ? agentOpsScheduledQueryRules(parseJsonOutput(alertResult)) : [];
     const enabledRules = rules.filter(rule => boolish(pathValue(rule, ['properties', 'enabled'], false)));
     const routedRules = rules.filter(rule => asArray(pathValue(rule, ['properties', 'actions', 'actionGroups'], [])).length > 0);
+    const unroutedRules = rules.filter(rule => asArray(pathValue(rule, ['properties', 'actions', 'actionGroups'], [])).length === 0);
     const alertPostureOk = alertResult.status === 0 && (!production || (enabledRules.length > 0 && enabledRules.length === routedRules.length));
     checks.push(checkResult('alert-routing-posture', alertPostureOk, {
       rules: rules.length,
+      rule_names: rules.map(rule => rule.name).filter(Boolean),
       enabled_rules: enabledRules.length,
+      enabled_rule_names: enabledRules.map(rule => rule.name).filter(Boolean),
       routed_rules: routedRules.length,
+      unrouted_rule_names: unroutedRules.map(rule => rule.name).filter(Boolean),
       production,
       detail: alertResult.status !== 0
         ? azErrorDetail(alertResult, 'could not list scheduled query rules')
@@ -3193,7 +3273,7 @@ function validateAzure(options = {}) {
     next.push('node agentops-cli/src/index.js latest --last 2h');
   }
 
-  return {
+  const result = {
     ok: checks.every(check => check.ok),
     last,
     config: {
@@ -3209,6 +3289,10 @@ function validateAzure(options = {}) {
     checks,
     next
   };
+  if (options.remediationPlan) {
+    result.remediation_plan = azureProductionRemediationPlan(result, options);
+  }
+  return result;
 }
 
 function renderValidateAzure(result) {
@@ -3223,6 +3307,14 @@ function renderValidateAzure(result) {
     }
   }
   lines.push('', result.ok ? 'Azure validation passed.' : 'Azure validation is incomplete.');
+  if (result.remediation_plan) {
+    lines.push('', 'Remediation plan:', result.remediation_plan.note);
+    for (const action of result.remediation_plan.actions || []) {
+      lines.push(`- ${action.name} (${action.risk}): ${action.reason}`);
+      lines.push(`  review: ${action.review}`);
+      for (const command of action.commands || []) lines.push(`  command: ${command}`);
+    }
+  }
   lines.push('Next:');
   for (const item of result.next) lines.push(`- ${item}`);
   return `${lines.join('\n')}\n`;
@@ -5850,7 +5942,8 @@ async function main(argv) {
     const result = validateAzure({
       last,
       importDashboards: args.includes('--import-dashboards'),
-      production: args.includes('--production')
+      production: args.includes('--production'),
+      remediationPlan: args.includes('--remediation-plan')
     });
     process.stdout.write(args.includes('--json') ? JSON.stringify(result, null, 2) + '\n' : renderValidateAzure(result));
     process.exitCode = result.ok ? 0 : 1;

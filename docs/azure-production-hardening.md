@@ -55,6 +55,14 @@ For production readiness, add `--production`:
 node agentops-cli/src/index.js validate-azure --last 24h --production --json
 ```
 
+To get a proposal-only remediation plan for failed production checks:
+
+```bash
+node agentops-cli/src/index.js validate-azure --last 24h --production --remediation-plan --json
+```
+
+The remediation plan prints commands to review. It does not mutate Azure. Treat the Grafana private-access command as a controlled change: verify private connectivity, DNS, and operator access before disabling public access.
+
 The production gate verifies the deployed posture, not only the Bicep files:
 
 - Log Analytics retention, daily cap, and resource-scoped access;

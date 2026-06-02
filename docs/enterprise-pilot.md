@@ -167,6 +167,12 @@ After deployment, verify the live posture:
 agentops validate-azure --last 24h --production --json
 ```
 
+If the production gate fails, print a proposal-only fix plan:
+
+```bash
+agentops validate-azure --last 24h --production --remediation-plan --json
+```
+
 Use normal `agentops validate-azure --last 24h` during pilots when public access or disabled alerts are intentional.
 
 ## Alert Routing
