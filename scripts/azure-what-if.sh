@@ -9,6 +9,11 @@ base_name="${AGENTOPS_BASE_NAME:-copilot-agentops}"
 deployment_profile="${AGENTOPS_DEPLOYMENT_PROFILE:-team}"
 log_retention_days="${AGENTOPS_LOG_RETENTION_DAYS:-0}"
 daily_ingestion_cap_gb="${AGENTOPS_DAILY_INGESTION_CAP_GB:-0}"
+deploy_alerts="${AGENTOPS_DEPLOY_ALERTS:-false}"
+enable_alerts="${AGENTOPS_ENABLE_ALERTS:-false}"
+alert_action_group_resource_ids="${AGENTOPS_ALERT_ACTION_GROUP_RESOURCE_IDS:-[]}"
+grafana_public_network_access="${AGENTOPS_GRAFANA_PUBLIC_NETWORK_ACCESS:-Enabled}"
+grafana_zone_redundancy="${AGENTOPS_GRAFANA_ZONE_REDUNDANCY:-Disabled}"
 deploy_rbac_assignments="${AGENTOPS_DEPLOY_RBAC_ASSIGNMENTS:-false}"
 observer_principal_ids="${AGENTOPS_OBSERVER_PRINCIPAL_IDS:-[]}"
 operator_principal_ids="${AGENTOPS_OPERATOR_PRINCIPAL_IDS:-[]}"
@@ -34,4 +39,4 @@ fi
 az deployment group what-if \
   --resource-group "$resource_group" \
   --template-file infra/bicep/main.bicep \
-  --parameters environmentName="$environment_name" location="$location" baseName="$base_name" deploymentProfile="$deployment_profile" logRetentionDays="$log_retention_days" dailyIngestionCapGb="$daily_ingestion_cap_gb" deployRbacAssignments="$deploy_rbac_assignments" observerPrincipalIds="$observer_principal_ids" operatorPrincipalIds="$operator_principal_ids" adminPrincipalIds="$admin_principal_ids" deployBudget="$deploy_budget" monthlyBudgetAmount="$monthly_budget_amount" budgetContactEmails="$budget_contact_emails"
+  --parameters environmentName="$environment_name" location="$location" baseName="$base_name" deploymentProfile="$deployment_profile" logRetentionDays="$log_retention_days" dailyIngestionCapGb="$daily_ingestion_cap_gb" deployAlerts="$deploy_alerts" enableAlerts="$enable_alerts" alertActionGroupResourceIds="$alert_action_group_resource_ids" grafanaPublicNetworkAccess="$grafana_public_network_access" grafanaZoneRedundancy="$grafana_zone_redundancy" deployRbacAssignments="$deploy_rbac_assignments" observerPrincipalIds="$observer_principal_ids" operatorPrincipalIds="$operator_principal_ids" adminPrincipalIds="$admin_principal_ids" deployBudget="$deploy_budget" monthlyBudgetAmount="$monthly_budget_amount" budgetContactEmails="$budget_contact_emails"

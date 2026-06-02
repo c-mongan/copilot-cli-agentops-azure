@@ -65,6 +65,9 @@ dailyIngestionCapGb        0, profile default 2 GB
 deployActioner             false
 deployAlerts               false
 enableAlerts               false
+alertActionGroupResourceIds []
+grafanaPublicNetworkAccess Enabled until private access is tested
+grafanaZoneRedundancy      Disabled until region/SKU support is confirmed
 deployRbacAssignments      false until Entra group IDs are approved
 deployBudget               false until a budget contact list is approved
 ```
@@ -144,6 +147,32 @@ Role references:
 
 - Azure Monitor built-in roles: https://learn.microsoft.com/azure/role-based-access-control/built-in-roles/monitor
 - Azure Managed Grafana access: https://learn.microsoft.com/azure/managed-grafana/how-to-manage-access-permissions-users-identities
+- Azure production hardening checklist: `docs/azure-production-hardening.md`
+
+## Grafana Network And Availability
+
+For early pilots, public Managed Grafana access with Entra/RBAC can be acceptable. For production or regulated environments, make the network posture an explicit review item:
+
+```bash
+AGENTOPS_GRAFANA_PUBLIC_NETWORK_ACCESS=Disabled \
+AGENTOPS_GRAFANA_ZONE_REDUNDANCY=Enabled \
+./scripts/azure-what-if.sh
+```
+
+Only disable public access after private connectivity, DNS, and operator access have been tested.
+
+## Alert Routing
+
+AgentOps scheduled query rules are disabled by default and should stay that way until thresholds are tuned from real traffic.
+
+When alerts are ready, route them through approved Azure Monitor action groups:
+
+```bash
+AGENTOPS_DEPLOY_ALERTS=true \
+AGENTOPS_ENABLE_ALERTS=true \
+AGENTOPS_ALERT_ACTION_GROUP_RESOURCE_IDS='["/subscriptions/<sub>/resourceGroups/<rg>/providers/microsoft.insights/actionGroups/<name>"]' \
+./scripts/azure-what-if.sh
+```
 
 ## Cost Guardrails
 

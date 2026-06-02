@@ -3,6 +3,7 @@ param baseName string
 param environmentName string
 param logAnalyticsWorkspaceResourceId string
 param enabled bool = false
+param actionGroupResourceIds array = []
 param tags object
 
 resource highAiuAlert 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = {
@@ -42,7 +43,7 @@ AppDependencies
       ]
     }
     actions: {
-      actionGroups: []
+      actionGroups: actionGroupResourceIds
       customProperties: {
         mode: 'proposal-only'
       }
@@ -88,7 +89,7 @@ AppDependencies
       ]
     }
     actions: {
-      actionGroups: []
+      actionGroups: actionGroupResourceIds
       customProperties: {
         mode: 'proposal-only'
       }
@@ -133,7 +134,7 @@ union isfuzzy=true AppDependencies, AppTraces
       ]
     }
     actions: {
-      actionGroups: []
+      actionGroups: actionGroupResourceIds
       customProperties: {
         mode: 'proposal-only'
       }

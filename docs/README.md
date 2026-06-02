@@ -68,6 +68,7 @@ For rendered docs and presentations:
 4. [Copilot SDK adapter](copilot-sdk-adapter.md)
 5. [MCP observability proxy](mcp-observability-proxy.md)
 6. [Azure V2 ingestion](azure-v2-ingestion.md)
+7. [Azure production hardening](azure-production-hardening.md)
 
 ### Coding Agent Or LLM
 

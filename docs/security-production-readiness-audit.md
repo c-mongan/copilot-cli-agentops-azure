@@ -141,11 +141,11 @@ It should wrap:
 
 ### P2: Azure/Grafana production posture checklist
 
-Status: open.
+Status: fixed in this branch.
 
 Azure Managed Grafana is the right product choice when the deployment needs audit usage logs, private networking, managed identity/service principal auth, alerts, reports, or sharing access without exposing the underlying data store.
 
-Add a deployment checklist for:
+Added `docs/azure-production-hardening.md` and `validate-enterprise` checks for:
 
 - managed identity or service principal data source auth;
 - least-privilege RBAC for Log Analytics;
@@ -157,9 +157,9 @@ Add a deployment checklist for:
 
 ## Recommended Next PRs
 
-1. `azure-prod-hardening`: add Managed Grafana/RBAC/private networking checklist and validation queries.
-2. `content-retention-rbac`: document short retention and restricted access for optional content-capture workspaces.
-3. `sdk-publish-hardening`: pin SDK peer dependency expectations and add package-publish dry-run checks.
+1. `content-retention-rbac`: document short retention and restricted access for optional content-capture workspaces.
+2. `sdk-publish-hardening`: pin SDK peer dependency expectations and add package-publish dry-run checks.
+3. `live-azure-posture-query`: add read-only live checks for deployed Grafana public access, zone redundancy, action groups, retention, and daily cap.
 
 ## Verification From Initial Audit
 
