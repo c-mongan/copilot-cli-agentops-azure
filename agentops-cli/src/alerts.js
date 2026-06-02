@@ -18,6 +18,7 @@ AppDependencies
     spans=count(),
     failures=countif(Success == false or tostring(Success) =~ "false" or isnotempty(error)),
     tool_failures=countif((operation == "execute_tool" or isnotempty(tool)) and (Success == false or tostring(Success) =~ "false" or isnotempty(error))),
+    tool_calls=countif(operation == "execute_tool" or isnotempty(tool)),
     aiu=sum(AIU),
     credits=sum(Credits)
   by conversation, bin(TimeGenerated, 1h);
@@ -38,6 +39,8 @@ hourly
     max_failures=max(failures),
     p95_tool_failures=percentile(tool_failures, 95),
     max_tool_failures=max(tool_failures),
+    p95_tool_calls=percentile(tool_calls, 95),
+    max_tool_calls=max(tool_calls),
     p95_credits=percentile(credits, 95),
     max_credits=max(credits);
 let content_rollup =
@@ -47,6 +50,12 @@ union
 (session_rollup
 | extend suggested_threshold = case(p99_aiu * 1.25 > p95_aiu * 2, p99_aiu * 1.25, p95_aiu * 2)
 | project rule="high-aiu", current_threshold=50000000000.0, suggested_threshold, p50=p50_aiu, p95=p95_aiu, p99=p99_aiu, max_observed=max_aiu, supporting_hours=hours),
+(session_rollup
+| extend suggested_threshold = case(p95_credits * 2 > 1.0, p95_credits * 2, 1.0)
+| project rule="cost-spike", current_threshold=1.0, suggested_threshold, p50=real(null), p95=p95_credits, p99=real(null), max_observed=max_credits, supporting_hours=hours),
+(session_rollup
+| extend suggested_threshold = case(p95_tool_calls * 2 > 25.0, p95_tool_calls * 2, 25.0)
+| project rule="runaway-tool-loop", current_threshold=25.0, suggested_threshold, p50=real(null), p95=p95_tool_calls, p99=real(null), max_observed=todouble(max_tool_calls), supporting_hours=hours),
 (session_rollup
 | extend suggested_threshold = case(p95_failures > 1, p95_failures, 1.0)
 | project rule="failed-spans", current_threshold=0.0, suggested_threshold, p50=real(null), p95=p95_failures, p99=real(null), max_observed=max_failures, supporting_hours=hours),
@@ -70,6 +79,24 @@ union
           suggested_threshold: 'max(p99_aiu * 1.25, p95_aiu * 2)',
           validation_query: 'Run alert recommend and inspect p95_aiu, p99_aiu, max_aiu before changing infra/bicep/alerts.bicep.',
           rollout: 'Keep enableAlerts=false until the threshold has at least 14 days of clean history.'
+        },
+        {
+          name: 'cost-spike',
+          bicep_resource: 'highAiuAlert',
+          signal: 'hourly GitHub Copilot credits above tuned cost history',
+          current_threshold: 1,
+          suggested_threshold: 'max(1, p95_credits * 2)',
+          validation_query: 'Inspect p95_credits and max_credits before changing budget contacts or alert thresholds.',
+          rollout: 'Pair with an Azure Consumption budget and keep action groups off until cost history is understood.'
+        },
+        {
+          name: 'runaway-tool-loop',
+          bicep_resource: 'failureAlert',
+          signal: 'tool calls per conversation-hour above tuned history',
+          current_threshold: 25,
+          suggested_threshold: 'max(25, p95_tool_calls * 2)',
+          validation_query: 'Compare p95_tool_calls and max_tool_calls with the runaway-tool-loop abuse fixture.',
+          rollout: 'Review tool permission policy before routing this rule to action groups.'
         },
         {
           name: 'failed-spans',

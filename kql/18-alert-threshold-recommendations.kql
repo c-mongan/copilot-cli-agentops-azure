@@ -28,6 +28,7 @@ AppDependencies
     spans = count(),
     failures = countif(Success == false or tostring(Success) =~ "false" or isnotempty(error)),
     tool_failures = countif((operation == "execute_tool" or isnotempty(tool)) and (Success == false or tostring(Success) =~ "false" or isnotempty(error))),
+    tool_calls = countif(operation == "execute_tool" or isnotempty(tool)),
     aiu = sum(aiu),
     credits = sum(credits)
   by conversation, bin(TimeGenerated, 1h);
@@ -47,6 +48,8 @@ hourly
     max_failures = max(failures),
     p95_tool_failures = percentile(tool_failures, 95),
     max_tool_failures = max(tool_failures),
+    p95_tool_calls = percentile(tool_calls, 95),
+    max_tool_calls = max(tool_calls),
     p95_credits = percentile(credits, 95),
     max_credits = max(credits);
 let content_rollup =
@@ -58,6 +61,12 @@ union
 (session_rollup
 | extend suggested_threshold = case(p99_aiu * 1.25 > p95_aiu * 2.0, todouble(p99_aiu * 1.25), todouble(p95_aiu * 2.0))
 | project rule = "high-aiu", current_threshold = 50000000000.0, suggested_threshold, p50 = p50_aiu, p95 = p95_aiu, p99 = p99_aiu, max_observed = max_aiu, supporting_hours = hours, rollout = "Keep disabled until at least 14 days of clean history."),
+(session_rollup
+| extend suggested_threshold = case(p95_credits * 2.0 > 1.0, todouble(p95_credits * 2.0), 1.0)
+| project rule = "cost-spike", current_threshold = 1.0, suggested_threshold, p50 = real(null), p95 = p95_credits, p99 = real(null), max_observed = max_credits, supporting_hours = hours, rollout = "Pair with an Azure Consumption budget and keep action groups off until cost history is understood."),
+(session_rollup
+| extend suggested_threshold = case(p95_tool_calls * 2.0 > 25.0, todouble(p95_tool_calls * 2.0), 25.0)
+| project rule = "runaway-tool-loop", current_threshold = 25.0, suggested_threshold, p50 = real(null), p95 = p95_tool_calls, p99 = real(null), max_observed = todouble(max_tool_calls), supporting_hours = hours, rollout = "Review tool permission policy before routing this rule to action groups."),
 (session_rollup
 | extend suggested_threshold = case(p95_failures > 1.0, todouble(p95_failures), 1.0)
 | project rule = "failed-spans", current_threshold = 0.0, suggested_threshold, p50 = real(null), p95 = p95_failures, p99 = real(null), max_observed = todouble(max_failures), supporting_hours = hours, rollout = "Review false positives in Permission Friction before attaching action groups."),
