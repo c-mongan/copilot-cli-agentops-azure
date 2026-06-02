@@ -24,7 +24,7 @@ const globalVariables = [
   ['run_id', '__all'],
   ['session_id', '__all'],
   ['trace_id', '__all'],
-  ['surface', '__all'],
+  ['surface', '__all,cli,sdk,vscode_mcp,github_action,cloud_agent,custom'],
   ['repo_hash', '__all'],
   ['branch_hash', '__all'],
   ['model', '__all'],
@@ -32,13 +32,13 @@ const globalVariables = [
   ['skill_name', '__all'],
   ['mcp_server', '__all'],
   ['sub_agent', '__all'],
-  ['task_type', '__all'],
+  ['task_type', '__all,explain,review,test,fix,refactor,docs,debug_ci,unknown'],
   ['tool_name', '__all'],
-  ['tool_risk', '__all'],
+  ['tool_risk', '__all,read-only,write-file,shell,network,secret-access,browser-control,destructive,privileged'],
   ['pattern_key', '__all'],
-  ['privacy_mode', '__all'],
-  ['outcome_status', '__all'],
-  ['eval_bucket', '__all']
+  ['privacy_mode', '__all,strict,compat,unsafe'],
+  ['outcome_status', '__all,success,failed,cancelled,blocked,unknown'],
+  ['eval_bucket', '__all,ok,review,poor']
 ];
 
 const nav = [
@@ -52,7 +52,7 @@ const nav = [
   ['Evals', 'agentops-v2-evals-quality'],
   ['Insights', 'agentops-v2-insights-regressions'],
   ['Collector', 'agentops-v2-collector-health']
-].map(([title, uid]) => ({ title, uid, type: 'link', icon: 'dashboard', url: `/d/${uid}`, targetBlank: false }));
+].map(([title, uid]) => ({ title, uid, type: 'link', icon: 'dashboard', url: `/d/${uid}`, targetBlank: false, keepTime: true, includeVars: true }));
 
 function variable(name, value) {
   return {
@@ -259,11 +259,15 @@ function filter(field, variable) {
   return `| where ('$${variable}' == '__all' or tostring(column_ifexists('${field}', '')) == '$${variable}')`;
 }
 
+function evalBucketFilter() {
+  return "| where ('$eval_bucket' == '__all' or tostring(column_ifexists('EvalBucket', '')) == iff('$eval_bucket' == 'ok', 'good', '$eval_bucket'))";
+}
+
 function runNormalize() {
   return [
     "| extend SkillName=tostring(column_ifexists('SkillName', ''))",
     "| extend ParentAgentName=tostring(column_ifexists('ParentAgentName', ''))",
-    "| extend SubAgentName=tostring(column_ifexists('SubAgentName', ''))",
+    "| extend SubAgentName=case(isnotempty(tostring(column_ifexists('SubAgentName', ''))), tostring(column_ifexists('SubAgentName', '')), isnotempty(ParentAgentName) and isnotempty(tostring(column_ifexists('AgentName', ''))) and tostring(column_ifexists('AgentName', '')) != ParentAgentName, tostring(column_ifexists('AgentName', '')), '')",
     "| extend DelegationId=tostring(column_ifexists('DelegationId', ''))",
     "| extend CacheReadTokens=todouble(column_ifexists('CacheReadTokens', 0.0))",
     "| extend CacheCreationTokens=todouble(column_ifexists('CacheCreationTokens', 0.0))",
@@ -277,7 +281,7 @@ function eventNormalize() {
   return [
     "| extend SkillName=tostring(column_ifexists('SkillName', ''))",
     "| extend ParentAgentName=tostring(column_ifexists('ParentAgentName', ''))",
-    "| extend SubAgentName=tostring(column_ifexists('SubAgentName', ''))",
+    "| extend SubAgentName=case(isnotempty(tostring(column_ifexists('SubAgentName', ''))), tostring(column_ifexists('SubAgentName', '')), isnotempty(ParentAgentName) and isnotempty(tostring(column_ifexists('AgentName', ''))) and tostring(column_ifexists('AgentName', '')) != ParentAgentName, tostring(column_ifexists('AgentName', '')), '')",
     "| extend DelegationId=tostring(column_ifexists('DelegationId', ''))",
     "| extend McpServer=case(isnotempty(tostring(column_ifexists('McpServer', ''))), tostring(column_ifexists('McpServer', '')), isnotempty(tostring(column_ifexists('McpServerName', ''))), tostring(column_ifexists('McpServerName', '')), tostring(column_ifexists('ServerName', '')))"
   ].join(' ');
@@ -287,6 +291,10 @@ function toolNormalize() {
   return [
     "| extend Surface=tostring(column_ifexists('Surface', ''))",
     "| extend AgentName=tostring(column_ifexists('AgentName', ''))",
+    "| extend SkillName=tostring(column_ifexists('SkillName', ''))",
+    "| extend ParentAgentName=tostring(column_ifexists('ParentAgentName', ''))",
+    "| extend SubAgentName=case(isnotempty(tostring(column_ifexists('SubAgentName', ''))), tostring(column_ifexists('SubAgentName', '')), isnotempty(ParentAgentName) and isnotempty(AgentName) and AgentName != ParentAgentName, AgentName, '')",
+    "| extend DelegationId=tostring(column_ifexists('DelegationId', ''))",
     "| extend McpServer=case(isnotempty(tostring(column_ifexists('McpServer', ''))), tostring(column_ifexists('McpServer', '')), isnotempty(tostring(column_ifexists('McpServerName', ''))), tostring(column_ifexists('McpServerName', '')), tostring(column_ifexists('ServerName', '')))"
   ].join(' ');
 }
@@ -307,7 +315,7 @@ function runFilters() {
     filter('PrivacyMode', 'privacy_mode'),
     filter('OutcomeStatus', 'outcome_status'),
     "| extend EvalBucket=case(EvalOverall >= 80, 'good', EvalOverall >= 60, 'review', 'poor')",
-    filter('EvalBucket', 'eval_bucket')
+    evalBucketFilter()
   ].join(' ');
 }
 
@@ -330,6 +338,9 @@ function toolFilters() {
     filter('TraceId', 'trace_id'),
     filter('Surface', 'surface'),
     filter('AgentName', 'agent_name'),
+    filter('SkillName', 'skill_name'),
+    filter('SubAgentName', 'sub_agent'),
+    filter('ModelActual', 'model'),
     filter('ToolName', 'tool_name'),
     filter('ToolRisk', 'tool_risk'),
     filter('McpServer', 'mcp_server')
@@ -351,7 +362,7 @@ function evalFilters() {
     filter('RepoHash', 'repo_hash'),
     filter('ModelActual', 'model'),
     filter('TaskType', 'task_type'),
-    filter('EvalBucket', 'eval_bucket')
+    evalBucketFilter()
   ].join(' ');
 }
 
@@ -388,6 +399,7 @@ function insightsNormalize() {
   return [
     "| extend RepoHash=tostring(column_ifexists('RepoHash', ''))",
     "| extend ModelActual=tostring(column_ifexists('ModelActual', ''))",
+    "| extend TaskType=tostring(column_ifexists('TaskType', ''))",
     "| extend ToolName=tostring(column_ifexists('ToolName', ''))",
     "| extend PatternId=tostring(column_ifexists('PatternId', ''))",
     "| extend PatternKey=tostring(column_ifexists('PatternKey', ''))",
@@ -402,6 +414,7 @@ function insightsFilters() {
     filter('TraceId', 'trace_id'),
     filter('RepoHash', 'repo_hash'),
     filter('ModelActual', 'model'),
+    filter('TaskType', 'task_type'),
     filter('ToolName', 'tool_name'),
     filter('PatternKey', 'pattern_key')
   ].join(' ');
@@ -428,7 +441,7 @@ function recommendationsFilters() {
     filter('RunId', 'run_id'),
     filter('TraceId', 'trace_id'),
     filter('PatternKey', 'pattern_key'),
-    filter('EvalBucket', 'eval_bucket')
+    evalBucketFilter()
   ].join(' ');
 }
 
@@ -458,7 +471,7 @@ const compatNormalize = [
   "| extend AgentName=case(isnotempty(tostring(Properties['agentops.agent.name'])), tostring(Properties['agentops.agent.name']), isnotempty(tostring(Properties['agentops.cli.agent'])), tostring(Properties['agentops.cli.agent']), isnotempty(tostring(Properties['gen_ai.agent.name'])), tostring(Properties['gen_ai.agent.name']), coalesce(AppRoleName, 'agent'))",
   "| extend SkillName=coalesce(tostring(Properties['agentops.skill.name']), tostring(Properties['github.copilot.skill.name']))",
   "| extend ParentAgentName=tostring(Properties['agentops.parent_agent.name'])",
-  "| extend SubAgentName=tostring(Properties['agentops.sub_agent.name'])",
+  "| extend SubAgentName=case(isnotempty(tostring(Properties['agentops.sub_agent.name'])), tostring(Properties['agentops.sub_agent.name']), isnotempty(tostring(Properties['agentops.child_agent.name'])), tostring(Properties['agentops.child_agent.name']), isnotempty(ParentAgentName) and isnotempty(AgentName) and AgentName != ParentAgentName, AgentName, '')",
   "| extend DelegationId=tostring(Properties['agentops.delegation.id'])",
   "| extend Surface=case(isnotempty(tostring(Properties['agentops.surface'])), tostring(Properties['agentops.surface']), AppRoleName has 'codex', 'custom', AppRoleName has 'copilot', 'cli', 'cli')",
   "| extend RepoHash=tostring(Properties['agentops.repo.hash'])",
@@ -503,7 +516,7 @@ function compatTools() {
     "| where Operation == 'execute_tool' or isnotempty(ToolName)",
     "| extend ToolRisk=case(ToolName has_any ('secret', 'credential', 'token', 'ssh'), 'secret-access', ToolName has_any ('rm', 'delete', 'destroy'), 'destructive', ToolName has_any ('browser', 'playwright'), 'browser-control', ToolName has_any ('shell', 'bash', 'terminal'), 'shell', ToolName has_any ('edit', 'write', 'patch'), 'write-file', ToolName has_any ('http', 'fetch', 'curl'), 'network', 'read-only')",
     "| extend McpServer=case(ToolName startswith 'mcp__', extract('^mcp__([^_]+)__', 1, ToolName), ToolName contains '/', tostring(split(ToolName, '/')[0]), ToolName startswith 'azure-mcp-', 'azure-mcp', '')",
-    "| project TimeGenerated, RunId, TraceId, SpanId=Id, Surface, AgentName, ToolName, ToolType=ToolRisk, ToolRisk, McpServer, Allowed=true, DeniedReason='', Status=iff(Failed, 'failed', 'success'), DurationMs, ErrorType, OutputSizeBytes=real(null), ArgsSchemaHash=''"
+    "| project TimeGenerated, RunId, SessionId, TraceId, SpanId=Id, Surface, AgentName, SkillName, ParentAgentName, SubAgentName, DelegationId, ModelActual, ToolName, ToolType=ToolRisk, ToolRisk, McpServer, Allowed=true, DeniedReason='', Status=iff(Failed, 'failed', 'success'), DurationMs, ErrorType, OutputSizeBytes=real(null), ArgsSchemaHash=''"
   ].join(' ');
 }
 
@@ -547,7 +560,7 @@ function compatInsights() {
     "| extend Severity=case(OutcomeStatus != 'success' or RiskScore >= 60, 'high', RiskScore >= 20, 'medium', 'low')",
     "| extend Summary=case(OutcomeStatus != 'success', strcat('Run failed from existing Copilot OpenTelemetry: ', OutcomeReason), ContentCaptureSignal == true, 'Content-like fields were observed and represented as privacy signals.', ToolFailureCount > 0, strcat('Tool failures observed: ', tostring(ToolFailureCount)), EstimatedCostUsd >= 1.0, strcat('Estimated cost is elevated: $', tostring(round(EstimatedCostUsd, 2))), 'Risk score is elevated.')",
     "| extend SuggestedNextStep='Open Run Replay and inspect the linked metadata-only timeline.'",
-    "| project TimeGenerated, InsightId=strcat('compat_', RunId, '_', InsightType), RunId, TraceId, InsightType, Severity, Title=InsightType, Summary, SuggestedNextStep, RepoHash, ModelActual, ToolName='', BaselineValue=real(null), CurrentValue=RiskScore, ConfigHash=''"
+    "| project TimeGenerated, InsightId=strcat('compat_', RunId, '_', InsightType), RunId, TraceId, InsightType, Severity, Title=InsightType, Summary, SuggestedNextStep, RepoHash, ModelActual, TaskType, ToolName='', BaselineValue=real(null), CurrentValue=RiskScore, ConfigHash=''"
   ].join(' ');
 }
 
@@ -579,7 +592,7 @@ const q = {
   github: `union isfuzzy=true (AgentOpsGithubOutcomes_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo())), (${compatGithubOutcomes()}) ${githubNormalize()} ${githubFilters()}`,
   insights: `union isfuzzy=true (AgentOpsInsights_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo())), (${compatInsights()}) ${insightsNormalize()} ${insightsFilters()}`,
   recommendations: `union isfuzzy=true (AgentOpsRecommendations_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo())), (${compatRecommendations()}) ${recommendationsNormalize()} ${recommendationsFilters()}`,
-  health: `union isfuzzy=true (AgentOpsCollectorHealth_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo())), (${compatHealth()})`,
+  health: `union isfuzzy=true (AgentOpsCollectorHealth_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo())), (${compatHealth()}) | where ('$privacy_mode' == '__all' or tostring(column_ifexists('PrivacyMode', '')) == '$privacy_mode')`,
   content: `union isfuzzy=true (AgentOpsContent_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo())), (print TimeGenerated=now(), RunId='', SessionId='', TraceId='', SpanId='', TurnIndex=long(null), Role='', ContentKind='', CaptureMode='', RedactionStatus='', ModelActual='', ToolName='', PromptText='', ResponseText='', ContentHash='', ContentLength=long(null) | where false) | extend PromptText=tostring(column_ifexists('PromptText', '')), ResponseText=tostring(column_ifexists('ResponseText', '')), CaptureMode=tostring(column_ifexists('CaptureMode', '')), RedactionStatus=tostring(column_ifexists('RedactionStatus', '')) | extend MessageText=case(isnotempty(PromptText), PromptText, isnotempty(ResponseText), ResponseText, '') | extend ViewerNote=case(isempty(MessageText), 'no captured content', CaptureMode == 'full', 'explicit opt-in: full content row', CaptureMode == 'redacted', 'explicit opt-in: redacted content row', 'explicit opt-in content row') ${contentFilters()}`
 };
 
