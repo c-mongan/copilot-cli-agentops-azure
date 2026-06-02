@@ -4,9 +4,8 @@ const { spawnSync } = require('node:child_process');
 
 const { hasFlag, optionValue } = require('../lib/args');
 const { validateDashboardContentGuardrails } = require('../lib/dashboard-content-guardrails');
+const { repoRoot } = require('../lib/paths');
 const legacy = require('../legacy');
-
-const repoRoot = path.resolve(__dirname, '..', '..', '..');
 
 function dashboardJsonFiles() {
   const roots = [

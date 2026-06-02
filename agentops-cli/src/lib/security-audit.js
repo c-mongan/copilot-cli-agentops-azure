@@ -25,11 +25,32 @@ function fileExists(root, file) {
   return fs.existsSync(path.join(root, file));
 }
 
+function isSourceCheckout(root) {
+  return fs.existsSync(path.join(root, 'agentops-cli', 'package.json'));
+}
+
+function isInstalledPackage(root) {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).name === 'copilot-agentops-cli'
+      && !isSourceCheckout(root);
+  } catch {
+    return false;
+  }
+}
+
+function sourceEvidencePath(root, file) {
+  if (file.startsWith('agentops-cli/') && !fileExists(root, file)) {
+    const packageRelative = file.replace(/^agentops-cli\//, '');
+    if (fileExists(root, packageRelative)) return packageRelative;
+  }
+  return file;
+}
+
 function evidenceStatus(root, evidence) {
   const missing = evidence
     .filter(item => item.file)
-    .filter(item => !fileExists(root, item.file))
-    .map(item => item.file);
+    .filter(item => !fileExists(root, sourceEvidencePath(root, item.file)))
+    .map(item => sourceEvidencePath(root, item.file));
   return {
     ok: missing.length === 0,
     missing
@@ -37,7 +58,7 @@ function evidenceStatus(root, evidence) {
 }
 
 function fileIncludes(root, file, terms) {
-  const absolute = path.join(root, file);
+  const absolute = path.join(root, sourceEvidencePath(root, file));
   if (!fs.existsSync(absolute)) return false;
   const body = fs.readFileSync(absolute, 'utf8').toLowerCase();
   return terms.every(term => body.includes(String(term).toLowerCase()));
@@ -223,6 +244,9 @@ function parseJson(text) {
 function runStaticCheck(options = {}) {
   const root = options.root || repoRoot;
   const script = path.join(root, 'scripts', 'static-check.js');
+  if (isInstalledPackage(root) || (!fs.existsSync(script) && !isSourceCheckout(root))) {
+    return finding('static-check', true, 'source-only static check is enforced by CI before packaging; installed package smoke validates runtime assets');
+  }
   if (!fs.existsSync(script)) return finding('static-check', false, 'scripts/static-check.js is missing');
   const result = run(process.execPath, [script, '--json'], { cwd: root });
   const summary = parseJson(result.stdout);
@@ -304,6 +328,9 @@ function dependencyAudit(options = {}) {
 function ciGateCheck(options = {}) {
   const root = options.root || repoRoot;
   const workflow = path.join(root, '.github', 'workflows', 'ci.yml');
+  if (isInstalledPackage(root) || (!fs.existsSync(workflow) && !isSourceCheckout(root))) {
+    return finding('ci-security-gates', true, 'source-only CI gate evidence is checked before packaging; installed package includes runtime assets');
+  }
   if (!fs.existsSync(workflow)) return finding('ci-security-gates', false, '.github/workflows/ci.yml is missing');
   const body = fs.readFileSync(workflow, 'utf8');
   const required = [
@@ -312,6 +339,7 @@ function ciGateCheck(options = {}) {
     'npm --prefix agentops-cli run publish:check',
     'npm --prefix packages/agentops-copilot-sdk run publish:check',
     'node scripts/check-release-distribution.js --json',
+    'node scripts/check-install-smoke.js --json',
     'node agentops-cli/src/index.js security audit --json',
     'node agentops-cli/src/index.js security posture --json',
     'collector smoke --privacy strict --poison --json'
@@ -400,7 +428,7 @@ function contentCaptureOperationalGuardrailsCheck(options = {}) {
       ? 'optional content capture requires restricted workspace/viewers, short retention, and explicit --allow-content review'
       : `missing content-capture guardrail evidence: ${missing.map(item => item.file).join(', ')}`,
     'error',
-    evidence.map(item => ({ file: item.file, terms: item.terms }))
+    evidence.map(item => ({ file: sourceEvidencePath(root, item.file), terms: item.terms }))
   );
 }
 

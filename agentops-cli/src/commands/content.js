@@ -4,9 +4,8 @@ const path = require('node:path');
 const { hasFlag, optionValue } = require('../lib/args');
 const { buildAzureIngestPlan } = require('../lib/azure/v2-ingest-plan');
 const { latestByTime } = require('../lib/explain/v2-explain');
+const { repoRoot } = require('../lib/paths');
 const { v2OpenLinksForRun } = require('./open');
-
-const repoRoot = path.resolve(__dirname, '..', '..', '..');
 
 function readJsonl(filePath) {
   if (!filePath || !fs.existsSync(filePath)) return [];

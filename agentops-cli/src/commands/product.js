@@ -4,9 +4,9 @@ const path = require('node:path');
 const { hasFlag, optionValue } = require('../lib/args');
 const { dashboardVerify, validateDashboardLinks, validateDashboardUx, validateDashboards } = require('./dashboard');
 const { e2eBrowserCheck } = require('./e2e');
+const { repoRoot } = require('../lib/paths');
 const legacy = require('../legacy');
 
-const repoRoot = path.resolve(__dirname, '..', '..', '..');
 const requiredVisualDashboards = [
   'agentops-v2-home',
   'agentops-v2-runs-explorer',

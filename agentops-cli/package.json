@@ -4,6 +4,14 @@
   "description": "Local utilities for Copilot CLI AgentOps for Azure.",
   "files": [
     "README.md",
+    ".azure",
+    "azure.yaml",
+    "collector",
+    "copilot",
+    "docs",
+    "grafana",
+    "plugin",
+    "scripts",
     "src"
   ],
   "bin": {
@@ -14,6 +22,8 @@
     "coverage": "node --test --experimental-test-coverage",
     "coverage:check": "node ../scripts/coverage-check.js",
     "static:check": "node ../scripts/static-check.js",
+    "prepack": "node ../scripts/prepare-cli-package-assets.js copy",
+    "postpack": "node ../scripts/prepare-cli-package-assets.js clean",
     "publish:check": "node ../scripts/check-cli-publish.js",
     "doctor": "node src/index.js doctor --local-only",
     "scan": "node src/index.js scan"
