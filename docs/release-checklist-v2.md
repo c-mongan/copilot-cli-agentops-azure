@@ -8,6 +8,7 @@ npm --prefix agentops-cli run coverage:check
 npm --prefix agentops-cli run static:check
 npm --prefix agentops-cli run publish:check -- --json
 npm --prefix packages/agentops-copilot-sdk run publish:check -- --json
+node scripts/check-release-distribution.js --json
 node agentops-cli/src/index.js security audit --json
 node agentops-cli/src/index.js security posture --json
 node agentops-cli/src/index.js setup --json
@@ -41,6 +42,7 @@ node agentops-cli/src/index.js github-enrich --limit 30 --runs .agentops/demo/la
 npm --prefix agentops-cli run publish:check -- --json
 npm --prefix packages/agentops-copilot-sdk test
 npm --prefix packages/agentops-copilot-sdk run publish:check -- --json
+node scripts/check-release-distribution.js --json
 node --test --test-name-pattern github agentops-cli/test/index.test.js
 node --test --test-name-pattern mcp-proxy agentops-cli/test/index.test.js
 printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"read_file","arguments":{"path":"demo"}}}' | node agentops-cli/src/index.js mcp-proxy --server-name demo -- node examples/mcp-proxy/demo-server.js

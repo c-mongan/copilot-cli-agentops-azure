@@ -53,6 +53,7 @@ const { classifyMcpToolRisk } = require('../src/lib/mcp/risk-classifier');
 const { rollupSpanRows } = require('../src/lib/rollup/span-to-agentops-tables');
 const { securityAudit, securityPosture } = require('../src/lib/security-audit');
 const { checkCliPublish } = require('../../scripts/check-cli-publish');
+const { checkReleaseDistribution } = require('../../scripts/check-release-distribution');
 const { checkSdkPublish, isWildcardRange } = require('../../scripts/check-sdk-publish');
 
 const {
@@ -348,6 +349,19 @@ test('SDK publish check validates package metadata', () => {
   assert.ok(result.checks.expected_files.includes('src/index.d.ts'));
   assert.ok(result.checks.expected_files.includes('examples/basic-sdk-agent/index.js'));
   assert.ok(result.checks.forbidden_files.includes('test/adapter.test.js'));
+});
+
+test('release distribution check builds artifacts with checksums', () => {
+  const result = checkReleaseDistribution({ skipDocs: false });
+
+  assert.equal(result.ok, true, JSON.stringify(result, null, 2));
+  assert.equal(result.artifacts.length, 2);
+  assert.ok(result.artifacts.some(artifact => artifact.filename.startsWith('copilot-agentops-cli-')));
+  assert.ok(result.artifacts.some(artifact => artifact.filename.startsWith('agentops-copilot-sdk-')));
+  for (const artifact of result.artifacts) {
+    assert.equal(artifact.sha256.length, 64);
+    assert.ok(artifact.size > 0);
+  }
 });
 
 test('strict collector allowlist preserves V2 hierarchy metadata', () => {
