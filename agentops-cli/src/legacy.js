@@ -3002,6 +3002,49 @@ function agentOpsContentTables(tables) {
   return logAnalyticsTablesFromResult(tables).filter(table => String(table.name || '').toLowerCase() === 'agentopscontent_cl');
 }
 
+function azureBudgetsFromResult(value) {
+  return asArray(value?.value || value).map(budget => ({
+    name: budget?.name || '',
+    amount: Number(budget?.amount ?? pathValue(budget, ['properties', 'amount'], NaN)),
+    category: budget?.category || pathValue(budget, ['properties', 'category'], ''),
+    time_grain: budget?.timeGrain || pathValue(budget, ['properties', 'timeGrain'], '')
+  }));
+}
+
+function privateEndpointConnectionsFromResource(resource) {
+  return asArray(pathValue(resource, ['properties', 'privateEndpointConnections'], []));
+}
+
+function approvedPrivateEndpointConnections(resource) {
+  return privateEndpointConnectionsFromResource(resource).filter(connection => {
+    const status = String(
+      pathValue(connection, ['properties', 'privateLinkServiceConnectionState', 'status'], '') ||
+      pathValue(connection, ['privateLinkServiceConnectionState', 'status'], '')
+    ).toLowerCase();
+    return status === 'approved';
+  });
+}
+
+function actionGroupReceiverSummary(actionGroup) {
+  const receiverKeys = [
+    'emailReceivers',
+    'smsReceivers',
+    'webhookReceivers',
+    'azureAppPushReceivers',
+    'itsmReceivers',
+    'automationRunbookReceivers',
+    'voiceReceivers',
+    'logicAppReceivers',
+    'azureFunctionReceivers',
+    'armRoleReceivers',
+    'eventHubReceivers'
+  ];
+  const properties = actionGroup?.properties || actionGroup || {};
+  const counts = Object.fromEntries(receiverKeys.map(key => [key, asArray(properties[key]).length]));
+  const total = Object.values(counts).reduce((sum, count) => sum + count, 0);
+  return { receiver_count: total, receiver_types: counts };
+}
+
 function azureProductionRemediationPlan(result, options = {}) {
   const checks = Object.fromEntries((result.checks || []).map(check => [check.name, check]));
   const config = result.config || {};
@@ -3083,6 +3126,45 @@ function azureProductionRemediationPlan(result, options = {}) {
     });
   }
 
+  if (checks['azure-budget-posture'] && !checks['azure-budget-posture'].ok) {
+    actions.push({
+      name: 'configure-agentops-budget',
+      risk: 'medium',
+      reason: 'Production mode expects an Azure Consumption budget so runaway token/tool loops have a spend guardrail.',
+      review: 'Confirm the monthly amount and approved notification contacts before deploying the budget.',
+      commands: [
+        'AGENTOPS_DEPLOY_BUDGET=true ./scripts/azure-what-if.sh',
+        `node agentops-cli/src/index.js validate-azure --last ${result.last || '24h'} --production --json`
+      ]
+    });
+  }
+
+  if (checks['grafana-private-access-posture'] && !checks['grafana-private-access-posture'].ok) {
+    actions.push({
+      name: 'verify-managed-grafana-private-access',
+      risk: 'medium',
+      reason: 'Production mode expects public Grafana access disabled with an approved private endpoint path.',
+      review: 'Test private DNS and operator access before disabling or depending on private access.',
+      commands: [
+        `az grafana show --resource-group ${commandShellQuote(resourceGroup)} --name ${commandShellQuote(grafanaName)} --query properties.privateEndpointConnections`,
+        `node agentops-cli/src/index.js validate-azure --last ${result.last || '24h'} --production --json`
+      ]
+    });
+  }
+
+  if (checks['action-group-destination-posture'] && !checks['action-group-destination-posture'].ok) {
+    actions.push({
+      name: 'verify-alert-action-group-destinations',
+      risk: 'medium',
+      reason: 'Production mode expects routed AgentOps alerts to target enabled action groups with at least one receiver.',
+      review: 'Review notification destinations, rate limits, and escalation ownership before enabling alerts.',
+      commands: [
+        'az monitor action-group list --resource-group <resource-group> --query "[].{name:name,enabled:enabled}"',
+        `node agentops-cli/src/index.js validate-azure --last ${result.last || '24h'} --production --json`
+      ]
+    });
+  }
+
   return {
     ok: actions.length === 0,
     mode: 'proposal-only',
@@ -3130,6 +3212,25 @@ function validateAzure(options = {}) {
     const exists = groupResult.status === 0 && String(groupResult.stdout || '').trim() === 'true';
     checks.push(checkResult('resource-group', exists, { resource_group: cloud.resourceGroup }));
     if (!exists) next.push('Run ./scripts/azure-readiness.sh and review the target resource group.');
+  }
+
+  if (production && hasAz && cloud.resourceGroup) {
+    const budgetResult = runAz(['consumption', 'budget', 'list', '--resource-group', cloud.resourceGroup, '-o', 'json'], options);
+    const budgets = budgetResult.status === 0 ? azureBudgetsFromResult(parseJsonOutput(budgetResult)) : [];
+    const validBudgets = budgets.filter(budget => Number.isFinite(budget.amount) && budget.amount > 0);
+    checks.push(checkResult('azure-budget-posture', budgetResult.status === 0 && validBudgets.length > 0, {
+      budgets: budgets.length,
+      budget_names: budgets.map(budget => budget.name).filter(Boolean),
+      valid_budgets: validBudgets.length,
+      production,
+      detail: budgetResult.status !== 0
+        ? azErrorDetail(budgetResult, 'could not list Azure Consumption budgets')
+        : validBudgets.length > 0
+          ? 'Azure budget guardrail observed'
+          : 'production mode expects an Azure budget for AgentOps spend guardrails'
+    }));
+    if (budgetResult.status !== 0) next.push('Verify Azure Consumption budget read permissions for the resource group.');
+    else if (validBudgets.length === 0) next.push('Configure an Azure Consumption budget before production AgentOps rollout.');
   }
 
   const workspaceConfigured = isConfiguredValue(cloud.workspaceId, /^0{8}-0{4}-0{4}-0{4}-0{12}$/);
@@ -3355,6 +3456,21 @@ function validateAzure(options = {}) {
           : 'Run agentops validate-azure --production to enforce production Grafana posture.');
       }
 
+      if (production) {
+        const approvedPrivateConnections = approvedPrivateEndpointConnections(grafanaResource);
+        const privateAccessOk = publicNetworkAccess === 'Disabled' && approvedPrivateConnections.length > 0;
+        checks.push(checkResult('grafana-private-access-posture', privateAccessOk, {
+          public_network_access: publicNetworkAccess,
+          private_endpoint_connections: privateEndpointConnectionsFromResource(grafanaResource).length,
+          approved_private_endpoint_connections: approvedPrivateConnections.length,
+          production,
+          detail: privateAccessOk
+            ? 'public access disabled and approved private endpoint connection observed'
+            : 'production mode expects disabled public access plus an approved private endpoint connection'
+        }));
+        if (!privateAccessOk) next.push('Verify Managed Grafana private endpoint connectivity before production.');
+      }
+
       if (grafanaResourceId) {
         const roleResult = runAz([
           'role',
@@ -3446,6 +3562,7 @@ function validateAzure(options = {}) {
     const enabledRules = rules.filter(rule => boolish(pathValue(rule, ['properties', 'enabled'], false)));
     const routedRules = rules.filter(rule => asArray(pathValue(rule, ['properties', 'actions', 'actionGroups'], [])).length > 0);
     const unroutedRules = rules.filter(rule => asArray(pathValue(rule, ['properties', 'actions', 'actionGroups'], [])).length === 0);
+    const actionGroupIds = Array.from(new Set(routedRules.flatMap(rule => asArray(pathValue(rule, ['properties', 'actions', 'actionGroups'], []))).filter(Boolean)));
     const alertPostureOk = alertResult.status === 0 && (!production || (enabledRules.length > 0 && enabledRules.length === routedRules.length));
     checks.push(checkResult('alert-routing-posture', alertPostureOk, {
       rules: rules.length,
@@ -3453,6 +3570,7 @@ function validateAzure(options = {}) {
       enabled_rules: enabledRules.length,
       enabled_rule_names: enabledRules.map(rule => rule.name).filter(Boolean),
       routed_rules: routedRules.length,
+      action_groups: actionGroupIds.length,
       unrouted_rule_names: unroutedRules.map(rule => rule.name).filter(Boolean),
       production,
       detail: alertResult.status !== 0
@@ -3464,6 +3582,36 @@ function validateAzure(options = {}) {
     if (alertResult.status !== 0) next.push('Install/update Azure CLI monitor extension or verify scheduled query rule read permissions.');
     else if (production && (enabledRules.length === 0 || enabledRules.length !== routedRules.length)) {
       next.push('Configure AgentOps scheduled query alerts with approved Azure Monitor action groups before production.');
+    }
+
+    if (production && alertResult.status === 0) {
+      const actionGroupChecks = actionGroupIds.map(id => {
+        const groupResult = runAz(['monitor', 'action-group', 'show', '--ids', id, '-o', 'json'], options);
+        const actionGroup = groupResult.status === 0 ? parseJsonOutput(groupResult) : null;
+        const receiverSummary = actionGroupReceiverSummary(actionGroup);
+        const enabled = boolish(actionGroup?.enabled ?? pathValue(actionGroup, ['properties', 'enabled'], true));
+        return {
+          id,
+          ok: groupResult.status === 0 && enabled && receiverSummary.receiver_count > 0,
+          status: groupResult.status,
+          enabled,
+          receiver_count: receiverSummary.receiver_count,
+          receiver_types: receiverSummary.receiver_types,
+          detail: groupResult.status === 0 ? 'found' : azErrorDetail(groupResult, 'could not read action group')
+        };
+      });
+      const actionGroupDestinationOk = actionGroupIds.length > 0 && actionGroupChecks.every(item => item.ok);
+      checks.push(checkResult('action-group-destination-posture', actionGroupDestinationOk, {
+        action_groups: actionGroupIds.length,
+        checked: actionGroupChecks.length,
+        invalid: actionGroupChecks.filter(item => !item.ok).map(item => item.id),
+        receivers: actionGroupChecks.reduce((sum, item) => sum + item.receiver_count, 0),
+        production,
+        detail: actionGroupDestinationOk
+          ? 'routed action groups exist and have notification receivers'
+          : 'production mode expects routed action groups to exist, be enabled, and have at least one receiver'
+      }));
+      if (!actionGroupDestinationOk) next.push('Review Azure Monitor action group destinations before production alerts are enabled.');
     }
   }
 

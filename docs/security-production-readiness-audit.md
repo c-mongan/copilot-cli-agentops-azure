@@ -55,8 +55,8 @@ COPILOT_OTEL_CAPTURE_CONTENT=false
 | Insecure output handling | Product does not execute model output directly. | Keep this explicit in docs and tests for SDK/MCP adapter examples. |
 | Vector/embedding weakness | Not currently a vector-store product. | No action unless vector/eval memory features are added. |
 | Misinformation / overreliance | Deterministic evals, code outcome checks, and explicit docs that dashboards are evidence aids, not security/compliance guarantees. | Keep evidence-disclaimer checks in `agentops security audit`. |
-| Model denial of service | Token/cost/latency dashboards exist. | Add budget guardrails and alert recommendations for runaway token/tool loops. |
-| Unbounded consumption | Cost, token, and p95 panels exist. | Add CI tests for cost anomaly query shape and budget threshold configuration. |
+| Model denial of service | Token/cost/latency dashboards exist, runaway loop fixtures exist, and production `validate-azure` checks for an Azure budget. | Add deeper automated budget threshold tuning recommendations after more live traffic. |
+| Unbounded consumption | Cost, token, and p95 panels exist. Production `validate-azure` checks for an Azure Consumption budget in the AgentOps resource group. | Add CI tests for cost anomaly query shape and threshold configuration drift. |
 | Agent/tool misuse | MCP risk classifier and dashboard filters exist. | Add an MCP abuse fixture covering network, shell, destructive, and secret-access tool classes. |
 
 ## Production Readiness Gaps
@@ -187,11 +187,17 @@ Added `docs/azure-production-hardening.md` and `validate-enterprise` checks for:
 - alert routing;
 - no public snapshots containing tenant/run data.
 
+Production `validate-azure --production` now verifies more of that live deployed posture with read-only Azure calls:
+
+- Azure Consumption budget exists for the resource group;
+- Managed Grafana public access is disabled and an approved private endpoint connection is present;
+- routed Azure Monitor action groups exist, are enabled, and have at least one destination.
+
 ## Recommended Next PRs
 
 1. `content-retention-rbac-live`: fixed in this branch. Production validation now flags optional `AgentOpsContent_CL` when retention or workspace access posture is not production-ready.
-2. `live-azure-posture-query`: keep expanding read-only live checks for budgets, private endpoint reachability, and alert action-group destinations.
-3. `budget-guardrails`: add CI tests for cost anomaly query shape, budget threshold configuration, and runaway token/tool-loop alert recommendations.
+2. `live-azure-posture-query`: fixed in this branch. Production validation now checks budget presence, Managed Grafana private endpoint approval, and action-group destinations.
+3. `budget-guardrails`: add deeper CI tests for cost anomaly query shape, budget threshold configuration, and runaway token/tool-loop alert recommendations.
 
 ## Verification From Initial Audit
 

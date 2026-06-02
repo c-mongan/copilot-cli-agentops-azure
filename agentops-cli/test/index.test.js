@@ -2795,6 +2795,9 @@ test('validateAzure production mode enforces Grafana and alert routing posture',
       if (args.includes('group') && args.includes('exists')) {
         return { status: 0, stdout: 'true\n', stderr: '' };
       }
+      if (args.includes('consumption') && args.includes('budget') && args.includes('list')) {
+        return { status: 0, stdout: JSON.stringify([{ name: 'budget-agentops', amount: 100, timeGrain: 'Monthly' }]), stderr: '' };
+      }
       if (args.includes('log-analytics') && args.includes('query')) {
         return { status: 0, stdout: JSON.stringify([{ Rows: 1 }]), stderr: '' };
       }
@@ -2855,6 +2858,7 @@ test('validateAzure production mode accepts least-privilege group RBAC', () => {
   };
   const result = validateAzure({
     production: true,
+    subscriptionId: 'sub-123',
     workspaceId: 'workspace-123',
     workspaceName: 'law-agentops-dev',
     resourceGroup: 'rg-agentops-dev',
@@ -2869,6 +2873,9 @@ test('validateAzure production mode accepts least-privilege group RBAC', () => {
       }
       if (args.includes('group') && args.includes('exists')) {
         return { status: 0, stdout: 'true\n', stderr: '' };
+      }
+      if (args.includes('consumption') && args.includes('budget') && args.includes('list')) {
+        return { status: 0, stdout: JSON.stringify([{ name: 'budget-agentops', amount: 100, timeGrain: 'Monthly' }]), stderr: '' };
       }
       if (args.includes('log-analytics') && args.includes('query')) {
         return { status: 0, stdout: JSON.stringify([{ Rows: 1 }]), stderr: '' };
@@ -2889,7 +2896,14 @@ test('validateAzure production mode accepts least-privilege group RBAC', () => {
           properties: {
             apiKey: 'Disabled',
             publicNetworkAccess: 'Disabled',
-            zoneRedundancy: 'Enabled'
+            zoneRedundancy: 'Enabled',
+            privateEndpointConnections: [
+              {
+                properties: {
+                  privateLinkServiceConnectionState: { status: 'Approved' }
+                }
+              }
+            ]
           }
         }), stderr: '' };
       }
@@ -2924,6 +2938,13 @@ test('validateAzure production mode accepts least-privilege group RBAC', () => {
           }
         ]), stderr: '' };
       }
+      if (args.includes('action-group') && args.includes('show')) {
+        return { status: 0, stdout: JSON.stringify({
+          name: 'ag-agentops',
+          enabled: true,
+          emailReceivers: [{ name: 'ops', emailAddress: 'ops@example.com' }]
+        }), stderr: '' };
+      }
       return { status: 0, stdout: JSON.stringify({ name: 'ok' }), stderr: '' };
     }
   });
@@ -2933,6 +2954,9 @@ test('validateAzure production mode accepts least-privilege group RBAC', () => {
   assert.equal(byName['log-analytics-rbac-posture'].group_assignments, 1);
   assert.equal(byName['grafana-rbac-posture'].group_assignments, 1);
   assert.equal(byName['access-rbac-posture'].ok, true);
+  assert.equal(byName['azure-budget-posture'].ok, true);
+  assert.equal(byName['grafana-private-access-posture'].ok, true);
+  assert.equal(byName['action-group-destination-posture'].ok, true);
 });
 
 test('validateAzure production mode flags optional content table without short retention', () => {
@@ -2950,6 +2974,9 @@ test('validateAzure production mode flags optional content table without short r
       }
       if (args.includes('group') && args.includes('exists')) {
         return { status: 0, stdout: 'true\n', stderr: '' };
+      }
+      if (args.includes('consumption') && args.includes('budget') && args.includes('list')) {
+        return { status: 0, stdout: JSON.stringify([{ name: 'budget-agentops', amount: 100, timeGrain: 'Monthly' }]), stderr: '' };
       }
       if (args.includes('log-analytics') && args.includes('query')) {
         return { status: 0, stdout: JSON.stringify([{ Rows: 1 }]), stderr: '' };
@@ -2988,6 +3015,13 @@ test('validateAzure production mode flags optional content table without short r
           }
         ]), stderr: '' };
       }
+      if (args.includes('action-group') && args.includes('show')) {
+        return { status: 0, stdout: JSON.stringify({
+          name: 'ag-agentops',
+          enabled: true,
+          emailReceivers: [{ name: 'ops', emailAddress: 'ops@example.com' }]
+        }), stderr: '' };
+      }
       return { status: 0, stdout: JSON.stringify({ name: 'ok' }), stderr: '' };
     }
   });
@@ -2998,6 +3032,103 @@ test('validateAzure production mode flags optional content table without short r
   assert.equal(byName['content-capture-table-posture'].observed, true);
   assert.deepEqual(byName['content-capture-table-posture'].issues, ['short_retention']);
   assert.match(result.next.join('\n'), /AgentOpsContent_CL retention <=30 days/);
+});
+
+test('validateAzure production mode flags missing budget private access and action group destinations', () => {
+  const result = validateAzure({
+    production: true,
+    workspaceId: 'workspace-123',
+    workspaceName: 'law-agentops-dev',
+    resourceGroup: 'rg-agentops-dev',
+    grafanaBaseUrl: 'https://grafana.example',
+    grafanaName: 'graf-agentops-dev',
+    appInsightsName: 'appi-agentops-dev',
+    expectedDashboards: [],
+    last: '1h',
+    spawnSync: (command, args) => {
+      if (args.includes('account') && args.includes('show')) {
+        return { status: 0, stdout: JSON.stringify({ id: 'sub-123', name: 'Demo Sub' }), stderr: '' };
+      }
+      if (args.includes('group') && args.includes('exists')) {
+        return { status: 0, stdout: 'true\n', stderr: '' };
+      }
+      if (args.includes('consumption') && args.includes('budget') && args.includes('list')) {
+        return { status: 0, stdout: JSON.stringify([]), stderr: '' };
+      }
+      if (args.includes('log-analytics') && args.includes('query')) {
+        return { status: 0, stdout: JSON.stringify([{ Rows: 1 }]), stderr: '' };
+      }
+      if (args.includes('log-analytics') && args.includes('workspace') && args.includes('show')) {
+        return { status: 0, stdout: JSON.stringify({
+          id: '/subscriptions/sub-123/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev',
+          retentionInDays: 30,
+          workspaceCapping: { dailyQuotaGb: 2 },
+          features: { enableLogAccessUsingOnlyResourcePermissions: true }
+        }), stderr: '' };
+      }
+      if (args[0] === 'grafana' && args[1] === 'show') {
+        return { status: 0, stdout: JSON.stringify({
+          id: '/subscriptions/sub-123/resourceGroups/rg-agentops-dev/providers/Microsoft.Dashboard/grafana/graf-agentops-dev',
+          name: 'graf-agentops-dev',
+          identity: { type: 'SystemAssigned' },
+          properties: {
+            apiKey: 'Disabled',
+            publicNetworkAccess: 'Disabled',
+            zoneRedundancy: 'Enabled',
+            privateEndpointConnections: []
+          }
+        }), stderr: '' };
+      }
+      if (args[0] === 'role' && args[1] === 'assignment' && args.includes('list')) {
+        const scope = args[args.indexOf('--scope') + 1] || '';
+        const roleId = scope.includes('OperationalInsights')
+          ? '3b03c2da-16b3-4a49-8834-0f8130efdd3b'
+          : '60921a7e-fef1-4a43-9b16-a26c52ad4769';
+        return { status: 0, stdout: JSON.stringify([
+          {
+            principalType: 'Group',
+            roleDefinitionId: `/subscriptions/sub-123/providers/Microsoft.Authorization/roleDefinitions/${roleId}`,
+            roleDefinitionName: scope.includes('OperationalInsights') ? 'Log Analytics Data Reader' : 'Grafana Viewer'
+          }
+        ]), stderr: '' };
+      }
+      if (args.includes('data-source') && args.includes('list')) {
+        return { status: 0, stdout: JSON.stringify([{ uid: 'azure-monitor-oob' }]), stderr: '' };
+      }
+      if (args.includes('dashboard') && args.includes('list')) {
+        return { status: 0, stdout: JSON.stringify([]), stderr: '' };
+      }
+      if (args.includes('scheduled-query') && args.includes('list')) {
+        return { status: 0, stdout: JSON.stringify([
+          {
+            name: 'sqr-agentops-dev-cost',
+            properties: {
+              displayName: 'Copilot AgentOps cost spike',
+              enabled: true,
+              actions: { actionGroups: ['/subscriptions/sub-123/resourceGroups/rg-agentops-dev/providers/microsoft.insights/actionGroups/ag-agentops'] }
+            }
+          }
+        ]), stderr: '' };
+      }
+      if (args.includes('action-group') && args.includes('show')) {
+        return { status: 0, stdout: JSON.stringify({
+          name: 'ag-agentops',
+          enabled: false,
+          emailReceivers: []
+        }), stderr: '' };
+      }
+      return { status: 0, stdout: JSON.stringify({ name: 'ok' }), stderr: '' };
+    }
+  });
+  const byName = Object.fromEntries(result.checks.map(check => [check.name, check]));
+
+  assert.equal(result.ok, false);
+  assert.equal(byName['azure-budget-posture'].ok, false);
+  assert.equal(byName['grafana-private-access-posture'].ok, false);
+  assert.equal(byName['action-group-destination-posture'].ok, false);
+  assert.match(result.next.join('\n'), /budget/);
+  assert.match(result.next.join('\n'), /private endpoint/);
+  assert.match(result.next.join('\n'), /action group destinations/);
 });
 
 test('validateAzure remediation plan proposes safe Azure commands without mutating', () => {
@@ -3070,11 +3201,17 @@ test('validateAzure remediation plan proposes safe Azure commands without mutati
     'set-log-analytics-daily-cap',
     'harden-managed-grafana-network-and-availability',
     'route-agentops-alerts-to-action-groups',
-    'review-agentops-rbac-assignments'
+    'review-agentops-rbac-assignments',
+    'configure-agentops-budget',
+    'verify-managed-grafana-private-access',
+    'verify-alert-action-group-destinations'
   ]);
   assert.match(plan.actions[0].commands.join('\n'), /az monitor log-analytics workspace update/);
   assert.match(plan.actions[1].commands.join('\n'), /az grafana update/);
   assert.match(plan.actions[2].commands.join('\n'), /az monitor scheduled-query update/);
+  assert.match(plan.actions[4].commands.join('\n'), /AGENTOPS_DEPLOY_BUDGET=true/);
+  assert.match(plan.actions[5].commands.join('\n'), /privateEndpointConnections/);
+  assert.match(plan.actions[6].commands.join('\n'), /az monitor action-group list/);
   assert.match(rendered, /Remediation plan/);
   assert.match(rendered, /planner does not mutate Azure/);
 });
