@@ -3123,14 +3123,17 @@ function validateEnterprise(options = {}) {
   const grafanaBicep = repoFileText('infra/bicep/grafana.bicep', options);
   const keyVaultBicep = repoFileText('infra/bicep/key-vault.bicep', options);
   const appInsightsBicep = repoFileText('infra/bicep/app-insights.bicep', options);
+  const alertsBicep = repoFileText('infra/bicep/alerts.bicep', options);
   const rbacBicep = repoFileText('infra/bicep/rbac.bicep', options);
   const budgetBicep = repoFileText('infra/bicep/budget.bicep', options);
+  const datasourceProvisioning = repoFileText('grafana/provisioning/datasources/azure-monitor.yaml', options);
   const azureCollector = repoFileText('collector/otelcol.azuremonitor.yaml', options);
   const azureCompose = repoFileText('collector/docker-compose.azuremonitor.yaml', options);
   const azureWhatIf = repoFileText('scripts/azure-what-if.sh', options);
   const enterpriseDeploy = repoFileText('scripts/azure-deploy-enterprise-pilot.sh', options);
   const readme = repoFileText('README.md', options);
   const enterprisePilot = repoFileText('docs/enterprise-pilot.md', options);
+  const azureProdHardening = repoFileText('docs/azure-production-hardening.md', options);
   const threatModel = repoFileText('docs/threat-model.md', options);
 
   const checks = [
@@ -3217,6 +3220,29 @@ function validateEnterprise(options = {}) {
       'Azure Managed Grafana API keys are disabled.'
     ),
     enterpriseCheck(
+      'grafana-managed-identity',
+      /identity:\s*{\s*type: 'SystemAssigned'/s.test(grafanaBicep) && /azureAuthType: msi/.test(datasourceProvisioning),
+      'high',
+      'Managed Grafana and the Azure Monitor datasource use managed identity auth.'
+    ),
+    enterpriseCheck(
+      'grafana-network-posture-params',
+      /param grafanaPublicNetworkAccess string/.test(mainBicep) &&
+        /param grafanaZoneRedundancy string/.test(mainBicep) &&
+        /publicNetworkAccess: publicNetworkAccess/.test(grafanaBicep) &&
+        /zoneRedundancy: zoneRedundancy/.test(grafanaBicep),
+      'medium',
+      'Grafana public access and zone redundancy are explicit deployment choices.'
+    ),
+    enterpriseCheck(
+      'alert-action-groups-parameter',
+      /param alertActionGroupResourceIds array/.test(mainBicep) &&
+        /param actionGroupResourceIds array/.test(alertsBicep) &&
+        /actionGroups: actionGroupResourceIds/.test(alertsBicep),
+      'high',
+      'Alert routing uses explicit Azure Monitor action group resource IDs.'
+    ),
+    enterpriseCheck(
       'key-vault-rbac-purge-protection',
       /enableRbacAuthorization: true/.test(keyVaultBicep) && /enablePurgeProtection: true/.test(keyVaultBicep),
       'high',
@@ -3255,17 +3281,25 @@ function validateEnterprise(options = {}) {
       'what-if-enterprise-params',
       /AGENTOPS_DEPLOY_RBAC_ASSIGNMENTS/.test(azureWhatIf) &&
         /AGENTOPS_DEPLOY_BUDGET/.test(azureWhatIf) &&
-        /AGENTOPS_BUDGET_CONTACT_EMAILS/.test(azureWhatIf),
+        /AGENTOPS_BUDGET_CONTACT_EMAILS/.test(azureWhatIf) &&
+        /AGENTOPS_DEPLOY_ALERTS/.test(azureWhatIf) &&
+        /AGENTOPS_ENABLE_ALERTS/.test(azureWhatIf) &&
+        /AGENTOPS_ALERT_ACTION_GROUP_RESOURCE_IDS/.test(azureWhatIf) &&
+        /AGENTOPS_GRAFANA_PUBLIC_NETWORK_ACCESS/.test(azureWhatIf),
       'medium',
-      'what-if supports RBAC and budget pilot parameters.'
+      'what-if supports RBAC, budget, alert routing, and Grafana network posture parameters.'
     ),
     enterpriseCheck(
       'enterprise-deploy-script',
       /az deployment group create/.test(enterpriseDeploy) &&
         /AGENTOPS_DEPLOY_RBAC_ASSIGNMENTS/.test(enterpriseDeploy) &&
-        /AGENTOPS_DEPLOY_BUDGET/.test(enterpriseDeploy),
+        /AGENTOPS_DEPLOY_BUDGET/.test(enterpriseDeploy) &&
+        /AGENTOPS_DEPLOY_ALERTS/.test(enterpriseDeploy) &&
+        /AGENTOPS_ENABLE_ALERTS/.test(enterpriseDeploy) &&
+        /AGENTOPS_ALERT_ACTION_GROUP_RESOURCE_IDS/.test(enterpriseDeploy) &&
+        /AGENTOPS_GRAFANA_PUBLIC_NETWORK_ACCESS/.test(enterpriseDeploy),
       'medium',
-      'Enterprise pilot script deploys the same RBAC and budget parameters reviewed by what-if.'
+      'Enterprise pilot script deploys the same RBAC, budget, alert, and Grafana posture parameters reviewed by what-if.'
     ),
     enterpriseCheck(
       'connection-string-not-configured',
@@ -3300,6 +3334,15 @@ function validateEnterprise(options = {}) {
         /Rollback/.test(enterprisePilot),
       'medium',
       'Enterprise pilot guide documents data classification, review, and rollback.'
+    ),
+    enterpriseCheck(
+      'azure-production-hardening-docs',
+      /Managed Grafana Access/i.test(azureProdHardening) &&
+        /Log Analytics Posture/i.test(azureProdHardening) &&
+        /Alert Routing/i.test(azureProdHardening) &&
+        /Private Access/i.test(azureProdHardening),
+      'medium',
+      'Azure production hardening doc covers Grafana access, Log Analytics, alert routing, and private access.'
     ),
     enterpriseCheck(
       'threat-model',

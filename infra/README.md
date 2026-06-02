@@ -26,4 +26,5 @@ Run Azure validation first and confirm subscription/location before any provisio
 For an internal pilot, review:
 
 - `docs/enterprise-pilot.md`
+- `docs/azure-production-hardening.md`
 - `docs/threat-model.md`

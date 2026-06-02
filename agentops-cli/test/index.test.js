@@ -1794,9 +1794,13 @@ test('enterprise validation confirms local guardrails', () => {
   assert.ok(result.checks.some(check => check.name === 'budget-module' && check.ok));
   assert.ok(result.checks.some(check => check.name === 'enterprise-deploy-script' && check.ok));
   assert.ok(result.checks.some(check => check.name === 'pilot-review-docs' && check.ok));
+  assert.ok(result.checks.some(check => check.name === 'azure-production-hardening-docs' && check.ok));
   assert.ok(result.checks.some(check => check.name === 'threat-model' && check.ok));
   assert.ok(result.checks.some(check => check.name === 'azd-no-connection-string-output' && check.ok));
   assert.ok(result.checks.some(check => check.name === 'collector-content-scrub' && check.ok));
+  assert.ok(result.checks.some(check => check.name === 'grafana-managed-identity' && check.ok));
+  assert.ok(result.checks.some(check => check.name === 'grafana-network-posture-params' && check.ok));
+  assert.ok(result.checks.some(check => check.name === 'alert-action-groups-parameter' && check.ok));
   assert.match(output, /Enterprise guardrails passed/);
 });
 

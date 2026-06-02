@@ -36,6 +36,23 @@ param deployAlerts bool = false
 @description('Enable AgentOps Azure Monitor scheduled query alert rules. Only used when deployAlerts is true.')
 param enableAlerts bool = false
 
+@description('Azure Monitor action group resource IDs for AgentOps scheduled query alerts. Keep empty while alerts are disabled or thresholds are still being tuned.')
+param alertActionGroupResourceIds array = []
+
+@allowed([
+  'Enabled'
+  'Disabled'
+])
+@description('Azure Managed Grafana public network access. Use Disabled only after private access has been designed and tested.')
+param grafanaPublicNetworkAccess string = 'Enabled'
+
+@allowed([
+  'Enabled'
+  'Disabled'
+])
+@description('Azure Managed Grafana zone redundancy. Keep Disabled for regions/SKUs that do not support it; enable for production regions after validation.')
+param grafanaZoneRedundancy string = 'Disabled'
+
 @description('Assign least-privilege Azure RBAC to Microsoft Entra security groups. Requires Owner or User Access Administrator at the resource group scope.')
 param deployRbacAssignments bool = false
 
@@ -113,6 +130,8 @@ module grafana 'grafana.bicep' = {
   params: {
     location: location
     name: take('graf-${compactBaseName}-${environmentName}', 23)
+    publicNetworkAccess: grafanaPublicNetworkAccess
+    zoneRedundancy: grafanaZoneRedundancy
     tags: tags
   }
 }
@@ -145,6 +164,7 @@ module alerts 'alerts.bicep' = if (deployAlerts) {
     environmentName: environmentName
     logAnalyticsWorkspaceResourceId: logAnalytics.outputs.resourceId
     enabled: enableAlerts
+    actionGroupResourceIds: alertActionGroupResourceIds
     tags: union(tags, {
       mode: 'proposal-only'
     })
@@ -185,4 +205,6 @@ output AZURE_MONITOR_WORKSPACE_ID string = monitorWorkspace.outputs.resourceId
 output GRAFANA_ENDPOINT string = grafana.outputs.endpoint
 output GRAFANA_RESOURCE_ID string = grafana.outputs.resourceId
 output GRAFANA_NAME string = grafana.outputs.name
+output GRAFANA_PUBLIC_NETWORK_ACCESS string = grafana.outputs.publicNetworkAccess
+output GRAFANA_ZONE_REDUNDANCY string = grafana.outputs.zoneRedundancy
 output KEY_VAULT_RESOURCE_ID string = keyVault.outputs.resourceId
