@@ -50,7 +50,7 @@ COPILOT_OTEL_CAPTURE_CONTENT=false
 | --- | --- | --- |
 | Prompt injection | Captures metadata and policy signals without exporting raw prompt text. | Add explicit red-team fixtures for injected tool instructions and MCP prompt-injection attempts. |
 | Sensitive information disclosure | Strict collector allowlist, content-signal drops, poison smoke, dashboard content guardrails, and documented retention/RBAC requirements for optional content capture workspaces. | Keep content-capture operational guardrails in `agentops security audit`. |
-| Supply chain | No direct npm deps, committed npm lockfiles, dependency audit command, collector binary checksum tests, and SDK publish-readiness checks exist. | Keep package publish checks in CI before stable releases. |
+| Supply chain | No direct npm deps, committed npm lockfiles, dependency audit command, collector binary checksum tests, and CLI/SDK publish-readiness checks exist. | Keep package publish checks in CI before stable releases. |
 | Excessive agency | Tool allow/deny counts, broad-permission flags, MCP risk dashboards. | Add policy tests for dangerous combinations such as broad tools plus content capture. |
 | Insecure output handling | Product does not execute model output directly. | Keep this explicit in docs and tests for SDK/MCP adapter examples. |
 | Vector/embedding weakness | Not currently a vector-store product. | No action unless vector/eval memory features are added. |
@@ -185,7 +185,7 @@ Added `docs/azure-production-hardening.md` and `validate-enterprise` checks for:
 
 1. `content-retention-rbac-live`: add table/workspace-specific live checks if optional content capture is deployed.
 2. `live-azure-posture-query`: keep expanding read-only live checks for budgets, private endpoint reachability, and alert action-group destinations.
-3. `cli-package-hardening`: add npm/Homebrew/GitHub release checks for the AgentOps CLI.
+3. `release-distribution-hardening`: add Homebrew/GitHub release checks for the AgentOps CLI distribution path.
 
 ## Verification From Initial Audit
 

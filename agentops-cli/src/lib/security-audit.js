@@ -309,6 +309,7 @@ function ciGateCheck(options = {}) {
   const required = [
     'npm --prefix agentops-cli run static:check',
     'npm --prefix agentops-cli run coverage:check',
+    'npm --prefix agentops-cli run publish:check',
     'npm --prefix packages/agentops-copilot-sdk run publish:check',
     'node agentops-cli/src/index.js security audit --json',
     'node agentops-cli/src/index.js security posture --json',

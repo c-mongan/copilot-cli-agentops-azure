@@ -52,6 +52,7 @@ const { createMcpProxyObserver } = require('../src/lib/mcp/proxy-stdio');
 const { classifyMcpToolRisk } = require('../src/lib/mcp/risk-classifier');
 const { rollupSpanRows } = require('../src/lib/rollup/span-to-agentops-tables');
 const { securityAudit, securityPosture } = require('../src/lib/security-audit');
+const { checkCliPublish } = require('../../scripts/check-cli-publish');
 const { checkSdkPublish, isWildcardRange } = require('../../scripts/check-sdk-publish');
 
 const {
@@ -318,6 +319,17 @@ test('security posture maps OWASP LLM and ASVS controls to repo evidence', () =>
   assert.equal(byId['ASVS-SEC'].status, 'covered');
   assert.equal(posture.summary.partial, 1);
   assert.deepEqual(posture.controls.flatMap(control => control.missing), []);
+});
+
+test('CLI publish check validates package metadata', () => {
+  const result = checkCliPublish({ skipPack: true });
+
+  assert.equal(result.ok, true, JSON.stringify(result, null, 2));
+  assert.equal(result.package.name, 'copilot-agentops-cli');
+  assert.equal(result.package.bin, 'src/index.js');
+  assert.ok(result.checks.expected_files.includes('src/index.js'));
+  assert.ok(result.checks.expected_files.includes('src/commands/collector.js'));
+  assert.ok(result.checks.forbidden_files.includes('test/index.test.js'));
 });
 
 test('SDK publish check rejects wildcard Copilot SDK peer ranges', () => {

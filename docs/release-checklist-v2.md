@@ -6,6 +6,7 @@
 npm --prefix agentops-cli test
 npm --prefix agentops-cli run coverage:check
 npm --prefix agentops-cli run static:check
+npm --prefix agentops-cli run publish:check -- --json
 npm --prefix packages/agentops-copilot-sdk run publish:check -- --json
 node agentops-cli/src/index.js security audit --json
 node agentops-cli/src/index.js security posture --json
@@ -37,6 +38,7 @@ node agentops-cli/src/index.js recommend latest --runs .agentops/demo/latest/Age
 node agentops-cli/src/index.js triage latest --runs .agentops/demo/latest/AgentOpsRunSummary_CL.jsonl --events .agentops/demo/latest/AgentOpsEvents_CL.jsonl --tools .agentops/demo/latest/AgentOpsToolCalls_CL.jsonl --evals .agentops/insights/latest/AgentOpsEval_CL.jsonl --insights .agentops/insights/latest/AgentOpsInsights_CL.jsonl --out .agentops/demo/latest --json
 node agentops-cli/src/index.js ask-context latest --runs .agentops/demo/latest/AgentOpsRunSummary_CL.jsonl --events .agentops/demo/latest/AgentOpsEvents_CL.jsonl --tools .agentops/demo/latest/AgentOpsToolCalls_CL.jsonl --evals .agentops/insights/latest/AgentOpsEval_CL.jsonl --insights .agentops/insights/latest/AgentOpsInsights_CL.jsonl --json
 node agentops-cli/src/index.js github-enrich --limit 30 --runs .agentops/demo/latest/AgentOpsRunSummary_CL.jsonl --json
+npm --prefix agentops-cli run publish:check -- --json
 npm --prefix packages/agentops-copilot-sdk test
 npm --prefix packages/agentops-copilot-sdk run publish:check -- --json
 node --test --test-name-pattern github agentops-cli/test/index.test.js
