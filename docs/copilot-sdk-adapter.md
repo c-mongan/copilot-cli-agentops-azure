@@ -55,4 +55,11 @@ GitHub's Copilot SDK docs describe `TelemetryConfig` options including `otlpEndp
 
 ```bash
 npm --prefix packages/agentops-copilot-sdk test
+npm --prefix packages/agentops-copilot-sdk run publish:check -- --json
 ```
+
+## Publish Readiness
+
+Before publishing the adapter package, run the publish check. It validates package metadata, rejects wildcard Copilot SDK peer dependencies, and inspects `npm pack --dry-run --json` so the package contains only the intended source, type definitions, examples, and package metadata.
+
+The `@github/copilot-sdk` peer dependency is optional but intentionally version-bounded. Do not publish with `*`, `latest`, or another open-ended peer range.

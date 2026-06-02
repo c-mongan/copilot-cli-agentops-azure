@@ -9,10 +9,11 @@
     "examples"
   ],
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "publish:check": "node ../../scripts/check-sdk-publish.js"
   },
   "peerDependencies": {
-    "@github/copilot-sdk": "*"
+    "@github/copilot-sdk": ">=0.1.0 <2"
   },
   "peerDependenciesMeta": {
     "@github/copilot-sdk": {

@@ -52,6 +52,7 @@ const { createMcpProxyObserver } = require('../src/lib/mcp/proxy-stdio');
 const { classifyMcpToolRisk } = require('../src/lib/mcp/risk-classifier');
 const { rollupSpanRows } = require('../src/lib/rollup/span-to-agentops-tables');
 const { securityAudit, securityPosture } = require('../src/lib/security-audit');
+const { checkSdkPublish, isWildcardRange } = require('../../scripts/check-sdk-publish');
 
 const {
   agentopsAttributionSmoke,
@@ -263,7 +264,7 @@ test('collector binary checksum verification rejects tampered archives', () => {
 
 test('strict privacy poison check drops unknown content fields and keeps safe metadata', () => {
   const result = privacy.poisonCheck();
-  assert.equal(result.ok, true);
+  assert.equal(result.ok, true, JSON.stringify(result, null, 2));
   assert.deepEqual(result.leaked, []);
   assert.equal(result.sanitized['agentops.content_capture.signal'], true);
   assert.equal(result.sanitized['unknown.future.content.field'], undefined);
@@ -317,6 +318,24 @@ test('security posture maps OWASP LLM and ASVS controls to repo evidence', () =>
   assert.equal(byId['ASVS-SEC'].status, 'covered');
   assert.equal(posture.summary.partial, 1);
   assert.deepEqual(posture.controls.flatMap(control => control.missing), []);
+});
+
+test('SDK publish check rejects wildcard Copilot SDK peer ranges', () => {
+  assert.equal(isWildcardRange('*'), true);
+  assert.equal(isWildcardRange('latest'), true);
+  assert.equal(isWildcardRange('>=0.1.0 <2'), false);
+});
+
+test('SDK publish check validates package metadata', () => {
+  const result = checkSdkPublish({ skipPack: true });
+
+  assert.equal(result.ok, true, JSON.stringify(result, null, 2));
+  assert.equal(result.package.name, '@agentops/copilot-sdk');
+  assert.equal(result.package.peer, '>=0.1.0 <2');
+  assert.ok(result.checks.expected_files.includes('src/index.js'));
+  assert.ok(result.checks.expected_files.includes('src/index.d.ts'));
+  assert.ok(result.checks.expected_files.includes('examples/basic-sdk-agent/index.js'));
+  assert.ok(result.checks.forbidden_files.includes('test/adapter.test.js'));
 });
 
 test('strict collector allowlist preserves V2 hierarchy metadata', () => {
