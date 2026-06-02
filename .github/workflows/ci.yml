@@ -33,6 +33,9 @@ jobs:
       - name: Run static analysis
         run: npm --prefix agentops-cli run static:check
 
+      - name: Check AgentOps CLI package publish readiness
+        run: npm --prefix agentops-cli run publish:check -- --json
+
       - name: Check Copilot SDK package publish readiness
         run: npm --prefix packages/agentops-copilot-sdk run publish:check -- --json
 

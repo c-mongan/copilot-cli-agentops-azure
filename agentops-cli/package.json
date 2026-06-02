@@ -14,6 +14,7 @@
     "coverage": "node --test --experimental-test-coverage",
     "coverage:check": "node ../scripts/coverage-check.js",
     "static:check": "node ../scripts/static-check.js",
+    "publish:check": "node ../scripts/check-cli-publish.js",
     "doctor": "node src/index.js doctor --local-only",
     "scan": "node src/index.js scan"
   },
