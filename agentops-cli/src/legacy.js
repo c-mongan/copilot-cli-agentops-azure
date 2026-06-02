@@ -2987,6 +2987,21 @@ function agentOpsScheduledQueryRules(rules) {
   });
 }
 
+function logAnalyticsTablesFromResult(value) {
+  const parsed = asArray(value?.value || value);
+  return parsed.map(table => ({
+    name: table?.name || pathValue(table, ['properties', 'name'], ''),
+    retention_days: [table?.retentionInDays, pathValue(table, ['properties', 'retentionInDays'], NaN)]
+      .map(Number)
+      .find(Number.isFinite),
+    total_retention_days: Number(table?.totalRetentionInDays ?? pathValue(table, ['properties', 'totalRetentionInDays'], NaN))
+  }));
+}
+
+function agentOpsContentTables(tables) {
+  return logAnalyticsTablesFromResult(tables).filter(table => String(table.name || '').toLowerCase() === 'agentopscontent_cl');
+}
+
 function azureProductionRemediationPlan(result, options = {}) {
   const checks = Object.fromEntries((result.checks || []).map(check => [check.name, check]));
   const config = result.config || {};
@@ -3050,6 +3065,19 @@ function azureProductionRemediationPlan(result, options = {}) {
       review: 'Assign Entra groups rather than individual users; avoid Owner/Contributor for routine observability access.',
       commands: [
         'AGENTOPS_DEPLOY_RBAC_ASSIGNMENTS=true ./scripts/azure-what-if.sh',
+        `node agentops-cli/src/index.js validate-azure --last ${result.last || '24h'} --production --json`
+      ]
+    });
+  }
+
+  if (checks['content-capture-table-posture'] && !checks['content-capture-table-posture'].ok) {
+    actions.push({
+      name: 'harden-optional-content-capture-storage',
+      risk: 'high',
+      reason: 'Optional prompt/response transcript storage must have short retention and least-privilege workspace access.',
+      review: 'Confirm content capture is intentionally enabled, then restrict access and lower retention before production.',
+      commands: [
+        `az monitor log-analytics workspace table update --resource-group ${commandShellQuote(resourceGroup)} --workspace-name ${commandShellQuote(workspaceName)} --name AgentOpsContent_CL --retention-time 30`,
         `node agentops-cli/src/index.js validate-azure --last ${result.last || '24h'} --production --json`
       ]
     });
@@ -3125,6 +3153,7 @@ function validateAzure(options = {}) {
   }
 
   if (hasAz && cloud.resourceGroup && cloud.workspaceName) {
+    let workspaceRbacOkForContent = null;
     const workspaceResult = runAz([
       'monitor',
       'log-analytics',
@@ -3185,6 +3214,7 @@ function validateAzure(options = {}) {
       );
       const workspaceRbacOk = roleResult.status === 0 &&
         (!production || (summary.group_assignments > 0 && summary.broad_assignments === 0));
+      workspaceRbacOkForContent = workspaceRbacOk;
       checks.push(checkResult('log-analytics-rbac-posture', workspaceRbacOk, {
         scope: workspaceResourceId,
         ...summary,
@@ -3199,6 +3229,58 @@ function validateAzure(options = {}) {
       }));
       if (roleResult.status !== 0) next.push('Verify Azure RBAC read permissions for the Log Analytics workspace.');
       else if (production && !workspaceRbacOk) next.push('Review Log Analytics RBAC: assign observer groups and remove routine broad roles before production.');
+    }
+
+    if (production && workspaceResult.status === 0) {
+      const tableResult = runAz([
+        'monitor',
+        'log-analytics',
+        'workspace',
+        'table',
+        'list',
+        '--resource-group',
+        cloud.resourceGroup,
+        '--workspace-name',
+        cloud.workspaceName,
+        '-o',
+        'json'
+      ], options);
+      const contentTables = tableResult.status === 0 ? agentOpsContentTables(parseJsonOutput(tableResult)) : [];
+      const retentionCandidates = contentTables
+        .map(table => table.retention_days)
+        .filter(Number.isFinite);
+      const contentRetentionDays = retentionCandidates.length > 0
+        ? Math.min(...retentionCandidates)
+        : retentionDays;
+      const hasContentTable = contentTables.length > 0;
+      const shortRetention = Number.isFinite(contentRetentionDays) && contentRetentionDays > 0 && contentRetentionDays <= 30;
+      const contentPostureOk = tableResult.status === 0 &&
+        (!hasContentTable || (shortRetention && resourceScopedAccess && workspaceRbacOkForContent === true));
+      checks.push(checkResult('content-capture-table-posture', contentPostureOk, {
+        table: 'AgentOpsContent_CL',
+        observed: hasContentTable,
+        retention_days: Number.isFinite(contentRetentionDays) ? contentRetentionDays : null,
+        max_retention_days: 30,
+        resource_scoped_access: resourceScopedAccess,
+        log_analytics_rbac_ok: workspaceRbacOkForContent,
+        issues: hasContentTable ? [
+          !shortRetention ? 'short_retention' : null,
+          !resourceScopedAccess ? 'resource_scoped_access' : null,
+          workspaceRbacOkForContent !== true ? 'workspace_rbac' : null
+        ].filter(Boolean) : [],
+        production,
+        detail: tableResult.status !== 0
+          ? azErrorDetail(tableResult, 'could not list Log Analytics tables')
+          : hasContentTable
+            ? (contentPostureOk
+                ? 'optional content table uses short retention and least-privilege workspace access'
+                : 'production mode expects optional content rows to use <=30 day retention and least-privilege workspace access')
+            : 'no optional content capture table observed'
+      }));
+      if (tableResult.status !== 0) next.push('Install/update Azure CLI monitor extension or verify Log Analytics table read permissions.');
+      else if (hasContentTable && !contentPostureOk) {
+        next.push('Harden optional content capture: keep AgentOpsContent_CL retention <=30 days and restrict Log Analytics access before production.');
+      }
     }
   }
 
