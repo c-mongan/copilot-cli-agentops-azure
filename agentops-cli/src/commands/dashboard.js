@@ -249,6 +249,7 @@ const v2KqlSmokePanels = [
   { uid: 'agentops-v2-code-outcomes', panel: 'Delivery timing', requireRows: true },
   { uid: 'agentops-v2-evals-quality', panel: 'Low-score runs', requireRows: true },
   { uid: 'agentops-v2-evals-quality', panel: 'Benchmark artifact diff review', requireRows: false },
+  { uid: 'agentops-v2-evals-quality', panel: 'Benchmark promotion approvals', requireRows: false },
   { uid: 'agentops-v2-insights-regressions', panel: 'Latest insights', requireRows: true },
   { uid: 'agentops-v2-insights-regressions', panel: 'Recurring patterns', requireRows: false },
   { uid: 'agentops-v2-insights-regressions', panel: 'Recommendation artifacts', requireRows: false },
@@ -411,9 +412,14 @@ function validateDashboardUx() {
   const evals = byUid.get('agentops-v2-evals-quality');
   const evalsTitles = new Set((evals?.body.panels || []).map(panel => panel.title));
   if (!evalsTitles.has('Benchmark artifact diff review')) errors.push('evals dashboard missing Benchmark artifact diff review panel');
+  if (!evalsTitles.has('Benchmark promotion approvals')) errors.push('evals dashboard missing Benchmark promotion approvals panel');
   const artifactDiffQuery = queryFromPanel(panelByTitle(evals, 'Benchmark artifact diff review'));
   for (const field of ['BenchmarkRunId', 'BenchmarkArtifactAdded', 'BenchmarkArtifactModified', 'BenchmarkArtifactDeleted', 'BenchmarkArtifactTotalChanged', 'ReviewAction', 'ChangeTargetRefs']) {
     if (!artifactDiffQuery.includes(field)) errors.push(`benchmark artifact diff review missing ${field}`);
+  }
+  const approvalQuery = queryFromPanel(panelByTitle(evals, 'Benchmark promotion approvals'));
+  for (const field of ['BenchmarkRunId', 'BenchmarkApprovalStatus', 'BenchmarkApprovalCount', 'BenchmarkRequiredApprovals', 'BenchmarkApprovalTicket', 'ApprovalAction']) {
+    if (!approvalQuery.includes(field)) errors.push(`benchmark promotion approvals missing ${field}`);
   }
 
   const insights = byUid.get('agentops-v2-insights-regressions');
@@ -425,7 +431,7 @@ function validateDashboardUx() {
     if (!patternsQuery.includes(field)) errors.push(`recurring patterns panel missing ${field}`);
   }
   const recommendationsQuery = queryFromPanel(panelByTitle(insights, 'Recommendation artifacts'));
-  for (const field of ['RecommendationId', 'Action', 'ObservedPattern', 'NextAction', 'BenchmarkRunId', 'BenchmarkDecision', 'BenchmarkArtifactTotalChanged', 'ChangeTargetRefs', 'OpenReplay', 'OpenPattern']) {
+  for (const field of ['RecommendationId', 'Action', 'ObservedPattern', 'NextAction', 'BenchmarkRunId', 'BenchmarkDecision', 'BenchmarkArtifactTotalChanged', 'BenchmarkApprovalStatus', 'ChangeTargetRefs', 'OpenReplay', 'OpenPattern']) {
     if (!recommendationsQuery.includes(field)) errors.push(`recommendation artifacts panel missing ${field}`);
   }
 
@@ -443,6 +449,7 @@ function validateDashboardUx() {
       recurring_patterns: true,
       recommendation_artifacts: true,
       artifact_diff_review: true,
+      promotion_approvals: true,
       pattern_drilldowns: true,
       empty_state_dashboards: emptyStateDashboards
     },
