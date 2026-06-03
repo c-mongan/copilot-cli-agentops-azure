@@ -4828,6 +4828,54 @@ test('benchmark report rejects candidates that miss promotion gates', () => {
   assert.equal(report.promotion.decision, 'reject');
 });
 
+test('benchmark report rejects candidates without required promotion approvals', () => {
+  const summaries = loadBenchmarkSummaries('pass-run', { summariesDir: benchmarkSummariesDir })
+    .map(summary => ({
+      ...summary,
+      promotionGates: {
+        requiredApprovals: 1
+      }
+    }));
+  const report = benchmarkReport('pass-run', summaries);
+
+  assert.deepEqual(report.promotionGateFailures, [{
+    gate: 'requiredApprovals',
+    expected: 1,
+    actual: 0,
+    ok: false
+  }]);
+  assert.equal(report.recommendation.action, 'reject');
+  assert.equal(report.promotion.decision, 'reject');
+});
+
+test('benchmark report promotes candidates with required approval evidence', () => {
+  const summaries = loadBenchmarkSummaries('pass-run', { summariesDir: benchmarkSummariesDir })
+    .map(summary => ({
+      ...summary,
+      promotionGates: {
+        requiredApprovals: 1
+      }
+    }));
+  const report = benchmarkReport('pass-run', summaries, {
+    promotionApproval: {
+      approvedBy: ['sre-team'],
+      approvedAt: '2026-06-03T04:00:00Z',
+      ticket: 'APPROVAL-123'
+    }
+  });
+
+  assert.deepEqual(report.promotionGateFailures, []);
+  assert.equal(report.recommendation.action, 'keep');
+  assert.equal(report.promotion.decision, 'promote');
+  assert.deepEqual(report.promotion.approval, {
+    status: 'approved',
+    approvedBy: ['sre-team'],
+    approvedAt: '2026-06-03T04:00:00Z',
+    ticket: 'APPROVAL-123',
+    source: 'options.promotionApproval'
+  });
+});
+
 test('benchmark report enriches stored summaries with Azure telemetry', () => {
   const summaries = loadBenchmarkSummaries('pass-run', { summariesDir: benchmarkSummariesDir });
   let capturedQuery = null;
@@ -4982,18 +5030,21 @@ test('benchmark report keeps local scores when Azure query fails', () => {
 });
 
 test('benchmark report args support optional Azure lookback', () => {
-  assert.deepEqual(parseBenchmarkReportArgs(['pass-run', '--azure', '--last', '2h']), {
+  assert.deepEqual(parseBenchmarkReportArgs(['pass-run', '--azure', '--last', '2h', '--approval-file', 'approval.json']), {
     runId: 'pass-run',
     azure: true,
-    last: '2h'
+    last: '2h',
+    approvalFile: 'approval.json'
   });
-  assert.deepEqual(parseBenchmarkCompareArgs(['before-run', 'after-run', '--azure', '--last', '12h']), {
+  assert.deepEqual(parseBenchmarkCompareArgs(['before-run', 'after-run', '--azure', '--last', '12h', '--approval-file', 'approval.json']), {
     beforeRunId: 'before-run',
     afterRunId: 'after-run',
     azure: true,
-    last: '12h'
+    last: '12h',
+    approvalFile: 'approval.json'
   });
   assert.throws(() => parseBenchmarkReportArgs(['pass-run', '--azure', '--last', 'forever']), /duration/);
+  assert.throws(() => parseBenchmarkReportArgs(['pass-run', '--approval-file']), /requires a path/);
 });
 
 test('benchmark Azure telemetry query filters by run id and lookback', () => {

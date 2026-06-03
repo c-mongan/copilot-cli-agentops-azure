@@ -72,8 +72,8 @@ function usage() {
     'mcp [--last <duration>]',
     'benchmark list',
     'benchmark run <suite> --variant <name> --repeat <n> [--hypothesis <id>] [--dry-run]',
-    'benchmark report <run-id> [--azure] [--last <duration>]',
-    'benchmark compare <before-run-id> <after-run-id> [--azure] [--last <duration>]'
+    'benchmark report <run-id> [--azure] [--last <duration>] [--approval-file <json>]',
+    'benchmark compare <before-run-id> <after-run-id> [--azure] [--last <duration>] [--approval-file <json>]'
   ];
   return `agentops <command>\n\nCommands:\n  ${commands.join('\n  ')}\n`;
 }
@@ -5107,7 +5107,8 @@ function validateBenchmarkPromotionGates(gates, source = 'suite') {
     'maxToolFailures',
     'maxSafetyViolationCount',
     'maxTotalTokens',
-    'maxCost'
+    'maxCost',
+    'requiredApprovals'
   ]);
   const normalized = {};
 
@@ -5118,6 +5119,9 @@ function validateBenchmarkPromotionGates(gates, source = 'suite') {
     const number = Number(value);
     if (!Number.isFinite(number) || number < 0) {
       throw new Error(`Invalid benchmark ${source}: promotion gate ${field} must be a non-negative number`);
+    }
+    if (field === 'requiredApprovals' && !Number.isInteger(number)) {
+      throw new Error(`Invalid benchmark ${source}: promotion gate ${field} must be an integer`);
     }
     normalized[field] = number;
   }
@@ -5342,6 +5346,10 @@ function parseBenchmarkReportArgs(args) {
     const arg = args[index];
     if (arg === '--azure') {
       options.azure = true;
+    } else if (arg === '--approval-file') {
+      if (!args[index + 1]) throw new Error('--approval-file requires a path');
+      options.approvalFile = args[index + 1];
+      index += 1;
     } else if (arg === '--last') {
       if (!args[index + 1]) throw new Error('--last requires a duration, for example 7d or 24h');
       options.last = args[index + 1];
@@ -5371,6 +5379,10 @@ function parseBenchmarkCompareArgs(args) {
     const arg = args[index];
     if (arg === '--azure') {
       options.azure = true;
+    } else if (arg === '--approval-file') {
+      if (!args[index + 1]) throw new Error('--approval-file requires a path');
+      options.approvalFile = args[index + 1];
+      index += 1;
     } else if (arg === '--last') {
       if (!args[index + 1]) throw new Error('--last requires a duration, for example 7d or 24h');
       options.last = args[index + 1];
@@ -6196,6 +6208,9 @@ function benchmarkPromotionGates(scoredSummaries) {
 function benchmarkPromotionGateFailures(report) {
   const gates = report.promotionGates;
   if (!isPlainObject(gates)) return [];
+  const approvalCount = report.promotionApproval?.status === 'approved'
+    ? (report.promotionApproval.approvedBy || []).length
+    : 0;
 
   const checks = [
     ['minPassRatePct', report.passRatePct, value => value >= gates.minPassRatePct],
@@ -6203,7 +6218,8 @@ function benchmarkPromotionGateFailures(report) {
     ['maxToolFailures', report.toolFailures, value => value <= gates.maxToolFailures],
     ['maxSafetyViolationCount', report.safetyViolationCount, value => value <= gates.maxSafetyViolationCount],
     ['maxTotalTokens', report.totalTokens, value => value <= gates.maxTotalTokens],
-    ['maxCost', report.cost, value => value <= gates.maxCost]
+    ['maxCost', report.cost, value => value <= gates.maxCost],
+    ['requiredApprovals', approvalCount, value => value >= gates.requiredApprovals]
   ];
 
   return checks
@@ -6320,6 +6336,48 @@ function benchmarkRecommendation(report) {
   };
 }
 
+function validateBenchmarkPromotionApproval(approval, source = 'approval') {
+  if (approval === undefined || approval === null) return null;
+  if (!isPlainObject(approval)) {
+    throw new Error(`Invalid benchmark promotion approval ${source}: approval must be an object`);
+  }
+
+  if (approval.approvedBy !== undefined && !isStringArray(approval.approvedBy)) {
+    throw new Error(`Invalid benchmark promotion approval ${source}: approvedBy must be an array of strings`);
+  }
+  const approvedBy = approval.approvedBy === undefined
+    ? []
+    : [...new Set(approval.approvedBy.map(name => name.trim()).filter(Boolean))].sort();
+
+  const status = approval.status || (approvedBy.length > 0 ? 'approved' : 'pending');
+  if (!['approved', 'pending', 'rejected'].includes(status)) {
+    throw new Error(`Invalid benchmark promotion approval ${source}: status must be approved, pending, or rejected`);
+  }
+
+  if (approval.approvedAt !== undefined && typeof approval.approvedAt !== 'string') {
+    throw new Error(`Invalid benchmark promotion approval ${source}: approvedAt must be a string`);
+  }
+  if (approval.ticket !== undefined && typeof approval.ticket !== 'string') {
+    throw new Error(`Invalid benchmark promotion approval ${source}: ticket must be a string`);
+  }
+
+  return {
+    status,
+    approvedBy,
+    approvedAt: approval.approvedAt || null,
+    ticket: approval.ticket || null,
+    source
+  };
+}
+
+function benchmarkPromotionApprovalFromOptions(options = {}) {
+  if (options.promotionApproval !== undefined) {
+    return validateBenchmarkPromotionApproval(options.promotionApproval, 'options.promotionApproval');
+  }
+  if (!options.approvalFile) return null;
+  return validateBenchmarkPromotionApproval(readJson(path.resolve(options.approvalFile)), options.approvalFile);
+}
+
 function defaultBenchmarkSummaryDir() {
   return process.env.AGENTOPS_BENCHMARK_RUNS_DIR || path.join(benchmarksDir, 'runs');
 }
@@ -6356,6 +6414,7 @@ function benchmarkReport(runId, summaries = null, options = {}) {
   if (!runId) throw new Error('benchmark report requires a run id');
   let runSummaries = (summaries || loadBenchmarkSummaries(runId)).filter(summary => summary.runId === runId);
   let azureTelemetry = null;
+  const promotionApproval = benchmarkPromotionApprovalFromOptions(options);
 
   if (runSummaries.length === 0) {
     if (options.azure) azureTelemetry = benchmarkAzureTelemetry(runId, options);
@@ -6445,6 +6504,7 @@ function benchmarkReport(runId, summaries = null, options = {}) {
   if (azureTelemetry) report.azureTelemetry = azureTelemetry;
   report.antiCheat = benchmarkCheatSignals(scoredSummaries, azureTelemetry);
   report.promotionGates = benchmarkPromotionGates(scoredSummaries);
+  report.promotionApproval = promotionApproval;
   report.promotionGateFailures = benchmarkPromotionGateFailures(report);
   report.recommendation = benchmarkRecommendation(report);
   report.promotion = benchmarkPromotionSummary(report);
@@ -6467,6 +6527,7 @@ function benchmarkPromotionSummary(report) {
     },
     gates: report.promotionGates || null,
     gateFailures: report.promotionGateFailures || [],
+    approval: report.promotionApproval || null,
     validation: report.azureTelemetry?.ok === false
       ? 'local benchmark summary only; rerun with --azure when live telemetry is required'
       : 'benchmark summary includes local checks' + (report.azureTelemetry ? ' and Azure telemetry' : ''),
@@ -6514,7 +6575,7 @@ function compareBenchmarkRuns(beforeRunId, afterRunId, summaries = null, options
     ...loadBenchmarkSummaries(beforeRunId),
     ...loadBenchmarkSummaries(afterRunId)
   ];
-  const before = benchmarkReport(beforeRunId, allSummaries, options);
+  const before = benchmarkReport(beforeRunId, allSummaries, { ...options, approvalFile: null, promotionApproval: null });
   const after = benchmarkReport(afterRunId, allSummaries, options);
   if (before.ok === false || after.ok === false) {
     const missingComparison = {
