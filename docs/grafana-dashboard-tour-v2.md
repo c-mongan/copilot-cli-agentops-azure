@@ -148,7 +148,7 @@ The **Benchmark promotion approvals** panel shows promotion approval status, req
 
 Use `agentops triage latest --runs <AgentOpsRunSummary_CL.jsonl> --events <AgentOpsEvents_CL.jsonl> --tools <AgentOpsToolCalls_CL.jsonl> --evals <AgentOpsEval_CL.jsonl> --insights <AgentOpsInsights_CL.jsonl>` to package links, evidence counts, a safe investigator prompt, and one recommendation.
 
-Use `agentops ask-context latest --runs <AgentOpsRunSummary_CL.jsonl> --events <AgentOpsEvents_CL.jsonl> --evals <AgentOpsEval_CL.jsonl> --insights <AgentOpsInsights_CL.jsonl>` when you only need the investigator prompt.
+Use `agentops ask-context latest --runs <AgentOpsRunSummary_CL.jsonl> --events <AgentOpsEvents_CL.jsonl> --tools <AgentOpsToolCalls_CL.jsonl> --privacy <AgentOpsPrivacy_CL.jsonl> --github <AgentOpsGitHubOutcome_CL.jsonl> --evals <AgentOpsEval_CL.jsonl> --insights <AgentOpsInsights_CL.jsonl> --recommendations <AgentOpsRecommendations_CL.jsonl>` when you only need the investigator prompt.
 
 Use `agentops recommend latest --runs <AgentOpsRunSummary_CL.jsonl> --evals <AgentOpsEval_CL.jsonl> --insights <AgentOpsInsights_CL.jsonl>` when you want one evidence-backed next action with direct dashboard links.
 
