@@ -2254,6 +2254,7 @@ test('init workflow installs skills in dry-run mode and returns first-run next s
     assert.equal(result.azd.ok, false);
     assert.equal(result.cloud_provision.requested, false);
     assert.equal(result.dashboard_import.requested, false);
+    assert.equal(result.real_smoke.requested, false);
     assert.ok(result.next.includes('agentops init --provision-cloud'));
     assert.ok(result.next.includes('node agentops-cli/src/index.js validate-azure --import-dashboards --last 24h'));
     assert.ok(result.next.includes('node agentops-cli/src/index.js smoke --real-copilot --wait 2m --poll 10s'));
@@ -2268,6 +2269,84 @@ test('init workflow installs skills in dry-run mode and returns first-run next s
     assert.match(output, /azd environment:/);
     assert.match(output, /First value: run the real smoke/);
     assert.match(output, /agentops plugin uninstall/);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('init run-smoke dry run plans explicit real smoke stage', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-init-run-smoke-dry-'));
+  try {
+    const result = agentopsInit({
+      dryRun: true,
+      runSmoke: true,
+      noSkills: true,
+      env: {},
+      workspaceId: '',
+      grafanaBaseUrl: '',
+      installDir: path.join(tempDir, 'bin')
+    });
+    const output = renderInit(result);
+
+    assert.equal(result.real_smoke.requested, true);
+    assert.equal(result.real_smoke.dry_run, true);
+    assert.equal(result.real_smoke.ok, true);
+    assert.equal(result.next.includes('node agentops-cli/src/index.js smoke --real-copilot --wait 2m --poll 10s'), false);
+    assert.match(output, /Real smoke: ready/);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('init run-smoke invokes the real smoke command when explicit', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-init-run-smoke-'));
+  const calls = [];
+  try {
+    const result = agentopsInit({
+      runSmoke: true,
+      noSkills: true,
+      env: {},
+      workspaceId: 'workspace-123',
+      grafanaBaseUrl: 'https://grafana.example',
+      installDir: path.join(tempDir, 'bin'),
+      spawnSync: (command, args) => {
+        calls.push([command, args]);
+        return { status: 0, stdout: JSON.stringify({ ok: true, replay_url: 'https://grafana.example/d/run' }), stderr: '' };
+      }
+    });
+
+    assert.equal(result.real_smoke.requested, true);
+    assert.equal(result.real_smoke.ok, true);
+    const smokeCall = calls.find(([, args]) => args.includes('smoke'));
+    assert.ok(smokeCall);
+    assert.ok(smokeCall[1].includes('--real-copilot'));
+    assert.ok(smokeCall[1].includes('--open-browser'));
+    assert.equal(result.next.includes('node agentops-cli/src/index.js smoke --real-copilot --wait 2m --poll 10s'), false);
+    assert.ok(result.next.includes('node agentops-cli/src/index.js open latest --last 2h'));
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('init run-smoke reports failed smoke next steps', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-init-run-smoke-fail-'));
+  try {
+    const result = agentopsInit({
+      runSmoke: true,
+      noSkills: true,
+      env: {},
+      workspaceId: 'workspace-123',
+      grafanaBaseUrl: 'https://grafana.example',
+      installDir: path.join(tempDir, 'bin'),
+      spawnSync: () => ({ status: 1, stdout: JSON.stringify({ ok: false }), stderr: 'smoke failed' })
+    });
+    const output = renderInit(result);
+
+    assert.equal(result.real_smoke.ok, false);
+    assert.ok(result.next.includes('agentops smoke --real-copilot --wait 2m --poll 10s --open-browser --json'));
+    assert.ok(result.next.includes('node agentops-cli/src/index.js latest --last 2h'));
+    assert.match(output, /Real smoke: needs review/);
+    assert.match(output, /Real smoke next:/);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }

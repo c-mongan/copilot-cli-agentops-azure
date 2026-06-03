@@ -70,6 +70,7 @@ agentops insights generate|patterns
 agentops init --dry-run
 agentops init --provision-cloud
 agentops init --import-dashboards
+agentops init --run-smoke
 agentops mcp-proxy
 agentops recommend
 agentops triage

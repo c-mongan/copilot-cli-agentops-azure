@@ -19,6 +19,7 @@ node src/index.js otel-setup --shell powershell
 node src/index.js compat-check --last 2h
 node src/index.js init --dry-run
 node src/index.js init --import-dashboards
+node src/index.js init --run-smoke
 node src/index.js scan
 node src/index.js primitives --last 7d
 node src/index.js import-jsonl ../tests/sample-otel/tool-failure.jsonl
