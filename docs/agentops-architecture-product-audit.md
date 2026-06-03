@@ -827,7 +827,7 @@ Current anti-cheat limitations:
 - Suites can seal command harness files with `commandFileSeal`; benchmark runs now reject candidates that change sealed test scripts or command files in the copied fixture. This is not a replacement for OS-level sandboxing.
 - The Evals & Quality dashboard now includes metadata-only artifact diff counts, per-file artifact path review, hidden check pack review, policy review, and semantic check review for benchmark recommendations. The CLI can now review artifact file paths and explicit fixture-to-workspace content diffs for local benchmark runs; a Grafana-native file-content diff viewer is still missing.
 - Benchmark reports flag network and browser-control tool usage as external answer-source evidence for review. This is metadata-only and does not prove the answer came from an external source.
-- There is no "agent optimized for benchmark but harmed real-world telemetry" comparison beyond the report heuristics.
+- Benchmark comparisons now warn when an offline-improved candidate has worse Azure-backed token, cost, tool-failure, or safety telemetry. This is still a benchmark-run telemetry comparison, not a full production cohort analysis.
 
 Product recommendation:
 

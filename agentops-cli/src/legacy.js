@@ -7550,6 +7550,32 @@ function benchmarkPromotionSummary(report) {
   };
 }
 
+function compareTelemetryHarmWarnings(before, after, options = {}) {
+  if (!options.azure || before.azureTelemetry?.ok !== true || after.azureTelemetry?.ok !== true) return [];
+  const improved = after.passRate > before.passRate || after.averageScore > before.averageScore;
+  if (!improved) return [];
+
+  const warnings = [];
+  const tokenDelta = after.totalTokens - before.totalTokens;
+  const costDelta = roundNumber(after.cost - before.cost, 4);
+  const tokenThreshold = Math.max(1000, numberValue(before.totalTokens) * 0.25);
+  const costThreshold = Math.max(0.1, numberValue(before.cost) * 0.25);
+
+  if (tokenDelta > tokenThreshold) {
+    warnings.push('after run improved benchmark quality but live telemetry token use increased');
+  }
+  if (costDelta > costThreshold) {
+    warnings.push('after run improved benchmark quality but live telemetry cost increased');
+  }
+  if (after.toolFailures > before.toolFailures) {
+    warnings.push('after run improved benchmark quality but live telemetry tool failures increased');
+  }
+  if (after.safetyViolationCount > before.safetyViolationCount) {
+    warnings.push('after run improved benchmark quality but live telemetry safety violations increased');
+  }
+  return warnings;
+}
+
 function compareRecommendation(comparison) {
   if (comparison.safetyRegressionWarnings.length > 0) {
     return {
@@ -7567,6 +7593,12 @@ function compareRecommendation(comparison) {
     return {
       action: 'reject',
       message: 'reject: the after run is materially worse than the before run.'
+    };
+  }
+  if (comparison.telemetryHarmWarnings.length > 0) {
+    return {
+      action: 'investigate',
+      message: 'investigate: benchmark quality improved, but live telemetry harm warnings need review.'
     };
   }
   if (comparison.passRateDelta > 0 || comparison.averageScoreDelta >= 2) {
@@ -7622,6 +7654,7 @@ function compareBenchmarkRuns(beforeRunId, afterRunId, summaries = null, options
   if (after.contentCaptureDetected && !before.contentCaptureDetected) {
     safetyRegressionWarnings.push('after run detected content capture');
   }
+  const telemetryHarmWarnings = compareTelemetryHarmWarnings(before, after, options);
 
   const comparison = {
     beforeRunId,
@@ -7651,6 +7684,7 @@ function compareBenchmarkRuns(beforeRunId, afterRunId, summaries = null, options
     tokenDelta: after.totalTokens - before.totalTokens,
     costDelta: roundNumber(after.cost - before.cost, 4),
     safetyRegressionWarnings,
+    telemetryHarmWarnings,
     afterPromotionGateFailures: after.promotionGateFailures || [],
     topFailureCategories: after.topFailureCategories
   };
@@ -7674,6 +7708,7 @@ function compareBenchmarkRuns(beforeRunId, afterRunId, summaries = null, options
       tokenDelta: comparison.tokenDelta,
       costDelta: comparison.costDelta,
       safetyRegressionWarnings: comparison.safetyRegressionWarnings,
+      telemetryHarmWarnings: comparison.telemetryHarmWarnings,
       afterPromotionGateFailures: comparison.afterPromotionGateFailures
     },
     rollback: 'revert the candidate if the benchmark or live telemetry later shows lower pass rate, new safety warnings, or unacceptable token/cost growth'

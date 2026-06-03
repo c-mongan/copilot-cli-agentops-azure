@@ -6365,6 +6365,41 @@ test('benchmark compare keeps an after run that improves', () => {
   assert.equal(comparison.recommendation.action, 'keep');
 });
 
+test('benchmark compare warns when offline improvement harms live telemetry', () => {
+  const summaries = [
+    ...loadBenchmarkSummaries('regress-run', { summariesDir: benchmarkSummariesDir }),
+    ...loadBenchmarkSummaries('pass-run', { summariesDir: benchmarkSummariesDir })
+  ];
+  const telemetryByRun = {
+    'regress-run': [
+      { task_id: 'edit-small-file', Spans: 2, ToolCalls: 1, ToolFailures: 0, Failures: 0, InputTokens: 1000, OutputTokens: 100, Credits: 1, AIU: 1000000, Models: ['gpt-5.5'], Tools: [], Conversations: ['before-a'], Operations: ['chat'] },
+      { task_id: 'add-test', Spans: 2, ToolCalls: 1, ToolFailures: 0, Failures: 0, InputTokens: 1000, OutputTokens: 100, Credits: 1, AIU: 1000000, Models: ['gpt-5.5'], Tools: [], Conversations: ['before-b'], Operations: ['chat'] }
+    ],
+    'pass-run': [
+      { task_id: 'edit-small-file', Spans: 3, ToolCalls: 2, ToolFailures: 1, Failures: 1, InputTokens: 20000, OutputTokens: 500, Credits: 80, AIU: 1000000, Models: ['gpt-5.5'], Tools: ['shell'], Conversations: ['after-a'], Operations: ['chat', 'execute_tool'] },
+      { task_id: 'add-test', Spans: 3, ToolCalls: 1, ToolFailures: 0, Failures: 0, InputTokens: 20000, OutputTokens: 500, Credits: 80, AIU: 1000000, Models: ['gpt-5.5'], Tools: [], Conversations: ['after-b'], Operations: ['chat'] }
+    ]
+  };
+
+  const comparison = compareBenchmarkRuns('regress-run', 'pass-run', summaries, {
+    azure: true,
+    spawnSync: (_command, args) => {
+      const query = args[args.indexOf('--analytics-query') + 1];
+      const runId = query.includes('run_id == "pass-run"') ? 'pass-run' : 'regress-run';
+      return { status: 0, stdout: JSON.stringify(telemetryByRun[runId].map(row => ({ ...row, run_id: runId }))), stderr: '' };
+    }
+  });
+
+  assert.ok(comparison.averageScoreDelta > 0);
+  assert.deepEqual(comparison.telemetryHarmWarnings, [
+    'after run improved benchmark quality but live telemetry token use increased',
+    'after run improved benchmark quality but live telemetry cost increased'
+  ]);
+  assert.equal(comparison.recommendation.action, 'investigate');
+  assert.equal(comparison.promotion.decision, 'investigate');
+  assert.deepEqual(comparison.promotion.evidence.telemetryHarmWarnings, comparison.telemetryHarmWarnings);
+});
+
 test('benchmark compare rejects an after run that misses promotion gates', () => {
   const summaries = [
     ...loadBenchmarkSummaries('regress-run', { summariesDir: benchmarkSummariesDir }),
