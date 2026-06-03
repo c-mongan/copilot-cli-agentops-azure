@@ -36,7 +36,7 @@ const { productAudit, productAuditWithVisual, renderProductAudit, validateVisual
 const { benchmarkEvidenceFromReport, changeAnnotationsForRun, exportRecommendationStore, firstPositional: firstRecommendPositional, normalizeChangeAnnotation, recommendFromFiles, recommendationRow, recommendationStoreCommand, renderRecommendationV2, saveRecommendation, writeRecommendation } = require('../src/commands/recommend');
 const { demoOptionsFromArgs, demoVerifyCommand } = require('../src/commands/demo');
 const { buildTriage, renderTriage, writeTriage } = require('../src/commands/triage');
-const { buildAzureIngestPlan } = require('../src/lib/azure/v2-ingest-plan');
+const { buildAzureIngestPlan, buildSharedStorageUploadPlan, renderSharedStorageUploadPlan } = require('../src/lib/azure/v2-ingest-plan');
 const { generateDemoData, tableNames, writeDemoData } = require('../src/lib/demo/agentops-demo-data');
 const { ciStatusFromChecks, enrichGithubOutcomes, rowFromPullRequest, stableHash } = require('../src/lib/github/outcome-enricher');
 const { isRevertPullRequest } = require('../src/lib/github/revert-detector');
@@ -717,6 +717,54 @@ test('content status makes prompt response viewer opt-in explicit', () => {
     assert.match(guide, /AGENTOPS_CAPTURE_CONTENT=false/);
     assert.match(guide, /restricted to approved viewers/);
     assert.match(guide, /--allow-content/);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('shared storage upload plan covers metadata-only saved views and recommendations', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-shared-store-'));
+  try {
+    fs.writeFileSync(path.join(tempDir, 'AgentOpsRecommendations_CL.jsonl'), `${JSON.stringify({
+      TimeGenerated: '2026-06-03T12:00:00.000Z',
+      RecommendationId: 'rec-123',
+      Action: 'reduce_context',
+      Severity: 'medium',
+      ObservedPattern: 'context pressure',
+      NextAction: 'Open Run Replay'
+    })}\n`);
+    fs.writeFileSync(path.join(tempDir, 'AgentOpsSavedViews_CL.jsonl'), `${JSON.stringify({
+      TimeGenerated: '2026-06-03T12:01:00.000Z',
+      SavedViewId: 'view-123',
+      Name: 'cost-spike',
+      Url: 'https://grafana.example/d/agentops-session-detail',
+      QueryHash: 'query_123'
+    })}\n`);
+    fs.writeFileSync(path.join(tempDir, 'recommendations-manifest.json'), JSON.stringify({
+      privacy: 'metadata-only'
+    }));
+
+    const plan = buildSharedStorageUploadPlan({
+      dir: tempDir,
+      account: 'stagopsteam123',
+      container: 'agentops-shared',
+      prefix: 'team-a/latest'
+    });
+    const rendered = renderSharedStorageUploadPlan(plan);
+
+    assert.equal(plan.schema_version, 'agentops.shared-storage-upload-plan.v1');
+    assert.equal(plan.ok, true);
+    assert.equal(plan.artifacts.length, 3);
+    assert.ok(plan.artifacts.some(artifact => artifact.table === 'AgentOpsRecommendations_CL' && artifact.rows === 1));
+    assert.ok(plan.artifacts.some(artifact => artifact.table === 'AgentOpsSavedViews_CL' && artifact.blob === 'team-a/latest/AgentOpsSavedViews_CL/AgentOpsSavedViews_CL.jsonl'));
+    assert.ok(plan.artifacts.every(artifact => artifact.command.includes('--auth-mode') && artifact.command.includes('login')));
+    assert.match(rendered, /az storage blob upload/);
+    assert.match(rendered, /team-a\/latest\/AgentOpsRecommendations_CL\/AgentOpsRecommendations_CL\.jsonl/);
+    assert.doesNotMatch(JSON.stringify(plan), /SECRET_FAKE_TEST_VALUE|raw transcript|tool_args/);
+
+    const missingAccount = buildSharedStorageUploadPlan({ dir: tempDir });
+    assert.equal(missingAccount.ok, false);
+    assert.ok(missingAccount.errors.some(error => error.includes('--account')));
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }

@@ -204,6 +204,191 @@ function buildAzureIngestPlan({ dir, allowContent = false } = {}) {
   };
 }
 
+const sharedStorageTables = [
+  'AgentOpsRecommendations_CL',
+  'AgentOpsSavedViews_CL'
+];
+
+function validateSharedStorageFile(table, file) {
+  const { rows, parseErrors, text } = readJsonl(file);
+  const columns = columnsFor(rows);
+  const errors = [...parseErrors];
+  const required = requiredColumns[table] || [];
+
+  for (const column of required) {
+    if (!columns.includes(column)) errors.push(`${table}: missing required column ${column}`);
+  }
+
+  const leaks = scanForLeaks(table, text);
+  return {
+    table,
+    file,
+    rows: rows.length,
+    columns,
+    required_columns: required,
+    errors,
+    leaks
+  };
+}
+
+function storageBlobName(prefix, table, file) {
+  const normalizedPrefix = String(prefix || '').trim().replace(/^\/+|\/+$/g, '');
+  const parts = [normalizedPrefix, table, path.basename(file)].filter(Boolean);
+  return parts.join('/');
+}
+
+function buildSharedStorageUploadPlan({ dir, account, container = 'agentops-shared', prefix = 'agentops-shared' } = {}) {
+  const absoluteDir = path.resolve(dir || '.');
+  const storageAccount = String(account || '').trim();
+  const containerName = String(container || '').trim();
+  const errors = [];
+  const warnings = [];
+  const artifacts = [];
+  const leaks = [];
+
+  if (!storageAccount) errors.push('shared upload-plan requires --account <storage-account-name>');
+  if (!containerName) errors.push('shared upload-plan requires --container <container-name>');
+
+  for (const table of sharedStorageTables) {
+    const file = path.join(absoluteDir, `${table}.jsonl`);
+    if (!fs.existsSync(file)) {
+      warnings.push(`${table}: file not found; skipping`);
+      continue;
+    }
+
+    const validation = validateSharedStorageFile(table, file);
+    errors.push(...validation.errors);
+    leaks.push(...validation.leaks);
+    if (validation.rows === 0) warnings.push(`${table}: no rows to share`);
+
+    artifacts.push({
+      table,
+      file,
+      rows: validation.rows,
+      blob: storageBlobName(prefix, table, file),
+      command: [
+        'az',
+        'storage',
+        'blob',
+        'upload',
+        '--auth-mode',
+        'login',
+        '--account-name',
+        storageAccount || '<storage-account-name>',
+        '--container-name',
+        containerName || '<container-name>',
+        '--name',
+        storageBlobName(prefix, table, file),
+        '--file',
+        file,
+        '--overwrite',
+        'true'
+      ]
+    });
+  }
+
+  for (const manifestName of ['recommendations-manifest.json', 'saved-views-manifest.json']) {
+    const file = path.join(absoluteDir, manifestName);
+    if (!fs.existsSync(file)) continue;
+    const text = fs.readFileSync(file, 'utf8');
+    const manifestLeaks = scanForLeaks(manifestName, text);
+    leaks.push(...manifestLeaks);
+    artifacts.push({
+      table: 'manifest',
+      file,
+      rows: null,
+      blob: storageBlobName(prefix, 'manifests', file),
+      command: [
+        'az',
+        'storage',
+        'blob',
+        'upload',
+        '--auth-mode',
+        'login',
+        '--account-name',
+        storageAccount || '<storage-account-name>',
+        '--container-name',
+        containerName || '<container-name>',
+        '--name',
+        storageBlobName(prefix, 'manifests', file),
+        '--file',
+        file,
+        '--overwrite',
+        'true'
+      ]
+    });
+  }
+
+  if (artifacts.filter(item => item.table !== 'manifest').length === 0) {
+    errors.push('no shared artifacts found; export recommendations or saved views first');
+  }
+  if (leaks.length > 0) {
+    errors.push(`privacy scan found ${leaks.length} content-like or secret-like match(es)`);
+  }
+
+  return {
+    schema_version: 'agentops.shared-storage-upload-plan.v1',
+    mode: 'preview-only-blob-upload-plan',
+    ok: errors.length === 0,
+    dir: absoluteDir,
+    storage: {
+      account: storageAccount || null,
+      container: containerName || null,
+      prefix: String(prefix || '').trim()
+    },
+    artifacts,
+    warnings,
+    errors,
+    privacy: {
+      ok: leaks.length === 0,
+      leaks,
+      mode: 'metadata-only shared artifacts; prompts, responses, tool arguments, tool results, source code, and file contents are not allowed'
+    },
+    guardrails: [
+      'Preview-only: this command does not upload blobs or create Azure resources.',
+      'Use Azure RBAC and --auth-mode login; do not use account keys in shared workflows.',
+      'Keep shared storage limited to metadata-only recommendation and saved-view exports.'
+    ],
+    next: [
+      'Review the artifact list and privacy scan.',
+      'Create or deploy the shared storage account and container if needed.',
+      'Run the listed az storage blob upload commands only after owner approval.'
+    ]
+  };
+}
+
+function renderSharedStorageUploadPlan(plan) {
+  const lines = [];
+  lines.push('AgentOps shared storage upload plan');
+  lines.push('');
+  lines.push(`Status: ${plan.ok ? 'ready' : 'not ready'}`);
+  lines.push(`Directory: ${plan.dir}`);
+  lines.push(`Storage: ${plan.storage.account || '<storage-account-name>'}/${plan.storage.container || '<container-name>'}`);
+  lines.push(`Privacy scan: ${plan.privacy.ok ? 'passed' : 'failed'}`);
+  lines.push('');
+  lines.push('Artifacts:');
+  for (const artifact of plan.artifacts) {
+    lines.push(`- ${artifact.table}: ${artifact.rows === null ? 'manifest' : `${artifact.rows} row(s)`} -> ${artifact.blob}`);
+  }
+  if (plan.errors.length > 0) {
+    lines.push('');
+    lines.push('Errors:');
+    for (const error of plan.errors) lines.push(`- ${error}`);
+  }
+  if (plan.warnings.length > 0) {
+    lines.push('');
+    lines.push('Warnings:');
+    for (const warning of plan.warnings) lines.push(`- ${warning}`);
+  }
+  lines.push('');
+  lines.push('Commands:');
+  for (const artifact of plan.artifacts) lines.push(`- ${artifact.command.join(' ')}`);
+  lines.push('');
+  lines.push('Next:');
+  for (const command of plan.next) lines.push(`- ${command}`);
+  return `${lines.join('\n')}\n`;
+}
+
 function renderAzureIngestPlan(plan) {
   const lines = [];
   lines.push('AgentOps V2 Azure ingestion plan');
@@ -236,9 +421,11 @@ function renderAzureIngestPlan(plan) {
 
 module.exports = {
   buildAzureIngestPlan,
+  buildSharedStorageUploadPlan,
   columnTypesFor,
   inferAzureColumnType,
   renderAzureIngestPlan,
+  renderSharedStorageUploadPlan,
   requiredColumns,
   leakPatterns,
   streamNameFor
