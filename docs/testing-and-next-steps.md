@@ -7,6 +7,7 @@ Completed locally:
 ```bash
 npm --prefix agentops-cli test
 node agentops-cli/src/index.js doctor --local-only
+node agentops-cli/src/index.js doctor --json
 az bicep build --file infra/bicep/main.bicep --stdout >/tmp/agentops-main-arm.json
 node agentops-cli/src/index.js collector validate --mode auto --privacy strict --json
 ```

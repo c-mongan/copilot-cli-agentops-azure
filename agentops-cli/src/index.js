@@ -102,7 +102,7 @@ Core commands:
   install [--no-shadow-copilot] [--no-collector] [--plugin]
   uninstall [--keep-plugin] [--keep-collector] [--keep-binary] [--purge]
   status [--json]
-  doctor [--json]
+  doctor [--local-only] [--last <duration>] [--json]
   configure show|set|import-azd [--json]
   collector start|stop|status|validate|smoke|install-binary|uninstall-binary [--mode auto|docker|binary|none] [--privacy strict|compat] [--json]
   azure-ingest plan [--dir <AgentOps table dir>] [--allow-content] [--json]
