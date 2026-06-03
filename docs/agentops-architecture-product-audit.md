@@ -825,7 +825,7 @@ Current anti-cheat limitations:
 - Semantic evaluator adapters exist for deterministic file-content and regex checks, but there is no LLM or rubric-judge scoring yet.
 - Candidate promotion gates can require approval evidence from an approval file, and the Evals & Quality dashboard now surfaces metadata-only approval review status. There is still no interactive team approval workflow yet.
 - There is no defense against an agent changing the test commands if the eval harness files are available to it.
-- The Evals & Quality dashboard now includes metadata-only artifact diff review counts for benchmark recommendations, but there is no full file-level artifact diff viewer yet.
+- The Evals & Quality dashboard now includes metadata-only artifact diff counts and per-file artifact path review for benchmark recommendations, but there is no unified file-content diff viewer yet.
 - There is no "agent used external answer source" detector.
 - There is no "agent optimized for benchmark but harmed real-world telemetry" comparison beyond the report heuristics.
 
@@ -1275,7 +1275,7 @@ Required work:
 - Add full sealed fixture pack distribution.
 - Add LLM or rubric-judge semantic evaluator adapters.
 - Expand enforced permission profiles to network and tool sandboxing.
-- Add full file-level artifact diff UI review.
+- Add unified artifact content diff UI review for approved benchmark artifacts.
 - Add interactive team approval workflow for candidate promotion gates.
 - Add dashboards for eval scorecards and regressions.
 

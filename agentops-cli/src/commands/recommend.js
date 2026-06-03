@@ -147,6 +147,26 @@ function fileRefsForRecommendation(action, insight = {}, run = {}) {
   return [...refs];
 }
 
+function benchmarkArtifactFileRefs(report = null) {
+  const rows = [];
+  for (const task of Array.isArray(report?.tasks) ? report.tasks : []) {
+    const diff = task.artifactDiff || {};
+    for (const change of ['added', 'modified', 'deleted']) {
+      const files = Array.isArray(diff[change]) ? diff[change] : [];
+      for (const file of files) {
+        const artifactPath = String(file || '').replaceAll('\\', '/').trim();
+        if (!artifactPath) continue;
+        rows.push({
+          task_id: task.taskId || '',
+          change,
+          path: artifactPath
+        });
+      }
+    }
+  }
+  return rows.slice(0, 200);
+}
+
 function benchmarkEvidenceFromReport(report = null) {
   if (!report || typeof report !== 'object') return null;
   const artifactDiff = report.artifactDiff || {};
@@ -169,6 +189,7 @@ function benchmarkEvidenceFromReport(report = null) {
       deleted: artifactDiff.deleted ?? null,
       total_changed: artifactDiff.totalChanged ?? null
     },
+    artifact_files: benchmarkArtifactFileRefs(report),
     approval: {
       status: approval.status || '',
       approved_count: approval.status === 'approved' ? (approval.approvedBy || []).length : 0,
@@ -319,6 +340,7 @@ function recommendationRow(recommendation, timeGenerated = new Date().toISOStrin
     BenchmarkArtifactModified: benchmark.artifact_diff?.modified ?? null,
     BenchmarkArtifactDeleted: benchmark.artifact_diff?.deleted ?? null,
     BenchmarkArtifactTotalChanged: benchmark.artifact_diff?.total_changed ?? null,
+    BenchmarkArtifactFiles: benchmark.artifact_files || [],
     BenchmarkApprovalStatus: benchmark.approval?.status || '',
     BenchmarkApprovalCount: benchmark.approval?.approved_count ?? null,
     BenchmarkRequiredApprovals: benchmark.approval?.required_count ?? null,

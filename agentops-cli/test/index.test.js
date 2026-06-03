@@ -1321,6 +1321,14 @@ test('V2 recommend carries benchmark gate and change-target metadata', () => {
         deleted: 0,
         totalChanged: 3
       },
+      tasks: [{
+        taskId: 'create-note',
+        artifactDiff: {
+          added: ['notes/hello.txt'],
+          modified: ['README.md', 'package.json'],
+          deleted: []
+        }
+      }],
       promotion: {
         decision: 'reject',
         gates: {
@@ -1358,6 +1366,11 @@ test('V2 recommend carries benchmark gate and change-target metadata', () => {
     assert.equal(row.BenchmarkArtifactModified, 2);
     assert.equal(row.BenchmarkArtifactDeleted, 0);
     assert.equal(row.BenchmarkArtifactTotalChanged, 3);
+    assert.deepEqual(row.BenchmarkArtifactFiles, [
+      { task_id: 'create-note', change: 'added', path: 'notes/hello.txt' },
+      { task_id: 'create-note', change: 'modified', path: 'README.md' },
+      { task_id: 'create-note', change: 'modified', path: 'package.json' }
+    ]);
     assert.equal(row.BenchmarkApprovalStatus, 'approved');
     assert.equal(row.BenchmarkApprovalCount, 1);
     assert.equal(row.BenchmarkRequiredApprovals, 1);
@@ -3274,6 +3287,7 @@ test('V2 dashboard ux-check protects the Datadog-style operator flow', () => {
   assert.equal(result.contracts.pattern_drilldowns, true);
   assert.equal(result.contracts.recommendation_artifacts, true);
   assert.equal(result.contracts.artifact_diff_review, true);
+  assert.equal(result.contracts.artifact_file_review, true);
   assert.equal(result.contracts.promotion_approvals, true);
   assert.equal(result.contracts.ask_agentops_context, true);
 });
@@ -3518,7 +3532,7 @@ test('dashboard verify combines static UX and optional live KQL gates', () => {
   });
   assert.equal(live.ok, true, live.errors.join('\n'));
   assert.equal(live.live, true);
-  assert.equal(live.summary.kql_checks, 21);
+  assert.equal(live.summary.kql_checks, 22);
 });
 
 test('V2 dashboard links preserve drilldown contracts', () => {
@@ -3553,7 +3567,9 @@ test('V2 dashboard links preserve drilldown contracts', () => {
   const insightsDashboard = JSON.parse(fs.readFileSync(path.join(root, 'grafana', 'dashboards', 'v2', '09-insights-regressions.json'), 'utf8'));
   const evalsDashboard = JSON.parse(fs.readFileSync(path.join(root, 'grafana', 'dashboards', 'v2', '08-evals-quality.json'), 'utf8'));
   assert.match(JSON.stringify(evalsDashboard), /Benchmark artifact diff review/);
+  assert.match(JSON.stringify(evalsDashboard), /Benchmark artifact files/);
   assert.match(JSON.stringify(evalsDashboard), /BenchmarkArtifactTotalChanged/);
+  assert.match(JSON.stringify(evalsDashboard), /ArtifactPath/);
   assert.match(JSON.stringify(evalsDashboard), /ReviewAction/);
   assert.match(JSON.stringify(evalsDashboard), /Benchmark promotion approvals/);
   assert.match(JSON.stringify(evalsDashboard), /BenchmarkApprovalStatus/);
@@ -3622,7 +3638,7 @@ test('dashboard kql-check renders representative V2 panel queries', () => {
   });
 
   assert.equal(result.ok, true, result.errors.join('\n'));
-  assert.equal(result.checks.length, 21);
+  assert.equal(result.checks.length, 22);
   assert.ok(queries.every(item => item.options.workspaceId === 'workspace-123'));
   assert.ok(queries.every(item => item.query.includes('ago(24h)')));
   assert.ok(queries.every(item => !item.query.includes('$__timeFrom')));
