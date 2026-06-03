@@ -37,7 +37,7 @@ agentops latest --last 2h
 agentops open latest --last 2h
 ```
 
-`agentops setup` is read-only. It prints the one-minute first-run loop, the current Azure/Grafana binding state, and the exact next commands for privacy smoke testing, running a safe no-edit Copilot smoke, opening the newest run, and verifying dashboards. `agentops smoke --real-copilot --open-browser` waits for the latest Copilot run to appear before opening the V2 Run Replay link.
+`agentops setup` is read-only. It prints the current Azure/Grafana binding state, recommends `agentops init --full` as the guided first-run path, and keeps fallback commands for privacy smoke testing, running a safe no-edit Copilot smoke, opening the newest run, and verifying dashboards. `agentops smoke --real-copilot --open-browser` waits for the latest Copilot run to appear before opening the V2 Run Replay link.
 
 If `collector start --mode auto` cannot find a collector binary and Docker is not running, it fails with setup instructions. It does not silently run Copilot without the local privacy boundary. Install the binary any time with:
 

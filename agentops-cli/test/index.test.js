@@ -2134,6 +2134,7 @@ test('setup guide recommends the shortest non-mutating setup path', () => {
     assert.equal(result.mutates, false);
     assert.equal(result.azd.ok, true);
     assert.equal(result.first_run.read_only, true);
+    assert.equal(result.first_run.guided_command, 'agentops init --full');
     assert.equal(result.first_run.bind_command, 'agentops configure import-azd');
     assert.match(result.first_run.privacy_smoke_command, /collector smoke --privacy strict --poison/);
     assert.match(result.first_run.smoke_command, /smoke --real-copilot/);
@@ -2143,11 +2144,13 @@ test('setup guide recommends the shortest non-mutating setup path', () => {
     assert.ok(result.next.includes('agentops configure import-azd'));
     assert.match(output, /This command is read-only/);
     assert.match(output, /One-minute first run/);
-    assert.match(output, /Privacy smoke: agentops collector smoke --privacy strict --poison --json/);
-    assert.match(output, /Real smoke: agentops smoke --real-copilot --wait 2m --poll 10s --open-browser/);
+    assert.match(output, /Guided path: agentops init --full/);
+    assert.match(output, /Privacy smoke fallback: agentops collector smoke --privacy strict --poison --json/);
+    assert.match(output, /Real smoke fallback: agentops smoke --real-copilot --wait 2m --poll 10s --open-browser/);
     assert.match(output, /the smoke opens Run Replay/);
     assert.match(output, /agentops dashboard import --yes --resource-group rg-agentops-dev --grafana-name graf-agentops-dev/);
     assert.match(output, /Fastest path/);
+    assert.ok(result.next.includes('agentops init --full'));
     assert.match(output, /agentops collector smoke --privacy strict --poison/);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });

@@ -1373,6 +1373,7 @@ function agentopsSetupGuide(options = {}) {
     ready: cloudConfigured && shim.agentops_cli_installed && shim.copilot_agentops_installed,
     read_only: true,
     setup_command: 'agentops setup',
+    guided_command: 'agentops init --full',
     bind_command: cloudConfigured
       ? 'agentops configure show'
       : azd.ok
@@ -1410,6 +1411,7 @@ function agentopsSetupGuide(options = {}) {
   if (!shim.plain_copilot_observed) {
     next.push('export PATH="$HOME/.local/bin:$PATH"');
   }
+  next.push('agentops init --full');
   next.push('agentops validate-enterprise');
   next.push('agentops validate-azure');
   next.push('agentops collector smoke --privacy strict --poison');
@@ -1461,11 +1463,12 @@ function renderSetupGuide(result) {
   lines.push(`Cloud config: workspace=${result.cloud.workspace_id_configured ? 'set' : 'missing'}, grafana=${result.cloud.grafana_url_configured ? 'set' : 'missing'}.`);
 
   lines.push('', 'One-minute first run:');
-  lines.push(`1. Setup/bind: ${result.first_run.bind_command}`);
-  lines.push(`2. Privacy smoke: ${result.first_run.privacy_smoke_command}`);
-  lines.push(`3. Real smoke: ${result.first_run.smoke_command}`);
-  lines.push(`4. See it: the smoke opens Run Replay, or run ${result.first_run.latest_command} && ${result.first_run.open_command}`);
-  lines.push(`5. Dashboards: ${result.first_run.dashboard_import_command} && ${result.first_run.dashboard_verify_command}`);
+  lines.push(`1. Guided path: ${result.first_run.guided_command}`);
+  lines.push(`2. Setup/bind fallback: ${result.first_run.bind_command}`);
+  lines.push(`3. Privacy smoke fallback: ${result.first_run.privacy_smoke_command}`);
+  lines.push(`4. Real smoke fallback: ${result.first_run.smoke_command}`);
+  lines.push(`5. See it: the smoke opens Run Replay, or run ${result.first_run.latest_command} && ${result.first_run.open_command}`);
+  lines.push(`6. Dashboards: ${result.first_run.dashboard_import_command} && ${result.first_run.dashboard_verify_command}`);
   lines.push(`Privacy: ${result.first_run.privacy_note}`);
 
   lines.push('', 'Fastest path:');
