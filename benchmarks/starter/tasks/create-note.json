@@ -21,6 +21,7 @@
       "README.md": "f991cba765390e2b6f5668e68cd0cf427c084310c2d30b60f80c6d56a188eecd"
     }
   },
+  "fixtureSealPack": "fixture-packs/tiny-repo.json",
   "successCommands": [
     "test -f notes/hello.txt",
     "grep -q 'hello agentops' notes/hello.txt"

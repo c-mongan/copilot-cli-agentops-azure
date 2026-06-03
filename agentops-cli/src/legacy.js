@@ -5095,6 +5095,54 @@ function validateBenchmarkFixtureSeal(seal, fixturePath, source = 'task') {
   };
 }
 
+function validateBenchmarkFixtureSealPack(pack, fixturePath, source = 'fixture seal pack') {
+  const errors = [];
+  if (!isPlainObject(pack)) {
+    throw new Error(`Invalid benchmark fixture seal pack ${source}: must be an object`);
+  }
+  if (typeof pack.id !== 'string' || pack.id.trim() === '') errors.push('id must be a non-empty string');
+  if (typeof pack.fixture !== 'string' || pack.fixture.trim() === '') errors.push('fixture must be a non-empty string');
+  if (errors.length > 0) {
+    throw new Error(`Invalid benchmark fixture seal pack ${source}: ${errors.join('; ')}`);
+  }
+
+  const fixtureSeal = validateBenchmarkFixtureSeal({
+    algorithm: pack.algorithm,
+    files: pack.files
+  }, fixturePath, source);
+
+  return {
+    id: pack.id,
+    title: typeof pack.title === 'string' && pack.title.trim() !== '' ? pack.title : pack.id,
+    fixture: normalizeBenchmarkRelativePath(pack.fixture),
+    algorithm: fixtureSeal.algorithm,
+    files: fixtureSeal.files,
+    source
+  };
+}
+
+function loadBenchmarkFixtureSealPack(task, suiteDir, fixturePath, source = 'task') {
+  if (task.fixtureSealPack === undefined) return null;
+  if (typeof task.fixtureSealPack !== 'string' || task.fixtureSealPack.trim() === '') {
+    throw new Error(`Invalid benchmark task ${source}: fixtureSealPack must be a non-empty string`);
+  }
+
+  const packPath = task.fixtureSealPack;
+  if (path.isAbsolute(packPath) || path.normalize(packPath).startsWith(`..${path.sep}`) || path.normalize(packPath) === '..') {
+    throw new Error(`Invalid benchmark task ${source}: fixture seal pack path cannot leave the suite: ${packPath}`);
+  }
+  const fullPath = path.resolve(suiteDir, packPath);
+  if (!fs.existsSync(fullPath) || !fs.statSync(fullPath).isFile()) {
+    throw new Error(`Invalid benchmark task ${source}: fixture seal pack does not exist: ${packPath}`);
+  }
+
+  const fixtureSealPack = validateBenchmarkFixtureSealPack(readJson(fullPath), fixturePath, normalizeBenchmarkRelativePath(path.relative(root, fullPath)));
+  if (fixtureSealPack.fixture !== normalizeBenchmarkRelativePath(task.fixture)) {
+    throw new Error(`Invalid benchmark task ${source}: fixtureSealPack fixture must match task fixture`);
+  }
+  return fixtureSealPack;
+}
+
 function validateBenchmarkPromotionGates(gates, source = 'suite') {
   if (gates === undefined) return null;
   if (!isPlainObject(gates)) {
@@ -5243,6 +5291,7 @@ function validateBenchmarkTask(task, suiteDir, source = 'task') {
   const hiddenPackCommands = hiddenCheckPacks.flatMap(pack => pack.commands);
   const semanticChecks = validateBenchmarkSemanticChecks(task.semanticChecks, source);
   const fixtureSeal = validateBenchmarkFixtureSeal(task.fixtureSeal, fixturePath, source);
+  const fixtureSealPack = loadBenchmarkFixtureSealPack(task, suiteDir, fixturePath, source);
   const toolPolicy = validateBenchmarkToolPolicy(task.toolPolicy, source);
 
   return {
@@ -5253,6 +5302,7 @@ function validateBenchmarkTask(task, suiteDir, source = 'task') {
     hiddenPackCommands,
     semanticChecks,
     fixtureSeal,
+    fixtureSealPack,
     toolPolicy,
     permissionProfile,
     fixturePath,
@@ -5470,6 +5520,14 @@ function benchmarkRunPlan(suiteId, options = {}) {
             algorithm: task.fixtureSeal.algorithm,
             fileCount: Object.keys(task.fixtureSeal.files).length,
             files: Object.keys(task.fixtureSeal.files).sort()
+          } : null,
+          fixtureSealPack: task.fixtureSealPack ? {
+            id: task.fixtureSealPack.id,
+            title: task.fixtureSealPack.title,
+            algorithm: task.fixtureSealPack.algorithm,
+            fixture: task.fixtureSealPack.fixture,
+            fileCount: Object.keys(task.fixtureSealPack.files).length,
+            source: task.fixtureSealPack.source
           } : null,
           hiddenCommandCount: task.hiddenSuccessCommands.length + task.hiddenPackCommands.length,
           hiddenCheckPacks: task.hiddenCheckPacks.map(pack => ({
@@ -5801,6 +5859,7 @@ function executeBenchmarkRun(plan, run, options = {}) {
     success: checksFailed === 0 && forbiddenFilesChanged === 0,
     checksPassed,
     checksFailed,
+    fixtureSealPack: run.successChecks.fixtureSealPack || null,
     hiddenCheckPacks: run.successChecks.hiddenCheckPacks || [],
     hiddenChecksPassed,
     hiddenChecksFailed,
@@ -6501,6 +6560,7 @@ function benchmarkReport(runId, summaries = null, options = {}) {
       toolPolicy: summary.toolPolicy || null,
       success: Boolean(summary.success),
       score: summary.score,
+      fixtureSealPack: summary.fixtureSealPack || null,
       hiddenChecksPassed: numberValue(summary.hiddenChecksPassed),
       hiddenChecksFailed: numberValue(summary.hiddenChecksFailed),
       hiddenCheckPacks: summary.hiddenCheckPacks || [],
