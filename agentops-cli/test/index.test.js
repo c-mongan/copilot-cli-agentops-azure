@@ -3721,6 +3721,7 @@ test('V2 dashboard links preserve drilldown contracts', () => {
   assert.match(JSON.stringify(replayDashboard), /Ask AgentOps context/);
   assert.match(JSON.stringify(replayDashboard), /TriageCommand/);
   assert.match(JSON.stringify(replayDashboard), /Do not request or enable prompt/);
+  assert.match(JSON.stringify(homeDashboard), /docs\/copilot-mcp-agentops-prompts\.md/);
   assert.match(JSON.stringify(replayDashboard), /project Status, SafetyNote, OpenTranscript, ContentRows/);
   assert.match(JSON.stringify(runsDashboard), /OpenReplay/);
   assert.match(JSON.stringify(runsDashboard), /OpenTrace/);
