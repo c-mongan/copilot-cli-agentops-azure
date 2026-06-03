@@ -739,6 +739,7 @@ What works well:
   - warn on unresolved tool failures, content-capture signals, and missing validation metadata at agent stop
   - write metadata-only notification sidecar rows for hook type, decision, reason category, duration, and session ID
   - validate bundled hook scripts against documented camelCase and VS Code-compatible snake_case hook stdin fixtures
+- `agentops-evidence-prompts` now starts from a concrete `agentops ask-context` investigation bundle with session ID, time range, Run Replay URL, KQL query, latest recommendation, and benchmark run ID when present.
 - MCP config is read-only for Azure Monitor and tokenized for Grafana.
 
 Current gaps:
@@ -752,13 +753,7 @@ Current gaps:
 
 Product recommendation:
 
-- Make `agentops-evidence-prompts` generate a concrete investigation bundle:
-  - session ID
-  - time range
-  - Grafana URL
-  - KQL query
-  - last known recommendation
-  - benchmark run ID if present
+- Keep `agentops ask-context` as the concrete investigation bundle path for `agentops-evidence-prompts`.
 - Keep tuning the non-blocking stop quality gate against real Copilot hook payloads before making any warning blocking.
 - Keep hook telemetry metadata-only and add a live Copilot hook smoke once plugin hook execution is available in CI.
 

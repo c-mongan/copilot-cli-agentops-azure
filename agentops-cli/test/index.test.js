@@ -22,6 +22,7 @@ const { validateAgentRun, validateMcpSpan } = require('../src/lib/schema/agent-r
 const { recommendationSchemaDocument, validateRecommendationRow } = require('../src/lib/schema/recommendation-schema');
 const { normalizeGenAiAttributes } = require('../src/lib/otel/genai-normalizer');
 const { normalizeMcpAttributes } = require('../src/lib/otel/mcp-normalizer');
+const { latestByTime } = require('../src/lib/explain/v2-explain');
 const { buildAskContext, hasV2AskArgs } = require('../src/commands/ask-context');
 const { buildContentStatus, renderOptInGuide } = require('../src/commands/content');
 const { removeAgentOpsCopilotFlags, wrapperReplayUrl } = require('../src/commands/copilot');
@@ -1594,6 +1595,25 @@ test('V2 ask-context builds a metadata-only investigation bundle', () => {
     const insightDir = path.join(tempDir, 'insights');
     const { writeInsights } = require('../src/lib/insights/deterministic-insights');
     const insightFiles = writeInsights(insightResult, insightDir);
+    const latestRun = latestByTime(demo.tables.AgentOpsRunSummary_CL);
+    const recommendationsFile = path.join(tempDir, 'AgentOpsRecommendations_CL.jsonl');
+    fs.writeFileSync(recommendationsFile, `${JSON.stringify({
+      TimeGenerated: '2026-06-03T12:00:00Z',
+      RecommendationId: 'rec-ask-context',
+      RunId: latestRun.RunId,
+      SessionId: latestRun.SessionId,
+      TraceId: latestRun.TraceId,
+      Action: 'run_validation',
+      Severity: 'medium',
+      ObservedPattern: 'validation missing after config change',
+      NextAction: 'Run the benchmark gate before keeping the change.',
+      DashboardTitles: ['Run Replay'],
+      DashboardCount: 1,
+      Validation: ['agentops benchmark run starter --variant candidate --repeat 1'],
+      RollbackCondition: 'Revert the config change if validation regresses.',
+      BenchmarkRunId: 'bench-ask-context',
+      BenchmarkDecision: 'investigate'
+    })}\n`);
 
     const result = buildAskContext({
       runId: 'latest',
@@ -1603,13 +1623,21 @@ test('V2 ask-context builds a metadata-only investigation bundle', () => {
       privacyFile: written.files.AgentOpsPrivacy_CL,
       githubFile: written.files.AgentOpsGithubOutcomes_CL,
       evalsFile: insightFiles.evalFile,
-      insightsFile: insightFiles.insightsFile
+      insightsFile: insightFiles.insightsFile,
+      recommendationsFile,
+      last: '24h'
     });
 
     assert.equal(result.ok, true);
     assert.equal(hasV2AskArgs(['latest', '--runs', written.files.AgentOpsRunSummary_CL]), true);
     assert.match(result.replay_url, /agentops-v2-run-replay/);
+    assert.equal(result.time_range, '24h');
+    assert.match(result.kql_query, /union isfuzzy=true AppDependencies/);
+    assert.match(result.prompt, /Last recommendation: run_validation/);
+    assert.equal(result.last_recommendation.benchmark_run_id, 'bench-ask-context');
+    assert.equal(result.benchmark_run_id, 'bench-ask-context');
     assert.ok(result.counts.events > 0);
+    assert.equal(result.counts.recommendations, 1);
     assert.ok(result.prompt.includes('Do not request or enable prompt'));
     assert.doesNotMatch(JSON.stringify(result), /gen_ai\.input\.messages|SECRET_FAKE_TEST_VALUE|api_key=/);
   } finally {

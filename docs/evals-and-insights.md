@@ -73,7 +73,9 @@ agentops ask-context latest \
   --privacy .agentops/demo/latest/AgentOpsPrivacy_CL.jsonl \
   --github .agentops/demo/latest/AgentOpsGithubOutcomes_CL.jsonl \
   --evals .agentops/insights/latest/AgentOpsEval_CL.jsonl \
-  --insights .agentops/insights/latest/AgentOpsInsights_CL.jsonl
+  --insights .agentops/insights/latest/AgentOpsInsights_CL.jsonl \
+  --recommendations .agentops/demo/latest/AgentOpsRecommendations_CL.jsonl \
+  --last 24h
 ```
 
-The bundle includes run metadata, timeline events, failed/denied tools, privacy signals, GitHub outcomes, evals, insights, and Run Replay links. It explicitly tells the investigator not to request or enable prompt/response/tool-argument/file-content capture.
+The bundle includes run metadata, timeline events, failed/denied tools, privacy signals, GitHub outcomes, evals, insights, the latest recommendation, benchmark run ID when present, Run Replay links, and a copyable KQL query. It explicitly tells the investigator not to request or enable prompt/response/tool-argument/file-content capture.

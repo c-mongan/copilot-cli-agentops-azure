@@ -14,14 +14,35 @@ Use these templates when asking Copilot CLI agents to analyze AgentOps telemetry
 
 Every recommendation must include: evidence query or dashboard link, observed failure/cost/safety pattern, proposed file(s) to change, expected metric movement, validation benchmark or query, and rollback condition.
 
+## Build An Investigation Bundle
+
+Prefer a concrete `ask-context` bundle before prompting another agent. It includes the session ID, time range, Run Replay URL, KQL query, latest recommendation, benchmark run ID when present, and metadata-only evidence rows:
+
+```bash
+node agentops-cli/src/index.js ask-context latest \
+  --last 24h \
+  --runs .agentops/demo/latest/AgentOpsRunSummary_CL.jsonl \
+  --events .agentops/demo/latest/AgentOpsEvents_CL.jsonl \
+  --tools .agentops/demo/latest/AgentOpsToolCalls_CL.jsonl \
+  --privacy .agentops/demo/latest/AgentOpsPrivacy_CL.jsonl \
+  --github .agentops/demo/latest/AgentOpsGithubOutcomes_CL.jsonl \
+  --evals .agentops/insights/latest/AgentOpsEval_CL.jsonl \
+  --insights .agentops/insights/latest/AgentOpsInsights_CL.jsonl \
+  --recommendations .agentops/demo/latest/AgentOpsRecommendations_CL.jsonl \
+  --json
+```
+
+Use the returned `prompt`, `kql_query`, `replay_url`, `last_recommendation`, and `benchmark_run_id` fields. Do not paste raw prompts, responses, source code, tool arguments, tool results, URLs, file contents, or secrets into follow-up prompts.
+
 ## Investigate Latest Session
 
 ```text
 Use the telemetry-investigator agent with read-only Azure MCP and Grafana MCP.
 
-Investigate the latest Copilot CLI session in the last <time-range>.
-Use the AgentOps Grafana dashboard <dashboard-url> and Log Analytics workspace <workspace-id>.
-Start by finding the newest `github-copilot-cli` conversation in `AppDependencies`.
+Investigate the latest Copilot CLI session using the AgentOps ask-context bundle:
+<paste metadata-only ask-context JSON or prompt field>
+
+Use the bundle's Run Replay URL, KQL query, latest recommendation, and benchmark run ID before writing any new query.
 
 Return only evidence-backed findings. For each recommendation include:
 evidence query or dashboard link, observed failure/cost/safety pattern, proposed file(s), expected metric movement, validation benchmark/query, and rollback condition.
