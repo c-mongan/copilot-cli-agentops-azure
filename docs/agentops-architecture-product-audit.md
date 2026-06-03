@@ -819,7 +819,7 @@ Current anti-cheat limitations:
 
 - The starter task uses `--allow-all`, which is acceptable for an isolated tiny fixture but should not be the default posture for serious evals.
 - Permission profiles enforce broad-flag validation and read-only workspace immutability for benchmark fixture copies. Task tool policies block explicitly allowed tools with forbidden risk classes before Copilot runs, can still reject observed risky tool telemetry after the run, and the Evals & Quality dashboard surfaces metadata-only policy review. They do not yet enforce OS-level sandboxing.
-- Hidden check packs exist as separate masked command packs, fixture seals can reject checksum drift, reusable fixture seal pack manifests can distribute fixture checksum sets across tasks, and the CLI can generate and verify Ed25519-signed fixture pack manifests from fixture directories. The Evals & Quality dashboard surfaces metadata-only hidden pack review. External trust-root management for sealed fixture pack distribution is still missing.
+- Hidden check packs exist as separate masked command packs, fixture seals can reject checksum drift, reusable fixture seal pack manifests can distribute fixture checksum sets across tasks, and the CLI can generate and verify Ed25519-signed fixture pack manifests from fixture directories. Suites can now require fixture pack signatures to match configured trust-root public keys. The Evals & Quality dashboard surfaces metadata-only hidden pack review.
 - There is no network egress isolation; network tool policies can block explicit `--allow-tool` network allowances before execution, but they are not OS-level egress prevention.
 - Read-only benchmark profiles now block any workspace file change in the copied fixture.
 - Semantic evaluator adapters exist for deterministic file-content, regex, file-rubric checks, and command-backed `llm-judge` scoring, and the Evals & Quality dashboard surfaces metadata-only semantic check review. Hosted judge provider configuration is still external to the benchmark runner.
@@ -1272,7 +1272,7 @@ Required work:
 ### P3 - Build Eval And Anti-Cheat
 
 - Expand benchmark schemas.
-- Add external trust-root management for signed sealed fixture pack distribution.
+- Add trust-root rotation and revocation workflows for signed sealed fixture pack distribution.
 - Add hosted judge provider configuration for `llm-judge` semantic scoring.
 - Expand enforced permission profiles to OS-level network and tool sandboxing.
 - Add unified artifact content diff UI review for approved benchmark artifacts.
