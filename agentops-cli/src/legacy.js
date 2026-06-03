@@ -5262,6 +5262,30 @@ function changedRelativeFiles(before, after) {
   return [...files].filter(file => before.get(file) !== after.get(file)).sort();
 }
 
+function relativeFileDiff(before, after) {
+  const files = new Set([...before.keys(), ...after.keys()]);
+  const diff = {
+    added: [],
+    modified: [],
+    deleted: []
+  };
+
+  for (const file of files) {
+    const beforeHash = before.get(file);
+    const afterHash = after.get(file);
+    if (beforeHash === afterHash) continue;
+    if (beforeHash === undefined) diff.added.push(file);
+    else if (afterHash === undefined) diff.deleted.push(file);
+    else diff.modified.push(file);
+  }
+
+  diff.added.sort();
+  diff.modified.sort();
+  diff.deleted.sort();
+  diff.totalChanged = diff.added.length + diff.modified.length + diff.deleted.length;
+  return diff;
+}
+
 function commandSucceeded(result) {
   return Boolean(result) && !result.error && result.status === 0;
 }
@@ -5378,6 +5402,7 @@ function executeBenchmarkRun(plan, run, options = {}) {
 
   const afterSnapshot = relativeFileSnapshot(workspace);
   const changedFiles = changedRelativeFiles(beforeSnapshot, afterSnapshot);
+  const artifactDiff = relativeFileDiff(beforeSnapshot, afterSnapshot);
   const forbiddenFilesChanged = run.successChecks.forbiddenFiles
     .filter(file => beforeSnapshot.get(path.normalize(file)) !== afterSnapshot.get(path.normalize(file)))
     .length;
@@ -5401,6 +5426,7 @@ function executeBenchmarkRun(plan, run, options = {}) {
     checksFailed,
     filesChanged: changedFiles.length,
     changedFiles,
+    artifactDiff,
     forbiddenFilesChanged,
     toolFailures: 0,
     policyBlocks: 0,
@@ -5733,6 +5759,17 @@ function topFailureCategories(scoredSummaries) {
     .slice(0, 5);
 }
 
+function benchmarkArtifactDiff(scoredSummaries) {
+  return scoredSummaries.reduce((acc, summary) => {
+    const diff = summary.artifactDiff || {};
+    acc.added += Array.isArray(diff.added) ? diff.added.length : 0;
+    acc.modified += Array.isArray(diff.modified) ? diff.modified.length : 0;
+    acc.deleted += Array.isArray(diff.deleted) ? diff.deleted.length : 0;
+    acc.totalChanged += Number.isInteger(diff.totalChanged) ? diff.totalChanged : 0;
+    return acc;
+  }, { added: 0, modified: 0, deleted: 0, totalChanged: 0 });
+}
+
 function benchmarkCheatSignals(scoredSummaries, azureTelemetry = null) {
   const signals = [];
   const forbidden = scoredSummaries.reduce((total, summary) => total + numberValue(summary.forbiddenFilesChanged), 0);
@@ -5910,6 +5947,7 @@ function benchmarkReport(runId, summaries = null, options = {}) {
     totalTokens: inputTokens + outputTokens,
     aiu: roundNumber(scoredSummaries.reduce((total, summary) => total + numberValue(summary.aiu), 0), 3),
     cost: roundNumber(scoredSummaries.reduce((total, summary) => total + numberValue(summary.cost), 0), 4),
+    artifactDiff: benchmarkArtifactDiff(scoredSummaries),
     topFailureCategories: topFailureCategories(scoredSummaries),
     tasks: scoredSummaries.map(summary => ({
       taskId: summary.taskId,
@@ -5920,6 +5958,7 @@ function benchmarkReport(runId, summaries = null, options = {}) {
       errorCategory: summary.errorCategory || null,
       telemetryMatched: Boolean(summary.telemetryMatched),
       azureSpans: numberValue(summary.azureSpans),
+      artifactDiff: summary.artifactDiff || { added: [], modified: [], deleted: [], totalChanged: 0 },
       models: summary.models || [],
       tools: summary.tools || [],
       penalties: summary.penalties

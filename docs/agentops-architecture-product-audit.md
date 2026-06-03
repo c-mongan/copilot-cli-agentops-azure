@@ -792,6 +792,11 @@ What works well:
   - expected files
   - forbidden files
   - timeout
+- It records artifact diffs in run summaries and reports:
+  - added files
+  - modified files
+  - deleted files
+  - total changed artifacts
 - It scores reports and emits keep/investigate/reject.
 - It can enrich local summaries with Azure telemetry:
   - spans
@@ -812,7 +817,7 @@ Current anti-cheat limitations:
 - There is no read-only seed data protection beyond forbidden file checks.
 - There is no semantic rubric scoring.
 - There is no defense against an agent changing the test commands if the eval harness files are available to it.
-- There is no artifact diff viewer in the UI.
+- There is no artifact diff viewer in the UI; artifact diffs are currently CLI/report metadata only.
 - There is no "agent used external answer source" detector.
 - There is no "agent optimized for benchmark but harmed real-world telemetry" comparison beyond the report heuristics.
 
@@ -1263,7 +1268,7 @@ Required work:
 - Add hidden checks.
 - Add semantic evaluator adapters.
 - Add permission profiles.
-- Add artifact diff reports.
+- Add artifact diff UI review.
 - Add candidate promotion gates.
 - Add dashboards for eval scorecards and regressions.
 
