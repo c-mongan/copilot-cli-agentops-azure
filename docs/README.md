@@ -88,7 +88,7 @@ Stable product surface:
 
 Experimental or data-dependent:
 
-- custom actioners;
+- custom actioner destinations;
 - benchmark promotion loops;
 - prompt/response transcript viewer, which is explicit opt-in only;
 - legacy raw-OTel dashboards.

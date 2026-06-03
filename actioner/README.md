@@ -1,6 +1,24 @@
 # Actioner
 
-The actioner is an opt-in workflow for Azure Monitor alert payloads. The implemented local contract is:
+The actioner is an opt-in Azure Functions HTTP handler for Azure Monitor alert payloads. It turns a fired alert into a metadata-only review packet with run links, alert history KQL, action-plan evidence, and an optional preview-only GitHub route plan.
+
+Local handler contract:
+
+```bash
+node -e 'const { buildActionerReview } = require("./actioner"); console.log(JSON.stringify(buildActionerReview({ data: { essentials: { alertRule: "failed-spans" }, customProperties: { "agentops.session": "session-123", "agentops.owner": "agentops-oncall" } } } ), null, 2))'
+```
+
+The actioner expects Azure Monitor common alert schema payloads with:
+
+- `data.essentials.alertRule`: one of `high-aiu`, `cost-spike`, `runaway-tool-loop`, `failed-spans`, or `content-capture`
+- `data.customProperties["agentops.session"]`: Copilot/AgentOps conversation id
+- optional `data.customProperties["agentops.owner"]`
+- optional `data.customProperties["agentops.service"]`
+- optional `data.customProperties["agentops.last"]`
+
+If required metadata is missing, it returns `needs-review` and does not create a route plan.
+
+The related CLI review workflow is:
 
 ```bash
 node agentops-cli/src/index.js alert history --rule <name> --last 24h
@@ -31,6 +49,6 @@ The history and detail commands provide metadata-only KQL and session links for 
 - ownership and escalation guardrails
 - review guardrails
 
-The route-plan command turns that safe handoff context into preview-only GitHub Issue or Azure DevOps Work Item payloads. The action-group-plan command previews receiver setup for an Azure Monitor action group without creating it. The route-github, route-azure-devops, and route-action-group commands are dry-run by default and only create issues/work items or attach action groups when `--yes` is passed with destination config and an owner. The tune-plan, threshold-simulate, threshold-patch, review, policy, handoff, route-plan, action-group-plan, and incident timeline commands keep remediation as review placeholders; they do not edit alert thresholds or page anyone.
+The Function handler uses the same safe alert review primitives as the CLI. The route-plan command turns that safe handoff context into preview-only GitHub Issue or Azure DevOps Work Item payloads. The action-group-plan command previews receiver setup for an Azure Monitor action group without creating it. The route-github, route-azure-devops, and route-action-group commands are dry-run by default and only create issues/work items or attach action groups when `--yes` is passed with destination config and an owner. The tune-plan, threshold-simulate, threshold-patch, review, policy, handoff, route-plan, action-group-plan, incident timeline, and HTTP actioner keep remediation as review placeholders; they do not edit alert thresholds or page anyone.
 
 It must not call broad LLM tools, read unrelated secrets, mutate Azure resources broadly, or change repository files automatically.

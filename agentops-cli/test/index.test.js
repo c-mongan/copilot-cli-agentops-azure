@@ -64,6 +64,7 @@ const { checkInstallSmoke } = require('../../scripts/check-install-smoke');
 const { checkReleaseDistribution } = require('../../scripts/check-release-distribution');
 const { checkSdkPublish, isWildcardRange } = require('../../scripts/check-sdk-publish');
 const { shouldCopy } = require('../../scripts/prepare-cli-package-assets');
+const { buildActionerReview } = require('../../actioner');
 
 const {
   agentopsAttributionSmoke,
@@ -8584,6 +8585,49 @@ test('alert action plan exposes deterministic notification payload without actio
   assert.ok(plan.action_targets.some(target => target.type === 'github-issue' && target.action === 'create'));
   assert.ok(plan.action_targets.some(target => target.type === 'azure-devops-work-item' && target.action === 'create'));
   assert.ok(plan.guardrails.some(item => item.includes('Do not include prompts')));
+});
+
+test('actioner builds metadata-only review packet from Azure alert payload', () => {
+  const packet = buildActionerReview({
+    data: {
+      essentials: {
+        alertRule: 'failed-spans',
+        severity: 'Sev3',
+        monitorCondition: 'Fired',
+        firedDateTime: '2026-06-03T12:00:00Z'
+      },
+      customProperties: {
+        'agentops.session': 'session-123',
+        'agentops.owner': 'agentops-oncall',
+        'agentops.service': 'copilot-agentops',
+        'agentops.last': '6h'
+      },
+      alertContext: {
+        SearchQuery: 'raw transcript SECRET_FAKE_TEST_VALUE'
+      }
+    }
+  }, {
+    workspaceId: 'workspace-123',
+    grafanaBaseUrl: 'https://grafana.example.test'
+  });
+
+  assert.equal(packet.schema_version, 'agentops.actioner-review.v1');
+  assert.equal(packet.mode, 'metadata-only-actioner-review');
+  assert.equal(packet.status, 'ready');
+  assert.equal(packet.alert.rule, 'failed-spans');
+  assert.equal(packet.alert.session, 'session-123');
+  assert.equal(packet.ownership.owner, 'agentops-oncall');
+  assert.equal(packet.review.schema_version, 'agentops.actioner-alert-review.v1');
+  assert.equal(packet.review.evidence.detail.session, 'session-123');
+  assert.equal(packet.route_plan.mode, 'preview-only-routing-plan');
+  assert.equal(packet.route_plan.destinations[0].target, 'github-issue');
+  assert.ok(packet.guardrails.some(item => item.includes('Do not page')));
+  assert.doesNotMatch(JSON.stringify(packet), /SECRET_FAKE_TEST_VALUE|raw transcript|SearchQuery/);
+
+  const incomplete = buildActionerReview({ data: { essentials: { alertRule: 'unknown-rule' } } });
+  assert.equal(incomplete.status, 'needs-review');
+  assert.ok(incomplete.errors.some(error => error.includes('unknown or missing alert rule')));
+  assert.ok(incomplete.errors.some(error => error.includes('missing alert session')));
 });
 
 test('alert history exposes metadata-only fired-alert query', () => {
