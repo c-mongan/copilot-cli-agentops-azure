@@ -572,7 +572,7 @@ Current gaps:
 - Some KQL files are investigation scripts with more than one final tabular expression. That is fine for manual use, but dashboard panels usually need one predictable result shape.
 - `agentops health --json` now exposes a stable machine-readable setup and latest-run health contract for setup wizards and UI adapters.
 - Recommendations are rule-based heuristics, not evidence ranking over recurring patterns.
-- `open` prints links but does not open the in-app/browser target.
+- `open` prints links. Real-Copilot smoke can open the Run Replay link directly with `--open-browser` after latest-run visibility is verified.
 
 Product recommendation:
 
@@ -1048,12 +1048,9 @@ Current experience:
 - If collector fails to start, Copilot still runs without observation.
 - Successful wrapped runs print an optional `AgentOps Run Replay` link scoped to the wrapper run/session IDs.
 - The user can query latest run with CLI or ask `agentops-latest-run`.
+- The first-run real-Copilot smoke command includes `--open-browser`, so Run Replay opens directly after latest-run visibility is verified.
 
 This is close to native.
-
-Missing native feel:
-
-- The UI should open directly to the latest run after smoke.
 
 ### Investigator Experience
 

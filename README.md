@@ -32,12 +32,12 @@ agentops configure import-azd
 agentops setup
 agentops collector smoke --privacy strict --poison --json
 agentops collector start --mode auto --privacy strict
-agentops smoke --real-copilot --wait 2m --poll 10s
+agentops smoke --real-copilot --wait 2m --poll 10s --open-browser
 agentops latest --last 2h
 agentops open latest --last 2h
 ```
 
-`agentops setup` is read-only. It prints the one-minute first-run loop, the current Azure/Grafana binding state, and the exact next commands for privacy smoke testing, running a safe no-edit Copilot smoke, opening the newest run, and verifying dashboards. `agentops smoke --real-copilot` waits for the latest Copilot run to appear before printing the V2 Run Replay link.
+`agentops setup` is read-only. It prints the one-minute first-run loop, the current Azure/Grafana binding state, and the exact next commands for privacy smoke testing, running a safe no-edit Copilot smoke, opening the newest run, and verifying dashboards. `agentops smoke --real-copilot --open-browser` waits for the latest Copilot run to appear before opening the V2 Run Replay link.
 
 If `collector start --mode auto` cannot find a collector binary and Docker is not running, it fails with setup instructions. It does not silently run Copilot without the local privacy boundary. Install the binary any time with:
 
