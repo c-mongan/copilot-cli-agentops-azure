@@ -371,7 +371,7 @@ function validateDashboardUx() {
     .filter(panel => panel.type === 'text')
     .map(panel => `${panel.title}\n${panel.options?.content || ''}`)
     .join('\n');
-  for (const snippet of ['Open latest run', 'agentops open latest --last 2h --json', 'Get recommendation', 'agentops recommend latest --last 2h', 'Ask AgentOps', 'agentops ask-context latest --last 2h --json']) {
+  for (const snippet of ['Open latest run', 'agentops open latest --last 2h --json', 'Get recommendation', 'agentops recommend latest --last 2h', 'Ask AgentOps', 'agentops ask-context latest --last 2h --json', 'docs/copilot-mcp-agentops-prompts.md']) {
     if (!homeText.includes(snippet)) errors.push(`home action strip missing ${snippet}`);
   }
 

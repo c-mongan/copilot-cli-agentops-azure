@@ -624,7 +624,7 @@ const dashboards = {
     textPanel(1, 'What happened?', 0, 0, 24, 3, `## AgentOps Home\nCopilot AgentOps control room for Azure. ${emptyState}`),
     textPanel(18, 'Open latest run', 0, 3, 8, 3, "### Open latest run\nStart with the newest session, then drill into Run Replay.\n\n`agentops open latest --last 2h --json`\n\n[Run Replay](/d/agentops-v2-run-replay?${__url_time_range})"),
     textPanel(19, 'Get recommendation', 8, 3, 8, 3, "### Get recommendation\nGenerate one evidence-backed next action for the current run set.\n\n`agentops recommend latest --last 2h`\n\n[Insights](/d/agentops-v2-insights-regressions?${__url_time_range})"),
-    textPanel(20, 'Ask AgentOps', 16, 3, 8, 3, "### Ask AgentOps\nBuild a metadata-only context bundle for investigation.\n\n`agentops ask-context latest --last 2h --json`\n\n[Run Replay](/d/agentops-v2-run-replay?${__url_time_range})"),
+    textPanel(20, 'Ask AgentOps', 16, 3, 8, 3, "### Ask AgentOps\nBuild a metadata-only context bundle for investigation.\n\n`agentops ask-context latest --last 2h --json`\n\nUse `docs/copilot-mcp-agentops-prompts.md` for session, tool failure, benchmark, agent, hook, and MCP regression templates.\n\n[Run Replay](/d/agentops-v2-run-replay?${__url_time_range})"),
     statPanel(2, 'Runs', 0, 6, `${q.runSummary} | summarize value=count() by bin(TimeGenerated, $__interval)`),
     statPanel(3, 'Success rate', 4, 6, `${q.runSummary} | summarize value=100.0 * countif(OutcomeStatus == 'success') / count() by bin(TimeGenerated, $__interval)`, 'percent', 'green'),
     statPanel(4, 'Failed runs', 8, 6, `${q.runSummary} | summarize value=countif(OutcomeStatus != 'success') by bin(TimeGenerated, $__interval)`, 'short', 'red'),
