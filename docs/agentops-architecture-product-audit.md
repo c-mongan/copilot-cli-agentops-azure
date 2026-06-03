@@ -1059,8 +1059,7 @@ This is strong for technical users.
 
 Missing world-class behavior:
 
-- The agent needs explicit session context.
-- The dashboard does not have an embedded agent assistant.
+- The dashboard now gives the agent explicit session context, Run Replay URL, starter KQL, and copyable `agentops ask-context` commands, but it still does not launch a hosted assistant directly.
 - Recommendations are not integrated into the UI as first-class artifacts.
 - Saved investigations can be exported as metadata-only `AgentOpsSavedViews_CL` artifacts, but there is still no shared hosted saved-view store.
 

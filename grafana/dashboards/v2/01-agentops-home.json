@@ -166,7 +166,7 @@
       },
       "options": {
         "mode": "markdown",
-        "content": "### Ask AgentOps\nBuild a metadata-only context bundle for investigation.\n\n`agentops ask-context latest --last 2h --json`\n\nUse `docs/copilot-mcp-agentops-prompts.md` for session, tool failure, benchmark, agent, hook, and MCP regression templates.\n\n[Run Replay](/d/agentops-v2-run-replay?${__url_time_range})"
+        "content": "### Ask AgentOps\nBuild a metadata-only context bundle for investigation.\n\n`agentops ask-context latest --last 2h --json`\n\nExported evidence bundle:\n\n`agentops ask-context latest --last 2h --runs <AgentOpsRunSummary_CL.jsonl> --events <AgentOpsEvents_CL.jsonl> --tools <AgentOpsToolCalls_CL.jsonl> --privacy <AgentOpsPrivacy_CL.jsonl> --github <AgentOpsGitHubOutcome_CL.jsonl> --evals <AgentOpsEval_CL.jsonl> --insights <AgentOpsInsights_CL.jsonl> --recommendations <AgentOpsRecommendations_CL.jsonl> --json`\n\nUse `docs/copilot-mcp-agentops-prompts.md` for session, tool failure, benchmark, agent, hook, and MCP regression templates.\n\n[Run Replay](/d/agentops-v2-run-replay?${__url_time_range})"
       }
     },
     {

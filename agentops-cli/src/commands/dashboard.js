@@ -371,7 +371,7 @@ function validateDashboardUx() {
     .filter(panel => panel.type === 'text')
     .map(panel => `${panel.title}\n${panel.options?.content || ''}`)
     .join('\n');
-  for (const snippet of ['Open latest run', 'agentops open latest --last 2h --json', 'Get recommendation', 'agentops recommend latest --last 2h', 'Ask AgentOps', 'agentops ask-context latest --last 2h --json', 'docs/copilot-mcp-agentops-prompts.md']) {
+  for (const snippet of ['Open latest run', 'agentops open latest --last 2h --json', 'Get recommendation', 'agentops recommend latest --last 2h', 'Ask AgentOps', 'agentops ask-context latest --last 2h --json', '--recommendations <AgentOpsRecommendations_CL.jsonl>', 'docs/copilot-mcp-agentops-prompts.md']) {
     if (!homeText.includes(snippet)) errors.push(`home action strip missing ${snippet}`);
   }
 
@@ -387,7 +387,7 @@ function validateDashboardUx() {
     if (!replayTitles.has(title)) errors.push(`run replay missing panel ${title}`);
   }
   const askQuery = queryFromPanel(panelByTitle(replay, 'Ask AgentOps context'));
-  for (const field of ['AskPrompt', 'TriageCommand', 'OpenReplay', 'Do not request or enable prompt']) {
+  for (const field of ['RunReplayUrl', 'InvestigationKql', 'AskContextCommand', 'BundleCommand', 'AskPrompt', 'TriageCommand', 'OpenReplay', 'Do not request or enable prompt']) {
     if (!askQuery.includes(field)) errors.push(`ask agentops context panel missing ${field}`);
   }
   const transcriptQuery = queryFromPanel(panelByTitle(replay, 'Transcript availability'));
