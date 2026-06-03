@@ -5005,6 +5005,40 @@ function hasBroadPermissionArg(args = []) {
   return args.some(arg => ['--allow-all', '--yolo'].includes(arg));
 }
 
+function validateBenchmarkHiddenPack(pack, source = 'hidden check pack') {
+  const errors = [];
+  if (typeof pack.id !== 'string' || pack.id.trim() === '') errors.push('id must be a non-empty string');
+  if (!isStringArray(pack.commands)) errors.push('commands must be an array of strings');
+  if (errors.length > 0) {
+    throw new Error(`Invalid benchmark hidden check pack ${source}: ${errors.join('; ')}`);
+  }
+
+  return {
+    id: pack.id,
+    title: typeof pack.title === 'string' && pack.title.trim() !== '' ? pack.title : pack.id,
+    commands: pack.commands,
+    source
+  };
+}
+
+function loadBenchmarkHiddenPacks(task, suiteDir, source = 'task') {
+  if (task.hiddenCheckPacks === undefined) return [];
+  if (!isStringArray(task.hiddenCheckPacks)) {
+    throw new Error(`Invalid benchmark task ${source}: hiddenCheckPacks must be an array of strings`);
+  }
+
+  return task.hiddenCheckPacks.map(packPath => {
+    if (path.isAbsolute(packPath) || path.normalize(packPath).startsWith(`..${path.sep}`) || path.normalize(packPath) === '..') {
+      throw new Error(`Invalid benchmark task ${source}: hidden check pack path cannot leave the suite: ${packPath}`);
+    }
+    const fullPath = path.resolve(suiteDir, packPath);
+    if (!fs.existsSync(fullPath) || !fs.statSync(fullPath).isFile()) {
+      throw new Error(`Invalid benchmark task ${source}: hidden check pack does not exist: ${packPath}`);
+    }
+    return validateBenchmarkHiddenPack(readJson(fullPath), path.relative(root, fullPath));
+  });
+}
+
 function validateBenchmarkTask(task, suiteDir, source = 'task') {
   const errors = [];
   const stringFields = ['id', 'title', 'fixture', 'prompt'];
@@ -5050,9 +5084,15 @@ function validateBenchmarkTask(task, suiteDir, source = 'task') {
     throw new Error(`Invalid benchmark task ${source}: ${errors.join('; ')}`);
   }
 
+  const hiddenCheckPacks = loadBenchmarkHiddenPacks(task, suiteDir, source);
+  const hiddenPackCommands = hiddenCheckPacks.flatMap(pack => pack.commands);
+
   return {
     ...task,
     hiddenSuccessCommands: task.hiddenSuccessCommands || [],
+    hiddenCheckPacks,
+    hiddenCheckPackRefs: task.hiddenCheckPacks || [],
+    hiddenPackCommands,
     permissionProfile,
     fixturePath,
     source
@@ -5250,8 +5290,14 @@ function benchmarkRunPlan(suiteId, options = {}) {
         },
         successChecks: {
           commands: task.successCommands,
-          hiddenCommandCount: task.hiddenSuccessCommands.length,
-          ...(options.includeHiddenChecks ? { hiddenCommands: task.hiddenSuccessCommands } : {}),
+          hiddenCommandCount: task.hiddenSuccessCommands.length + task.hiddenPackCommands.length,
+          hiddenCheckPacks: task.hiddenCheckPacks.map(pack => ({
+            id: pack.id,
+            title: pack.title,
+            commandCount: pack.commands.length,
+            source: pack.source
+          })),
+          ...(options.includeHiddenChecks ? { hiddenCommands: [...task.hiddenSuccessCommands, ...task.hiddenPackCommands] } : {}),
           expectedFiles: task.expectedFiles,
           forbiddenFiles: task.forbiddenFiles
         },
@@ -5523,6 +5569,7 @@ function executeBenchmarkRun(plan, run, options = {}) {
     success: checksFailed === 0 && forbiddenFilesChanged === 0,
     checksPassed,
     checksFailed,
+    hiddenCheckPacks: run.successChecks.hiddenCheckPacks || [],
     hiddenChecksPassed,
     hiddenChecksFailed,
     filesChanged: changedFiles.length,
@@ -6072,6 +6119,7 @@ function benchmarkReport(runId, summaries = null, options = {}) {
       score: summary.score,
       hiddenChecksPassed: numberValue(summary.hiddenChecksPassed),
       hiddenChecksFailed: numberValue(summary.hiddenChecksFailed),
+      hiddenCheckPacks: summary.hiddenCheckPacks || [],
       policyBlocks: numberValue(summary.policyBlocks),
       safetyViolation: summary.safetyViolation,
       errorCategory: summary.errorCategory || null,
