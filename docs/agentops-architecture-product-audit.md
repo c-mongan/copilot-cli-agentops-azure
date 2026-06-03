@@ -737,13 +737,13 @@ What works well:
   - block obvious risky commands and `.env` writes
   - offer failure recovery hints
   - warn on unresolved tool failures, content-capture signals, and missing validation metadata at agent stop
-  - allow notification hooks to exist as extension points
+  - write metadata-only notification sidecar rows for hook type, decision, reason category, duration, and session ID
 - MCP config is read-only for Azure Monitor and tokenized for Grafana.
 
 Current gaps:
 
 - `agent-stop-quality-gate.js` is now a non-blocking metadata-only warning gate; it does not fail runs yet.
-- `emit-sidecar-event.js` writes a minimal event to stdout but does not export telemetry directly.
+- `emit-sidecar-event.js` now writes durable local sidecar rows, but those rows still need real Copilot hook payload compatibility validation.
 - `pre-tool-policy.js` blocks a small set of risky strings. It is useful but not comprehensive.
 - Hook behavior depends on the exact shape of Copilot hook stdin, which needs real compatibility validation.
 - The MCP meta-agent loop is documented and scaffolded, but not fully productized.
@@ -759,12 +759,7 @@ Product recommendation:
   - last known recommendation
   - benchmark run ID if present
 - Keep tuning the non-blocking stop quality gate against real Copilot hook payloads before making any warning blocking.
-- Add hook telemetry that does not require prompt/tool content:
-  - hook type
-  - decision
-  - reason category
-  - duration
-  - timeout/failure
+- Keep hook telemetry metadata-only and validate the sidecar row shape against real Copilot notification payloads.
 
 ### Benchmark, Evaluation, And "Cheating" Plane
 
