@@ -813,13 +813,14 @@ What works well:
   - AIU
   - models/tools/conversations
 - It rejects safety violations, content capture, forbidden file changes, severe quality regressions, and configured promotion gate misses in reports and comparisons.
+- It can reject observed risky tool telemetry through per-task tool policies, for example network, secret-access, browser-control, or destructive tool categories.
 
 Current anti-cheat limitations:
 
 - The starter task uses `--allow-all`, which is acceptable for an isolated tiny fixture but should not be the default posture for serious evals.
-- Permission profiles enforce broad-flag validation and read-only workspace immutability for benchmark fixture copies, but they do not yet enforce OS/network/tool sandboxing.
+- Permission profiles enforce broad-flag validation and read-only workspace immutability for benchmark fixture copies, and task tool policies can reject observed risky tool telemetry. They do not yet enforce OS-level sandboxing.
 - Hidden check packs exist as separate masked command packs, and fixture seals can reject checksum drift, but full sealed fixture pack distribution is still missing.
-- There is no network isolation.
+- There is no network isolation; network tool policies are report-time rejection signals, not egress prevention.
 - Read-only benchmark profiles now block any workspace file change in the copied fixture.
 - Semantic evaluator adapters exist for deterministic file-content checks, but there is no LLM or rubric-judge scoring yet.
 - Candidate promotion gates exist for benchmark reports, but there is no team approval workflow yet.

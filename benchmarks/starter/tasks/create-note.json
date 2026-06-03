@@ -7,6 +7,14 @@
     "--allow-all"
   ],
   "permissionProfile": "allow-all-isolated",
+  "toolPolicy": {
+    "blockedRisks": [
+      "browser-control",
+      "destructive",
+      "network",
+      "secret-access"
+    ]
+  },
   "fixtureSeal": {
     "algorithm": "sha256",
     "files": {

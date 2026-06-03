@@ -4085,6 +4085,9 @@ test('benchmark schema validation accepts starter task files', () => {
   assert.equal(suite.tasks.length, 1);
   assert.equal(suite.tasks[0].id, 'create-note');
   assert.equal(suite.tasks[0].permissionProfile, 'allow-all-isolated');
+  assert.deepEqual(suite.tasks[0].toolPolicy, {
+    blockedRisks: ['browser-control', 'destructive', 'network', 'secret-access']
+  });
   assert.deepEqual(suite.tasks[0].tags, ['starter', 'safe', 'filesystem']);
 });
 
@@ -4309,6 +4312,27 @@ test('benchmark schema validation rejects invalid semantic checks', () => {
   assert.throws(() => validateBenchmarkTask(task, suiteDir, 'test-task'), /adapter must be one of/);
 });
 
+test('benchmark schema validation rejects invalid tool policies', () => {
+  const suiteDir = path.join(root, 'benchmarks', 'starter');
+  const task = {
+    id: 'bad-tool-policy',
+    title: 'Bad tool policy',
+    fixture: 'fixtures/tiny-repo',
+    prompt: 'Do nothing.',
+    copilotArgs: [],
+    toolPolicy: {
+      blockedRisks: ['network', 'unknown-risk']
+    },
+    successCommands: [],
+    expectedFiles: [],
+    forbiddenFiles: [],
+    timeoutSec: 10,
+    tags: []
+  };
+
+  assert.throws(() => validateBenchmarkTask(task, suiteDir, 'test-task'), /toolPolicy\.blockedRisks must use known risks/);
+});
+
 test('benchmark schema validation rejects invalid promotion gates', () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-bench-gate-schema-'));
   const suiteDir = path.join(tempDir, 'benchmarks', 'bad-gate-suite');
@@ -4399,6 +4423,9 @@ test('benchmark dry run plans fixture copy, Copilot args, labels, checks, and ti
   assert.deepEqual(plan.runs[0].copilot.args, ['--allow-all']);
   assert.match(plan.runs[0].copilot.prompt, /notes\/hello\.txt/);
   assert.equal(plan.runs[0].permissionProfile, 'allow-all-isolated');
+  assert.deepEqual(plan.runs[0].toolPolicy, {
+    blockedRisks: ['browser-control', 'destructive', 'network', 'secret-access']
+  });
   assert.deepEqual(plan.runs[0].promotionGates, {
     minPassRatePct: 100,
     minAverageScore: 90,
@@ -4414,6 +4441,7 @@ test('benchmark dry run plans fixture copy, Copilot args, labels, checks, and ti
   assert.equal(plan.runs[0].otelLabels['agentops.hypothesis.id'], 'shorter-prompt');
   assert.equal(plan.runs[0].otelLabels['agentops.benchmark.task_id'], 'create-note');
   assert.equal(plan.runs[0].otelLabels['agentops.benchmark.permission_profile'], 'allow-all-isolated');
+  assert.equal(plan.runs[0].otelLabels['agentops.benchmark.tool_policy.blocked_risks'], 'browser-control|destructive|network|secret-access');
   assert.equal(plan.runs[0].otelLabels['agentops.benchmark.task'], undefined);
   assert.deepEqual(plan.runs[0].successChecks.expectedFiles, ['notes/hello.txt']);
   assert.deepEqual(plan.runs[0].successChecks.forbiddenFiles, ['.env', 'secrets.txt']);
@@ -4875,6 +4903,67 @@ test('benchmark report enriches stored summaries with Azure telemetry', () => {
   assert.equal(report.tasks.every(task => task.telemetryMatched), true);
   assert.equal(report.tasks.find(task => task.taskId === 'edit-small-file').azureSpans, 4);
   assert.deepEqual(report.tasks.find(task => task.taskId === 'edit-small-file').models, ['gpt-5.5']);
+});
+
+test('benchmark report rejects observed blocked tool risks from Azure telemetry', () => {
+  const summaries = loadBenchmarkSummaries('pass-run', { summariesDir: benchmarkSummariesDir })
+    .map(summary => summary.taskId === 'edit-small-file'
+      ? { ...summary, toolPolicy: { blockedRisks: ['network'] } }
+      : summary);
+  const rows = [
+    {
+      run_id: 'pass-run',
+      suite: 'fixture-suite',
+      task_id: 'edit-small-file',
+      variant: 'baseline',
+      repeat_id: '',
+      Spans: 2,
+      ToolCalls: 1,
+      ToolFailures: 0,
+      Failures: 0,
+      InputTokens: 100,
+      OutputTokens: 20,
+      Credits: 0,
+      AIU: 0,
+      Models: ['gpt-5.5'],
+      Tools: ['http_fetch_url'],
+      Conversations: ['conv-policy'],
+      Operations: ['chat', 'execute_tool']
+    },
+    {
+      run_id: 'pass-run',
+      suite: 'fixture-suite',
+      task_id: 'add-test',
+      variant: 'baseline',
+      repeat_id: '',
+      Spans: 1,
+      ToolCalls: 1,
+      ToolFailures: 0,
+      Failures: 0,
+      InputTokens: 100,
+      OutputTokens: 20,
+      Credits: 0,
+      AIU: 0,
+      Models: ['gpt-5.5'],
+      Tools: ['read_file'],
+      Conversations: ['conv-clean'],
+      Operations: ['chat', 'execute_tool']
+    }
+  ];
+
+  const report = benchmarkReport('pass-run', summaries, {
+    azure: true,
+    spawnSync: () => ({ status: 0, stdout: JSON.stringify(rows), stderr: '' })
+  });
+  const task = report.tasks.find(item => item.taskId === 'edit-small-file');
+
+  assert.equal(report.policyBlocks, 1);
+  assert.equal(report.antiCheat.status, 'blocked');
+  assert.equal(report.recommendation.action, 'reject');
+  assert.equal(task.success, false);
+  assert.equal(task.safetyViolation, true);
+  assert.equal(task.errorCategory, 'policy_violation');
+  assert.deepEqual(task.toolPolicyViolations, [{ tool: 'http_fetch_url', risk: 'network' }]);
 });
 
 test('benchmark report keeps local scores when Azure query fails', () => {

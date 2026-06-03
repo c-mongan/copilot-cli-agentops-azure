@@ -13,6 +13,7 @@ const { createRecommendations } = require('./recommendations');
 const { createSavedViews } = require('./saved-views');
 const { createTelemetry } = require('./telemetry');
 const { repoRoot } = require('./lib/paths');
+const { classifyToolName } = require('./lib/copilot/tool-classifier');
 
 const root = repoRoot;
 
@@ -4996,6 +4997,16 @@ function isPlainObject(value) {
 
 const benchmarkPermissionProfiles = new Set(['allow-all-isolated', 'least-privilege', 'read-only']);
 const benchmarkSemanticAdapters = new Set(['file-contains']);
+const benchmarkToolRisks = new Set([
+  'read-only',
+  'write-file',
+  'shell',
+  'network',
+  'secret-access',
+  'browser-control',
+  'destructive',
+  'privileged'
+]);
 
 function normalizeBenchmarkPermissionProfile(profile) {
   if (profile === undefined || profile === null || profile === '') return 'least-privilege';
@@ -5144,6 +5155,26 @@ function validateBenchmarkSemanticChecks(checks, source = 'task') {
   });
 }
 
+function validateBenchmarkToolPolicy(policy, source = 'task') {
+  if (policy === undefined) return null;
+  if (!isPlainObject(policy)) {
+    throw new Error(`Invalid benchmark task ${source}: toolPolicy must be an object`);
+  }
+
+  if (policy.blockedRisks === undefined) return null;
+  if (!isStringArray(policy.blockedRisks)) {
+    throw new Error(`Invalid benchmark task ${source}: toolPolicy.blockedRisks must be an array of strings`);
+  }
+
+  const blockedRisks = [...new Set(policy.blockedRisks.map(risk => risk.trim()).filter(Boolean))].sort();
+  const invalid = blockedRisks.filter(risk => !benchmarkToolRisks.has(risk));
+  if (invalid.length > 0) {
+    throw new Error(`Invalid benchmark task ${source}: toolPolicy.blockedRisks must use known risks: ${[...benchmarkToolRisks].join(', ')}`);
+  }
+
+  return blockedRisks.length > 0 ? { blockedRisks } : null;
+}
+
 function validateBenchmarkTask(task, suiteDir, source = 'task') {
   const errors = [];
   const stringFields = ['id', 'title', 'fixture', 'prompt'];
@@ -5193,6 +5224,7 @@ function validateBenchmarkTask(task, suiteDir, source = 'task') {
   const hiddenPackCommands = hiddenCheckPacks.flatMap(pack => pack.commands);
   const semanticChecks = validateBenchmarkSemanticChecks(task.semanticChecks, source);
   const fixtureSeal = validateBenchmarkFixtureSeal(task.fixtureSeal, fixturePath, source);
+  const toolPolicy = validateBenchmarkToolPolicy(task.toolPolicy, source);
 
   return {
     ...task,
@@ -5202,6 +5234,7 @@ function validateBenchmarkTask(task, suiteDir, source = 'task') {
     hiddenPackCommands,
     semanticChecks,
     fixtureSeal,
+    toolPolicy,
     permissionProfile,
     fixturePath,
     source
@@ -5251,6 +5284,7 @@ function listBenchmarks(baseDir = benchmarksDir) {
         title: task.title,
         fixture: task.fixture,
         permissionProfile: task.permissionProfile,
+        toolPolicy: task.toolPolicy,
         timeoutSec: task.timeoutSec,
         tags: task.tags
       }))
@@ -5397,6 +5431,9 @@ function benchmarkRunPlan(suiteId, options = {}) {
           'agentops.benchmark.variant': variant,
           'agentops.benchmark.permission_profile': task.permissionProfile,
           'agentops.benchmark.repeat': String(repeatIndex),
+          ...(task.toolPolicy?.blockedRisks?.length
+            ? { 'agentops.benchmark.tool_policy.blocked_risks': task.toolPolicy.blockedRisks.join('|') }
+            : {}),
           ...(hypothesis ? { 'agentops.hypothesis.id': hypothesis } : {})
         },
         promotionGates: suite.promotionGates,
@@ -5426,6 +5463,7 @@ function benchmarkRunPlan(suiteId, options = {}) {
           forbiddenFiles: task.forbiddenFiles
         },
         permissionProfile: task.permissionProfile,
+        toolPolicy: task.toolPolicy,
         timeoutSec: task.timeoutSec
       });
     }
@@ -5724,6 +5762,7 @@ function executeBenchmarkRun(plan, run, options = {}) {
     taskId: run.taskId,
     taskTitle: run.taskTitle,
     permissionProfile: run.permissionProfile,
+    toolPolicy: run.toolPolicy || null,
     promotionGates: run.promotionGates || null,
     repeat: run.repeat,
     startedAt: startedAt.toISOString(),
@@ -6047,6 +6086,43 @@ function scoreBenchmarkSummary(summary) {
   };
 }
 
+function benchmarkToolPolicyViolations(summary) {
+  const blockedRisks = new Set(summary.toolPolicy?.blockedRisks || []);
+  if (blockedRisks.size === 0) return [];
+
+  const seen = new Set();
+  const violations = [];
+  for (const tool of Array.isArray(summary.tools) ? summary.tools : []) {
+    const name = String(tool || '').trim();
+    if (!name) continue;
+    const risk = classifyToolName(name);
+    const key = `${name}:${risk}`;
+    if (!blockedRisks.has(risk) || seen.has(key)) continue;
+    seen.add(key);
+    violations.push({ tool: name, risk });
+  }
+
+  return violations.sort((left, right) => left.risk.localeCompare(right.risk) || left.tool.localeCompare(right.tool));
+}
+
+function applyBenchmarkToolPolicy(summary) {
+  const toolPolicyViolations = benchmarkToolPolicyViolations(summary);
+  if (toolPolicyViolations.length === 0) {
+    return {
+      ...summary,
+      toolPolicyViolations: []
+    };
+  }
+
+  return {
+    ...summary,
+    success: false,
+    errorCategory: summary.errorCategory || 'policy_violation',
+    policyBlocks: numberValue(summary.policyBlocks) + toolPolicyViolations.length,
+    toolPolicyViolations
+  };
+}
+
 function topFailureCategories(scoredSummaries) {
   const counts = new Map();
 
@@ -6298,7 +6374,8 @@ function benchmarkReport(runId, summaries = null, options = {}) {
     azureTelemetry = enriched.azureTelemetry;
   }
 
-  const scoredSummaries = runSummaries.map(scoreBenchmarkSummary);
+  const policySummaries = runSummaries.map(applyBenchmarkToolPolicy);
+  const scoredSummaries = policySummaries.map(scoreBenchmarkSummary);
   const passed = scoredSummaries.filter(summary => summary.success).length;
   const inputTokens = scoredSummaries.reduce((total, summary) => total + numberValue(summary.inputTokens), 0);
   const outputTokens = scoredSummaries.reduce((total, summary) => total + numberValue(summary.outputTokens), 0);
@@ -6344,6 +6421,7 @@ function benchmarkReport(runId, summaries = null, options = {}) {
       taskId: summary.taskId,
       hypothesis: summary.hypothesis || null,
       permissionProfile: summary.permissionProfile || null,
+      toolPolicy: summary.toolPolicy || null,
       success: Boolean(summary.success),
       score: summary.score,
       hiddenChecksPassed: numberValue(summary.hiddenChecksPassed),
@@ -6352,6 +6430,7 @@ function benchmarkReport(runId, summaries = null, options = {}) {
       semanticScore: summary.semanticScore === undefined ? null : summary.semanticScore,
       semanticChecks: summary.semanticChecks || [],
       policyBlocks: numberValue(summary.policyBlocks),
+      toolPolicyViolations: summary.toolPolicyViolations || [],
       safetyViolation: summary.safetyViolation,
       errorCategory: summary.errorCategory || null,
       telemetryMatched: Boolean(summary.telemetryMatched),
