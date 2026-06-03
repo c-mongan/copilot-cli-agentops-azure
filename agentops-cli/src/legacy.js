@@ -74,6 +74,7 @@ function usage() {
     'benchmark fixture-pack <fixture-dir> --id <id> [--fixture <path>] [--title <title>] [--output <file>] [--sign-key-id <id> --sign-private-key <pem>]',
     'benchmark run <suite> --variant <name> --repeat <n> [--hypothesis <id>] [--dry-run]',
     'benchmark approve <run-id> --by <name> [--ticket <id>] [--output <json>]',
+    'benchmark artifacts <run-id> [--task <task-id>] [--include-content]',
     'benchmark report <run-id> [--azure] [--last <duration>] [--approval-file <json>]',
     'benchmark compare <before-run-id> <after-run-id> [--azure] [--last <duration>] [--approval-file <json>]'
   ];
@@ -1011,6 +1012,7 @@ function agentopsWorkflows() {
         `${cli} benchmark run starter --variant baseline --repeat 1 --hypothesis safer-tool-policy --dry-run`,
         `${cli} benchmark run starter --variant baseline --repeat 1 --hypothesis safer-tool-policy`,
         `${cli} benchmark approve <run-id> --by alice@example.com --ticket CHG-123 --output approvals/<run-id>.json`,
+        `${cli} benchmark artifacts <run-id> --task create-note --include-content`,
         `${cli} benchmark report <run-id>`,
         `${cli} benchmark compare <baseline-run-id> <variant-run-id> --azure --last 24h`
       ]
@@ -5824,6 +5826,38 @@ function parseBenchmarkApproveArgs(args) {
   return options;
 }
 
+function parseBenchmarkArtifactsArgs(args) {
+  const runId = args[0];
+  if (!runId) throw new Error('benchmark artifacts requires a run id');
+
+  const options = {
+    runId,
+    includeContent: false
+  };
+
+  for (let index = 1; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === '--task') {
+      if (!args[index + 1]) throw new Error('--task requires a task id');
+      options.taskId = args[index + 1];
+      index += 1;
+    } else if (arg === '--repeat') {
+      if (!args[index + 1]) throw new Error('--repeat requires a number');
+      options.repeat = Number(args[index + 1]);
+      index += 1;
+    } else if (arg === '--include-content') {
+      options.includeContent = true;
+    } else {
+      throw new Error(`Unknown benchmark artifacts option: ${arg}`);
+    }
+  }
+
+  if (options.repeat !== undefined && (!Number.isInteger(options.repeat) || options.repeat <= 0)) {
+    throw new Error('--repeat must be a positive integer');
+  }
+  return options;
+}
+
 function makeBenchmarkRunId(now = new Date()) {
   const stamp = now.toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
   return `bench-${stamp}-${crypto.randomBytes(4).toString('hex')}`;
@@ -7002,6 +7036,74 @@ function benchmarkSummariesFromPayload(payload) {
   return [];
 }
 
+function benchmarkTaskBySummary(summary, options = {}) {
+  const suite = loadBenchmarkSuites(options.benchmarksDir || benchmarksDir).find(item => item.id === summary.suite);
+  return suite?.tasks.find(task => task.id === summary.taskId) || null;
+}
+
+function benchmarkArtifactText(filePath) {
+  if (!filePath || !fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) return null;
+  if (fs.statSync(filePath).size > 64 * 1024) return null;
+  return fs.readFileSync(filePath, 'utf8');
+}
+
+function benchmarkUnifiedDiff(file, beforeText, afterText) {
+  if (beforeText === null && afterText === null) return [];
+  const beforeLines = beforeText === null ? [] : beforeText.replace(/\r\n/g, '\n').split('\n');
+  const afterLines = afterText === null ? [] : afterText.replace(/\r\n/g, '\n').split('\n');
+  return [
+    `--- a/${file}`,
+    `+++ b/${file}`,
+    ...beforeLines.filter((line, index) => line !== afterLines[index]).map(line => `-${line}`),
+    ...afterLines.filter((line, index) => line !== beforeLines[index]).map(line => `+${line}`)
+  ];
+}
+
+function benchmarkArtifactReview(runId, summaries = null, options = {}) {
+  if (!runId) throw new Error('benchmark artifacts requires a run id');
+  const runSummaries = (summaries || loadBenchmarkSummaries(runId, options))
+    .filter(summary => summary.runId === runId)
+    .filter(summary => !options.taskId || summary.taskId === options.taskId)
+    .filter(summary => options.repeat === undefined || numberValue(summary.repeat) === options.repeat);
+
+  const tasks = runSummaries.map(summary => {
+    const task = benchmarkTaskBySummary(summary, options);
+    const workspace = summary.workspace || null;
+    const diff = summary.artifactDiff || { added: [], modified: [], deleted: [], totalChanged: 0 };
+    const files = [
+      ...(Array.isArray(diff.added) ? diff.added.map(file => ({ file: normalizeBenchmarkRelativePath(file), status: 'added' })) : []),
+      ...(Array.isArray(diff.modified) ? diff.modified.map(file => ({ file: normalizeBenchmarkRelativePath(file), status: 'modified' })) : []),
+      ...(Array.isArray(diff.deleted) ? diff.deleted.map(file => ({ file: normalizeBenchmarkRelativePath(file), status: 'deleted' })) : [])
+    ].sort((left, right) => left.file.localeCompare(right.file));
+
+    return {
+      taskId: summary.taskId,
+      repeat: summary.repeat || null,
+      workspace,
+      fixture: task?.fixture || null,
+      files: files.map(entry => {
+        const beforePath = task?.fixturePath && entry.status !== 'added' ? safeBenchmarkPath(task.fixturePath, entry.file) : null;
+        const afterPath = workspace && entry.status !== 'deleted' ? safeBenchmarkPath(workspace, entry.file) : null;
+        const beforeText = options.includeContent ? benchmarkArtifactText(beforePath) : null;
+        const afterText = options.includeContent ? benchmarkArtifactText(afterPath) : null;
+        return {
+          ...entry,
+          beforeExists: Boolean(beforePath && fs.existsSync(beforePath)),
+          afterExists: Boolean(afterPath && fs.existsSync(afterPath)),
+          ...(options.includeContent ? { diff: benchmarkUnifiedDiff(entry.file, beforeText, afterText) } : {})
+        };
+      })
+    };
+  });
+
+  return {
+    runId,
+    taskCount: tasks.length,
+    includeContent: Boolean(options.includeContent),
+    tasks
+  };
+}
+
 function loadBenchmarkSummaries(runId, options = {}) {
   if (!runId) throw new Error('benchmark report requires a run id');
 
@@ -7603,6 +7705,12 @@ async function main(argv) {
       return;
     }
 
+    if (subcommand === 'artifacts') {
+      const options = parseBenchmarkArtifactsArgs(benchmarkArgs);
+      process.stdout.write(JSON.stringify(benchmarkArtifactReview(options.runId, null, options), null, 2) + '\n');
+      return;
+    }
+
     if (subcommand === 'run') {
       const options = parseBenchmarkRunArgs(benchmarkArgs);
       process.stdout.write(JSON.stringify(runBenchmarkSuite(options.suite, options), null, 2) + '\n');
@@ -7621,7 +7729,7 @@ async function main(argv) {
       return;
     }
 
-    throw new Error('benchmark requires list, fixture-pack, approve, run, report, or compare');
+    throw new Error('benchmark requires list, fixture-pack, approve, artifacts, run, report, or compare');
   }
 
   if (command === 'link') {
@@ -7722,6 +7830,7 @@ module.exports = {
   benchmarkAzureTelemetry,
   benchmarkAzureTelemetryQuery,
   benchmarkApproval,
+  benchmarkArtifactReview,
   benchmarkFixturePack,
   benchmarkReport,
   benchmarkRunBaseDir,
@@ -7770,6 +7879,7 @@ module.exports = {
   otlpLiveReplaySmokeTracePayload,
   parseBenchmarkCompareArgs,
   parseBenchmarkApproveArgs,
+  parseBenchmarkArtifactsArgs,
   parseBenchmarkFixturePackArgs,
   parseBenchmarkReportArgs,
   parseBenchmarkRunArgs,

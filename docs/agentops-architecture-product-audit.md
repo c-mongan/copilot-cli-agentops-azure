@@ -825,7 +825,7 @@ Current anti-cheat limitations:
 - Semantic evaluator adapters exist for deterministic file-content, regex, file-rubric checks, and command-backed `llm-judge` scoring, and the Evals & Quality dashboard surfaces metadata-only semantic check review. Hosted judge provider configuration is still external to the benchmark runner.
 - Candidate promotion gates can require approval evidence from an approval file, the CLI can generate run-scoped approval evidence, and the Evals & Quality dashboard now surfaces metadata-only approval review status. There is still no interactive multi-reviewer team workflow yet.
 - There is no defense against an agent changing the test commands if the eval harness files are available to it.
-- The Evals & Quality dashboard now includes metadata-only artifact diff counts, per-file artifact path review, hidden check pack review, policy review, and semantic check review for benchmark recommendations, but there is no unified file-content diff viewer yet.
+- The Evals & Quality dashboard now includes metadata-only artifact diff counts, per-file artifact path review, hidden check pack review, policy review, and semantic check review for benchmark recommendations. The CLI can now review artifact file paths and explicit fixture-to-workspace content diffs for local benchmark runs; a Grafana-native file-content diff viewer is still missing.
 - There is no "agent used external answer source" detector.
 - There is no "agent optimized for benchmark but harmed real-world telemetry" comparison beyond the report heuristics.
 
@@ -1275,7 +1275,7 @@ Required work:
 - Add trust-root rotation and revocation workflows for signed sealed fixture pack distribution.
 - Add hosted judge provider configuration for `llm-judge` semantic scoring.
 - Expand enforced permission profiles to OS-level network and tool sandboxing.
-- Add unified artifact content diff UI review for approved benchmark artifacts.
+- Add Grafana-native artifact content diff UI review for approved benchmark artifacts.
 - Add interactive multi-reviewer team workflow integrations for candidate promotion gates.
 - Add dashboards for eval scorecards and regressions.
 
