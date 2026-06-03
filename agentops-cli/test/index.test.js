@@ -307,6 +307,26 @@ test('strict privacy poison check drops unknown content fields and keeps safe me
   assert.equal(result.sanitized['unknown.future.content.field'], undefined);
 });
 
+test('field catalog detector flags unknown sensitive key families without flagging safe token fields', () => {
+  const result = privacy.detectContentLikeFieldCatalog([
+    'gen_ai.usage.input_tokens',
+    'agentops.content_capture.signal',
+    'github.copilot.new_prompt_payload',
+    'tool.result.preview',
+    { field: 'custom.connection_token' },
+    'service.name'
+  ]);
+
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.suspicious.map(item => item.key), [
+    'custom.connection_token',
+    'github.copilot.new_prompt_payload',
+    'tool.result.preview'
+  ]);
+  assert.equal(privacy.classifyContentLikeKey('gen_ai.input.messages').reason, 'exact-content-key');
+  assert.equal(privacy.classifyContentLikeKey('gen_ai.usage.input_tokens'), null);
+});
+
 test('collector privacy processor artifacts and poison fixtures are present', () => {
   const result = collectorManager.validateCollectorArtifacts();
   assert.equal(result.ok, true, result.errors.join('\n'));
@@ -7516,6 +7536,9 @@ test('field catalog query discovers Properties keys', () => {
   assert.match(query, /ago\(14d\)/);
   assert.match(query, /bag_keys\(Properties\)/);
   assert.match(query, /example_values/);
+  assert.match(query, /content_risk/);
+  assert.match(query, /exact_content_keys/);
+  assert.match(query, /sensitive-key-family/);
 });
 
 test('context pressure query ranks inefficient sessions', () => {

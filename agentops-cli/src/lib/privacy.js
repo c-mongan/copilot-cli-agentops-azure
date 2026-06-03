@@ -109,6 +109,8 @@ const contentLikeKeys = [
   'code.filepath'
 ];
 
+const sensitiveKeyFamilyPattern = /(prompt|completion|message|instruction|argument|result|body|secret|password|credential|cookie|url|filepath|file_path|path|token)/i;
+
 function redacted(value) {
   if (value === undefined || value === null) return value;
   return '[REDACTED]';
@@ -146,10 +148,45 @@ function makePoisonAttributes(id = `agentops-poison-${crypto.randomBytes(4).toSt
   };
 }
 
+function classifyContentLikeKey(key) {
+  const normalized = String(key || '');
+  if (!normalized) return null;
+  if (contentLikeKeys.includes(normalized)) {
+    return { key: normalized, reason: 'exact-content-key', action: 'drop' };
+  }
+  if (safeAttributeKeys.includes(normalized)) return null;
+  if (sensitiveKeyFamilyPattern.test(normalized)) {
+    return { key: normalized, reason: 'sensitive-key-family', action: 'review-or-drop' };
+  }
+  return null;
+}
+
+function fieldNameFromCatalogRow(row) {
+  if (typeof row === 'string') return row;
+  if (!row || typeof row !== 'object') return '';
+  return row.field || row.Field || row.name || row.Name || row.key || row.Key || '';
+}
+
+function detectContentLikeFieldCatalog(fields = []) {
+  const suspicious = [];
+  const seen = new Set();
+  for (const row of fields) {
+    const field = fieldNameFromCatalogRow(row);
+    const classified = classifyContentLikeKey(field);
+    if (!classified || seen.has(classified.key)) continue;
+    seen.add(classified.key);
+    suspicious.push(classified);
+  }
+  suspicious.sort((a, b) => a.key.localeCompare(b.key));
+  return {
+    ok: suspicious.length === 0,
+    suspicious
+  };
+}
+
 function sanitizeAttributesStrict(attributes = {}) {
   const observedContent = Object.keys(attributes).some(key => (
-    contentLikeKeys.includes(key)
-    || /content|message|prompt|completion|instruction|argument|result|body|secret|token|password|filepath|url/i.test(key)
+    classifyContentLikeKey(key)
   ));
   const sanitized = {};
 
@@ -185,7 +222,9 @@ function poisonCheck() {
 }
 
 module.exports = {
+  classifyContentLikeKey,
   contentLikeKeys,
+  detectContentLikeFieldCatalog,
   envLooksSecret,
   makePoisonAttributes,
   poisonCheck,

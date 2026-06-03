@@ -70,6 +70,7 @@ function productAudit(options = {}) {
     'collector/processors/span-to-run-summary.yaml',
     'collector/tests/privacy-poison-fixtures/content-poison.json',
     'agentops-cli/src/commands/content.js',
+    'agentops-cli/src/lib/privacy.js',
     'agentops-cli/src/lib/azure/v2-ingest-plan.js',
     'docs/privacy-threat-model-v2.md'
   ]));
