@@ -157,7 +157,7 @@ AgentOps alert rules are proposal-only and disabled by default.
 Before enabling alerts:
 
 1. Run real traffic long enough to tune thresholds.
-2. Create or select Azure Monitor action groups.
+2. Create or select Azure Monitor action groups. Use `agentops alert action-group-plan` to preview email/webhook receivers before creating a new group.
 3. Review action-group destinations and rate limits.
 4. Pass action group resource IDs explicitly.
 

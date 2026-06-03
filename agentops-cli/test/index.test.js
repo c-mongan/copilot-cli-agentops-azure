@@ -69,6 +69,7 @@ const {
   agentopsLiveReplaySmoke,
   agentopsStatusSummary,
   agentopsWorkflows,
+  alertActionGroupPlan,
   alertActionGroupRoute,
   alertAzureDevOpsWorkItemRoute,
   alertGithubIssueRoute,
@@ -7937,6 +7938,39 @@ test('alert azure devops route requires review gates before posting', () => {
   assert.throws(() => alertAzureDevOpsWorkItemRoute({ rule: 'failed-spans', session: 'session-456', project: 'AgentOps', owners: ['agentops-oncall@example.com'] }), /requires --org/);
   assert.throws(() => alertAzureDevOpsWorkItemRoute({ rule: 'failed-spans', session: 'session-456', org: 'https://dev.azure.com/contoso', owners: ['agentops-oncall@example.com'] }), /requires --project/);
   assert.throws(() => alertAzureDevOpsWorkItemRoute({ rule: 'failed-spans', session: 'session-456', org: 'https://dev.azure.com/contoso', project: 'AgentOps' }), /requires at least one --owner/);
+});
+
+test('alert action group plan previews receivers without mutating Azure', () => {
+  const plan = alertActionGroupPlan({
+    resourceGroup: 'rg-agentops-dev',
+    name: 'ag-agentops-oncall',
+    shortName: 'agentops',
+    owners: ['agentops-oncall'],
+    emails: ['ops@example.com'],
+    webhooks: ['https://example.com/agentops-webhook']
+  });
+
+  assert.equal(plan.schema_version, 'agentops.alert-action-group-plan.v1');
+  assert.equal(plan.mode, 'preview-only-action-group-plan');
+  assert.equal(plan.command.executable, 'az');
+  assert.deepEqual(plan.command.args.slice(0, 4), ['monitor', 'action-group', 'create', '--resource-group']);
+  assert.ok(plan.command.args.includes('--action'));
+  const emailActionIndex = plan.command.args.indexOf('email');
+  const webhookActionIndex = plan.command.args.indexOf('webhook');
+  assert.deepEqual(plan.command.args.slice(emailActionIndex - 1, emailActionIndex + 3), ['--action', 'email', 'email-1', 'ops@example.com']);
+  assert.deepEqual(plan.command.args.slice(webhookActionIndex - 1, webhookActionIndex + 3), ['--action', 'webhook', 'webhook-1', 'https://example.com/agentops-webhook']);
+  assert.equal(plan.receivers.email[0].email_address, 'ops@example.com');
+  assert.equal(plan.receivers.webhook[0].service_uri, 'https://example.com/agentops-webhook');
+  assert.match(plan.follow_up_route_command, /alert route-action-group/);
+  assert.ok(plan.guardrails.some(item => item.includes('Preview-only')));
+  assert.doesNotMatch(JSON.stringify(plan), /SECRET_FAKE_TEST_VALUE|raw transcript/);
+
+  assert.throws(() => alertActionGroupPlan({ name: 'ag', shortName: 'agentops', owners: ['owner'], emails: ['ops@example.com'] }), /requires --resource-group/);
+  assert.throws(() => alertActionGroupPlan({ resourceGroup: 'rg', shortName: 'agentops', owners: ['owner'], emails: ['ops@example.com'] }), /requires --name/);
+  assert.throws(() => alertActionGroupPlan({ resourceGroup: 'rg', name: 'ag', owners: ['owner'], emails: ['ops@example.com'] }), /requires --short-name/);
+  assert.throws(() => alertActionGroupPlan({ resourceGroup: 'rg', name: 'ag', shortName: 'agentops-prod', owners: ['owner'], emails: ['ops@example.com'] }), /12 characters or fewer/);
+  assert.throws(() => alertActionGroupPlan({ resourceGroup: 'rg', name: 'ag', shortName: 'agentops', emails: ['ops@example.com'] }), /requires at least one --owner/);
+  assert.throws(() => alertActionGroupPlan({ resourceGroup: 'rg', name: 'ag', shortName: 'agentops', owners: ['owner'] }), /requires at least one --email/);
 });
 
 test('alert action group route requires review gates before updating scheduled queries', () => {
