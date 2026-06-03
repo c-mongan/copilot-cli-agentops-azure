@@ -68,6 +68,7 @@ function usage() {
     'permission-friction [--last <duration>]',
     'alert recommend [--last <duration>]',
     'alert tune-plan [--last <duration>] [--rule <name>] [--owner <name>]',
+    'alert threshold-patch --rule <name> --threshold <number> --owner <name> [--last <duration>]',
     'alert policy [--owner <name>] [--service <name>] [--timezone <tz>]',
     'alert resources [--resource-group <name>]',
     'alert history --rule <name> [--last <duration>]',
@@ -5044,6 +5045,118 @@ function alertOpenRun({ rule, session, last = '24h' } = {}) {
   };
 }
 
+const alertThresholdPatchResources = {
+  'high-aiu': {
+    bicep_resource: 'highAiuAlert',
+    current_threshold: 50000000000
+  },
+  'failed-spans': {
+    bicep_resource: 'failureAlert',
+    current_threshold: 0
+  },
+  'content-capture': {
+    bicep_resource: 'contentCaptureAlert',
+    current_threshold: 0,
+    fixed_threshold: 0
+  }
+};
+
+function normalizeThresholdValue(value) {
+  const text = String(value ?? '').trim();
+  if (!text) throw new Error('alert threshold-patch requires --threshold <number>');
+  const number = Number(text);
+  if (!Number.isFinite(number) || number < 0) throw new Error('alert threshold-patch --threshold must be a non-negative number');
+  return Number.isInteger(number) ? String(number) : String(number);
+}
+
+function unifiedThresholdDiff({ lines, lineIndex, before, after, filePath }) {
+  const contextBefore = Math.max(0, lineIndex - 3);
+  const contextAfter = Math.min(lines.length, lineIndex + 4);
+  const hunkLines = [];
+  for (let index = contextBefore; index < contextAfter; index += 1) {
+    if (index === lineIndex) {
+      hunkLines.push(`-${lines[index]}`);
+      hunkLines.push(`+${lines[index].replace(before, after)}`);
+    } else {
+      hunkLines.push(` ${lines[index]}`);
+    }
+  }
+
+  return [
+    `--- a/${filePath}`,
+    `+++ b/${filePath}`,
+    `@@ -${contextBefore + 1},${contextAfter - contextBefore} +${contextBefore + 1},${contextAfter - contextBefore} @@`,
+    ...hunkLines
+  ].join('\n');
+}
+
+function alertThresholdPatch({ rule, threshold, owner, last = '14d', bicepPath = path.join(root, 'infra/bicep/alerts.bicep') } = {}) {
+  const normalizedRule = String(rule || '').trim();
+  const target = alertThresholdPatchResources[normalizedRule];
+  if (!target) {
+    throw new Error(`alert threshold-patch requires --rule ${Object.keys(alertThresholdPatchResources).join('|')}`);
+  }
+
+  const normalizedOwner = String(owner || '').trim();
+  if (!normalizedOwner) throw new Error('alert threshold-patch requires --owner <name>');
+
+  const nextThreshold = normalizeThresholdValue(threshold);
+  if (target.fixed_threshold !== undefined && nextThreshold !== String(target.fixed_threshold)) {
+    throw new Error(`alert threshold-patch keeps ${normalizedRule} threshold at ${target.fixed_threshold}`);
+  }
+
+  const lookback = validateKqlDuration(last);
+  const relativePath = path.relative(root, bicepPath).replace(/\\/g, '/');
+  const source = fs.readFileSync(bicepPath, 'utf8');
+  const lines = source.split(/\r?\n/);
+  const resourceStart = lines.findIndex(line => line.includes(`resource ${target.bicep_resource} `));
+  if (resourceStart === -1) throw new Error(`alert threshold-patch could not find ${target.bicep_resource} in ${relativePath}`);
+  let resourceEnd = lines.findIndex((line, index) => index > resourceStart && /^resource |^output /.test(line));
+  if (resourceEnd === -1) resourceEnd = lines.length;
+
+  const currentLine = `threshold: ${target.current_threshold}`;
+  const thresholdIndex = lines.findIndex((line, index) => index > resourceStart && index < resourceEnd && line.trim() === currentLine);
+  if (thresholdIndex === -1) throw new Error(`alert threshold-patch could not find ${currentLine} in ${target.bicep_resource}`);
+
+  const replacementLine = `threshold: ${nextThreshold}`;
+  const diff = unifiedThresholdDiff({
+    lines,
+    lineIndex: thresholdIndex,
+    before: currentLine,
+    after: replacementLine,
+    filePath: relativePath
+  });
+  const tunePlan = alertTunePlan({ rule: normalizedRule, last: lookback, owner: normalizedOwner });
+
+  return {
+    schema_version: 'agentops.alert-threshold-patch.v1',
+    mode: 'preview-only-bicep-threshold-patch',
+    rule: normalizedRule,
+    owner: normalizedOwner,
+    last: lookback,
+    patch_target: relativePath,
+    bicep_resource: target.bicep_resource,
+    current_threshold: target.current_threshold,
+    proposed_threshold: Number(nextThreshold),
+    diff,
+    evidence: {
+      tune_plan_schema: tunePlan.schema_version,
+      threshold_recommendation_query: tunePlan.evidence.threshold_recommendation_query,
+      fired_alert_history: tunePlan.evidence.fired_alert_history[0].query
+    },
+    guardrails: [
+      'Preview-only: this command does not edit infra/bicep/alerts.bicep.',
+      'Review threshold recommendation evidence and fired-alert history before applying this diff.',
+      'Run validate-azure before enabling alerts or routing action groups after any threshold change.'
+    ],
+    next: [
+      'Apply this diff in a reviewed PR only after owner approval.',
+      'Keep enableAlerts=false until the patched rule has been validated against real traffic.',
+      'Regenerate alert resources and run validate-azure before production routing.'
+    ]
+  };
+}
+
 function alertAzureDevOpsWorkItemRoute({ rule, session, last = '24h', owners = [], service = 'agentops', timezone = 'UTC', org, project, workItemType = 'Issue', yes = false, resourceGroup = null, spawnSync = childProcess.spawnSync } = {}) {
   const normalizedOrg = String(org || '').trim();
   if (!normalizedOrg) throw new Error('alert route-azure-devops requires --org <url>');
@@ -9110,6 +9223,14 @@ async function main(argv) {
       process.stdout.write(JSON.stringify(plan, null, 2) + '\n');
       return;
     }
+    if (subcommand === 'threshold-patch') {
+      const last = parseLastArg(alertArgs, '14d');
+      const rule = optionValue(alertArgs, ['--rule']);
+      const threshold = optionValue(alertArgs, ['--threshold']);
+      const owner = optionValue(alertArgs, ['--owner']);
+      process.stdout.write(JSON.stringify(alertThresholdPatch({ rule, threshold, owner, last }), null, 2) + '\n');
+      return;
+    }
     if (subcommand === 'policy') {
       const owners = optionValues(alertArgs, '--owner');
       const service = optionValue(alertArgs, ['--service']) || 'agentops';
@@ -9314,7 +9435,7 @@ async function main(argv) {
       }), null, 2) + '\n');
       return;
     }
-    throw new Error('alert currently supports: alert recommend, alert tune-plan, alert policy, alert resources, alert history, alert detail, alert open, alert action-plan, alert export, alert handoff, alert route-plan, alert route-github, alert route-azure-devops, alert action-group-plan, alert route-action-group');
+    throw new Error('alert currently supports: alert recommend, alert tune-plan, alert threshold-patch, alert policy, alert resources, alert history, alert detail, alert open, alert action-plan, alert export, alert handoff, alert route-plan, alert route-github, alert route-azure-devops, alert action-group-plan, alert route-action-group');
   }
 
   if (command === 'incident') {
@@ -9377,6 +9498,7 @@ module.exports = {
   alertRecommendationQuery,
   alertRecommendations,
   alertTunePlan,
+  alertThresholdPatch,
   alertResourceState,
   alertPolicy,
   alertHistoryQuery,

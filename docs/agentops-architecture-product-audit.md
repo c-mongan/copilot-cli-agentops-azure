@@ -885,6 +885,7 @@ What works well:
 - `agentops alert action-plan` generates deterministic GitHub issue or Azure DevOps work-item payload metadata with KQL, session links, and guardrails.
 - `agentops alert export` writes durable metadata-only alert artifacts for later incident review.
 - `agentops alert tune-plan` generates proposal-only threshold-change metadata with Bicep patch targets, validation queries, and fired-alert history evidence.
+- `agentops alert threshold-patch` generates a preview-only Bicep threshold diff for direct rules after an owner supplies an approved numeric threshold.
 - `agentops alert policy` generates local ownership, dedupe/noise, quiet-hours placeholder, and manual-escalation metadata.
 - `agentops alert resources` reports current Azure scheduled-query enabled/disabled state and action-group routing without mutating Azure.
 - `agentops incident timeline` collects exported alert artifacts into a durable metadata-only incident review record.
@@ -899,7 +900,7 @@ Current gaps:
 
 - Alert action routing is partially manual; the CLI can now post GitHub Issues, Azure DevOps Work Items, preview email/webhook action group receivers, and attach Azure Monitor action groups behind explicit review gates, but Teams and paging destinations still depend on approved receiver setup outside the CLI.
 - Alert history and timeline review now have a local metadata-only handoff bundle, route preview, guarded ticket creation, and guarded action-group attachment, but not yet broad paging automation.
-- Threshold changes are still manual review artifacts; there is no automatic threshold tuning loop.
+- Threshold changes now have preview-only Bicep diffs for direct rules, but there is no automatic threshold tuning loop.
 - Alert-to-run opening is now available as a CLI link artifact, but not yet a fully guided visual workflow.
 
 Product recommendation:
