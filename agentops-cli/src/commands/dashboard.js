@@ -248,6 +248,8 @@ const v2KqlSmokePanels = [
   { uid: 'agentops-v2-code-outcomes', panel: 'Runs and PR outcomes', requireRows: true },
   { uid: 'agentops-v2-code-outcomes', panel: 'Delivery timing', requireRows: true },
   { uid: 'agentops-v2-evals-quality', panel: 'Low-score runs', requireRows: true },
+  { uid: 'agentops-v2-evals-quality', panel: 'Eval scorecard by repo, model, and task', requireRows: true },
+  { uid: 'agentops-v2-evals-quality', panel: 'Eval regression follow-up', requireRows: false },
   { uid: 'agentops-v2-evals-quality', panel: 'Benchmark artifact diff review', requireRows: false },
   { uid: 'agentops-v2-evals-quality', panel: 'Benchmark artifact files', requireRows: false },
   { uid: 'agentops-v2-evals-quality', panel: 'Benchmark hidden check packs', requireRows: false },
@@ -256,6 +258,7 @@ const v2KqlSmokePanels = [
   { uid: 'agentops-v2-evals-quality', panel: 'Benchmark promotion approvals', requireRows: false },
   { uid: 'agentops-v2-insights-regressions', panel: 'Latest insights', requireRows: true },
   { uid: 'agentops-v2-insights-regressions', panel: 'Recurring patterns', requireRows: false },
+  { uid: 'agentops-v2-insights-regressions', panel: 'Eval regression queue', requireRows: false },
   { uid: 'agentops-v2-insights-regressions', panel: 'Recommendation artifacts', requireRows: false },
   { uid: 'agentops-v2-collector-health', panel: 'Collector checks', requireRows: true }
 ];
@@ -415,12 +418,22 @@ function validateDashboardUx() {
 
   const evals = byUid.get('agentops-v2-evals-quality');
   const evalsTitles = new Set((evals?.body.panels || []).map(panel => panel.title));
+  if (!evalsTitles.has('Eval scorecard by repo, model, and task')) errors.push('evals dashboard missing Eval scorecard by repo, model, and task panel');
+  if (!evalsTitles.has('Eval regression follow-up')) errors.push('evals dashboard missing Eval regression follow-up panel');
   if (!evalsTitles.has('Benchmark artifact diff review')) errors.push('evals dashboard missing Benchmark artifact diff review panel');
   if (!evalsTitles.has('Benchmark artifact files')) errors.push('evals dashboard missing Benchmark artifact files panel');
   if (!evalsTitles.has('Benchmark hidden check packs')) errors.push('evals dashboard missing Benchmark hidden check packs panel');
   if (!evalsTitles.has('Benchmark policy review')) errors.push('evals dashboard missing Benchmark policy review panel');
   if (!evalsTitles.has('Benchmark semantic checks')) errors.push('evals dashboard missing Benchmark semantic checks panel');
   if (!evalsTitles.has('Benchmark promotion approvals')) errors.push('evals dashboard missing Benchmark promotion approvals panel');
+  const evalScorecardQuery = queryFromPanel(panelByTitle(evals, 'Eval scorecard by repo, model, and task'));
+  for (const field of ['ScorecardStatus', 'PoorRuns', 'ReviewRuns', 'AvgTestDiscipline', 'AvgToolEfficiency', 'AvgSecurity', 'AvgReliability', 'AvgCodeOutcome']) {
+    if (!evalScorecardQuery.includes(field)) errors.push(`eval scorecard missing ${field}`);
+  }
+  const evalFollowUpQuery = queryFromPanel(panelByTitle(evals, 'Eval regression follow-up'));
+  for (const field of ['EvalBucket', 'ObservedPattern', 'NextAction', 'ChangeTargetRefs', 'OpenReplay', 'OpenPattern']) {
+    if (!evalFollowUpQuery.includes(field)) errors.push(`eval regression follow-up missing ${field}`);
+  }
   const artifactDiffQuery = queryFromPanel(panelByTitle(evals, 'Benchmark artifact diff review'));
   for (const field of ['BenchmarkRunId', 'BenchmarkArtifactAdded', 'BenchmarkArtifactModified', 'BenchmarkArtifactDeleted', 'BenchmarkArtifactTotalChanged', 'ReviewAction', 'ChangeTargetRefs']) {
     if (!artifactDiffQuery.includes(field)) errors.push(`benchmark artifact diff review missing ${field}`);
@@ -449,6 +462,7 @@ function validateDashboardUx() {
   const insights = byUid.get('agentops-v2-insights-regressions');
   const insightsTitles = new Set((insights?.body.panels || []).map(panel => panel.title));
   if (!insightsTitles.has('Recurring patterns')) errors.push('insights dashboard missing Recurring patterns panel');
+  if (!insightsTitles.has('Eval regression queue')) errors.push('insights dashboard missing Eval regression queue panel');
   if (!insightsTitles.has('Recommendation artifacts')) errors.push('insights dashboard missing Recommendation artifacts panel');
   const patternsQuery = queryFromPanel(panelByTitle(insights, 'Recurring patterns'));
   for (const field of ['PatternId', 'PatternRuns', 'PatternDimension', 'PatternKey', 'OpenPattern', 'OpenReplay']) {
@@ -457,6 +471,10 @@ function validateDashboardUx() {
   const recommendationsQuery = queryFromPanel(panelByTitle(insights, 'Recommendation artifacts'));
   for (const field of ['RecommendationId', 'Action', 'ObservedPattern', 'NextAction', 'BenchmarkRunId', 'BenchmarkDecision', 'BenchmarkArtifactTotalChanged', 'BenchmarkArtifactFiles', 'BenchmarkHiddenCheckPacks', 'BenchmarkPolicyTasks', 'BenchmarkSemanticChecks', 'BenchmarkApprovalStatus', 'ChangeTargetRefs', 'OpenReplay', 'OpenPattern']) {
     if (!recommendationsQuery.includes(field)) errors.push(`recommendation artifacts panel missing ${field}`);
+  }
+  const evalRegressionQueueQuery = queryFromPanel(panelByTitle(insights, 'Eval regression queue'));
+  for (const field of ['Source', 'EvalBucket', 'BaselineValue', 'CurrentValue', 'Summary', 'NextAction', 'OpenReplay', 'OpenPattern']) {
+    if (!evalRegressionQueueQuery.includes(field)) errors.push(`eval regression queue missing ${field}`);
   }
 
   return {

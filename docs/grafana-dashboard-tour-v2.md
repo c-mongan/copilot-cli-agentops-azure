@@ -130,6 +130,10 @@ Scores cover:
 
 Low-score runs link back into Run Replay.
 
+The **Eval scorecard by repo, model, and task** panel groups eval rows into scorecards with overall, test discipline, tool efficiency, security, reliability, and code outcome averages. It also counts poor and review-bucket runs so weak slices are visible without opening every run.
+
+The **Eval regression follow-up** panel shows poor/review eval recommendations and regression actions with Run Replay and pattern drilldowns.
+
 The **Benchmark artifact diff review** panel shows benchmark gate recommendations with added, modified, deleted, and total changed artifact counts so reviewers can spot unexpected fixture output changes before promotion. It stays metadata-only and does not show file contents.
 
 The **Benchmark artifact files** panel expands the same benchmark evidence into task ID, change type, and artifact path rows. Use it to see which expected artifacts changed without exposing file contents.
@@ -162,6 +166,8 @@ It shows anomalies and regressions for:
 - privacy/policy signals;
 - eval drops;
 - model/config/instruction changes when available.
+
+The **Eval regression queue** panel combines eval-related insights and recommendations so operators can review score drops and regression next actions in one table.
 
 Recurring pattern rows include `OpenPattern`, `OpenReplay`, and `PatternKey` so operators can keep drilling into one repeated behavior without learning KQL.
 

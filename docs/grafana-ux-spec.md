@@ -49,12 +49,15 @@ Every V2 dashboard uses:
 - Runs Explorer exposes `OpenReplay`, `OpenTrace`, and `OpenGithub` action cells.
 - Agent, skill, MCP server, and sub-agent cells drill into filtered dashboards.
 - Recurring pattern rows expose `OpenPattern` and preserve `$pattern_key` for Datadog/Lapdog-style triage.
+- Evals & Quality exposes an **Eval scorecard by repo, model, and task** table with overall and dimension-level averages plus poor/review counts.
+- Evals & Quality exposes an **Eval regression follow-up** table with recommendation rows for poor/review eval buckets or regression actions.
 - Evals & Quality exposes a **Benchmark artifact diff review** table with artifact diff counts, review action, benchmark decision, and change-target references.
 - Evals & Quality exposes a **Benchmark artifact files** table with task ID, change type, and artifact path rows. It must stay metadata-only and avoid file contents.
 - Evals & Quality exposes a **Benchmark hidden check packs** table with hidden pass/fail counts, task ID, pack ID/title, and command count. It must stay metadata-only and avoid hidden command text.
 - Evals & Quality exposes a **Benchmark policy review** table with task ID, permission profile, policy block count, configured blocked risks, and observed violation risks. It must avoid tool arguments and command text.
 - Evals & Quality exposes a **Benchmark semantic checks** table with task ID, check ID, adapter, file, pass/fail state, score, and failure detail. It must avoid expected content strings, regex patterns, and judge commands.
 - Evals & Quality exposes a **Benchmark promotion approvals** table with approval status, required/observed approval counts, ticket, and review action.
+- Insights & Regressions exposes an **Eval regression queue** table that combines eval-related insight and recommendation rows.
 - Run Replay exposes an **Ask AgentOps context** panel with a metadata-only prompt and `agentops triage` command.
 - Empty states point to the smallest command that generates data.
 - Raw content never appears in dashboards by default.
