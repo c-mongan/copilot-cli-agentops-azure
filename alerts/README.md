@@ -50,10 +50,11 @@ node agentops-cli/src/index.js alert handoff --rule content-capture --session <c
 node agentops-cli/src/index.js alert route-plan --rule content-capture --session <conversation-id> --owner agentops-oncall --target github-issue --output .agentops/alerts/content-capture-route.json --last 24h
 node agentops-cli/src/index.js alert route-github --repo <owner/repo> --rule content-capture --session <conversation-id> --owner <github-login> --last 24h
 node agentops-cli/src/index.js alert route-azure-devops --org <url> --project <name> --rule content-capture --session <conversation-id> --owner <user> --last 24h
+node agentops-cli/src/index.js alert route-action-group --resource-group <rg> --scheduled-query <name> --action-group <id> --rule content-capture --session <conversation-id> --owner agentops-oncall --last 24h
 node agentops-cli/src/index.js incident timeline --artifact .agentops/alerts/content-capture.json --output .agentops/incidents/content-capture.json
 ```
 
-The plan, exported artifact, handoff bundle, route-plan payloads, route-github dry-run, route-azure-devops dry-run, and incident timeline include only safe metadata, KQL, and dashboard links. They do not post the issue/work item, mutate Azure resources, or include prompts, responses, tool arguments, tool results, or file contents. Add `--yes` to a route command only after reviewing the payload and confirming the owner.
+The plan, exported artifact, handoff bundle, route-plan payloads, route-github dry-run, route-azure-devops dry-run, route-action-group dry-run, and incident timeline include only safe metadata, KQL, and dashboard links. They do not post the issue/work item, mutate Azure resources, or include prompts, responses, tool arguments, tool results, or file contents. Add `--yes` to a route command only after reviewing the payload, confirming the owner, and approving the notification destination.
 
 The same evidence is available in the generated `agentops-alert-tuning` Grafana dashboard after rebuilding the dashboard pack:
 
