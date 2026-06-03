@@ -9,6 +9,37 @@ function check(name, ok, detail = null, severity = 'error') {
   return { name, ok: Boolean(ok), detail, severity };
 }
 
+function readText(file) {
+  const fullPath = repoPath(file);
+  return fs.existsSync(fullPath) ? fs.readFileSync(fullPath, 'utf8') : '';
+}
+
+function hasPinnedCollectorImage(text) {
+  return /otel\/opentelemetry-collector-contrib:(?!latest\b)\d+\.\d+\.\d+/.test(text);
+}
+
+function hasLocalhostPortBindings(text) {
+  return ['127.0.0.1:4318:4318', '127.0.0.1:4317:4317', '127.0.0.1:13133:13133']
+    .every(binding => text.includes(binding));
+}
+
+function collectorConfigChecks() {
+  const localCompose = readText('collector/docker-compose.yaml');
+  const azureCompose = readText('collector/docker-compose.azuremonitor.yaml');
+  const azureConfig = readText('collector/otelcol.azuremonitor.yaml');
+  const azureStrictConfig = readText('collector/otelcol.azuremonitor.strict.yaml');
+  const azureConfigHasPrivacy = ['transform/content_capture_signal', 'attributes/privacy_safe', 'exporters:', 'azuremonitor']
+    .every(snippet => azureConfig.includes(snippet));
+  const azureStrictHasPrivacy = ['transform/privacy_strict', 'keep_keys(attributes', 'exporters:', 'azuremonitor']
+    .every(snippet => azureStrictConfig.includes(snippet));
+
+  return [
+    check('collector-image-pinned', hasPinnedCollectorImage(localCompose) && hasPinnedCollectorImage(azureCompose), 'docker compose defaults use an explicit otel/opentelemetry-collector-contrib version'),
+    check('collector-azure-localhost-bindings', hasLocalhostPortBindings(azureCompose), 'Azure Monitor compose binds OTLP and health ports to 127.0.0.1'),
+    check('collector-azure-config-privacy-parity', azureConfigHasPrivacy && azureStrictHasPrivacy, 'Azure Monitor configs include content signal, privacy filtering, and azuremonitor exporter')
+  ];
+}
+
 async function doctorSummary(options = {}) {
   const localOnly = Boolean(options.localOnly);
   const base = legacy.doctor({ localOnly: true }).map(item => ({
@@ -40,6 +71,7 @@ async function doctorSummary(options = {}) {
     check('collector-localhost-bindings', collectorStatus.safeLocalhostBinding, collector.composeFile),
     check('collector-health', collectorStatus.running, collectorStatus.health?.error || collectorStatus.health?.statusCode || 'not running', 'warning'),
     check('collector-binary-available', collectorStatus.binary.ok, collectorStatus.binary.error, collectorStatus.effectiveMode === 'binary' ? 'error' : 'warning'),
+    ...collectorConfigChecks(),
     check('copilot-binary-non-recursive', copilot.ok, copilot.error, localOnly ? 'warning' : 'error'),
     check('plugin-reversible', fs.existsSync(repoPath('plugin', 'plugin.json')) && fs.existsSync(repoPath('plugin', 'hooks.json')), 'agentops plugin uninstall removes bundled files'),
     check('connection-string-not-on-disk', !connectionStringStored, configPath),
