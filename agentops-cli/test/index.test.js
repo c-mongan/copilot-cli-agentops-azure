@@ -286,7 +286,8 @@ test('collector privacy processor artifacts and poison fixtures are present', ()
 
   const owasp = collectorManager.validateOwaspFixtures();
   assert.equal(owasp.ok, true, owasp.errors.join('\n'));
-  assert.equal(owasp.fixtures.length, 6);
+  assert.equal(owasp.fixtures.length, 7);
+  assert.ok(owasp.fixtures.some(fixture => fixture.file === 'injected-tool-instructions.json'));
   assert.ok(owasp.fixtures.some(fixture => fixture.file === 'mcp-dangerous-tool-classes.json'));
   assert.ok(owasp.fixtures.every(fixture => fixture.ok));
   assert.ok(owasp.fixtures.every(fixture => fixture.content_signal));
