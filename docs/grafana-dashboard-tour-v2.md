@@ -10,7 +10,7 @@ It shows:
 
 - a first-row action strip for opening the latest Run Replay, generating one recommendation, and building an Ask AgentOps context bundle with prompt-template guidance;
 - runs, success rate, failed runs, policy blocks, privacy drops, estimated cost, input/output tokens, p95 duration, tests ran percent, PRs opened, and collector health;
-- recent failed runs;
+- Session Health table with status, risk, root agent, model, tool failures, policy denials, privacy signal, context pressure, eval score, benchmark linkage, and recommended next action;
 - recommended next actions from insight rows;
 - expensive runs;
 - GitHub outcome summary;

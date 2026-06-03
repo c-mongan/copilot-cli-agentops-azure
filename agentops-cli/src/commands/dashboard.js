@@ -233,6 +233,7 @@ function validateDashboardFilters() {
 }
 
 const v2KqlSmokePanels = [
+  { uid: 'agentops-v2-home', panel: 'Session Health', requireRows: true },
   { uid: 'agentops-v2-home', panel: 'Recommended next actions', requireRows: true },
   { uid: 'agentops-v2-runs-explorer', panel: 'Runs', requireRows: true },
   { uid: 'agentops-v2-run-replay', panel: 'Run summary', requireRows: true },
@@ -364,7 +365,7 @@ function validateDashboardUx() {
 
   const home = byUid.get('agentops-v2-home');
   const homeTitles = new Set((home?.body.panels || []).map(panel => panel.title));
-  for (const title of ['Runs', 'Success rate', 'Failed runs', 'Policy blocks', 'Privacy drops', 'Estimated cost', 'Input tokens', 'Output tokens', 'p95 duration', 'Tests ran %', 'PRs opened', 'Collector health', 'Saved investigations']) {
+  for (const title of ['Runs', 'Success rate', 'Failed runs', 'Policy blocks', 'Privacy drops', 'Estimated cost', 'Input tokens', 'Output tokens', 'p95 duration', 'Tests ran %', 'PRs opened', 'Collector health', 'Session Health', 'Saved investigations']) {
     if (!homeTitles.has(title)) errors.push(`home missing top-strip panel ${title}`);
   }
   const homeText = (home?.body.panels || [])
@@ -377,6 +378,10 @@ function validateDashboardUx() {
   const savedViewsQuery = queryFromPanel(panelByTitle(home, 'Saved investigations'));
   for (const field of ['AgentOpsSavedViews_CL', 'SavedViewId', 'Name', 'QueryHash', 'OpenSavedView', 'OpenReplay']) {
     if (!savedViewsQuery.includes(field)) errors.push(`saved investigations panel missing ${field}`);
+  }
+  const sessionHealthQuery = queryFromPanel(panelByTitle(home, 'Session Health'));
+  for (const field of ['LatestRecommendations', 'HealthStatus', 'RootAgent', 'RecommendedNextAction', 'ToolFailureCount', 'ToolDeniedCount', 'ContentCaptureSignal', 'ContextWindowPct', 'EvalOverall', 'OpenReplay']) {
+    if (!sessionHealthQuery.includes(field)) errors.push(`session health panel missing ${field}`);
   }
 
   const runs = byUid.get('agentops-v2-runs-explorer');
