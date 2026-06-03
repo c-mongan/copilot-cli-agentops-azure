@@ -1325,8 +1325,18 @@ test('V2 recommend carries benchmark gate and change-target metadata', () => {
         passed: 1,
         failed: 0
       },
+      policyBlocks: 1,
+      permissionProfiles: {
+        'allow-all-isolated': 1
+      },
       tasks: [{
         taskId: 'create-note',
+        permissionProfile: 'allow-all-isolated',
+        toolPolicy: {
+          blockedRisks: ['browser-control', 'destructive', 'network', 'secret-access']
+        },
+        policyBlocks: 1,
+        toolPolicyViolations: [{ tool: 'http_fetch_url', risk: 'network' }],
         hiddenCheckPacks: [{
           id: 'create-note-sealed',
           title: 'Create note sealed checks',
@@ -1387,6 +1397,16 @@ test('V2 recommend carries benchmark gate and change-target metadata', () => {
       id: 'create-note-sealed',
       title: 'Create note sealed checks',
       command_count: 1
+    }]);
+    assert.equal(row.BenchmarkPolicyBlocks, 1);
+    assert.deepEqual(row.BenchmarkPermissionProfiles, { 'allow-all-isolated': 1 });
+    assert.deepEqual(row.BenchmarkPolicyTasks, [{
+      task_id: 'create-note',
+      permission_profile: 'allow-all-isolated',
+      policy_blocks: 1,
+      blocked_risks: ['browser-control', 'destructive', 'network', 'secret-access'],
+      violation_count: 1,
+      violation_risks: ['network']
     }]);
     assert.equal(row.BenchmarkApprovalStatus, 'approved');
     assert.equal(row.BenchmarkApprovalCount, 1);
@@ -3306,6 +3326,7 @@ test('V2 dashboard ux-check protects the Datadog-style operator flow', () => {
   assert.equal(result.contracts.artifact_diff_review, true);
   assert.equal(result.contracts.artifact_file_review, true);
   assert.equal(result.contracts.hidden_check_review, true);
+  assert.equal(result.contracts.policy_review, true);
   assert.equal(result.contracts.promotion_approvals, true);
   assert.equal(result.contracts.ask_agentops_context, true);
 });
@@ -3550,7 +3571,7 @@ test('dashboard verify combines static UX and optional live KQL gates', () => {
   });
   assert.equal(live.ok, true, live.errors.join('\n'));
   assert.equal(live.live, true);
-  assert.equal(live.summary.kql_checks, 23);
+  assert.equal(live.summary.kql_checks, 24);
 });
 
 test('V2 dashboard links preserve drilldown contracts', () => {
@@ -3587,9 +3608,11 @@ test('V2 dashboard links preserve drilldown contracts', () => {
   assert.match(JSON.stringify(evalsDashboard), /Benchmark artifact diff review/);
   assert.match(JSON.stringify(evalsDashboard), /Benchmark artifact files/);
   assert.match(JSON.stringify(evalsDashboard), /Benchmark hidden check packs/);
+  assert.match(JSON.stringify(evalsDashboard), /Benchmark policy review/);
   assert.match(JSON.stringify(evalsDashboard), /BenchmarkArtifactTotalChanged/);
   assert.match(JSON.stringify(evalsDashboard), /ArtifactPath/);
   assert.match(JSON.stringify(evalsDashboard), /HiddenPackId/);
+  assert.match(JSON.stringify(evalsDashboard), /ViolationRisks/);
   assert.match(JSON.stringify(evalsDashboard), /ReviewAction/);
   assert.match(JSON.stringify(evalsDashboard), /Benchmark promotion approvals/);
   assert.match(JSON.stringify(evalsDashboard), /BenchmarkApprovalStatus/);
@@ -3658,7 +3681,7 @@ test('dashboard kql-check renders representative V2 panel queries', () => {
   });
 
   assert.equal(result.ok, true, result.errors.join('\n'));
-  assert.equal(result.checks.length, 23);
+  assert.equal(result.checks.length, 24);
   assert.ok(queries.every(item => item.options.workspaceId === 'workspace-123'));
   assert.ok(queries.every(item => item.query.includes('ago(24h)')));
   assert.ok(queries.every(item => !item.query.includes('$__timeFrom')));

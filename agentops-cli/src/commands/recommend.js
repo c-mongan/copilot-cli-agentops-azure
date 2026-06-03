@@ -184,6 +184,22 @@ function benchmarkHiddenCheckPackRefs(report = null) {
   return rows.slice(0, 200);
 }
 
+function benchmarkPolicyRefs(report = null) {
+  const rows = [];
+  for (const task of Array.isArray(report?.tasks) ? report.tasks : []) {
+    const violations = Array.isArray(task.toolPolicyViolations) ? task.toolPolicyViolations : [];
+    rows.push({
+      task_id: task.taskId || '',
+      permission_profile: task.permissionProfile || '',
+      policy_blocks: task.policyBlocks ?? null,
+      blocked_risks: Array.isArray(task.toolPolicy?.blockedRisks) ? task.toolPolicy.blockedRisks : [],
+      violation_count: violations.length,
+      violation_risks: [...new Set(violations.map(violation => violation?.risk).filter(Boolean))].sort()
+    });
+  }
+  return rows.slice(0, 200);
+}
+
 function benchmarkEvidenceFromReport(report = null) {
   if (!report || typeof report !== 'object') return null;
   const artifactDiff = report.artifactDiff || {};
@@ -211,6 +227,11 @@ function benchmarkEvidenceFromReport(report = null) {
       passed: report.hiddenChecks?.passed ?? null,
       failed: report.hiddenChecks?.failed ?? null,
       packs: benchmarkHiddenCheckPackRefs(report)
+    },
+    policy: {
+      blocks: report.policyBlocks ?? null,
+      permission_profiles: report.permissionProfiles || {},
+      tasks: benchmarkPolicyRefs(report)
     },
     approval: {
       status: approval.status || '',
@@ -366,6 +387,9 @@ function recommendationRow(recommendation, timeGenerated = new Date().toISOStrin
     BenchmarkHiddenChecksPassed: benchmark.hidden_checks?.passed ?? null,
     BenchmarkHiddenChecksFailed: benchmark.hidden_checks?.failed ?? null,
     BenchmarkHiddenCheckPacks: benchmark.hidden_checks?.packs || [],
+    BenchmarkPolicyBlocks: benchmark.policy?.blocks ?? null,
+    BenchmarkPermissionProfiles: benchmark.policy?.permission_profiles || {},
+    BenchmarkPolicyTasks: benchmark.policy?.tasks || [],
     BenchmarkApprovalStatus: benchmark.approval?.status || '',
     BenchmarkApprovalCount: benchmark.approval?.approved_count ?? null,
     BenchmarkRequiredApprovals: benchmark.approval?.required_count ?? null,

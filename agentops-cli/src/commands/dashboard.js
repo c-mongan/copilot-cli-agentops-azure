@@ -251,6 +251,7 @@ const v2KqlSmokePanels = [
   { uid: 'agentops-v2-evals-quality', panel: 'Benchmark artifact diff review', requireRows: false },
   { uid: 'agentops-v2-evals-quality', panel: 'Benchmark artifact files', requireRows: false },
   { uid: 'agentops-v2-evals-quality', panel: 'Benchmark hidden check packs', requireRows: false },
+  { uid: 'agentops-v2-evals-quality', panel: 'Benchmark policy review', requireRows: false },
   { uid: 'agentops-v2-evals-quality', panel: 'Benchmark promotion approvals', requireRows: false },
   { uid: 'agentops-v2-insights-regressions', panel: 'Latest insights', requireRows: true },
   { uid: 'agentops-v2-insights-regressions', panel: 'Recurring patterns', requireRows: false },
@@ -416,6 +417,7 @@ function validateDashboardUx() {
   if (!evalsTitles.has('Benchmark artifact diff review')) errors.push('evals dashboard missing Benchmark artifact diff review panel');
   if (!evalsTitles.has('Benchmark artifact files')) errors.push('evals dashboard missing Benchmark artifact files panel');
   if (!evalsTitles.has('Benchmark hidden check packs')) errors.push('evals dashboard missing Benchmark hidden check packs panel');
+  if (!evalsTitles.has('Benchmark policy review')) errors.push('evals dashboard missing Benchmark policy review panel');
   if (!evalsTitles.has('Benchmark promotion approvals')) errors.push('evals dashboard missing Benchmark promotion approvals panel');
   const artifactDiffQuery = queryFromPanel(panelByTitle(evals, 'Benchmark artifact diff review'));
   for (const field of ['BenchmarkRunId', 'BenchmarkArtifactAdded', 'BenchmarkArtifactModified', 'BenchmarkArtifactDeleted', 'BenchmarkArtifactTotalChanged', 'ReviewAction', 'ChangeTargetRefs']) {
@@ -428,6 +430,10 @@ function validateDashboardUx() {
   const hiddenCheckQuery = queryFromPanel(panelByTitle(evals, 'Benchmark hidden check packs'));
   for (const field of ['BenchmarkHiddenCheckPacks', 'mv-expand', 'BenchmarkHiddenChecksPassed', 'BenchmarkHiddenChecksFailed', 'HiddenTaskId', 'HiddenPackId', 'HiddenCommandCount']) {
     if (!hiddenCheckQuery.includes(field)) errors.push(`benchmark hidden check packs missing ${field}`);
+  }
+  const policyQuery = queryFromPanel(panelByTitle(evals, 'Benchmark policy review'));
+  for (const field of ['BenchmarkPolicyTasks', 'mv-expand', 'BenchmarkPolicyBlocks', 'BenchmarkPermissionProfiles', 'PolicyTaskId', 'PermissionProfile', 'BlockedRisks', 'ViolationRisks']) {
+    if (!policyQuery.includes(field)) errors.push(`benchmark policy review missing ${field}`);
   }
   const approvalQuery = queryFromPanel(panelByTitle(evals, 'Benchmark promotion approvals'));
   for (const field of ['BenchmarkRunId', 'BenchmarkApprovalStatus', 'BenchmarkApprovalCount', 'BenchmarkRequiredApprovals', 'BenchmarkApprovalTicket', 'ApprovalAction']) {
@@ -443,7 +449,7 @@ function validateDashboardUx() {
     if (!patternsQuery.includes(field)) errors.push(`recurring patterns panel missing ${field}`);
   }
   const recommendationsQuery = queryFromPanel(panelByTitle(insights, 'Recommendation artifacts'));
-  for (const field of ['RecommendationId', 'Action', 'ObservedPattern', 'NextAction', 'BenchmarkRunId', 'BenchmarkDecision', 'BenchmarkArtifactTotalChanged', 'BenchmarkArtifactFiles', 'BenchmarkHiddenCheckPacks', 'BenchmarkApprovalStatus', 'ChangeTargetRefs', 'OpenReplay', 'OpenPattern']) {
+  for (const field of ['RecommendationId', 'Action', 'ObservedPattern', 'NextAction', 'BenchmarkRunId', 'BenchmarkDecision', 'BenchmarkArtifactTotalChanged', 'BenchmarkArtifactFiles', 'BenchmarkHiddenCheckPacks', 'BenchmarkPolicyTasks', 'BenchmarkApprovalStatus', 'ChangeTargetRefs', 'OpenReplay', 'OpenPattern']) {
     if (!recommendationsQuery.includes(field)) errors.push(`recommendation artifacts panel missing ${field}`);
   }
 
@@ -463,6 +469,7 @@ function validateDashboardUx() {
       artifact_diff_review: true,
       artifact_file_review: true,
       hidden_check_review: true,
+      policy_review: true,
       promotion_approvals: true,
       pattern_drilldowns: true,
       empty_state_dashboards: emptyStateDashboards
