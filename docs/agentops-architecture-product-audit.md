@@ -24,7 +24,7 @@ The short answer to the product questions:
 - Does it make it simple to use? Simpler. The CLI now covers first-run setup, Azure/Grafana validation, smoke verification, latest-run summaries, ask-context bundles, and benchmark gates. The remaining complexity is cloud provisioning/binding and dashboard import automation.
 - Is it native to Copilot? Locally, almost. The shadow shim, bundled skills, custom agents, hooks, and MCP config all point in the right direction. The missing piece is a single Copilot-facing install/configure/check loop that hides infrastructure details until needed.
 - Can a coding agent monitor another agent through MCP? The architecture supports this concept. The repo includes read-only Azure Monitor MCP and Grafana MCP configs plus telemetry-investigator/optimizer agents. The current implementation is an evidence and prompt workflow, not yet a seamless page-context-aware "Ask AgentOps about this run" product.
-- Can it detect cheating in evals? Only at a starter level. The benchmark runner checks success commands, expected files, forbidden files, safety signals, content capture, tool failures, policy blocks, tokens, and cost. It does not yet provide robust anti-cheat isolation, hidden tests, network controls, rubric scoring, or semantic quality evaluation.
+- Can it detect cheating in evals? Only at a starter level. The benchmark runner checks success commands, expected files, forbidden files, safety signals, content capture, tool failures, policy blocks, tokens, and cost. It now has hidden checks, sealed fixture pack manifests, deterministic semantic/rubric checks, and pre-run allowed-tool policy blocking, but it does not yet provide robust OS-level anti-cheat isolation or network egress controls.
 
 My product judgment: keep the current metadata-first/privacy-first foundation. Do not add prompt/content capture as the default. To become a world-class Copilot AgentOps product, the next major move should be a session-first UI and setup wizard, not more scattered KQL. The user should land on "what happened, why, what changed, what should I do next" within one minute of running `copilot`.
 
@@ -818,9 +818,9 @@ What works well:
 Current anti-cheat limitations:
 
 - The starter task uses `--allow-all`, which is acceptable for an isolated tiny fixture but should not be the default posture for serious evals.
-- Permission profiles enforce broad-flag validation and read-only workspace immutability for benchmark fixture copies, task tool policies can reject observed risky tool telemetry, and the Evals & Quality dashboard surfaces metadata-only policy review. They do not yet enforce OS-level sandboxing.
+- Permission profiles enforce broad-flag validation and read-only workspace immutability for benchmark fixture copies. Task tool policies block explicitly allowed tools with forbidden risk classes before Copilot runs, can still reject observed risky tool telemetry after the run, and the Evals & Quality dashboard surfaces metadata-only policy review. They do not yet enforce OS-level sandboxing.
 - Hidden check packs exist as separate masked command packs, fixture seals can reject checksum drift, and reusable fixture seal pack manifests can distribute fixture checksum sets across tasks. The Evals & Quality dashboard surfaces metadata-only hidden pack review. External sealed fixture pack distribution is still missing.
-- There is no network isolation; network tool policies are report-time rejection signals, not egress prevention.
+- There is no network egress isolation; network tool policies can block explicit `--allow-tool` network allowances before execution, but they are not OS-level egress prevention.
 - Read-only benchmark profiles now block any workspace file change in the copied fixture.
 - Semantic evaluator adapters exist for deterministic file-content, regex, and file-rubric checks, and the Evals & Quality dashboard surfaces metadata-only semantic check review. There is no LLM judge scoring yet.
 - Candidate promotion gates can require approval evidence from an approval file, and the Evals & Quality dashboard now surfaces metadata-only approval review status. There is still no interactive team approval workflow yet.
@@ -1274,7 +1274,7 @@ Required work:
 - Expand benchmark schemas.
 - Add external sealed fixture pack distribution and import tooling.
 - Add LLM judge semantic evaluator adapters.
-- Expand enforced permission profiles to network and tool sandboxing.
+- Expand enforced permission profiles to OS-level network and tool sandboxing.
 - Add unified artifact content diff UI review for approved benchmark artifacts.
 - Add interactive team approval workflow for candidate promotion gates.
 - Add dashboards for eval scorecards and regressions.
