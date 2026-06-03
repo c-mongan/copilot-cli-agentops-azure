@@ -269,11 +269,12 @@ Keep deployed scheduled query rules disabled until thresholds are tuned. Use the
 ```bash
 node agentops-cli/src/index.js alert recommend --last 14d
 node agentops-cli/src/index.js alert tune-plan --last 14d --owner agentops-oncall
+node agentops-cli/src/index.js alert threshold-simulate --rule failed-spans --threshold 1 --owner agentops-oncall --last 14d
 node agentops-cli/src/index.js alert threshold-patch --rule failed-spans --threshold 1 --owner agentops-oncall --last 14d
 node agentops-cli/src/index.js alert resources --resource-group "${AZURE_RESOURCE_GROUP:-rg-agentops-dev}"
 ```
 
-`alert tune-plan` is proposal-only and summarizes reviewable threshold changes with Bicep patch targets. `alert threshold-patch` is also preview-only and prints a concrete `infra/bicep/alerts.bicep` diff for owner-approved direct threshold changes. `alert resources` is read-only and summarizes current scheduled-query rule enabled/disabled state plus attached action groups.
+`alert tune-plan` is proposal-only and summarizes reviewable threshold changes with Bicep patch targets. `alert threshold-simulate` is preview-only and prints metadata-only KQL that compares current and proposed alert windows. `alert threshold-patch` is also preview-only and prints a concrete `infra/bicep/alerts.bicep` diff for owner-approved direct threshold changes. `alert resources` is read-only and summarizes current scheduled-query rule enabled/disabled state plus attached action groups.
 
 ## Read-Only MCP Investigation Smoke Test
 

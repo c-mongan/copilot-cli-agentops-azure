@@ -84,6 +84,7 @@ const {
   alertPolicy,
   alertRecommendationQuery,
   alertRecommendations,
+  alertThresholdSimulation,
   alertThresholdPatch,
   alertRoutePlan,
   alertResourceState,
@@ -7628,6 +7629,44 @@ test('alert threshold patch previews concrete Bicep diffs without mutating', () 
   assert.throws(() => alertThresholdPatch({ rule: 'failed-spans', threshold: '1' }), /requires --owner/);
   assert.throws(() => alertThresholdPatch({ rule: 'failed-spans', owner: 'agentops-oncall' }), /requires --threshold/);
   assert.throws(() => alertThresholdPatch({ rule: 'failed-spans', threshold: '-1', owner: 'agentops-oncall' }), /non-negative number/);
+});
+
+test('alert threshold simulation compares current and proposed alert windows', () => {
+  const simulation = alertThresholdSimulation({
+    rule: 'failed-spans',
+    threshold: '1',
+    owner: 'agentops-oncall',
+    last: '21d'
+  });
+
+  assert.equal(simulation.schema_version, 'agentops.alert-threshold-simulation.v1');
+  assert.equal(simulation.mode, 'preview-only-threshold-simulation');
+  assert.equal(simulation.rule, 'failed-spans');
+  assert.equal(simulation.owner, 'agentops-oncall');
+  assert.equal(simulation.current_threshold, 0);
+  assert.equal(simulation.proposed_threshold, 1);
+  assert.equal(simulation.expected_effect, 'fewer-or-equal-alert-windows');
+  assert.equal(simulation.bicep_resource, 'failureAlert');
+  assert.match(simulation.evidence.simulation_query, /let proposed_threshold = 1;/);
+  assert.match(simulation.evidence.simulation_query, /let lookback = 21d;/);
+  assert.match(simulation.evidence.simulation_query, /current_alert_windows=countif\(TriggerValue > current_threshold\)/);
+  assert.match(simulation.evidence.simulation_query, /proposed_alert_windows=countif\(TriggerValue > proposed_threshold\)/);
+  assert.match(simulation.evidence.simulation_query, /TriggerValue=todouble\(Failures \+ ToolFailures\)/);
+  assert.match(simulation.evidence.simulation_query, /Rule=selected_rule/);
+  assert.match(simulation.evidence.threshold_recommendation_query, /let lookback = 21d;/);
+  assert.match(simulation.evidence.fired_alert_history, /let selected_rule = "failed-spans";/);
+  assert.ok(simulation.guardrails.some(item => item.includes('Preview-only')));
+  assert.ok(simulation.next.some(item => item.includes('threshold-patch')));
+  assert.doesNotMatch(JSON.stringify(simulation), /SECRET_FAKE_TEST_VALUE|raw transcript/);
+
+  const same = alertThresholdSimulation({ rule: 'content-capture', threshold: '0', owner: 'privacy-owner' });
+  assert.equal(same.expected_effect, 'same-threshold');
+  assert.match(same.evidence.simulation_query, /content-capture-window/);
+  assert.throws(() => alertThresholdSimulation({ rule: 'content-capture', threshold: '1', owner: 'privacy-owner' }), /keeps content-capture threshold at 0/);
+  assert.throws(() => alertThresholdSimulation({ rule: 'cost-spike', threshold: '2', owner: 'agentops-oncall' }), /requires --rule/);
+  assert.throws(() => alertThresholdSimulation({ rule: 'failed-spans', threshold: '1' }), /requires --owner/);
+  assert.throws(() => alertThresholdSimulation({ rule: 'failed-spans', owner: 'agentops-oncall' }), /requires --threshold/);
+  assert.throws(() => alertThresholdSimulation({ rule: 'failed-spans', threshold: '-1', owner: 'agentops-oncall' }), /non-negative number/);
 });
 
 test('alert resources summarize scheduled-query enabled state', () => {
