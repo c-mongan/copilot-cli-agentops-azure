@@ -231,6 +231,7 @@ Use the fixture path when Azure telemetry is unavailable:
 node agentops-cli/src/index.js live --file tests/sample-otel/tool-failure.jsonl
 node agentops-cli/src/index.js replay latest --file tests/sample-otel/tool-failure.jsonl
 node agentops-cli/src/index.js recommend latest --file tests/sample-otel/tool-failure.jsonl
+node agentops-cli/src/index.js run-summary generate --file tests/sample-otel/copilot-cli-wrapper-snapshot.jsonl --json
 ```
 
 Save repeat investigations locally:
