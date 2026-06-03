@@ -13,6 +13,7 @@ node agentops-cli/src/index.js alert handoff --rule <name> --session <conversati
 node agentops-cli/src/index.js alert route-plan --rule <name> --session <conversation-id> --owner <team-or-person> --target github-issue --output .agentops/alerts/<rule>-route.json --last 24h
 node agentops-cli/src/index.js alert route-github --repo <owner/repo> --rule <name> --session <conversation-id> --owner <github-login> --last 24h
 node agentops-cli/src/index.js alert route-azure-devops --org <url> --project <name> --rule <name> --session <conversation-id> --owner <user> --last 24h
+node agentops-cli/src/index.js alert action-group-plan --resource-group <rg> --name <action-group-name> --short-name <short> --owner <team-or-person> --email <address>
 node agentops-cli/src/index.js alert route-action-group --resource-group <rg> --scheduled-query <name> --action-group <id> --rule <name> --session <conversation-id> --owner <team-or-person> --last 24h
 node agentops-cli/src/index.js incident timeline --artifact .agentops/alerts/<rule>.json --output .agentops/incidents/<incident>.json
 ```
@@ -26,6 +27,6 @@ The history and detail commands provide metadata-only KQL and session links for 
 - ownership and escalation guardrails
 - review guardrails
 
-The route-plan command turns that safe handoff context into preview-only GitHub Issue or Azure DevOps Work Item payloads. The route-github, route-azure-devops, and route-action-group commands are dry-run by default and only create issues/work items or attach action groups when `--yes` is passed with destination config and an owner. The tune-plan, policy, handoff, route-plan, and incident timeline commands keep remediation as review placeholders; they do not edit alert thresholds or page anyone.
+The route-plan command turns that safe handoff context into preview-only GitHub Issue or Azure DevOps Work Item payloads. The action-group-plan command previews receiver setup for an Azure Monitor action group without creating it. The route-github, route-azure-devops, and route-action-group commands are dry-run by default and only create issues/work items or attach action groups when `--yes` is passed with destination config and an owner. The tune-plan, policy, handoff, route-plan, action-group-plan, and incident timeline commands keep remediation as review placeholders; they do not edit alert thresholds or page anyone.
 
 It must not call broad LLM tools, read unrelated secrets, mutate Azure resources broadly, or change repository files automatically.

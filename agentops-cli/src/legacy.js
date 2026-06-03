@@ -78,6 +78,7 @@ function usage() {
     'alert route-plan --rule <name> --session <conversation> [--owner <name>] [--target <github-issue|azure-devops-work-item>] [--output <json>]',
     'alert route-github --repo <owner/repo> --rule <name> --session <conversation> --owner <github-login> [--yes]',
     'alert route-azure-devops --org <url> --project <name> --rule <name> --session <conversation> --owner <user> [--yes]',
+    'alert action-group-plan --resource-group <rg> --name <name> --short-name <short> --owner <name> [--email <address>] [--webhook <url>]',
     'alert route-action-group --resource-group <rg> --scheduled-query <name> --action-group <id> --rule <name> --session <conversation> --owner <name> [--yes]',
     'incident timeline --artifact <json> [--artifact <json> ...] --output <json> [--incident <id>]',
     'lineage [--last <duration>]',
@@ -5093,6 +5094,84 @@ function alertAzureDevOpsWorkItemRoute({ rule, session, last = '24h', owners = [
   };
 }
 
+function alertActionGroupPlan({ resourceGroup, name, shortName, owners = [], emails = [], webhooks = [], location = 'global' } = {}) {
+  const normalizedResourceGroup = String(resourceGroup || '').trim();
+  if (!normalizedResourceGroup) throw new Error('alert action-group-plan requires --resource-group <rg>');
+
+  const normalizedName = String(name || '').trim();
+  if (!normalizedName) throw new Error('alert action-group-plan requires --name <action-group-name>');
+
+  const normalizedShortName = String(shortName || '').trim();
+  if (!normalizedShortName) throw new Error('alert action-group-plan requires --short-name <short>');
+  if (normalizedShortName.length > 12) throw new Error('alert action-group-plan --short-name must be 12 characters or fewer');
+
+  const normalizedOwners = owners.map(owner => String(owner || '').trim()).filter(Boolean);
+  if (normalizedOwners.length === 0) throw new Error('alert action-group-plan requires at least one --owner <name>');
+
+  const normalizedEmails = emails.map(email => String(email || '').trim()).filter(Boolean);
+  const normalizedWebhooks = webhooks.map(webhook => String(webhook || '').trim()).filter(Boolean);
+  if (normalizedEmails.length === 0 && normalizedWebhooks.length === 0) {
+    throw new Error('alert action-group-plan requires at least one --email <address> or --webhook <url>');
+  }
+
+  const emailReceivers = normalizedEmails.map((email, index) => ({
+    name: `email-${index + 1}`,
+    email_address: email
+  }));
+  const webhookReceivers = normalizedWebhooks.map((webhook, index) => ({
+    name: `webhook-${index + 1}`,
+    service_uri: webhook
+  }));
+
+  const args = [
+    'monitor',
+    'action-group',
+    'create',
+    '--resource-group',
+    normalizedResourceGroup,
+    '--name',
+    normalizedName,
+    '--short-name',
+    normalizedShortName,
+    '--location',
+    String(location || 'global').trim() || 'global'
+  ];
+
+  for (const receiver of emailReceivers) args.push('--action', 'email', receiver.name, receiver.email_address);
+  for (const receiver of webhookReceivers) args.push('--action', 'webhook', receiver.name, receiver.service_uri);
+
+  return {
+    schema_version: 'agentops.alert-action-group-plan.v1',
+    mode: 'preview-only-action-group-plan',
+    resource_group: normalizedResourceGroup,
+    action_group: {
+      name: normalizedName,
+      short_name: normalizedShortName,
+      location: String(location || 'global').trim() || 'global'
+    },
+    owner: normalizedOwners[0],
+    receivers: {
+      email: emailReceivers,
+      webhook: webhookReceivers
+    },
+    command: {
+      executable: 'az',
+      args
+    },
+    follow_up_route_command: `agentops alert route-action-group --resource-group ${normalizedResourceGroup} --scheduled-query <scheduled-query-name> --action-group <action-group-resource-id> --rule <rule> --session <conversation-id> --owner ${normalizedOwners[0]}`,
+    guardrails: [
+      'Preview-only: this command does not create or update Azure Monitor action groups.',
+      'Review receiver ownership, destination accuracy, and escalation policy before creating the action group.',
+      'Keep prompts, responses, tool arguments, tool results, and file contents out of receiver names and webhook URLs.'
+    ],
+    next: [
+      'Review the generated Azure CLI command with the action group owner.',
+      'Create the action group only after receiver approval.',
+      'Run alert route-action-group after the action group resource ID is approved.'
+    ]
+  };
+}
+
 function alertActionGroupRoute({ rule, session, last = '24h', owners = [], service = 'agentops', timezone = 'UTC', resourceGroup, scheduledQuery, actionGroups = [], enableAlert = false, yes = false, spawnSync = childProcess.spawnSync } = {}) {
   const normalizedResourceGroup = String(resourceGroup || '').trim();
   if (!normalizedResourceGroup) throw new Error('alert route-action-group requires --resource-group <rg>');
@@ -9133,6 +9212,25 @@ async function main(argv) {
       }), null, 2) + '\n');
       return;
     }
+    if (subcommand === 'action-group-plan') {
+      const owners = optionValues(alertArgs, '--owner');
+      const resourceGroup = optionValue(alertArgs, ['--resource-group', '-g']) || configuredCloudValues().resourceGroup;
+      const name = optionValue(alertArgs, ['--name']);
+      const shortName = optionValue(alertArgs, ['--short-name']);
+      const emails = optionValues(alertArgs, '--email');
+      const webhooks = optionValues(alertArgs, '--webhook');
+      const location = optionValue(alertArgs, ['--location']) || 'global';
+      process.stdout.write(JSON.stringify(alertActionGroupPlan({
+        resourceGroup,
+        name,
+        shortName,
+        owners,
+        emails,
+        webhooks,
+        location
+      }), null, 2) + '\n');
+      return;
+    }
     if (subcommand === 'route-action-group') {
       const rule = optionValue(alertArgs, ['--rule']);
       const session = optionValue(alertArgs, ['--session', '--conversation']);
@@ -9160,7 +9258,7 @@ async function main(argv) {
       }), null, 2) + '\n');
       return;
     }
-    throw new Error('alert currently supports: alert recommend, alert tune-plan, alert policy, alert resources, alert history, alert detail, alert action-plan, alert export, alert handoff, alert route-plan, alert route-github, alert route-azure-devops, alert route-action-group');
+    throw new Error('alert currently supports: alert recommend, alert tune-plan, alert policy, alert resources, alert history, alert detail, alert action-plan, alert export, alert handoff, alert route-plan, alert route-github, alert route-azure-devops, alert action-group-plan, alert route-action-group');
   }
 
   if (command === 'incident') {
@@ -9230,6 +9328,7 @@ module.exports = {
   alertDetail,
   alertActionPlan,
   alertArtifact,
+  alertActionGroupPlan,
   alertActionGroupRoute,
   alertIncidentTimeline,
   alertAzureDevOpsWorkItemRoute,
