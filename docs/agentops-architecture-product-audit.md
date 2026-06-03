@@ -825,7 +825,7 @@ Current anti-cheat limitations:
 - Semantic evaluator adapters exist for deterministic file-content, regex, file-rubric checks, and command-backed `llm-judge` scoring, and suites can configure reusable judge provider command templates for hosted judge CLIs. The CLI now includes hosted judge provider setup guidance with a non-mutating Azure Container Apps provisioning plan. The Evals & Quality dashboard surfaces metadata-only semantic check review. Hosted judge service deployment is still external to the benchmark runner.
 - Candidate promotion gates can require approval evidence from an approval file, named approver identities, approval counts, and approved external review metadata such as a GitHub PR, Azure DevOps PR, Jira ticket, or change workflow URL. The CLI can generate run-scoped approval evidence, and `benchmark report` / `benchmark compare` can now verify GitHub PR review evidence through `gh pr view`, Azure DevOps PR reviewer/status evidence through `az repos pr show`, plus Jira issue status evidence through the Jira REST API when `--verify-external-review` is set. The Evals & Quality dashboard surfaces metadata-only approval review status. Other change-management system API verification is still not integrated.
 - Suites can seal command harness files with `commandFileSeal`; benchmark runs now reject candidates that change sealed test scripts or command files in the copied fixture. This is not a replacement for OS-level sandboxing.
-- The Evals & Quality dashboard now includes metadata-only artifact diff counts, per-file artifact path review, hidden check pack review, policy review, and semantic check review for benchmark recommendations. The CLI can now review artifact file paths and explicit fixture-to-workspace content diffs for local benchmark runs; a Grafana-native file-content diff viewer is still missing.
+- The Evals & Quality dashboard now includes artifact diff counts, per-file artifact path review, capped artifact content diff previews, hidden check pack review, policy review, and semantic check review for benchmark recommendations. The CLI can now review artifact file paths and explicit fixture-to-workspace content diffs for local benchmark runs, and Grafana can review capped benchmark artifact content diff previews when those recommendation rows include `BenchmarkArtifactContentDiffs`.
 - Benchmark reports flag network and browser-control tool usage as external answer-source evidence for review. This is metadata-only and does not prove the answer came from an external source.
 - Benchmark comparisons now warn when an offline-improved candidate has worse Azure-backed token, cost, tool-failure, or safety telemetry. This is still a benchmark-run telemetry comparison, not a full production cohort analysis.
 
@@ -1275,7 +1275,7 @@ Required work:
 - Add signed fixture pack distribution guidance for rotating benchmark trust roots.
 - Add managed hosted judge service deployment for `llm-judge` semantic scoring beyond the current non-mutating Azure Container Apps provision plan.
 - Expand enforced permission profiles to OS-level network and tool sandboxing.
-- Add Grafana-native artifact content diff UI review for approved benchmark artifacts.
+- Expand Grafana-native artifact content diff review from capped previews into a full approved-artifact drilldown workflow.
 - Add remaining change-management workflow API integrations for candidate promotion gates beyond GitHub, Azure DevOps, and Jira.
 - Expand eval scorecard and regression dashboards as production usage reveals more review slices.
 
