@@ -70,6 +70,7 @@ const {
   agentopsStatusSummary,
   agentopsWorkflows,
   alertActionPlan,
+  alertArtifact,
   alertDetail,
   alertHistory,
   alertHistoryQuery,
@@ -7604,4 +7605,25 @@ test('alert detail links one alert session to history and action plan', () => {
   assert.match(detail.history_query, /Conversation == "session-123"/);
   assert.equal(detail.session_link.conversation, 'session-123');
   assert.match(detail.action_plan_command, /alert action-plan --rule runaway-tool-loop --session session-123 --last 2h/);
+});
+
+test('alert artifact persists metadata-only incident evidence', () => {
+  const artifact = alertArtifact({
+    rule: 'failed-spans',
+    session: 'session-123',
+    last: '4h',
+    createdAt: '2026-06-03T12:00:00.000Z'
+  });
+
+  assert.equal(artifact.schema_version, 'agentops.alert-artifact.v1');
+  assert.equal(artifact.created_at, '2026-06-03T12:00:00.000Z');
+  assert.equal(artifact.rule, 'failed-spans');
+  assert.equal(artifact.session, 'session-123');
+  assert.equal(artifact.privacy.mode, 'metadata-only');
+  assert.ok(artifact.privacy.excluded.includes('prompts'));
+  assert.match(artifact.evidence.history_query, /Conversation == "session-123"/);
+  assert.equal(artifact.evidence.session_link.conversation, 'session-123');
+  assert.match(artifact.evidence.threshold_evidence_query, /let lookback = 4h;/);
+  assert.equal(artifact.action_plan.safe_metadata.current_threshold, 0);
+  assert.equal(artifact.status.state, 'review');
 });

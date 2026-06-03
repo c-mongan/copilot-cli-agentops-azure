@@ -70,6 +70,7 @@ function usage() {
     'alert history --rule <name> [--last <duration>]',
     'alert detail --rule <name> --session <conversation> [--last <duration>]',
     'alert action-plan --rule <name> --session <conversation> [--last <duration>]',
+    'alert export --rule <name> --session <conversation> --output <json> [--last <duration>]',
     'lineage [--last <duration>]',
     'policy [--last <duration>]',
     'mcp [--last <duration>]',
@@ -4879,7 +4880,8 @@ const {
   alertHistoryQuery,
   alertHistory,
   alertDetail,
-  alertActionPlan
+  alertActionPlan,
+  alertArtifact
 } = createAlerts({
   workspaceId,
   baseFilter,
@@ -8707,7 +8709,20 @@ async function main(argv) {
       process.stdout.write(JSON.stringify(alertDetail({ rule, session, last }), null, 2) + '\n');
       return;
     }
-    throw new Error('alert currently supports: alert recommend, alert history, alert detail, alert action-plan');
+    if (subcommand === 'export') {
+      const rule = optionValue(alertArgs, ['--rule']);
+      const session = optionValue(alertArgs, ['--session', '--conversation']);
+      const output = optionValue(alertArgs, ['--output', '--out']);
+      if (!output) throw new Error('alert export requires --output <json>');
+      const last = parseLastArg(alertArgs, '24h');
+      const artifact = alertArtifact({ rule, session, last });
+      const outputPath = path.resolve(process.cwd(), output);
+      fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+      fs.writeFileSync(outputPath, `${JSON.stringify(artifact, null, 2)}\n`);
+      process.stdout.write(JSON.stringify({ output: outputPath, artifact }, null, 2) + '\n');
+      return;
+    }
+    throw new Error('alert currently supports: alert recommend, alert history, alert detail, alert action-plan, alert export');
   }
 
   if (command === 'lineage') {
@@ -8754,6 +8769,7 @@ module.exports = {
   alertHistory,
   alertDetail,
   alertActionPlan,
+  alertArtifact,
   askAgentOpsContext,
   attributionUsageQuery,
   benchmarkCheatSignals,
