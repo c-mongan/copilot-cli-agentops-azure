@@ -89,6 +89,14 @@ agentops experimental custom emit --event agent.content.signal --agent debug-age
 
 Keep raw prompt, response, tool argument, and file content out of these attributes unless you are doing a trusted local debugging session.
 
+For config or release changes that may explain a regression, emit a metadata-only annotation:
+
+```bash
+agentops annotation config-change --component skill --target agentops-latest-run --change-type updated --change-id change-123 --version 2026.06.03 --dry-run
+```
+
+This emits `agentops.config.changed` with `content.capture.enabled=false`. Use `--run-id`, `--session`, or `--trace-id` to attach the annotation to a specific run.
+
 For JSONL-producing agents:
 
 ```bash

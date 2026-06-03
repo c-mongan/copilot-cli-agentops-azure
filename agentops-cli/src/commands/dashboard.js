@@ -262,6 +262,7 @@ const v2KqlSmokePanels = [
   { uid: 'agentops-v2-insights-regressions', panel: 'Recurring patterns', requireRows: false },
   { uid: 'agentops-v2-insights-regressions', panel: 'Eval regression queue', requireRows: false },
   { uid: 'agentops-v2-insights-regressions', panel: 'Recommendation artifacts', requireRows: false },
+  { uid: 'agentops-v2-insights-regressions', panel: 'Config change annotations', requireRows: false },
   { uid: 'agentops-v2-collector-health', panel: 'Collector checks', requireRows: true }
 ];
 
@@ -488,6 +489,7 @@ function validateDashboardUx() {
   if (!insightsTitles.has('Recurring patterns')) errors.push('insights dashboard missing Recurring patterns panel');
   if (!insightsTitles.has('Eval regression queue')) errors.push('insights dashboard missing Eval regression queue panel');
   if (!insightsTitles.has('Recommendation artifacts')) errors.push('insights dashboard missing Recommendation artifacts panel');
+  if (!insightsTitles.has('Config change annotations')) errors.push('insights dashboard missing Config change annotations panel');
   const patternsQuery = queryFromPanel(panelByTitle(insights, 'Recurring patterns'));
   for (const field of ['PatternId', 'PatternRuns', 'PatternDimension', 'PatternKey', 'OpenPattern', 'OpenReplay']) {
     if (!patternsQuery.includes(field)) errors.push(`recurring patterns panel missing ${field}`);
@@ -499,6 +501,10 @@ function validateDashboardUx() {
   const evalRegressionQueueQuery = queryFromPanel(panelByTitle(insights, 'Eval regression queue'));
   for (const field of ['Source', 'EvalBucket', 'BaselineValue', 'CurrentValue', 'Summary', 'NextAction', 'OpenReplay', 'OpenPattern']) {
     if (!evalRegressionQueueQuery.includes(field)) errors.push(`eval regression queue missing ${field}`);
+  }
+  const configAnnotationsQuery = queryFromPanel(panelByTitle(insights, 'Config change annotations'));
+  for (const field of ['agentops.config.changed', 'agentops.custom.annotation_type', 'ChangeComponent', 'ChangeTarget', 'ChangeType', 'ChangeId', 'Version']) {
+    if (!configAnnotationsQuery.includes(field)) errors.push(`config change annotations missing ${field}`);
   }
 
   return {
