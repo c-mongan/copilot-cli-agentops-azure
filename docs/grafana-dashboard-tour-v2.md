@@ -13,7 +13,8 @@ It shows:
 - recent failed runs;
 - recommended next actions from insight rows;
 - expensive runs;
-- GitHub outcome summary.
+- GitHub outcome summary;
+- shared saved investigations exported from `agentops saved-view export`.
 
 Click a `RunId` to open Run Replay. Click a model, repo hash, tool, skill, or sub-agent to keep drilling with the same time range.
 

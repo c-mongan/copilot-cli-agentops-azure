@@ -209,6 +209,10 @@ function tablePanel(id, title, x, y, w, h, query, links = []) {
         {
           matcher: { id: 'byName', options: 'OpenPattern' },
           properties: [{ id: 'links', value: [{ title: 'Open Pattern', url: '/d/agentops-v2-insights-regressions?var-pattern_key=${__data.fields.PatternKey}&${__url_time_range}', targetBlank: false }] }]
+        },
+        {
+          matcher: { id: 'byName', options: 'OpenSavedView' },
+          properties: [{ id: 'links', value: [{ title: 'Open saved view', url: '${__data.fields.Url}', targetBlank: true }] }]
         }
       ]
     },
@@ -615,6 +619,7 @@ const q = {
   github: `union isfuzzy=true (AgentOpsGithubOutcomes_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo())), (${compatGithubOutcomes()}) ${githubNormalize()} ${githubFilters()}`,
   insights: `union isfuzzy=true (AgentOpsInsights_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo())), (${compatInsights()}) ${insightsNormalize()} ${insightsFilters()}`,
   recommendations: `union isfuzzy=true (AgentOpsRecommendations_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo())), (${compatRecommendations()}) ${recommendationsNormalize()} ${recommendationsFilters()}`,
+  savedViews: `union isfuzzy=true (AgentOpsSavedViews_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo())), (print TimeGenerated=now(), SavedViewId='', Name='', Description='', Url='', QueryHash='', Tags=dynamic([]), SessionId='', CreatedAt='' | where false)`,
   health: `union isfuzzy=true (AgentOpsCollectorHealth_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo())), (${compatHealth()}) | where ('$privacy_mode' == '__all' or tostring(column_ifexists('PrivacyMode', '')) == '$privacy_mode')`,
   content: `union isfuzzy=true (AgentOpsContent_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo())), (print TimeGenerated=now(), RunId='', SessionId='', TraceId='', SpanId='', TurnIndex=long(null), Role='', ContentKind='', CaptureMode='', RedactionStatus='', ModelActual='', ToolName='', PromptText='', ResponseText='', ContentHash='', ContentLength=long(null) | where false) | extend PromptText=tostring(column_ifexists('PromptText', '')), ResponseText=tostring(column_ifexists('ResponseText', '')), CaptureMode=tostring(column_ifexists('CaptureMode', '')), RedactionStatus=tostring(column_ifexists('RedactionStatus', '')) | extend MessageText=case(isnotempty(PromptText), PromptText, isnotempty(ResponseText), ResponseText, '') | extend ViewerNote=case(isempty(MessageText), 'no captured content', CaptureMode == 'full', 'explicit opt-in: full content row', CaptureMode == 'redacted', 'explicit opt-in: redacted content row', 'explicit opt-in content row') ${contentFilters()}`
 };
@@ -640,7 +645,8 @@ const dashboards = {
     tablePanel(10, 'Recent failed runs', 0, 14, 12, 9, `${q.runSummary} | where OutcomeStatus != 'success' | project TimeGenerated, RunId, SessionId, TraceId, Surface, RepoHash, TaskType, AgentName, SkillName, SubAgentName, ModelActual, OutcomeStatus, OutcomeReason, DurationMs, EstimatedCostUsd, RiskScore | order by TimeGenerated desc | take 50`),
     tablePanel(11, 'Recommended next actions', 12, 14, 12, 9, `${q.recommendations} | extend OpenReplay='Replay', OpenPattern=iff(isnotempty(PatternKey), 'Pattern', '') | project TimeGenerated, Severity, Action, ObservedPattern, NextAction, RunId, TraceId, PatternKey, PatternRuns, BenchmarkRunId, BenchmarkDecision, ChangeTargetRefs, DashboardCount, OpenReplay, OpenPattern | order by TimeGenerated desc | take 50`),
     tablePanel(12, 'Most expensive runs', 0, 23, 12, 9, `${q.runSummary} | project TimeGenerated, RunId, RepoHash, TaskType, ModelActual, OutcomeStatus, EstimatedCostUsd, InputTokens, OutputTokens | order by EstimatedCostUsd desc | take 50`),
-    tablePanel(13, 'GitHub outcomes summary', 12, 23, 12, 9, `${q.github} | project TimeGenerated, RunId, RepoHash, PrOpened, PrMerged, PrReverted, CiStatus, TimeToPrMinutes, TimeToMergeMinutes, ReviewCommentCount, FilesChangedCount | order by TimeGenerated desc | take 50`)
+    tablePanel(13, 'GitHub outcomes summary', 12, 23, 12, 9, `${q.github} | project TimeGenerated, RunId, RepoHash, PrOpened, PrMerged, PrReverted, CiStatus, TimeToPrMinutes, TimeToMergeMinutes, ReviewCommentCount, FilesChangedCount | order by TimeGenerated desc | take 50`),
+    tablePanel(21, 'Saved investigations', 0, 32, 24, 8, `${q.savedViews} | extend TagsText=strcat_array(Tags, ', '), OpenSavedView=iff(isnotempty(Url), 'Open', ''), OpenReplay=iff(isnotempty(SessionId), 'Replay', '') | project TimeGenerated, Name, Description, TagsText, SessionId, QueryHash, CreatedAt, Url, OpenSavedView, OpenReplay | order by TimeGenerated desc | take 100`)
   ]),
 
   '02-runs-explorer.json': dashboard('agentops-v2-runs-explorer', 'Runs Explorer', [
