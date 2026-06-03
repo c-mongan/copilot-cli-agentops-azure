@@ -67,6 +67,7 @@ function usage() {
     'attribution [--last <duration>]',
     'permission-friction [--last <duration>]',
     'alert recommend [--last <duration>]',
+    'alert action-plan --rule <name> --session <conversation> [--last <duration>]',
     'lineage [--last <duration>]',
     'policy [--last <duration>]',
     'mcp [--last <duration>]',
@@ -4872,12 +4873,14 @@ function latestSummaryFromArgs(args, fallbackLast = '7d') {
 
 const {
   alertRecommendationQuery,
-  alertRecommendations
+  alertRecommendations,
+  alertActionPlan
 } = createAlerts({
   workspaceId,
   baseFilter,
   sessionKey,
-  validateKqlDuration
+  validateKqlDuration,
+  buildLink
 });
 
 const {
@@ -8674,10 +8677,19 @@ async function main(argv) {
 
   if (command === 'alert') {
     const [subcommand, ...alertArgs] = args;
-    if (subcommand !== 'recommend') throw new Error('alert currently supports: alert recommend');
-    const last = parseLastArg(alertArgs, '14d');
-    process.stdout.write(JSON.stringify(alertRecommendations(last), null, 2) + '\n');
-    return;
+    if (subcommand === 'recommend') {
+      const last = parseLastArg(alertArgs, '14d');
+      process.stdout.write(JSON.stringify(alertRecommendations(last), null, 2) + '\n');
+      return;
+    }
+    if (subcommand === 'action-plan') {
+      const rule = optionValue(alertArgs, ['--rule']);
+      const session = optionValue(alertArgs, ['--session', '--conversation']);
+      const last = parseLastArg(alertArgs, '24h');
+      process.stdout.write(JSON.stringify(alertActionPlan({ rule, session, last }), null, 2) + '\n');
+      return;
+    }
+    throw new Error('alert currently supports: alert recommend, alert action-plan');
   }
 
   if (command === 'lineage') {
@@ -8720,6 +8732,7 @@ module.exports = {
   agentopsWorkflows,
   alertRecommendationQuery,
   alertRecommendations,
+  alertActionPlan,
   askAgentOpsContext,
   attributionUsageQuery,
   benchmarkCheatSignals,

@@ -69,6 +69,7 @@ const {
   agentopsLiveReplaySmoke,
   agentopsStatusSummary,
   agentopsWorkflows,
+  alertActionPlan,
   alertRecommendationQuery,
   alertRecommendations,
   askAgentOpsContext,
@@ -7543,4 +7544,19 @@ test('alert recommendations expose proposal-only threshold evidence', () => {
   assert.match(recommendations.evidence_query, /max_credits/);
   assert.match(recommendations.evidence_query, /max_tool_calls/);
   assert.match(alertRecommendationQuery('7d'), /p99_aiu/);
+});
+
+test('alert action plan exposes deterministic notification payload without actioning', () => {
+  const plan = alertActionPlan({ rule: 'content-capture', session: 'session-123', last: '6h' });
+
+  assert.equal(plan.mode, 'deterministic-plan');
+  assert.equal(plan.rule, 'content-capture');
+  assert.equal(plan.severity, 'critical');
+  assert.equal(plan.session, 'session-123');
+  assert.equal(plan.links.session.conversation, 'session-123');
+  assert.match(plan.links.session.query, /session-123/);
+  assert.match(plan.links.threshold_evidence_query, /let lookback = 6h;/);
+  assert.ok(plan.action_targets.some(target => target.type === 'github-issue' && target.action === 'create'));
+  assert.ok(plan.action_targets.some(target => target.type === 'azure-devops-work-item' && target.action === 'create'));
+  assert.ok(plan.guardrails.some(item => item.includes('Do not include prompts')));
 });

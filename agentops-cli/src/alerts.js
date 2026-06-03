@@ -1,5 +1,5 @@
 // Builds KQL queries that recommend alert thresholds based on recent telemetry.
-function createAlerts({ workspaceId, baseFilter, sessionKey, validateKqlDuration }) {
+function createAlerts({ workspaceId, baseFilter, sessionKey, validateKqlDuration, buildLink }) {
   function alertRecommendationQuery(last = '14d') {
     const lookback = validateKqlDuration(last);
     return `let lookback = ${lookback};
@@ -120,9 +120,64 @@ union
     };
   }
 
+  function alertActionPlan({ rule, session, last = '24h' }) {
+    const lookback = validateKqlDuration(last);
+    const normalizedRule = String(rule || '').trim();
+    const normalizedSession = String(session || '').trim();
+    const rules = alertRecommendations(lookback).rules;
+    const matchedRule = rules.find(candidate => candidate.name === normalizedRule);
+
+    if (!matchedRule) throw new Error(`alert action-plan requires --rule ${rules.map(candidate => candidate.name).join('|')}`);
+    if (!normalizedSession) throw new Error('alert action-plan requires --session <conversation>');
+
+    const sessionLink = buildLink
+      ? buildLink('session', normalizedSession, { last: lookback })
+      : { kind: 'session', conversation: normalizedSession, workspace_id: workspaceId };
+
+    return {
+      workspace_id: workspaceId,
+      mode: 'deterministic-plan',
+      rule: matchedRule.name,
+      last: lookback,
+      session: normalizedSession,
+      severity: matchedRule.name === 'content-capture' ? 'critical' : 'review',
+      title: `AgentOps alert: ${matchedRule.name} for session ${normalizedSession}`,
+      safe_metadata: {
+        signal: matchedRule.signal,
+        current_threshold: matchedRule.current_threshold,
+        suggested_threshold: matchedRule.suggested_threshold,
+        rollout: matchedRule.rollout
+      },
+      links: {
+        session: sessionLink,
+        threshold_evidence_query: alertRecommendationQuery(lookback)
+      },
+      action_targets: [
+        {
+          type: 'github-issue',
+          action: 'create',
+          fields: ['title', 'rule', 'session', 'safe_metadata', 'session.grafana_url', 'session.query'],
+          note: 'Create only after reviewing the alert and assigning an owner.'
+        },
+        {
+          type: 'azure-devops-work-item',
+          action: 'create',
+          fields: ['title', 'rule', 'session', 'safe_metadata', 'session.grafana_url', 'session.query'],
+          note: 'Use for teams that track production incidents in Azure Boards.'
+        }
+      ],
+      guardrails: [
+        'Do not include prompts, responses, tool arguments, tool results, or raw file contents.',
+        'Do not edit repositories, Azure resources, thresholds, or alert rules from this plan.',
+        'Do not invoke broad LLM tools automatically; use the linked KQL and Grafana evidence first.'
+      ]
+    };
+  }
+
   return {
     alertRecommendationQuery,
-    alertRecommendations
+    alertRecommendations,
+    alertActionPlan
   };
 }
 
