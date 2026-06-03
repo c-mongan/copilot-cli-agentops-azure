@@ -13,6 +13,7 @@ const requiredColumns = {
   AgentOpsGithubOutcomes_CL: ['RunId', 'RepoHash', 'PrOpened', 'CiStatus'],
   AgentOpsInsights_CL: ['InsightType', 'Severity', 'RunId', 'SuggestedNextStep'],
   AgentOpsRecommendations_CL: ['TimeGenerated', 'RecommendationId', 'Action', 'Severity', 'ObservedPattern', 'NextAction'],
+  AgentOpsSavedViews_CL: ['TimeGenerated', 'SavedViewId', 'Name', 'Url', 'QueryHash'],
   AgentOpsCollectorHealth_CL: ['Component', 'Status', 'SchemaVersion'],
   AgentOpsContent_CL: ['TimeGenerated', 'RunId', 'SessionId', 'TraceId', 'Role', 'ContentKind', 'CaptureMode']
 };
@@ -25,6 +26,7 @@ const optionalEmptyTables = new Set([
   'AgentOpsGithubOutcomes_CL',
   'AgentOpsInsights_CL',
   'AgentOpsRecommendations_CL',
+  'AgentOpsSavedViews_CL',
   'AgentOpsCollectorHealth_CL',
   'AgentOpsContent_CL'
 ]);

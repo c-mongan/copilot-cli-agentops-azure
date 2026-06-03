@@ -7437,11 +7437,13 @@ test('real Copilot OTel snapshot preserves wrapper envelope contract', () => {
   assert.equal(mcp.ResultSizeBytes, 2048);
 });
 
-test('saved views add, list, show, and open durable investigations', () => {
+test('saved views add, list, show, open, and export durable investigations', () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-views-test-'));
   const viewsPath = path.join(tempDir, 'views.json');
+  const exportDir = path.join(tempDir, 'export');
 
   try {
+    fs.writeFileSync(path.join(tempDir, 'query.kql'), 'AgentOpsRunSummary_CL | take 1\n');
     const addOptions = parseSavedViewArgs([
       'add',
       'cost-spike',
@@ -7449,6 +7451,8 @@ test('saved views add, list, show, and open durable investigations', () => {
       'https://grafana.example/d/agentops-session-detail',
       '--description',
       'High-cost run',
+      '--query-file',
+      path.join(tempDir, 'query.kql'),
       '--tag',
       'cost'
     ]);
@@ -7456,11 +7460,22 @@ test('saved views add, list, show, and open durable investigations', () => {
     const listed = savedViewCommand(parseSavedViewArgs(['list']), viewsPath);
     const shown = savedViewCommand(parseSavedViewArgs(['show', 'cost-spike']), viewsPath);
     const opened = savedViewCommand(parseSavedViewArgs(['open', 'cost-spike']), viewsPath);
+    const exported = savedViewCommand(parseSavedViewArgs(['export', '--out', exportDir]), viewsPath);
+    const exportedRows = fs.readFileSync(exported.export.file, 'utf8')
+      .trim()
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .map(line => JSON.parse(line));
 
     assert.equal(added.saved.name, 'cost-spike');
     assert.equal(listed.views.length, 1);
     assert.deepEqual(shown.view.tags, ['cost']);
     assert.equal(opened.url, 'https://grafana.example/d/agentops-session-detail');
+    assert.equal(exported.export.rows_written, 1);
+    assert.equal(exportedRows[0].Name, 'cost-spike');
+    assert.match(exportedRows[0].QueryHash, /^query_/);
+    assert.equal(exportedRows[0].Tags[0], 'cost');
+    assert.doesNotMatch(JSON.stringify(exportedRows), /AgentOpsRunSummary_CL/);
     assert.equal(fs.existsSync(viewsPath), true);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });

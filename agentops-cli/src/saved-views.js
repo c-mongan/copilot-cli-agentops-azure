@@ -1,4 +1,5 @@
 const fs = require('node:fs');
+const crypto = require('node:crypto');
 const path = require('node:path');
 
 function createSavedViews({ savedViewsPath, readJson, buildLink }) {
@@ -16,8 +17,10 @@ function createSavedViews({ savedViewsPath, readJson, buildLink }) {
   }
 
   function parseSavedViewArgs(args) {
-    const [subcommand, name, ...rest] = args;
-    if (!subcommand) throw new Error('saved-view requires add, list, show, or open');
+    const [subcommand, rawName, ...rawRest] = args;
+    if (!subcommand) throw new Error('saved-view requires add, list, show, open, or export');
+    const name = rawName && !rawName.startsWith('--') ? rawName : undefined;
+    const rest = name ? rawRest : [rawName, ...rawRest].filter(Boolean);
     const options = { subcommand, name, tags: [] };
 
     for (let index = 0; index < rest.length; index += 1) {
@@ -37,6 +40,11 @@ function createSavedViews({ savedViewsPath, readJson, buildLink }) {
       } else if (arg === '--tag') {
         options.tags.push(rest[index + 1]);
         index += 1;
+      } else if (arg === '--out') {
+        const outDir = rest[index + 1];
+        if (!outDir) throw new Error('--out requires a directory');
+        options.outDir = path.resolve(outDir);
+        index += 1;
       } else if (arg === '--session') {
         const sessionId = rest[index + 1];
         if (!sessionId) throw new Error('--session requires a session id');
@@ -53,6 +61,41 @@ function createSavedViews({ savedViewsPath, readJson, buildLink }) {
     return options;
   }
 
+  function stableId(value, prefix = 'view') {
+    return `${prefix}_${crypto.createHash('sha256').update(String(value)).digest('hex').slice(0, 16)}`;
+  }
+
+  function savedViewRow(view, timeGenerated = new Date().toISOString()) {
+    return {
+      TimeGenerated: timeGenerated,
+      SavedViewId: stableId([view.name, view.url, view.session || '', view.createdAt || ''].join('|')),
+      Name: view.name || '',
+      Description: view.description || '',
+      Url: view.url || '',
+      QueryHash: view.query ? stableId(view.query, 'query') : '',
+      Tags: Array.isArray(view.tags) ? view.tags : [],
+      SessionId: view.session || '',
+      CreatedAt: view.createdAt || ''
+    };
+  }
+
+  function exportSavedViews(views, outDir) {
+    const absoluteDir = path.resolve(outDir);
+    fs.mkdirSync(absoluteDir, { recursive: true });
+    const rows = views.map(view => savedViewRow(view));
+    const file = path.join(absoluteDir, 'AgentOpsSavedViews_CL.jsonl');
+    fs.writeFileSync(file, `${rows.map(row => JSON.stringify(row)).join('\n')}${rows.length ? '\n' : ''}`);
+    const manifest = path.join(absoluteDir, 'saved-views-manifest.json');
+    fs.writeFileSync(manifest, `${JSON.stringify({
+      generated_at: new Date().toISOString(),
+      table: 'AgentOpsSavedViews_CL',
+      file,
+      rows_written: rows.length,
+      privacy: 'metadata-only; query text is represented by QueryHash and is not exported'
+    }, null, 2)}\n`);
+    return { out_dir: absoluteDir, file, manifest, rows_written: rows.length, rows };
+  }
+
   function savedViewCommand(options, filePath = savedViewsPath) {
     const payload = readSavedViews(filePath);
 
@@ -65,6 +108,15 @@ function createSavedViews({ savedViewsPath, readJson, buildLink }) {
           tags: view.tags || [],
           createdAt: view.createdAt
         }))
+      };
+    }
+
+    if (options.subcommand === 'export') {
+      const views = options.name ? payload.views.filter(item => item.name === options.name) : payload.views;
+      if (options.name && views.length === 0) throw new Error(`Unknown saved view: ${options.name}`);
+      return {
+        path: filePath,
+        export: exportSavedViews(views, options.outDir || path.join(path.dirname(filePath), 'saved-views-export'))
       };
     }
 
@@ -92,13 +144,15 @@ function createSavedViews({ savedViewsPath, readJson, buildLink }) {
 
     if (options.subcommand === 'show') return { path: filePath, view };
     if (options.subcommand === 'open') return { name: view.name, url: view.url };
-    throw new Error('saved-view requires add, list, show, or open');
+    throw new Error('saved-view requires add, list, show, open, or export');
   }
 
   return {
+    exportSavedViews,
     parseSavedViewArgs,
     readSavedViews,
-    savedViewCommand
+    savedViewCommand,
+    savedViewRow
   };
 }
 
