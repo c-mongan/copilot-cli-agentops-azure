@@ -17,6 +17,7 @@ const { classifyToolName, summarizeAllowedTools } = require('../src/lib/copilot/
 const { auditCopilotHelpFlags, parseCopilotHelpFlags, trackedFlags } = require('../src/lib/copilot/flag-contract');
 const { sharedTerms: wrapperSharedTerms, validateWrapperContract, wrapperFiles } = require('../src/lib/copilot/wrapper-contract');
 const privacy = require('../src/lib/privacy');
+const { collectorReleaseContract, readCollectorRelease } = require('../src/lib/collector-release');
 const { validateAgentRun, validateMcpSpan } = require('../src/lib/schema/agent-run-schema');
 const { recommendationSchemaDocument, validateRecommendationRow } = require('../src/lib/schema/recommendation-schema');
 const { normalizeGenAiAttributes } = require('../src/lib/otel/genai-normalizer');
@@ -263,6 +264,16 @@ test('collector binary installer maps release packages without Docker', () => {
   assert.equal(win.fileName, 'otelcol-contrib_0.151.0_windows_amd64.tar.gz');
   assert.equal(win.binaryName, 'otelcol-contrib.exe');
   assert.match(win.checksumUrl, /opentelemetry-collector-releases_otelcol-contrib_windows_checksums\.txt$/);
+});
+
+test('collector release cadence manifest matches install and compose defaults', () => {
+  const release = readCollectorRelease();
+  const contract = collectorReleaseContract(root);
+
+  assert.equal(release.version, collectorManager.defaultCollectorVersion);
+  assert.equal(contract.ok, true, contract.missing.join('\n'));
+  assert.equal(contract.image, `otel/opentelemetry-collector-contrib:${release.version}`);
+  assert.ok(release.upgrade_gate.some(command => command.includes('collector validate')));
 });
 
 test('collector binary checksum verification rejects tampered archives', () => {
@@ -4126,6 +4137,7 @@ test('doctor checks Azure collector config parity and pinned image defaults', as
   const byName = Object.fromEntries(summary.checks.map(check => [check.name, check]));
 
   assert.equal(byName['collector-image-pinned'].ok, true);
+  assert.equal(byName['collector-release-cadence'].ok, true);
   assert.equal(byName['collector-azure-localhost-bindings'].ok, true);
   assert.equal(byName['collector-azure-config-privacy-parity'].ok, true);
 });

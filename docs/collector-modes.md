@@ -23,10 +23,21 @@ To install only the Collector binary:
 agentops collector install-binary
 ```
 
-AgentOps downloads the tested `otelcol-contrib` release into `~/.agentops/collector/bin/`, verifies its SHA256 checksum from the official release checksum file, and validates the strict config before reporting success. Override the version only when testing a Collector upgrade:
+AgentOps downloads the tested `otelcol-contrib` release into `~/.agentops/collector/bin/`, verifies its SHA256 checksum from the official release checksum file, and validates the strict config before reporting success. The tested version and quarterly review date live in `collector/release-cadence.json`; `agentops doctor` checks that install scripts and Docker Compose defaults still match that manifest. Override the version only when testing a Collector upgrade:
 
 ```bash
 agentops collector install-binary --version 0.151.0 --force
+```
+
+## Pin Review
+
+Review the Collector pin on the cadence in `collector/release-cadence.json`. For an upgrade, update the manifest, Docker Compose defaults, installer defaults, and this page together, then run:
+
+```bash
+agentops collector install-binary --version <version> --force
+agentops collector validate --mode binary --privacy strict --json
+agentops collector smoke --privacy strict --poison --json
+npm --prefix agentops-cli test
 ```
 
 ## Commands

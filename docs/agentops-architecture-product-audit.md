@@ -429,6 +429,7 @@ What works well:
 - The privacy processor deletes known high-risk GenAI and HTTP content fields.
 - The field catalog query now labels exact content keys and unknown sensitive key families for review.
 - Collector health now counts queue, retry, timeout, drop, and backpressure log signals instead of only generic collector errors.
+- Collector image and binary defaults now have a release-cadence manifest checked by `doctor`.
 - Application Insights connection string is fetched at runtime and not committed.
 - Content capture is off in wrapper defaults and checked by `doctor`.
 - The design deliberately avoids capturing prompts, code, tool args, tool outputs, URLs, and file contents.
@@ -439,7 +440,7 @@ Both local and Azure Monitor collector configs now hash `code.filepath`. The rem
 
 Current gaps:
 
-- The collector image is pinned by default and checked by `doctor`, but the chosen pin still needs an intentional release cadence.
+- The collector image is pinned by default, checked by `doctor`, and tied to a quarterly release-cadence manifest; actual upgrades still need scheduled review work.
 - Collector health now has a local health endpoint, Data Quality dashboard panel, and log-derived queue/drop/backpressure counters, but it still does not scrape dedicated collector exporter metrics.
 - `validate-collector` checks OTLP reachability plus the health endpoint; Azure export is proven by `agentops smoke --wait ...`.
 - `doctor` checks local collector localhost endpoints, Azure Monitor compose localhost bindings, pinned image defaults, and Azure Monitor privacy/exporter config essentials.
@@ -447,7 +448,7 @@ Current gaps:
 
 Product recommendation:
 
-- Keep collector image pins fresh through releases.
+- Keep executing the Collector pin review cadence and update pins through a tested release workflow.
 - Expand collector health telemetry from log-derived queue/drop/backpressure counters into dedicated collector exporter metrics when those are available.
 - Continue tightening toward a stricter allowlist mode for exported attributes and review field-catalog content-risk findings during releases.
 

@@ -68,6 +68,7 @@ function productAudit(options = {}) {
     'collector/processors/genai-normalizer.yaml',
     'collector/processors/mcp-normalizer.yaml',
     'collector/processors/span-to-run-summary.yaml',
+    'collector/release-cadence.json',
     'collector/tests/privacy-poison-fixtures/content-poison.json',
     'agentops-cli/src/commands/content.js',
     'agentops-cli/src/lib/privacy.js',

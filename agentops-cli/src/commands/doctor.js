@@ -2,6 +2,7 @@ const fs = require('node:fs');
 
 const legacy = require('../legacy');
 const collector = require('../lib/collector-manager');
+const { collectorReleaseContract } = require('../lib/collector-release');
 const { resolveCopilotBinary } = require('../lib/copilot-resolver');
 const { repoPath } = require('../lib/paths');
 
@@ -32,9 +33,11 @@ function collectorConfigChecks() {
     .every(snippet => azureConfig.includes(snippet));
   const azureStrictHasPrivacy = ['transform/privacy_strict', 'keep_keys(attributes', 'exporters:', 'azuremonitor']
     .every(snippet => azureStrictConfig.includes(snippet));
+  const release = collectorReleaseContract();
 
   return [
     check('collector-image-pinned', hasPinnedCollectorImage(localCompose) && hasPinnedCollectorImage(azureCompose), 'docker compose defaults use an explicit otel/opentelemetry-collector-contrib version'),
+    check('collector-release-cadence', release.ok, release.ok ? `${release.version}; review after ${release.review_after}` : release.missing.join(', '), 'warning'),
     check('collector-azure-localhost-bindings', hasLocalhostPortBindings(azureCompose), 'Azure Monitor compose binds OTLP and health ports to 127.0.0.1'),
     check('collector-azure-config-privacy-parity', azureConfigHasPrivacy && azureStrictHasPrivacy, 'Azure Monitor configs include content signal, privacy filtering, and azuremonitor exporter')
   ];

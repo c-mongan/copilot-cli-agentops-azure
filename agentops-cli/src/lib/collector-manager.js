@@ -17,11 +17,12 @@ const {
 const { commandCandidates, commandExists, isExecutable, run } = require('./shell');
 const { makePoisonAttributes, poisonCheck } = require('./privacy');
 const { validateCollectorArtifacts, validateOwaspFixtures } = require('./collector-artifacts');
+const collectorRelease = require('./collector-release');
 
 const collectorModes = ['auto', 'docker', 'binary', 'none'];
 const privacyModes = ['strict', 'compat'];
 const dockerProjectName = 'agentops-azuremonitor';
-const defaultCollectorVersion = '0.151.0';
+const defaultCollectorVersion = collectorRelease.defaultCollectorVersion();
 const healthUrl = 'http://127.0.0.1:13133';
 const otlpHttpEndpoint = 'http://127.0.0.1:4318';
 const composeFile = path.join(collectorDir, 'docker-compose.azuremonitor.yaml');
@@ -878,7 +879,7 @@ function validate(options = {}) {
       error: 'Docker daemon is not reachable; start Docker/OrbStack or use binary mode.'
     };
   }
-  const image = process.env.AGENTOPS_OTELCOL_IMAGE || 'otel/opentelemetry-collector-contrib:0.151.0';
+  const image = process.env.AGENTOPS_OTELCOL_IMAGE || collectorRelease.collectorImage();
   const result = run('docker', [
     'run',
     '--rm',
