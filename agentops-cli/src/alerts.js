@@ -10,6 +10,67 @@ function createAlerts({ workspaceId, baseFilter, sessionKey, validateKqlDuration
     return Boolean(value);
   }
 
+  function stringValue(value) {
+    if (value === undefined || value === null) return '';
+    if (typeof value === 'string') return value;
+    return String(value);
+  }
+
+  function propertyValue(row = {}, key) {
+    const props = row.Properties && typeof row.Properties === 'object'
+      ? row.Properties
+      : {};
+    return row[key]
+      ?? row[`agentops.custom.${key}`]
+      ?? row[`agentops.${key}`]
+      ?? props[key]
+      ?? props[`agentops.custom.${key}`]
+      ?? props[`agentops.${key}`]
+      ?? '';
+  }
+
+  function parseDetailsValue(details, key) {
+    const text = stringValue(details);
+    if (!text) return '';
+    const pattern = new RegExp(`${key}[=: ]+([A-Za-z0-9_.@/-]+)`);
+    return pattern.exec(text)?.[1] || '';
+  }
+
+  function normalizeConfigChangeAnnotation(row = {}) {
+    const props = row.Properties && typeof row.Properties === 'object' ? row.Properties : {};
+    const eventName = stringValue(row.EventName || row.Event || row.event || props['agentops.event.name'] || props['event.name']);
+    const eventType = stringValue(row.EventType || row.Type || row.type);
+    const details = stringValue(row.Details || row.ResultCode || row.details || '');
+    const annotationType = stringValue(propertyValue(row, 'annotation_type') || row.AnnotationType || parseDetailsValue(details, 'annotation_type'));
+    const isConfigAnnotation = eventName === 'agentops.config.changed'
+      || annotationType === 'config_change'
+      || eventType === 'annotation'
+      || details.includes('config_change');
+    if (!isConfigAnnotation) return null;
+
+    return {
+      time_generated: stringValue(row.TimeGenerated || row.time || row.timestamp),
+      component: stringValue(row.ChangeComponent || propertyValue(row, 'component') || propertyValue(row, 'entity.type') || row.EntityType || parseDetailsValue(details, 'component')),
+      target: stringValue(row.ChangeTarget || propertyValue(row, 'target') || propertyValue(row, 'entity.id_hash') || row.EntityIdHash || parseDetailsValue(details, 'target')),
+      change_type: stringValue(row.ChangeType || propertyValue(row, 'change_type') || parseDetailsValue(details, 'change_type') || 'updated'),
+      change_id: stringValue(row.ChangeId || propertyValue(row, 'change_id') || parseDetailsValue(details, 'change_id')),
+      version: stringValue(row.Version || propertyValue(row, 'version') || parseDetailsValue(details, 'version')),
+      run_id: stringValue(row.RunId || propertyValue(row, 'run.id')),
+      session_id: stringValue(row.SessionId || propertyValue(row, 'session.id') || props['gen_ai.conversation.id']),
+      trace_id: stringValue(row.TraceId || propertyValue(row, 'trace.id')),
+      event_name: eventName || 'agentops.config.changed'
+    };
+  }
+
+  function configChangeAnnotationsForSession(events = [], session) {
+    const normalizedSession = String(session || '').trim();
+    if (!normalizedSession) return [];
+    return events
+      .map(normalizeConfigChangeAnnotation)
+      .filter(annotation => annotation && annotation.session_id === normalizedSession)
+      .slice(0, 10);
+  }
+
   function alertRules(last = '14d') {
     return [
       {
@@ -317,6 +378,27 @@ ${selectedSession}
 | order by TimeGenerated desc`;
   }
 
+  function configChangeAnnotationsQuery(session, last = '24h') {
+    const lookback = validateKqlDuration(last);
+    const normalizedSession = String(session || '').trim();
+    return `let lookback = ${lookback};
+let selected_session = ${kqlString(normalizedSession)};
+union isfuzzy=true
+(AgentOpsEvents_CL
+| where TimeGenerated > ago(lookback)
+| extend EventName=tostring(column_ifexists("EventName", "")), EventType=tostring(column_ifexists("EventType", "")), Details=tostring(column_ifexists("Details", ""))
+| where EventName == "agentops.config.changed" or EventType == "annotation" or Details has "config_change"
+| extend AnnotationType=coalesce(tostring(column_ifexists("AnnotationType", "")), extract("annotation_type[=: ]+([A-Za-z0-9_-]+)", 1, Details)), ChangeComponent=tostring(column_ifexists("ChangeComponent", "")), ChangeTarget=tostring(column_ifexists("ChangeTarget", "")), ChangeType=tostring(column_ifexists("ChangeType", "")), ChangeId=tostring(column_ifexists("ChangeId", "")), Version=tostring(column_ifexists("Version", "")), RunId=tostring(column_ifexists("RunId", "")), SessionId=tostring(column_ifexists("SessionId", "")), TraceId=tostring(column_ifexists("TraceId", "")), Source="AgentOpsEvents_CL"
+| project TimeGenerated, Source, EventName, AnnotationType, ChangeComponent, ChangeTarget, ChangeType, ChangeId, Version, RunId, SessionId, TraceId, Details),
+(AppDependencies
+| where TimeGenerated > ago(lookback)
+| where tostring(Properties["agentops.event.name"]) == "agentops.config.changed" or tostring(Properties["agentops.custom.annotation_type"]) == "config_change"
+| extend EventName=tostring(Properties["agentops.event.name"]), AnnotationType=tostring(Properties["agentops.custom.annotation_type"]), ChangeComponent=tostring(Properties["agentops.custom.component"]), ChangeTarget=tostring(Properties["agentops.custom.target"]), ChangeType=tostring(Properties["agentops.custom.change_type"]), ChangeId=tostring(Properties["agentops.custom.change_id"]), Version=tostring(Properties["agentops.custom.version"]), RunId=tostring(Properties["agentops.run.id"]), SessionId=tostring(Properties["gen_ai.conversation.id"]), TraceId=tostring(Properties["agentops.trace.id"]), Details="", Source="AppDependencies"
+| project TimeGenerated, Source, EventName, AnnotationType, ChangeComponent, ChangeTarget, ChangeType, ChangeId, Version, RunId, SessionId, TraceId, Details)
+| where isempty(selected_session) or SessionId == selected_session
+| order by TimeGenerated desc`;
+  }
+
   function alertHistory({ rule, last = '24h' }) {
     const matchedRule = requireAlertRule(rule, 'history');
     const lookback = validateKqlDuration(last);
@@ -519,12 +601,13 @@ ${selectedSession}
     };
   }
 
-  function alertHandoff({ rule, session, last = '24h', owners = [], service = 'agentops', timezone = 'UTC', createdAt, resourceGroup = null } = {}) {
+  function alertHandoff({ rule, session, last = '24h', owners = [], service = 'agentops', timezone = 'UTC', createdAt, resourceGroup = null, events = [] } = {}) {
     const created = createdAt || new Date().toISOString();
     const artifact = alertArtifact({ rule, session, last, createdAt: created });
     const tunePlan = alertTunePlan({ last, rule: artifact.rule, owner: owners[0] || null });
     const policy = alertPolicy({ owners, service, timezone });
     const resources = alertResourceState({ resourceGroup });
+    const configChanges = configChangeAnnotationsForSession(events, artifact.session);
     const timeline = alertIncidentTimeline({
       artifacts: [artifact],
       createdAt: created,
@@ -551,12 +634,18 @@ ${selectedSession}
           session_link: artifact.evidence.session_link,
           threshold_evidence_query: artifact.evidence.threshold_evidence_query
         },
+        config_changes: {
+          query: configChangeAnnotationsQuery(artifact.session, artifact.last),
+          matched_annotations: configChanges,
+          matched_count: configChanges.length
+        },
         tune_plan: tunePlan,
         resources,
         timeline
       },
       operator_steps: [
         'Review the session link and metadata-only alert history.',
+        'Check config-change annotations for agent, skill, hook, MCP, model, or benchmark changes near the alert.',
         'Review the tune-plan threshold evidence before changing any alert rule.',
         'Assign an owner and create a ticket manually only after confirming the evidence.',
         'Run validate-azure before enabling alert rules or attaching action groups.'
@@ -575,8 +664,8 @@ ${selectedSession}
     };
   }
 
-  function alertRoutePlan({ rule, session, last = '24h', owners = [], service = 'agentops', timezone = 'UTC', targets = [], createdAt, resourceGroup = null } = {}) {
-    const handoff = alertHandoff({ rule, session, last, owners, service, timezone, createdAt, resourceGroup });
+  function alertRoutePlan({ rule, session, last = '24h', owners = [], service = 'agentops', timezone = 'UTC', targets = [], createdAt, resourceGroup = null, events = [] } = {}) {
+    const handoff = alertHandoff({ rule, session, last, owners, service, timezone, createdAt, resourceGroup, events });
     const selectedTargets = targets.length > 0 ? targets : ['github-issue', 'azure-devops-work-item'];
     const allowedTargets = new Set(handoff.escalation.allowed_targets);
     const unknownTarget = selectedTargets.find(target => !allowedTargets.has(target));
@@ -595,6 +684,7 @@ ${selectedSession}
       'Evidence to review:',
       '- Session dashboard/KQL link from the handoff detail evidence.',
       '- Alert history KQL scoped to this rule and session.',
+      '- Config-change annotation query and matched metadata from the handoff.',
       '- Tune-plan threshold evidence before changing alert rules.',
       '',
       'Privacy guardrails:',
@@ -637,6 +727,7 @@ ${selectedSession}
       evidence: {
         handoff_schema: handoff.schema_version,
         history_query: handoff.evidence.detail.history_query,
+        config_changes: handoff.evidence.config_changes,
         session_link: handoff.evidence.detail.session_link,
         tune_plan_schema: handoff.evidence.tune_plan.schema_version
       },

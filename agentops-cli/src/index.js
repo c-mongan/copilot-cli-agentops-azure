@@ -125,6 +125,7 @@ Core commands:
   init [--dry-run] [--full] [--provision-cloud] [--import-dashboards] [--run-smoke] [--triage-latest] [--force-skills] [--no-skills] [--json]
   recommend latest|<run-id> [--runs <jsonl>] [--events <jsonl>] [--evals <jsonl>] [--insights <jsonl>] [--benchmark-run <id>] [--benchmark-report <json>] [--out <dir>] [--json]
   triage latest|<run-id> [--runs <jsonl>] [--events <jsonl>] [--tools <jsonl>] [--privacy <jsonl>] [--github <jsonl>] [--evals <jsonl>] [--insights <jsonl>] [--benchmark-run <id>] [--out <dir>] [--json]
+  alert handoff --rule <name> --session <conversation> [--owner <name>] [--events <jsonl>] [--output <json>] [--last <duration>]
   mcp-proxy --server-name <name> [--out <jsonl>] -- <server command> [args...]
   latest [--file <jsonl>] [--last <duration>] [--json]
   replay <session|latest> [--file <jsonl>] [--last <duration>]

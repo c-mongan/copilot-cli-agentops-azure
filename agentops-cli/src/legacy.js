@@ -80,8 +80,8 @@ function usage() {
     'alert review --rule <name> --session <conversation> [--owner <name>] [--last <duration>]',
     'alert action-plan --rule <name> --session <conversation> [--last <duration>]',
     'alert export --rule <name> --session <conversation> --output <json> [--last <duration>]',
-    'alert handoff --rule <name> --session <conversation> [--owner <name>] [--output <json>] [--last <duration>]',
-    'alert route-plan --rule <name> --session <conversation> [--owner <name>] [--target <github-issue|azure-devops-work-item>] [--output <json>]',
+    'alert handoff --rule <name> --session <conversation> [--owner <name>] [--events <jsonl>] [--output <json>] [--last <duration>]',
+    'alert route-plan --rule <name> --session <conversation> [--owner <name>] [--events <jsonl>] [--target <github-issue|azure-devops-work-item>] [--output <json>]',
     'alert route-github --repo <owner/repo> --rule <name> --session <conversation> --owner <github-login> [--yes]',
     'alert route-azure-devops --org <url> --project <name> --rule <name> --session <conversation> --owner <user> [--yes]',
     'alert action-group-plan --resource-group <rg> --name <name> --short-name <short> --owner <name> [--email <address>] [--webhook <url>]',
@@ -9829,8 +9829,10 @@ async function main(argv) {
       const timezone = optionValue(alertArgs, ['--timezone', '--tz']) || 'UTC';
       const resourceGroup = optionValue(alertArgs, ['--resource-group', '-g']) || configuredCloudValues().resourceGroup;
       const output = optionValue(alertArgs, ['--output', '--out']);
+      const eventsFile = optionValue(alertArgs, ['--events']);
+      const events = eventsFile ? readJsonlRows(path.resolve(process.cwd(), eventsFile)) : [];
       const last = parseLastArg(alertArgs, '24h');
-      const handoff = alertHandoff({ rule, session, last, owners, service, timezone, resourceGroup });
+      const handoff = alertHandoff({ rule, session, last, owners, service, timezone, resourceGroup, events });
       if (output) {
         const outputPath = path.resolve(process.cwd(), output);
         fs.mkdirSync(path.dirname(outputPath), { recursive: true });
@@ -9850,8 +9852,10 @@ async function main(argv) {
       const timezone = optionValue(alertArgs, ['--timezone', '--tz']) || 'UTC';
       const resourceGroup = optionValue(alertArgs, ['--resource-group', '-g']) || configuredCloudValues().resourceGroup;
       const output = optionValue(alertArgs, ['--output', '--out']);
+      const eventsFile = optionValue(alertArgs, ['--events']);
+      const events = eventsFile ? readJsonlRows(path.resolve(process.cwd(), eventsFile)) : [];
       const last = parseLastArg(alertArgs, '24h');
-      const plan = alertRoutePlan({ rule, session, last, owners, service, timezone, targets, resourceGroup });
+      const plan = alertRoutePlan({ rule, session, last, owners, service, timezone, targets, resourceGroup, events });
       if (output) {
         const outputPath = path.resolve(process.cwd(), output);
         fs.mkdirSync(path.dirname(outputPath), { recursive: true });
