@@ -4083,6 +4083,7 @@ test('benchmark schema validation accepts starter task files', () => {
   assert.ok(suite);
   assert.equal(suite.tasks.length, 1);
   assert.equal(suite.tasks[0].id, 'create-note');
+  assert.equal(suite.tasks[0].permissionProfile, 'allow-all-isolated');
   assert.deepEqual(suite.tasks[0].tags, ['starter', 'safe', 'filesystem']);
 });
 
@@ -4141,6 +4142,44 @@ test('benchmark schema validation rejects invalid hidden checks', () => {
   assert.throws(() => validateBenchmarkTask(task, suiteDir, 'test-task'), /hiddenSuccessCommands must be an array of strings/);
 });
 
+test('benchmark schema validation rejects invalid permission profiles', () => {
+  const suiteDir = path.join(root, 'benchmarks', 'starter');
+  const task = {
+    id: 'bad-permission-profile',
+    title: 'Bad permission profile',
+    fixture: 'fixtures/tiny-repo',
+    prompt: 'Do nothing.',
+    copilotArgs: [],
+    permissionProfile: 'root',
+    successCommands: [],
+    expectedFiles: [],
+    forbiddenFiles: [],
+    timeoutSec: 10,
+    tags: []
+  };
+
+  assert.throws(() => validateBenchmarkTask(task, suiteDir, 'test-task'), /permissionProfile must be one of/);
+});
+
+test('benchmark schema validation rejects broad args without isolated profile', () => {
+  const suiteDir = path.join(root, 'benchmarks', 'starter');
+  const task = {
+    id: 'broad-permission-mismatch',
+    title: 'Broad permission mismatch',
+    fixture: 'fixtures/tiny-repo',
+    prompt: 'Do nothing.',
+    copilotArgs: ['--allow-all'],
+    permissionProfile: 'least-privilege',
+    successCommands: [],
+    expectedFiles: [],
+    forbiddenFiles: [],
+    timeoutSec: 10,
+    tags: []
+  };
+
+  assert.throws(() => validateBenchmarkTask(task, suiteDir, 'test-task'), /broad permissions/);
+});
+
 test('benchmark dry run plans fixture copy, Copilot args, labels, checks, and timeout', () => {
   const plan = benchmarkRunPlan('starter', {
     variant: 'baseline',
@@ -4159,9 +4198,11 @@ test('benchmark dry run plans fixture copy, Copilot args, labels, checks, and ti
   assert.match(plan.runs[0].copiedFixturePath.to.replaceAll(path.sep, '/'), /agentops-benchmark-runs\/bench-test\/create-note\/repeat-1\/workspace$/);
   assert.deepEqual(plan.runs[0].copilot.args, ['--allow-all']);
   assert.match(plan.runs[0].copilot.prompt, /notes\/hello\.txt/);
+  assert.equal(plan.runs[0].permissionProfile, 'allow-all-isolated');
   assert.equal(plan.runs[0].otelLabels['agentops.benchmark.variant'], 'baseline');
   assert.equal(plan.runs[0].otelLabels['agentops.hypothesis.id'], 'shorter-prompt');
   assert.equal(plan.runs[0].otelLabels['agentops.benchmark.task_id'], 'create-note');
+  assert.equal(plan.runs[0].otelLabels['agentops.benchmark.permission_profile'], 'allow-all-isolated');
   assert.equal(plan.runs[0].otelLabels['agentops.benchmark.task'], undefined);
   assert.deepEqual(plan.runs[0].successChecks.expectedFiles, ['notes/hello.txt']);
   assert.deepEqual(plan.runs[0].successChecks.forbiddenFiles, ['.env', 'secrets.txt']);
@@ -4223,6 +4264,7 @@ test('benchmark run executes Copilot in an isolated fixture copy and writes a su
     assert.equal(result.wouldExecuteCopilot, true);
     assert.equal(result.summaries.length, 1);
     assert.equal(result.summaries[0].success, true);
+    assert.equal(result.summaries[0].permissionProfile, 'allow-all-isolated');
     assert.deepEqual(result.summaries[0].changedFiles.map(file => file.replaceAll(path.sep, '/')), ['README.md', 'notes/hello.txt']);
     assert.deepEqual(result.summaries[0].artifactDiff.added.map(file => file.replaceAll(path.sep, '/')), ['notes/hello.txt']);
     assert.deepEqual(result.summaries[0].artifactDiff.modified.map(file => file.replaceAll(path.sep, '/')), ['README.md']);
@@ -4237,8 +4279,10 @@ test('benchmark run executes Copilot in an isolated fixture copy and writes a su
     });
     assert.doesNotMatch(JSON.stringify(result.summaries[0].checks), /shortcut/);
     assert.deepEqual(result.report.artifactDiff, { added: 1, modified: 1, deleted: 0, totalChanged: 2 });
+    assert.deepEqual(result.report.permissionProfiles, { 'allow-all-isolated': 1 });
     assert.deepEqual(result.report.hiddenChecks, { passed: 1, failed: 0 });
     assert.equal(result.report.tasks[0].artifactDiff.totalChanged, 2);
+    assert.equal(result.report.tasks[0].permissionProfile, 'allow-all-isolated');
     assert.equal(result.report.tasks[0].hiddenChecksPassed, 1);
     assert.equal(result.report.tasks[0].hiddenChecksFailed, 0);
     assert.equal(result.report.recommendation.action, 'keep');
@@ -4246,6 +4290,7 @@ test('benchmark run executes Copilot in an isolated fixture copy and writes a su
     assert.equal(fs.existsSync(result.summariesPath), true);
     assert.ok(copilotCall.options.cwd.startsWith(benchmarkRunBaseDir));
     assert.match(copilotCall.options.env.OTEL_RESOURCE_ATTRIBUTES, /agentops\.benchmark\.task_id=create-note/);
+    assert.match(copilotCall.options.env.OTEL_RESOURCE_ATTRIBUTES, /agentops\.benchmark\.permission_profile=allow-all-isolated/);
     assert.deepEqual(copilotCall.args.slice(-2), ['-p', 'Create notes/hello.txt containing the text hello agentops.']);
   } finally {
     fs.rmSync(path.join(benchmarkRunBaseDir, runId), { recursive: true, force: true });

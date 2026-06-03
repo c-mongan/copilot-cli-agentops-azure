@@ -6,6 +6,7 @@
   "copilotArgs": [
     "--allow-all"
   ],
+  "permissionProfile": "allow-all-isolated",
   "successCommands": [
     "test -f notes/hello.txt",
     "grep -q 'hello agentops' notes/hello.txt"

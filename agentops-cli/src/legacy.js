@@ -4990,6 +4990,21 @@ function isStringArray(value) {
   return Array.isArray(value) && value.every(item => typeof item === 'string');
 }
 
+const benchmarkPermissionProfiles = new Set(['allow-all-isolated', 'least-privilege', 'read-only']);
+
+function normalizeBenchmarkPermissionProfile(profile) {
+  if (profile === undefined || profile === null || profile === '') return 'least-privilege';
+  return String(profile);
+}
+
+function benchmarkProfileAllowsBroadArgs(profile) {
+  return profile === 'allow-all-isolated';
+}
+
+function hasBroadPermissionArg(args = []) {
+  return args.some(arg => ['--allow-all', '--yolo'].includes(arg));
+}
+
 function validateBenchmarkTask(task, suiteDir, source = 'task') {
   const errors = [];
   const stringFields = ['id', 'title', 'fixture', 'prompt'];
@@ -5014,6 +5029,14 @@ function validateBenchmarkTask(task, suiteDir, source = 'task') {
     }
   }
 
+  const permissionProfile = normalizeBenchmarkPermissionProfile(task.permissionProfile);
+  if (!benchmarkPermissionProfiles.has(permissionProfile)) {
+    errors.push(`permissionProfile must be one of: ${[...benchmarkPermissionProfiles].join(', ')}`);
+  }
+  if (hasBroadPermissionArg(task.copilotArgs || []) && !benchmarkProfileAllowsBroadArgs(permissionProfile)) {
+    errors.push('copilotArgs uses broad permissions but permissionProfile is not allow-all-isolated');
+  }
+
   if (!Number.isInteger(task.timeoutSec) || task.timeoutSec <= 0) {
     errors.push('timeoutSec must be a positive integer');
   }
@@ -5030,6 +5053,7 @@ function validateBenchmarkTask(task, suiteDir, source = 'task') {
   return {
     ...task,
     hiddenSuccessCommands: task.hiddenSuccessCommands || [],
+    permissionProfile,
     fixturePath,
     source
   };
@@ -5075,6 +5099,7 @@ function listBenchmarks(baseDir = benchmarksDir) {
         id: task.id,
         title: task.title,
         fixture: task.fixture,
+        permissionProfile: task.permissionProfile,
         timeoutSec: task.timeoutSec,
         tags: task.tags
       }))
@@ -5219,6 +5244,7 @@ function benchmarkRunPlan(suiteId, options = {}) {
           'agentops.benchmark.suite': suite.id,
           'agentops.benchmark.task_id': task.id,
           'agentops.benchmark.variant': variant,
+          'agentops.benchmark.permission_profile': task.permissionProfile,
           'agentops.benchmark.repeat': String(repeatIndex),
           ...(hypothesis ? { 'agentops.hypothesis.id': hypothesis } : {})
         },
@@ -5229,6 +5255,7 @@ function benchmarkRunPlan(suiteId, options = {}) {
           expectedFiles: task.expectedFiles,
           forbiddenFiles: task.forbiddenFiles
         },
+        permissionProfile: task.permissionProfile,
         timeoutSec: task.timeoutSec
       });
     }
@@ -5439,6 +5466,7 @@ function executeBenchmarkRun(plan, run, options = {}) {
     hypothesis: plan.hypothesis,
     taskId: run.taskId,
     taskTitle: run.taskTitle,
+    permissionProfile: run.permissionProfile,
     repeat: run.repeat,
     startedAt: startedAt.toISOString(),
     endedAt: endedAt.toISOString(),
@@ -5794,6 +5822,14 @@ function benchmarkArtifactDiff(scoredSummaries) {
   }, { added: 0, modified: 0, deleted: 0, totalChanged: 0 });
 }
 
+function benchmarkPermissionProfileSummary(scoredSummaries) {
+  return scoredSummaries.reduce((acc, summary) => {
+    const profile = summary.permissionProfile || 'unknown';
+    acc[profile] = (acc[profile] || 0) + 1;
+    return acc;
+  }, {});
+}
+
 function benchmarkCheatSignals(scoredSummaries, azureTelemetry = null) {
   const signals = [];
   const forbidden = scoredSummaries.reduce((total, summary) => total + numberValue(summary.forbiddenFilesChanged), 0);
@@ -5965,6 +6001,7 @@ function benchmarkReport(runId, summaries = null, options = {}) {
     forbiddenFilesChanged: scoredSummaries.reduce((total, summary) => total + numberValue(summary.forbiddenFilesChanged), 0),
     policyBlocks: scoredSummaries.reduce((total, summary) => total + numberValue(summary.policyBlocks), 0),
     contentCaptureDetected: scoredSummaries.some(summary => summary.contentCaptureDetected === true),
+    permissionProfiles: benchmarkPermissionProfileSummary(scoredSummaries),
     hiddenChecks: {
       passed: scoredSummaries.reduce((total, summary) => total + numberValue(summary.hiddenChecksPassed), 0),
       failed: scoredSummaries.reduce((total, summary) => total + numberValue(summary.hiddenChecksFailed), 0)
@@ -5980,6 +6017,7 @@ function benchmarkReport(runId, summaries = null, options = {}) {
     tasks: scoredSummaries.map(summary => ({
       taskId: summary.taskId,
       hypothesis: summary.hypothesis || null,
+      permissionProfile: summary.permissionProfile || null,
       success: Boolean(summary.success),
       score: summary.score,
       hiddenChecksPassed: numberValue(summary.hiddenChecksPassed),
