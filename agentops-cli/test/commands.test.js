@@ -146,6 +146,61 @@ test('doctorSummary flags stored connection strings and renderDoctor reports blo
   }
 });
 
+test('healthCommand returns setup contract with optional latest run', async () => {
+  const legacy = require('../src/legacy');
+  const collector = require('../src/lib/collector-manager');
+  const resolver = require('../src/lib/copilot-resolver');
+  const dir = tmpDir('health');
+  const runsFile = path.join(dir, 'AgentOpsRunSummary_CL.jsonl');
+  fs.writeFileSync(runsFile, `${JSON.stringify({
+    TimeGenerated: '2026-01-02T00:00:00.000Z',
+    RunId: 'run_health',
+    SessionId: 'session_health',
+    OutcomeStatus: 'success',
+    TestsRan: true,
+    PrivacyMode: 'strict'
+  })}\n`);
+  const restore = [
+    patch(legacy, 'doctor', () => [{ name: 'content-capture-disabled', ok: true }]),
+    patch(legacy, 'agentopsStatusSummary', () => ({
+      ok: true,
+      required_files: { found: 3, total: 3 },
+      shim: { agentops_cli: 'ok', agentops_command: 'ok', shadow: 'safe' }
+    })),
+    patch(collector, 'status', async () => ({
+      running: true,
+      mode: 'auto',
+      effectiveMode: 'binary',
+      privacyMode: 'strict',
+      details: ['binary selected'],
+      safeLocalhostBinding: true,
+      health: { statusCode: 200 },
+      binary: { ok: true, error: null }
+    })),
+    patch(resolver, 'resolveCopilotBinary', () => ({
+      ok: true,
+      path: '/usr/local/bin/copilot',
+      source: 'PATH',
+      error: null,
+      candidates: []
+    }))
+  ];
+
+  try {
+    const { healthCommand, renderHealth } = freshRequire('src/commands/health.js');
+    const captured = await captureOutput(() => healthCommand(['--runs', runsFile, '--json']));
+    const summary = JSON.parse(captured.output);
+    assert.equal(captured.exitCode, 0);
+    assert.equal(summary.status, 'healthy');
+    assert.equal(summary.local.collector_privacy_mode, 'strict');
+    assert.equal(summary.latest_run.run_id, 'run_health');
+    assert.equal(summary.latest_run.status, 'healthy');
+    assert.match(renderHealth(summary), /Latest run: run_health \(healthy\)/);
+  } finally {
+    restore.reverse().forEach(fn => fn());
+  }
+});
+
 test('runSummaryCommand rolls up a JSONL span file and writes table paths', async () => {
   const { runSummaryCommand } = freshRequire('src/commands/run-summary.js');
   const dir = tmpDir('run-summary');

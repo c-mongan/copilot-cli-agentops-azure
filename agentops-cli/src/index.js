@@ -13,6 +13,7 @@ const { doctorCommand } = require('./commands/doctor');
 const { e2eCommand } = require('./commands/e2e');
 const { explainCommand } = require('./commands/explain');
 const { githubEnrichCommand } = require('./commands/github-enrich');
+const { healthCommand } = require('./commands/health');
 const { insightsCommand } = require('./commands/insights');
 const { mcpProxyCommand } = require('./commands/mcp-proxy');
 const { openCommand } = require('./commands/open');
@@ -41,6 +42,7 @@ const coreCommands = [
   'demo',
   'explain',
   'github-enrich',
+  'health',
   'insights',
   'init',
   'latest',
@@ -113,6 +115,7 @@ Core commands:
   dashboard validate|links-check|filters-check|ux-check|content-check|kql-check|verify|import [--last <duration>] [--live] [--yes] [--all] [--folder <name>] [--resource-group <rg>] [--grafana-name <name>]
   demo generate|verify [--runs <n>] [--out <dir>] [--with-content] [--json]
   github-enrich [--limit <n>] [--runs <AgentOpsRunSummary_CL.jsonl>] [--out <dir>] [--json]
+  health [--runs <AgentOpsRunSummary_CL.jsonl>] [--json]
   explain latest|<run-id> [--runs <jsonl>] [--evals <jsonl>] [--insights <jsonl>] [--json]
   insights [generate|patterns] [--runs <jsonl>] [--insights <jsonl>] [--tools <jsonl>] [--privacy <jsonl>] [--github <jsonl>] [--out <dir>] [--json]
   init [--dry-run] [--provision-cloud] [--force-skills] [--no-skills] [--json]
@@ -172,6 +175,7 @@ async function main(argv) {
   if (command === 'e2e') return e2eCommand(args);
   if (command === 'explain') return explainCommand(args);
   if (command === 'github-enrich') return githubEnrichCommand(args);
+  if (command === 'health') return healthCommand(args);
   if (command === 'insights') return insightsCommand(args);
   if (command === 'mcp-proxy') return mcpProxyCommand(args);
   if (command === 'recommend') {
@@ -219,6 +223,7 @@ module.exports = {
   e2eCommand,
   explainCommand,
   githubEnrichCommand,
+  healthCommand,
   insightsCommand,
   mcpProxyCommand,
   openCommand,

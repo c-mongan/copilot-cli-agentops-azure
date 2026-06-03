@@ -13,6 +13,12 @@ node agentops-cli/src/index.js collector validate --mode auto --privacy strict -
 
 All of the above pass.
 
+For a compact machine-readable setup/UI contract, run:
+
+```bash
+node agentops-cli/src/index.js health --json
+```
+
 Azure deployment checklist:
 
 - Core telemetry stack can be deployed with the Bicep/AZD files in this repo.

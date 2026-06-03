@@ -585,7 +585,7 @@ Current gaps:
 - `validate-azure` now does read-only Azure preflight checks, including Grafana datasource and dashboard UID validation, but it does not create/fix resources.
 - Live Azure query depends on local `az` login and workspace ID.
 - Some KQL files are investigation scripts with more than one final tabular expression. That is fine for manual use, but dashboard panels usually need one predictable result shape.
-- The CLI does not yet expose a stable machine-readable "run health score" command outside benchmark reports.
+- `agentops health --json` now exposes a stable machine-readable setup and latest-run health contract for setup wizards and UI adapters.
 - Recommendations are rule-based heuristics, not evidence ranking over recurring patterns.
 - `open` prints links but does not open the in-app/browser target.
 
@@ -593,7 +593,7 @@ Product recommendation:
 
 - Keep `agentops` as the default installed command in docs and skills.
 - Extend `agentops smoke` so it can optionally run Copilot and print the exact session URL after closed-loop ingestion verification.
-- Add `agentops health --json` as the contract for a UI/setup wizard.
+- Keep `agentops health --json` as the contract for a UI/setup wizard.
 - Add recurring-pattern analysis:
   - same tool failing across sessions
   - same agent causing high context pressure
