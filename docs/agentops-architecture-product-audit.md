@@ -409,14 +409,13 @@ Current gaps:
 - Flag parsing is hand-rolled. It covers many important Copilot flags, but future Copilot CLI changes can silently drift.
 - Metadata is mostly resource attributes, so depending on exporter behavior, every span may carry the same per-run attributes. That is fine for analysis but can increase cardinality and storage cost.
 - It does not emit an explicit AgentOps "run started" or "run completed" span if Copilot emits no usable spans.
-- It does not emit collector startup/fallback telemetry. If collector startup fails, the user sees a warning, but the observability system has no durable "telemetry missed" event.
+- If collector startup fails and `AGENTOPS_ALLOW_UNOBSERVED_FALLBACK=1` is set, the CLI writes a durable metadata-only `agentops.wrapper.fallback_unobserved` event to `.agentops/wrapper-events.jsonl`.
 
 Product recommendation:
 
-- Add a wrapper-owned minimal run envelope:
+- Complete the wrapper-owned minimal run envelope:
   - `agentops.run.start`
   - `agentops.run.end`
-  - `agentops.wrapper.fallback_unobserved`
   - `agentops.collector.start_failed`
 - Add contract tests using real Copilot OTel fixture snapshots when available.
 - Generate Bash/PowerShell flag metadata from one source of truth if this grows further.
@@ -1252,7 +1251,7 @@ Required work:
 - Make `agentops validate-azure` optionally import missing dashboards after explicit confirmation.
 - Make `agentops smoke` optionally launch a real Copilot smoke prompt and deep-link to the resulting latest run.
 - Add cloud doctor checks that reuse the same Grafana datasource/dashboard checks without requiring a separate command.
-- Add a wrapper-owned run envelope/fallback event.
+- Complete wrapper-owned run start/end and collector-start-failed events.
 
 ### P1 - Make It Native To Copilot
 
@@ -1300,7 +1299,7 @@ If I had to choose only five next tasks:
 
 1. Add dashboard import remediation to `agentops validate-azure`.
 2. Add a real Copilot smoke-run mode that prints the exact latest-run URL.
-3. Add a run envelope/fallback telemetry event from the wrapper.
+3. Complete wrapper-owned run start/end events.
 4. Build a polished session-first dashboard landing page with recommendation and ask-AgentOps context.
 5. Expand benchmark/eval support with hidden checks, permission profiles, and artifact diffing.
 

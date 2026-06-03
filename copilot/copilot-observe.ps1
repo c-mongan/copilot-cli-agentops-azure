@@ -15,6 +15,9 @@ if (-not $branch) { $branch = "unknown" }
 $commit = git rev-parse --short HEAD 2>$null
 if (-not $commit) { $commit = "unknown" }
 $version = if ($env:AGENTOPS_PACK_VERSION) { $env:AGENTOPS_PACK_VERSION } else { "0.1.0" }
+$wrapperRunId = if ($env:AGENTOPS_WRAPPER_RUN_ID) { $env:AGENTOPS_WRAPPER_RUN_ID } else { "" }
+$wrapperSessionId = if ($env:AGENTOPS_WRAPPER_SESSION_ID) { $env:AGENTOPS_WRAPPER_SESSION_ID } else { "" }
+$wrapperFallbackUnobserved = if ($env:AGENTOPS_WRAPPER_FALLBACK_UNOBSERVED) { $env:AGENTOPS_WRAPPER_FALLBACK_UNOBSERVED.ToLowerInvariant() } else { "false" }
 $profile = if ($env:AGENTOPS_PROFILE) { $env:AGENTOPS_PROFILE } else { "safe-default" }
 $experiment = if ($env:AGENTOPS_EXPERIMENT) { $env:AGENTOPS_EXPERIMENT } else { "baseline" }
 $cliMode = "interactive"
@@ -195,7 +198,13 @@ for ($i = 0; $i -lt $args.Count; $i++) {
 	}
 }
 
-$agentopsResourceAttributes = "service.namespace=copilot-agentops,service.name=github-copilot-cli,agent.framework=github-copilot,agent.runtime=github-copilot-cli,agentops.profile=$profile,agentops.experiment=$experiment,agentops.pack.version=$version,agentops.repo.hash=$repoHash,git.branch=$branch,git.commit=$commit,agentops.cli.mode=$cliMode,agentops.cli.remote=$cliRemote,agentops.cli.output_format=$cliOutputFormat,agentops.cli.allow_all=$allowAll,agentops.cli.allow_all_tools=$allowAllTools,agentops.cli.allow_all_paths=$allowAllPaths,agentops.cli.allow_all_urls=$allowAllUrls,agentops.cli.acp=$acpEnabled,agentops.cli.cwd_changed=$cwdChanged,agentops.cli.session_id_provided=$sessionIdProvided,agentops.cli.share=$shareEnabled,agentops.cli.share_gist=$shareGistEnabled,agentops.cli.allow_tool.count=$allowToolCount,agentops.cli.allow_url.count=$allowUrlCount,agentops.cli.deny_tool.count=$denyToolCount,agentops.cli.deny_url.count=$denyUrlCount,agentops.cli.available_tools.count=$availableToolCount,agentops.cli.excluded_tools.count=$excludedToolCount,agentops.cli.secret_env_vars.count=$secretEnvCount,agentops.cli.attachment.count=$attachmentCount,agentops.cli.plugin_dir.count=$pluginDirCount,agentops.cli.additional_mcp_config.count=$additionalMcpConfigCount,agentops.cli.disabled_mcp_server.count=$disabledMcpServerCount,agentops.cli.github_mcp_tool.count=$githubMcpToolCount,agentops.cli.github_mcp_toolset.count=$githubMcpToolsetCount"
+$agentopsResourceAttributes = "service.namespace=copilot-agentops,service.name=github-copilot-cli,agent.framework=github-copilot,agent.runtime=github-copilot-cli,agentops.profile=$profile,agentops.experiment=$experiment,agentops.pack.version=$version,agentops.repo.hash=$repoHash,git.branch=$branch,git.commit=$commit,agentops.wrapper.fallback_unobserved=$wrapperFallbackUnobserved,agentops.cli.mode=$cliMode,agentops.cli.remote=$cliRemote,agentops.cli.output_format=$cliOutputFormat,agentops.cli.allow_all=$allowAll,agentops.cli.allow_all_tools=$allowAllTools,agentops.cli.allow_all_paths=$allowAllPaths,agentops.cli.allow_all_urls=$allowAllUrls,agentops.cli.acp=$acpEnabled,agentops.cli.cwd_changed=$cwdChanged,agentops.cli.session_id_provided=$sessionIdProvided,agentops.cli.share=$shareEnabled,agentops.cli.share_gist=$shareGistEnabled,agentops.cli.allow_tool.count=$allowToolCount,agentops.cli.allow_url.count=$allowUrlCount,agentops.cli.deny_tool.count=$denyToolCount,agentops.cli.deny_url.count=$denyUrlCount,agentops.cli.available_tools.count=$availableToolCount,agentops.cli.excluded_tools.count=$excludedToolCount,agentops.cli.secret_env_vars.count=$secretEnvCount,agentops.cli.attachment.count=$attachmentCount,agentops.cli.plugin_dir.count=$pluginDirCount,agentops.cli.additional_mcp_config.count=$additionalMcpConfigCount,agentops.cli.disabled_mcp_server.count=$disabledMcpServerCount,agentops.cli.github_mcp_tool.count=$githubMcpToolCount,agentops.cli.github_mcp_toolset.count=$githubMcpToolsetCount"
+if ($wrapperRunId) {
+	$agentopsResourceAttributes = "$agentopsResourceAttributes,agentops.wrapper.run_id=$(Safe-AttrValue $wrapperRunId)"
+}
+if ($wrapperSessionId) {
+	$agentopsResourceAttributes = "$agentopsResourceAttributes,agentops.wrapper.session_id=$(Safe-AttrValue $wrapperSessionId)"
+}
 if ($cliModel) {
 	$agentopsResourceAttributes = "$agentopsResourceAttributes,agentops.cli.model=$cliModel"
 }

@@ -3820,6 +3820,9 @@ test('copilot-observe percent-encodes resource attributes and forces content cap
         COPILOT_CLI_BIN: fakeCopilot,
         AGENTOPS_PROFILE: 'safe default,=x',
         AGENTOPS_E2E_ID: 'agentops e2e,=id',
+        AGENTOPS_WRAPPER_RUN_ID: 'wrapper run,=id',
+        AGENTOPS_WRAPPER_SESSION_ID: 'wrapper session',
+        AGENTOPS_WRAPPER_FALLBACK_UNOBSERVED: 'TRUE',
         AGENTOPS_CAPTURE_CONTENT: 'true',
         OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT: 'true'
       },
@@ -3830,6 +3833,9 @@ test('copilot-observe percent-encodes resource attributes and forces content cap
     assert.match(result.stdout, /capture=false/);
     assert.match(result.stdout, /agentops\.profile=safe%20default%2C%3Dx/);
     assert.match(result.stdout, /agentops\.e2e\.id=agentops%20e2e%2C%3Did/);
+    assert.match(result.stdout, /agentops\.wrapper\.run_id=wrapper%20run%2C%3Did/);
+    assert.match(result.stdout, /agentops\.wrapper\.session_id=wrapper%20session/);
+    assert.match(result.stdout, /agentops\.wrapper\.fallback_unobserved=true/);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }

@@ -201,6 +201,46 @@ test('healthCommand returns setup contract with optional latest run', async () =
   }
 });
 
+test('copilotCommand records fallback envelope when unobserved fallback is allowed', async () => {
+  const childProcessModule = require('node:child_process');
+  const collector = require('../src/lib/collector-manager');
+  const resolver = require('../src/lib/copilot-resolver');
+  const dir = tmpDir('wrapper-envelope');
+  const eventFile = path.join(dir, 'wrapper-events.jsonl');
+  const originalFallback = process.env.AGENTOPS_ALLOW_UNOBSERVED_FALLBACK;
+  const originalEventsPath = process.env.AGENTOPS_WRAPPER_EVENTS_PATH;
+  process.env.AGENTOPS_ALLOW_UNOBSERVED_FALLBACK = '1';
+  process.env.AGENTOPS_WRAPPER_EVENTS_PATH = eventFile;
+  let spawned = null;
+  const restore = [
+    patch(collector, 'status', async () => ({ running: false })),
+    patch(collector, 'start', async () => ({ ok: false, error: 'collector unavailable in test' })),
+    patch(resolver, 'resolveCopilotBinary', () => ({ ok: true, path: '/bin/copilot', source: 'mock' })),
+    patch(process.stderr, 'write', () => true),
+    patch(childProcessModule, 'spawnSync', (command, args, options) => {
+      spawned = { command, args, env: options.env };
+      return { status: 0, error: null };
+    })
+  ];
+
+  try {
+    const { copilotCommand } = freshRequire('src/commands/copilot.js');
+    await copilotCommand(['-p', 'hello']);
+    const event = JSON.parse(fs.readFileSync(eventFile, 'utf8').trim());
+    assert.equal(event.EventName, 'agentops.wrapper.fallback_unobserved');
+    assert.equal(event.Reason, 'collector unavailable in test');
+    assert.equal(spawned.env.AGENTOPS_WRAPPER_FALLBACK_UNOBSERVED, 'true');
+    assert.equal(spawned.env.AGENTOPS_WRAPPER_RUN_ID, event.RunId);
+    assert.equal(spawned.env.AGENTOPS_WRAPPER_SESSION_ID, event.SessionId);
+  } finally {
+    restore.reverse().forEach(fn => fn());
+    if (originalFallback === undefined) delete process.env.AGENTOPS_ALLOW_UNOBSERVED_FALLBACK;
+    else process.env.AGENTOPS_ALLOW_UNOBSERVED_FALLBACK = originalFallback;
+    if (originalEventsPath === undefined) delete process.env.AGENTOPS_WRAPPER_EVENTS_PATH;
+    else process.env.AGENTOPS_WRAPPER_EVENTS_PATH = originalEventsPath;
+  }
+});
+
 test('runSummaryCommand rolls up a JSONL span file and writes table paths', async () => {
   const { runSummaryCommand } = freshRequire('src/commands/run-summary.js');
   const dir = tmpDir('run-summary');
