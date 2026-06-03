@@ -880,12 +880,13 @@ What works well:
 - Failure and high-AIU alerts exist as infrastructure.
 - No action groups are attached by default.
 - `agentops alert history` and `agentops alert detail` provide metadata-only fired-alert candidate review with KQL and session links.
+- The Alert Tuning dashboard includes metadata-only fired-alert candidates with session drilldowns.
 - `agentops alert action-plan` generates deterministic GitHub issue or Azure DevOps work-item payload metadata with KQL, session links, and guardrails.
 
 Current gaps:
 
 - Alert action routing is still manual; the CLI now creates a safe plan but does not post notifications or create issues/work items.
-- Alert history exists as CLI-generated metadata-only KQL, but not yet as a first-class dashboard or persisted incident timeline.
+- Alert history exists as CLI-generated metadata-only KQL and Grafana candidate review, but not yet as a persisted incident timeline.
 - No on-call/noise policy.
 - No automatic threshold tuning loop.
 - No first-class "open run from alert" UI beyond constructed KQL/dashboard links.

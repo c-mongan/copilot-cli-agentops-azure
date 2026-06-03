@@ -138,7 +138,7 @@ Retry-hint panels stay quiet unless a real post-tool-failure hook emits a recove
 
 Use this before enabling real alerts. It answers: **what thresholds are reasonable for failures, tool failures, AIU/cost, latency, and content capture?**
 
-The alert rules are disabled by default. This page is evidence for choosing thresholds, not an emergency console on day one.
+The alert rules are disabled by default. This page is evidence for choosing thresholds and reviewing fired-alert candidates, not an emergency console on day one.
 
 This page needs enough history before it becomes visually interesting. On a fresh install, it may have little to recommend. Run real traffic, real custom lifecycle events, and the safe policy-block check over time, then use the recommendations here before turning on scheduled-query alerts.
 
