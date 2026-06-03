@@ -149,6 +149,7 @@ function fileRefsForRecommendation(action, insight = {}, run = {}) {
 
 function benchmarkEvidenceFromReport(report = null) {
   if (!report || typeof report !== 'object') return null;
+  const artifactDiff = report.artifactDiff || {};
   return {
     run_id: report.runId || '',
     decision: report.ok === false ? 'missing' : (report.promotion?.decision || report.recommendation?.action || ''),
@@ -158,6 +159,12 @@ function benchmarkEvidenceFromReport(report = null) {
     tool_failures: report.toolFailures ?? null,
     total_tokens: report.totalTokens ?? null,
     cost: report.cost ?? null,
+    artifact_diff: {
+      added: artifactDiff.added ?? null,
+      modified: artifactDiff.modified ?? null,
+      deleted: artifactDiff.deleted ?? null,
+      total_changed: artifactDiff.totalChanged ?? null
+    },
     validation: report.promotion?.validation || report.message || '',
     rollback: report.promotion?.rollback || (report.ok === false ? 'run or attach benchmark evidence before promotion' : '')
   };
@@ -296,6 +303,10 @@ function recommendationRow(recommendation, timeGenerated = new Date().toISOStrin
     BenchmarkAverageScore: benchmark.average_score ?? null,
     BenchmarkSafetyViolationCount: benchmark.safety_violation_count ?? null,
     BenchmarkToolFailures: benchmark.tool_failures ?? null,
+    BenchmarkArtifactAdded: benchmark.artifact_diff?.added ?? null,
+    BenchmarkArtifactModified: benchmark.artifact_diff?.modified ?? null,
+    BenchmarkArtifactDeleted: benchmark.artifact_diff?.deleted ?? null,
+    BenchmarkArtifactTotalChanged: benchmark.artifact_diff?.total_changed ?? null,
     ChangeTargetRefs: recommendation.evidence?.file_refs || [],
     DashboardTitles: dashboards.map(dashboard => dashboard.title),
     DashboardCount: dashboards.length,

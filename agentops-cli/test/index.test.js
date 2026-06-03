@@ -1315,6 +1315,12 @@ test('V2 recommend carries benchmark gate and change-target metadata', () => {
       toolFailures: 1,
       totalTokens: 12000,
       cost: 0.42,
+      artifactDiff: {
+        added: 1,
+        modified: 2,
+        deleted: 0,
+        totalChanged: 3
+      },
       promotion: {
         decision: 'reject',
         validation: 'benchmark summary includes local checks',
@@ -1338,6 +1344,10 @@ test('V2 recommend carries benchmark gate and change-target metadata', () => {
     assert.equal(row.BenchmarkRunId, 'bench-candidate');
     assert.equal(row.BenchmarkDecision, 'reject');
     assert.equal(row.BenchmarkAverageScore, 61);
+    assert.equal(row.BenchmarkArtifactAdded, 1);
+    assert.equal(row.BenchmarkArtifactModified, 2);
+    assert.equal(row.BenchmarkArtifactDeleted, 0);
+    assert.equal(row.BenchmarkArtifactTotalChanged, 3);
     assert.ok(row.ChangeTargetRefs.includes('tests_or_benchmark_suite'));
     assert.doesNotMatch(JSON.stringify(row), /prompt|source code|tool args/i);
   } finally {
@@ -3247,6 +3257,7 @@ test('V2 dashboard ux-check protects the Datadog-style operator flow', () => {
   assert.equal(result.contracts.empty_state_dashboards, 10);
   assert.equal(result.contracts.pattern_drilldowns, true);
   assert.equal(result.contracts.recommendation_artifacts, true);
+  assert.equal(result.contracts.artifact_diff_review, true);
   assert.equal(result.contracts.ask_agentops_context, true);
 });
 
@@ -3490,7 +3501,7 @@ test('dashboard verify combines static UX and optional live KQL gates', () => {
   });
   assert.equal(live.ok, true, live.errors.join('\n'));
   assert.equal(live.live, true);
-  assert.equal(live.summary.kql_checks, 19);
+  assert.equal(live.summary.kql_checks, 20);
 });
 
 test('V2 dashboard links preserve drilldown contracts', () => {
@@ -3523,6 +3534,10 @@ test('V2 dashboard links preserve drilldown contracts', () => {
   assert.match(JSON.stringify(runsDashboard), /OpenGithub/);
   assert.match(JSON.stringify(runsDashboard), /PrNumberHash/);
   const insightsDashboard = JSON.parse(fs.readFileSync(path.join(root, 'grafana', 'dashboards', 'v2', '09-insights-regressions.json'), 'utf8'));
+  const evalsDashboard = JSON.parse(fs.readFileSync(path.join(root, 'grafana', 'dashboards', 'v2', '08-evals-quality.json'), 'utf8'));
+  assert.match(JSON.stringify(evalsDashboard), /Benchmark artifact diff review/);
+  assert.match(JSON.stringify(evalsDashboard), /BenchmarkArtifactTotalChanged/);
+  assert.match(JSON.stringify(evalsDashboard), /ReviewAction/);
   assert.match(JSON.stringify(insightsDashboard), /OpenPattern/);
   assert.match(JSON.stringify(insightsDashboard), /Recommendation artifacts/);
   assert.match(JSON.stringify(insightsDashboard), /var-pattern_key/);
@@ -3587,7 +3602,7 @@ test('dashboard kql-check renders representative V2 panel queries', () => {
   });
 
   assert.equal(result.ok, true, result.errors.join('\n'));
-  assert.equal(result.checks.length, 19);
+  assert.equal(result.checks.length, 20);
   assert.ok(queries.every(item => item.options.workspaceId === 'workspace-123'));
   assert.ok(queries.every(item => item.query.includes('ago(24h)')));
   assert.ok(queries.every(item => !item.query.includes('$__timeFrom')));
