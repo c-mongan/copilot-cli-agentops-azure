@@ -6,6 +6,7 @@ The actioner is an opt-in workflow for Azure Monitor alert payloads. The impleme
 node agentops-cli/src/index.js alert history --rule <name> --last 24h
 node agentops-cli/src/index.js alert detail --rule <name> --session <conversation-id> --last 24h
 node agentops-cli/src/index.js alert tune-plan --last 14d --rule <name> --owner <team-or-person>
+node agentops-cli/src/index.js alert threshold-patch --rule <name> --threshold <number> --owner <team-or-person> --last 14d
 node agentops-cli/src/index.js alert policy --owner <team-or-person> --service <service-name> --timezone UTC
 node agentops-cli/src/index.js alert action-plan --rule <name> --session <conversation-id> --last 24h
 node agentops-cli/src/index.js alert open --rule <name> --session <conversation-id> --last 24h
@@ -19,7 +20,7 @@ node agentops-cli/src/index.js alert route-action-group --resource-group <rg> --
 node agentops-cli/src/index.js incident timeline --artifact .agentops/alerts/<rule>.json --output .agentops/incidents/<incident>.json
 ```
 
-The history and detail commands provide metadata-only KQL and session links for alert review. The open command turns a rule/session pair into Run Replay, Runs Explorer, session detail, content-viewer, and Azure Logs links. The tune-plan command creates a proposal-only threshold-change artifact with Bicep patch targets and validation queries. The policy command creates ownership, dedupe, and manual-escalation metadata. The action-plan command creates a deterministic JSON plan for a GitHub issue or Azure DevOps work item. The export command writes a durable metadata-only alert artifact. The handoff command bundles the alert detail, tune-plan, policy, resource-state placeholder, and incident timeline into one operator review packet with:
+The history and detail commands provide metadata-only KQL and session links for alert review. The open command turns a rule/session pair into Run Replay, Runs Explorer, session detail, content-viewer, and Azure Logs links. The tune-plan command creates a proposal-only threshold-change artifact with Bicep patch targets and validation queries. The threshold-patch command previews a concrete `infra/bicep/alerts.bicep` diff for direct alert thresholds without editing files. The policy command creates ownership, dedupe, and manual-escalation metadata. The action-plan command creates a deterministic JSON plan for a GitHub issue or Azure DevOps work item. The export command writes a durable metadata-only alert artifact. The handoff command bundles the alert detail, tune-plan, policy, resource-state placeholder, and incident timeline into one operator review packet with:
 
 - alert rule and threshold metadata
 - session Grafana link
@@ -28,6 +29,6 @@ The history and detail commands provide metadata-only KQL and session links for 
 - ownership and escalation guardrails
 - review guardrails
 
-The route-plan command turns that safe handoff context into preview-only GitHub Issue or Azure DevOps Work Item payloads. The action-group-plan command previews receiver setup for an Azure Monitor action group without creating it. The route-github, route-azure-devops, and route-action-group commands are dry-run by default and only create issues/work items or attach action groups when `--yes` is passed with destination config and an owner. The tune-plan, policy, handoff, route-plan, action-group-plan, and incident timeline commands keep remediation as review placeholders; they do not edit alert thresholds or page anyone.
+The route-plan command turns that safe handoff context into preview-only GitHub Issue or Azure DevOps Work Item payloads. The action-group-plan command previews receiver setup for an Azure Monitor action group without creating it. The route-github, route-azure-devops, and route-action-group commands are dry-run by default and only create issues/work items or attach action groups when `--yes` is passed with destination config and an owner. The tune-plan, threshold-patch, policy, handoff, route-plan, action-group-plan, and incident timeline commands keep remediation as review placeholders; they do not edit alert thresholds or page anyone.
 
 It must not call broad LLM tools, read unrelated secrets, mutate Azure resources broadly, or change repository files automatically.

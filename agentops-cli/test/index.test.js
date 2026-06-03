@@ -84,6 +84,7 @@ const {
   alertPolicy,
   alertRecommendationQuery,
   alertRecommendations,
+  alertThresholdPatch,
   alertRoutePlan,
   alertResourceState,
   alertTunePlan,
@@ -7596,6 +7597,37 @@ test('alert tune plan exposes reviewable threshold changes without mutating', ()
   const allRules = alertTunePlan({ last: '14d' });
   assert.equal(allRules.threshold_changes.length, 5);
   assert.ok(allRules.threshold_changes.some(change => change.rule === 'content-capture' && change.decision === 'keep-strict'));
+});
+
+test('alert threshold patch previews concrete Bicep diffs without mutating', () => {
+  const patch = alertThresholdPatch({
+    rule: 'failed-spans',
+    threshold: '1',
+    owner: 'agentops-oncall',
+    last: '21d'
+  });
+
+  assert.equal(patch.schema_version, 'agentops.alert-threshold-patch.v1');
+  assert.equal(patch.mode, 'preview-only-bicep-threshold-patch');
+  assert.equal(patch.rule, 'failed-spans');
+  assert.equal(patch.owner, 'agentops-oncall');
+  assert.equal(patch.patch_target, 'infra/bicep/alerts.bicep');
+  assert.equal(patch.bicep_resource, 'failureAlert');
+  assert.equal(patch.current_threshold, 0);
+  assert.equal(patch.proposed_threshold, 1);
+  assert.match(patch.diff, /--- a\/infra\/bicep\/alerts\.bicep/);
+  assert.match(patch.diff, /-          threshold: 0/);
+  assert.match(patch.diff, /\+          threshold: 1/);
+  assert.match(patch.evidence.threshold_recommendation_query, /let lookback = 21d;/);
+  assert.match(patch.evidence.fired_alert_history, /let selected_rule = "failed-spans";/);
+  assert.ok(patch.guardrails.some(item => item.includes('Preview-only')));
+  assert.doesNotMatch(JSON.stringify(patch), /SECRET_FAKE_TEST_VALUE|raw transcript/);
+
+  assert.throws(() => alertThresholdPatch({ rule: 'content-capture', threshold: '1', owner: 'agentops-oncall' }), /keeps content-capture threshold at 0/);
+  assert.throws(() => alertThresholdPatch({ rule: 'cost-spike', threshold: '2', owner: 'agentops-oncall' }), /requires --rule/);
+  assert.throws(() => alertThresholdPatch({ rule: 'failed-spans', threshold: '1' }), /requires --owner/);
+  assert.throws(() => alertThresholdPatch({ rule: 'failed-spans', owner: 'agentops-oncall' }), /requires --threshold/);
+  assert.throws(() => alertThresholdPatch({ rule: 'failed-spans', threshold: '-1', owner: 'agentops-oncall' }), /non-negative number/);
 });
 
 test('alert resources summarize scheduled-query enabled state', () => {
