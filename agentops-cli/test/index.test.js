@@ -1748,6 +1748,7 @@ test('default skills list exposes user-friendly AgentOps workflows', () => {
 
   assert.ok(names.includes('agentops-setup'));
   assert.ok(names.includes('agentops-attribution'));
+  assert.ok(names.includes('agentops-latest-run'));
   assert.ok(names.includes('agentops-live-triage'));
   assert.ok(names.includes('agentops-benchmark-gate'));
   assert.ok(names.includes('agentops-dashboard-ops'));
@@ -1823,14 +1824,17 @@ test('default skills install copies bundled skills into Copilot home', () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-skills-'));
   try {
     const result = installDefaultSkills({ copilotHome: tempDir });
+    const latestSkill = path.join(tempDir, 'skills', 'agentops-latest-run', 'SKILL.md');
     const liveSkill = path.join(tempDir, 'skills', 'agentops-live-triage', 'SKILL.md');
     const benchmarkSkill = path.join(tempDir, 'skills', 'agentops-benchmark-gate', 'SKILL.md');
 
     assert.equal(result.copilotHome, tempDir);
     assert.equal(result.targetDir, path.join(tempDir, 'skills'));
     assert.ok(result.installed >= 2);
+    assert.equal(fs.existsSync(latestSkill), true);
     assert.equal(fs.existsSync(liveSkill), true);
     assert.equal(fs.existsSync(benchmarkSkill), true);
+    assert.match(fs.readFileSync(latestSkill, 'utf8'), /find my latest AgentOps run/i);
     assert.match(fs.readFileSync(liveSkill, 'utf8'), /what happened in the latest Copilot CLI session/);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
@@ -1916,6 +1920,8 @@ test('workflows map README goals to invocable skills and commands', () => {
   assert.ok(byName.setup.commands.includes('node agentops-cli/src/index.js plugin install'));
   assert.equal(byName.orchestrate.skill, 'agentops-orchestrator');
   assert.ok(byName.orchestrate.commands.includes('node agentops-cli/src/index.js workflows show attribution'));
+  assert.equal(byName['latest-run'].skill, 'agentops-latest-run');
+  assert.ok(byName['latest-run'].commands.includes('node agentops-cli/src/index.js open latest --last 2h'));
   assert.ok(byName['latest-run'].commands.includes('node agentops-cli/src/index.js explain latest --last 7d'));
   assert.equal(byName.attribution.skill, 'agentops-attribution');
   assert.ok(byName.attribution.commands.includes('node agentops-cli/src/index.js attribution --last 7d'));

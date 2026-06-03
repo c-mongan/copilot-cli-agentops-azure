@@ -986,12 +986,12 @@ function agentopsWorkflows() {
     },
     {
       name: 'latest-run',
-      skill: 'agentops-live-triage',
-      description: 'Inspect the latest observed Copilot CLI run.',
-      prompt: 'Use agentops-live-triage to explain the latest run and recommend one next action.',
+      skill: 'agentops-latest-run',
+      description: 'Find, open, and inspect the latest observed Copilot CLI run.',
+      prompt: 'Use agentops-latest-run to find my latest AgentOps run, open the Run Replay link, explain it, and recommend one next action.',
       commands: [
         'copilot -p "Reply with exactly: agentops smoke."',
-        `${cli} open`,
+        `${cli} open latest --last 2h`,
         `${cli} latest --last 7d`,
         `${cli} explain latest --last 7d`,
         `${cli} recommend latest --last 7d`,

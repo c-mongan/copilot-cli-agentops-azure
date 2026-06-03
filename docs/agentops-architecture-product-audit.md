@@ -94,7 +94,7 @@ Local `doctor --local-only` reports OK in this environment:
                                        |                                      |
                                        | Normal command: copilot ...          |
                                        | Optional command: copilot-agentops   |
-                                       | Skills: "Use agentops-live-triage"   |
+                                       | Skills: "Use agentops-latest-run"    |
                                        +------------------+-------------------+
                                                           |
                                                           v
@@ -1036,7 +1036,7 @@ agentops latest
 Then:
 
 ```text
-Use agentops-live-triage to explain my latest run.
+Use agentops-latest-run to find my latest AgentOps run, open the Run Replay link, explain it, and recommend one next action.
 ```
 
 ### Daily Copilot Use
@@ -1047,13 +1047,12 @@ Current experience:
 - If collector is missing, wrapper tries to start it.
 - If collector fails to start, Copilot still runs without observation.
 - Successful wrapped runs print an optional `AgentOps Run Replay` link scoped to the wrapper run/session IDs.
-- The user can query latest run with CLI or ask installed skills.
+- The user can query latest run with CLI or ask `agentops-latest-run`.
 
 This is close to native.
 
 Missing native feel:
 
-- There should be a `copilot` skill prompt that can find the latest run without needing users to remember CLI commands.
 - The UI should open directly to the latest run after smoke.
 
 ### Investigator Experience
