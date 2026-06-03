@@ -74,6 +74,7 @@ const {
   alertDetail,
   alertHistory,
   alertHistoryQuery,
+  alertHandoff,
   alertIncidentTimeline,
   alertPolicy,
   alertRecommendationQuery,
@@ -7747,4 +7748,35 @@ test('incident timeline collects exported alert artifacts without content', () =
   assert.equal(timeline.status.state, 'review');
   assert.ok(timeline.next.some(step => step.includes('assign an owner')));
   assert.doesNotMatch(JSON.stringify(timeline), /SECRET_FAKE_TEST_VALUE|raw transcript/);
+});
+
+test('alert handoff bundles operator evidence without actioning', () => {
+  const handoff = alertHandoff({
+    rule: 'failed-spans',
+    session: 'session-123',
+    last: '6h',
+    owners: ['agentops-oncall'],
+    service: 'copilot-agentops',
+    timezone: 'Europe/Dublin',
+    resourceGroup: 'rg-agentops-dev',
+    createdAt: '2026-06-03T12:00:00.000Z'
+  });
+
+  assert.equal(handoff.schema_version, 'agentops.alert-handoff.v1');
+  assert.equal(handoff.mode, 'metadata-only-operator-handoff');
+  assert.equal(handoff.alert.rule, 'failed-spans');
+  assert.equal(handoff.alert.session, 'session-123');
+  assert.equal(handoff.ownership.state, 'assigned');
+  assert.equal(handoff.status.owner, 'agentops-oncall');
+  assert.equal(handoff.escalation.page, false);
+  assert.equal(handoff.escalation.create_ticket, false);
+  assert.equal(handoff.evidence.tune_plan.schema_version, 'agentops.alert-tune-plan.v1');
+  assert.equal(handoff.evidence.tune_plan.threshold_changes[0].rule, 'failed-spans');
+  assert.equal(handoff.evidence.resources.mode, 'read-only-resource-state');
+  assert.equal(handoff.evidence.resources.resource_group, 'rg-agentops-dev');
+  assert.equal(handoff.evidence.timeline.schema_version, 'agentops.incident-timeline.v1');
+  assert.match(handoff.evidence.detail.history_query, /Conversation == "session-123"/);
+  assert.ok(handoff.guardrails.some(item => item.includes('Do not page')));
+  assert.ok(handoff.operator_steps.some(item => item.includes('Review the session link')));
+  assert.doesNotMatch(JSON.stringify(handoff), /SECRET_FAKE_TEST_VALUE|raw transcript/);
 });
