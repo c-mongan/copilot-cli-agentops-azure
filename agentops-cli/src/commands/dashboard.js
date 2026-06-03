@@ -452,7 +452,7 @@ function validateDashboardUx() {
     if (!hiddenCheckQuery.includes(field)) errors.push(`benchmark hidden check packs missing ${field}`);
   }
   const policyQuery = queryFromPanel(panelByTitle(evals, 'Benchmark policy review'));
-  for (const field of ['BenchmarkPolicyTasks', 'mv-expand', 'BenchmarkPolicyBlocks', 'BenchmarkPermissionProfiles', 'PolicyTaskId', 'PermissionProfile', 'BlockedRisks', 'ViolationRisks']) {
+  for (const field of ['BenchmarkPolicyTasks', 'mv-expand', 'BenchmarkPolicyBlocks', 'BenchmarkPermissionProfiles', 'PolicyTaskId', 'PermissionProfile', 'OsSandboxMode', 'OsSandboxActive', 'BlockedRisks', 'ViolationRisks']) {
     if (!policyQuery.includes(field)) errors.push(`benchmark policy review missing ${field}`);
   }
   const semanticQuery = queryFromPanel(panelByTitle(evals, 'Benchmark semantic checks'));

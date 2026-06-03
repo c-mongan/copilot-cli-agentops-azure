@@ -5021,6 +5021,7 @@ function isPlainObject(value) {
 }
 
 const benchmarkPermissionProfiles = new Set(['allow-all-isolated', 'least-privilege', 'read-only']);
+const benchmarkOsSandboxModes = new Set(['none', 'macos-network-blocked']);
 const benchmarkSemanticAdapters = new Set(['file-contains', 'file-regex', 'file-rubric', 'llm-judge']);
 const benchmarkToolRisks = new Set([
   'read-only',
@@ -5044,6 +5045,30 @@ function benchmarkProfileAllowsBroadArgs(profile) {
 
 function hasBroadPermissionArg(args = []) {
   return args.some(arg => ['--allow-all', '--yolo'].includes(arg));
+}
+
+function normalizeBenchmarkOsSandbox(sandbox, source = 'task') {
+  if (sandbox === undefined || sandbox === null) {
+    return { mode: 'none', enforced: false, network: 'not_enforced', tool: 'not_enforced' };
+  }
+  if (!isPlainObject(sandbox)) {
+    throw new Error(`Invalid benchmark task ${source}: osSandbox must be an object`);
+  }
+  const mode = sandbox.mode === undefined ? 'none' : String(sandbox.mode);
+  if (!benchmarkOsSandboxModes.has(mode)) {
+    throw new Error(`Invalid benchmark task ${source}: osSandbox.mode must be one of: ${[...benchmarkOsSandboxModes].join(', ')}`);
+  }
+  if (mode === 'none') {
+    return { mode, enforced: false, network: 'not_enforced', tool: 'not_enforced' };
+  }
+  return {
+    mode,
+    enforced: true,
+    network: mode === 'macos-network-blocked' ? 'blocked' : 'not_enforced',
+    tool: 'copilot_command_wrapped',
+    platform: 'darwin',
+    command: 'sandbox-exec'
+  };
 }
 
 function validateBenchmarkHiddenPack(pack, source = 'hidden check pack') {
@@ -5842,6 +5867,7 @@ function validateBenchmarkTask(task, suiteDir, source = 'task', options = {}) {
   const fixtureSeal = validateBenchmarkFixtureSeal(task.fixtureSeal, fixturePath, source);
   const fixtureSealPack = loadBenchmarkFixtureSealPack(task, suiteDir, fixturePath, source, options);
   const commandFileSeal = validateBenchmarkFixtureSeal(task.commandFileSeal, fixturePath, source);
+  const osSandbox = normalizeBenchmarkOsSandbox(task.osSandbox, source);
   const toolPolicy = validateBenchmarkToolPolicy(task.toolPolicy, source);
   const toolPolicyEnforcement = {
     blockedRisks: toolPolicy?.blockedRisks || [],
@@ -5860,6 +5886,7 @@ function validateBenchmarkTask(task, suiteDir, source = 'task', options = {}) {
     commandFileSeal,
     toolPolicy,
     toolPolicyEnforcement,
+    osSandbox,
     permissionProfile,
     fixturePath,
     source
@@ -6186,6 +6213,7 @@ function benchmarkRunPlan(suiteId, options = {}) {
             : {}),
           ...(hypothesis ? { 'agentops.hypothesis.id': hypothesis } : {})
         },
+        osSandbox: task.osSandbox,
         promotionGates: suite.promotionGates,
         toolPolicyEnforcement: task.toolPolicyEnforcement,
         successChecks: {
@@ -6372,6 +6400,47 @@ function mergeResourceAttributes(existing, labels) {
   return [existing, benchmarkLabels].filter(Boolean).join(',');
 }
 
+function benchmarkSandboxProfile(run, workspace) {
+  if (run.osSandbox?.mode !== 'macos-network-blocked') return null;
+  const escapedWorkspace = workspace.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  const escapedHome = run.copilotHome.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  return [
+    '(version 1)',
+    '(allow default)',
+    '(deny network*)',
+    `(allow file-write* (subpath "${escapedWorkspace}") (subpath "${escapedHome}"))`
+  ].join('\n');
+}
+
+function benchmarkCopilotInvocation(run, workspace, options = {}) {
+  const copilotCommand = options.copilotCommand || run.copilot.command;
+  const copilotArgs = [...run.copilot.args, '-p', run.copilot.prompt];
+  if (run.osSandbox?.mode !== 'macos-network-blocked') {
+    return {
+      command: copilotCommand,
+      args: copilotArgs,
+      sandbox: { mode: run.osSandbox?.mode || 'none', active: false }
+    };
+  }
+  const platform = options.platform || process.platform;
+  if (platform !== 'darwin') {
+    return {
+      command: copilotCommand,
+      args: copilotArgs,
+      sandbox: {
+        mode: run.osSandbox.mode,
+        active: false,
+        error: 'macos-network-blocked requires macOS sandbox-exec'
+      }
+    };
+  }
+  return {
+    command: 'sandbox-exec',
+    args: ['-p', benchmarkSandboxProfile(run, workspace), copilotCommand, ...copilotArgs],
+    sandbox: { mode: run.osSandbox.mode, active: true, command: 'sandbox-exec' }
+  };
+}
+
 function benchmarkPermissionPolicyChecks(run, changedFiles) {
   if (run.permissionProfile !== 'read-only') return [];
 
@@ -6527,15 +6596,23 @@ function executeBenchmarkRun(plan, run, options = {}) {
 
   const beforeSnapshot = relativeFileSnapshot(workspace);
   const preRunPolicyViolations = run.toolPolicyEnforcement?.blockedAllowedTools || [];
-  if (preRunPolicyViolations.length > 0) {
+  const invocation = benchmarkCopilotInvocation(run, workspace, options);
+  if (preRunPolicyViolations.length > 0 || invocation.sandbox.error) {
     const now = new Date().toISOString();
     fs.writeFileSync(path.join(runRoot, 'stdout.txt'), '');
     fs.writeFileSync(path.join(runRoot, 'stderr.txt'), '');
-    const checkResults = preRunPolicyViolations.map(tool => ({
-      name: `tool policy: blocked allowed tool ${tool.name}`,
-      ok: false,
-      detail: `risk ${tool.risk} is blocked before Copilot execution`
-    }));
+    const checkResults = [
+      ...preRunPolicyViolations.map(tool => ({
+        name: `tool policy: blocked allowed tool ${tool.name}`,
+        ok: false,
+        detail: `risk ${tool.risk} is blocked before Copilot execution`
+      })),
+      ...(invocation.sandbox.error ? [{
+        name: `os sandbox: ${invocation.sandbox.mode}`,
+        ok: false,
+        detail: invocation.sandbox.error
+      }] : [])
+    ];
     return {
       runId: plan.runId,
       suite: plan.suite,
@@ -6544,6 +6621,8 @@ function executeBenchmarkRun(plan, run, options = {}) {
       taskId: run.taskId,
       taskTitle: run.taskTitle,
       permissionProfile: run.permissionProfile,
+      osSandbox: run.osSandbox || { mode: 'none', enforced: false },
+      osSandboxRuntime: invocation.sandbox,
       toolPolicy: run.toolPolicy || null,
       toolPolicyEnforcement: run.toolPolicyEnforcement || null,
       promotionGates: run.promotionGates || null,
@@ -6573,7 +6652,7 @@ function executeBenchmarkRun(plan, run, options = {}) {
       outputTokens: 0,
       aiu: 0,
       cost: 0,
-      errorCategory: 'policy_violation',
+      errorCategory: invocation.sandbox.error ? 'sandbox_unavailable' : 'policy_violation',
       checks: checkResults,
       workspace,
       stdoutPath: path.join(runRoot, 'stdout.txt'),
@@ -6594,7 +6673,7 @@ function executeBenchmarkRun(plan, run, options = {}) {
   env.OTEL_RESOURCE_ATTRIBUTES = mergeResourceAttributes(process.env.OTEL_RESOURCE_ATTRIBUTES, run.otelLabels);
 
   const startedAt = new Date();
-  const copilotResult = spawnSync(options.copilotCommand || run.copilot.command, [...run.copilot.args, '-p', run.copilot.prompt], {
+  const copilotResult = spawnSync(invocation.command, invocation.args, {
     cwd: workspace,
     env,
     encoding: 'utf8',
@@ -6683,6 +6762,8 @@ function executeBenchmarkRun(plan, run, options = {}) {
     taskId: run.taskId,
     taskTitle: run.taskTitle,
     permissionProfile: run.permissionProfile,
+    osSandbox: run.osSandbox || { mode: 'none', enforced: false },
+    osSandboxRuntime: invocation.sandbox,
     toolPolicy: run.toolPolicy || null,
     toolPolicyEnforcement: run.toolPolicyEnforcement || null,
     promotionGates: run.promotionGates || null,
@@ -7964,6 +8045,8 @@ function benchmarkReport(runId, summaries = null, options = {}) {
       taskId: summary.taskId,
       hypothesis: summary.hypothesis || null,
       permissionProfile: summary.permissionProfile || null,
+      osSandbox: summary.osSandbox || null,
+      osSandboxRuntime: summary.osSandboxRuntime || null,
       toolPolicy: summary.toolPolicy || null,
       toolPolicyEnforcement: summary.toolPolicyEnforcement || null,
       success: Boolean(summary.success),
