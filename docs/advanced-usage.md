@@ -312,9 +312,9 @@ agentops experimental mcp --last 7d
 agentops experimental lineage --last 24h
 agentops experimental permission-friction --last 7d
 agentops experimental alert recommend --last 14d
-agentops saved-view add latest-risk --session <conversation-id> --tag risk
+agentops saved-view add latest-risk --session <conversation-id> --tag risk --events .agentops/demo/latest/AgentOpsEvents_CL.jsonl
 agentops saved-view list
-agentops saved-view export --out .agentops/saved-views/latest
+agentops saved-view export --events .agentops/demo/latest/AgentOpsEvents_CL.jsonl --out .agentops/saved-views/latest
 ```
 
 These commands print Grafana links or Azure Log Analytics queries. You can use them without learning KQL first, and an analyst can inspect the generated query when needed.

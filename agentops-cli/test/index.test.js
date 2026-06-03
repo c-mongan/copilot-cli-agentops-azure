@@ -4246,7 +4246,7 @@ test('dashboard verify combines static UX and optional live KQL gates', () => {
   });
   assert.equal(live.ok, true, live.errors.join('\n'));
   assert.equal(live.live, true);
-  assert.equal(live.summary.kql_checks, 31);
+  assert.equal(live.summary.kql_checks, 32);
 });
 
 test('V2 dashboard links preserve drilldown contracts', () => {
@@ -4376,7 +4376,7 @@ test('dashboard kql-check renders representative V2 panel queries', () => {
   });
 
   assert.equal(result.ok, true, result.errors.join('\n'));
-  assert.equal(result.checks.length, 31);
+  assert.equal(result.checks.length, 32);
   assert.ok(queries.every(item => item.options.workspaceId === 'workspace-123'));
   assert.ok(queries.every(item => item.query.includes('ago(24h)')));
   assert.ok(queries.every(item => !item.query.includes('$__timeFrom')));
@@ -8134,17 +8134,40 @@ test('saved views add, list, show, open, and export durable investigations', () 
 
   try {
     fs.writeFileSync(path.join(tempDir, 'query.kql'), 'AgentOpsRunSummary_CL | take 1\n');
+    fs.writeFileSync(path.join(tempDir, 'events.jsonl'), [
+      JSON.stringify({
+        TimeGenerated: '2026-06-03T12:00:00.000Z',
+        EventName: 'agentops.config.changed',
+        ChangeComponent: 'skill',
+        ChangeTarget: 'agentops-latest-run',
+        ChangeType: 'updated',
+        ChangeId: 'change-123',
+        Version: 'v2',
+        SessionId: 'session-123'
+      }),
+      JSON.stringify({
+        TimeGenerated: '2026-06-03T12:01:00.000Z',
+        EventName: 'agentops.config.changed',
+        ChangeComponent: 'model',
+        ChangeTarget: 'gpt-5-chat',
+        SessionId: 'other-session'
+      })
+    ].join('\n'));
     const addOptions = parseSavedViewArgs([
       'add',
       'cost-spike',
       '--url',
       'https://grafana.example/d/agentops-session-detail',
+      '--session',
+      'session-123',
       '--description',
       'High-cost run',
       '--query-file',
       path.join(tempDir, 'query.kql'),
       '--tag',
-      'cost'
+      'cost',
+      '--events',
+      path.join(tempDir, 'events.jsonl')
     ]);
     const added = savedViewCommand(addOptions, viewsPath);
     const listed = savedViewCommand(parseSavedViewArgs(['list']), viewsPath);
@@ -8158,14 +8181,21 @@ test('saved views add, list, show, open, and export durable investigations', () 
       .map(line => JSON.parse(line));
 
     assert.equal(added.saved.name, 'cost-spike');
+    assert.equal(added.saved.changeAnnotations.length, 1);
+    assert.equal(added.saved.changeAnnotations[0].component, 'skill');
     assert.equal(listed.views.length, 1);
     assert.deepEqual(shown.view.tags, ['cost']);
-    assert.equal(opened.url, 'https://grafana.example/d/agentops-session-detail');
+    assert.equal(shown.view.changeAnnotations[0].target, 'agentops-latest-run');
+    assert.match(opened.url, /session-123/);
     assert.equal(exported.export.rows_written, 1);
     assert.equal(exportedRows[0].Name, 'cost-spike');
     assert.match(exportedRows[0].QueryHash, /^query_/);
     assert.equal(exportedRows[0].Tags[0], 'cost');
+    assert.equal(exportedRows[0].ChangeAnnotationCount, 1);
+    assert.deepEqual(exportedRows[0].ChangeTargetRefs, ['skill:agentops-latest-run']);
+    assert.equal(exportedRows[0].ChangeAnnotations[0].change_id, 'change-123');
     assert.doesNotMatch(JSON.stringify(exportedRows), /AgentOpsRunSummary_CL/);
+    assert.doesNotMatch(JSON.stringify(exportedRows), /other-session/);
     assert.equal(fs.existsSync(viewsPath), true);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });

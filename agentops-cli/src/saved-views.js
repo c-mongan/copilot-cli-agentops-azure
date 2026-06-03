@@ -16,6 +16,79 @@ function createSavedViews({ savedViewsPath, readJson, buildLink }) {
     fs.writeFileSync(filePath, `${JSON.stringify(payload, null, 2)}\n`);
   }
 
+  function readJsonl(filePath) {
+    if (!filePath) return [];
+    const text = fs.readFileSync(filePath, 'utf8');
+    return text.split(/\r?\n/).filter(Boolean).map(line => JSON.parse(line));
+  }
+
+  function stringValue(value) {
+    if (value === undefined || value === null) return '';
+    if (typeof value === 'string') return value;
+    return String(value);
+  }
+
+  function propertyValue(row = {}, key) {
+    const props = row.Properties && typeof row.Properties === 'object'
+      ? row.Properties
+      : {};
+    return row[key]
+      ?? row[`agentops.custom.${key}`]
+      ?? row[`agentops.${key}`]
+      ?? props[key]
+      ?? props[`agentops.custom.${key}`]
+      ?? props[`agentops.${key}`]
+      ?? '';
+  }
+
+  function parseDetailsValue(details, key) {
+    const text = stringValue(details);
+    if (!text) return '';
+    const pattern = new RegExp(`${key}[=: ]+([A-Za-z0-9_.@/-]+)`);
+    return pattern.exec(text)?.[1] || '';
+  }
+
+  function normalizeConfigChangeAnnotation(row = {}) {
+    const props = row.Properties && typeof row.Properties === 'object' ? row.Properties : {};
+    const eventName = stringValue(row.EventName || row.Event || row.event || props['agentops.event.name'] || props['event.name']);
+    const eventType = stringValue(row.EventType || row.Type || row.type);
+    const details = stringValue(row.Details || row.ResultCode || row.details || '');
+    const annotationType = stringValue(propertyValue(row, 'annotation_type') || row.AnnotationType || parseDetailsValue(details, 'annotation_type'));
+    const isConfigAnnotation = eventName === 'agentops.config.changed'
+      || annotationType === 'config_change'
+      || eventType === 'annotation'
+      || details.includes('config_change');
+    if (!isConfigAnnotation) return null;
+
+    return {
+      time_generated: stringValue(row.TimeGenerated || row.time || row.timestamp),
+      component: stringValue(row.ChangeComponent || propertyValue(row, 'component') || propertyValue(row, 'entity.type') || row.EntityType || parseDetailsValue(details, 'component')),
+      target: stringValue(row.ChangeTarget || propertyValue(row, 'target') || propertyValue(row, 'entity.id_hash') || row.EntityIdHash || parseDetailsValue(details, 'target')),
+      change_type: stringValue(row.ChangeType || propertyValue(row, 'change_type') || parseDetailsValue(details, 'change_type') || 'updated'),
+      change_id: stringValue(row.ChangeId || propertyValue(row, 'change_id') || parseDetailsValue(details, 'change_id')),
+      version: stringValue(row.Version || propertyValue(row, 'version') || parseDetailsValue(details, 'version')),
+      run_id: stringValue(row.RunId || propertyValue(row, 'run.id')),
+      session_id: stringValue(row.SessionId || propertyValue(row, 'session.id') || props['gen_ai.conversation.id']),
+      trace_id: stringValue(row.TraceId || propertyValue(row, 'trace.id')),
+      event_name: eventName || 'agentops.config.changed'
+    };
+  }
+
+  function annotationsForSession(events = [], session) {
+    const normalizedSession = String(session || '').trim();
+    if (!normalizedSession) return [];
+    return events
+      .map(normalizeConfigChangeAnnotation)
+      .filter(annotation => annotation && annotation.session_id === normalizedSession)
+      .slice(0, 10);
+  }
+
+  function annotationRefs(annotations = []) {
+    return annotations
+      .map(annotation => [annotation.component, annotation.target].filter(Boolean).join(':'))
+      .filter(Boolean);
+  }
+
   function parseSavedViewArgs(args) {
     const [subcommand, rawName, ...rawRest] = args;
     if (!subcommand) throw new Error('saved-view requires add, list, show, open, or export');
@@ -44,6 +117,12 @@ function createSavedViews({ savedViewsPath, readJson, buildLink }) {
         const outDir = rest[index + 1];
         if (!outDir) throw new Error('--out requires a directory');
         options.outDir = path.resolve(outDir);
+        index += 1;
+      } else if (arg === '--events') {
+        const eventsFile = rest[index + 1];
+        if (!eventsFile) throw new Error('--events requires a JSONL file');
+        options.eventsFile = path.resolve(eventsFile);
+        options.events = readJsonl(options.eventsFile);
         index += 1;
       } else if (arg === '--session') {
         const sessionId = rest[index + 1];
@@ -75,14 +154,27 @@ function createSavedViews({ savedViewsPath, readJson, buildLink }) {
       QueryHash: view.query ? stableId(view.query, 'query') : '',
       Tags: Array.isArray(view.tags) ? view.tags : [],
       SessionId: view.session || '',
-      CreatedAt: view.createdAt || ''
+      CreatedAt: view.createdAt || '',
+      ChangeAnnotations: Array.isArray(view.changeAnnotations) ? view.changeAnnotations : [],
+      ChangeAnnotationCount: Array.isArray(view.changeAnnotations) ? view.changeAnnotations.length : 0,
+      ChangeTargetRefs: annotationRefs(view.changeAnnotations)
     };
   }
 
-  function exportSavedViews(views, outDir) {
+  function viewWithAnnotations(view, events = []) {
+    const existing = Array.isArray(view.changeAnnotations) ? view.changeAnnotations : [];
+    const matched = existing.length ? existing : annotationsForSession(events, view.session);
+    return {
+      ...view,
+      changeAnnotations: matched,
+      changeTargetRefs: annotationRefs(matched)
+    };
+  }
+
+  function exportSavedViews(views, outDir, options = {}) {
     const absoluteDir = path.resolve(outDir);
     fs.mkdirSync(absoluteDir, { recursive: true });
-    const rows = views.map(view => savedViewRow(view));
+    const rows = views.map(view => savedViewRow(viewWithAnnotations(view, options.events || [])));
     const file = path.join(absoluteDir, 'AgentOpsSavedViews_CL.jsonl');
     fs.writeFileSync(file, `${rows.map(row => JSON.stringify(row)).join('\n')}${rows.length ? '\n' : ''}`);
     const manifest = path.join(absoluteDir, 'saved-views-manifest.json');
@@ -116,7 +208,7 @@ function createSavedViews({ savedViewsPath, readJson, buildLink }) {
       if (options.name && views.length === 0) throw new Error(`Unknown saved view: ${options.name}`);
       return {
         path: filePath,
-        export: exportSavedViews(views, options.outDir || path.join(path.dirname(filePath), 'saved-views-export'))
+        export: exportSavedViews(views, options.outDir || path.join(path.dirname(filePath), 'saved-views-export'), options)
       };
     }
 
@@ -131,6 +223,7 @@ function createSavedViews({ savedViewsPath, readJson, buildLink }) {
         query: options.query || '',
         tags: options.tags.filter(Boolean),
         session: options.session || null,
+        changeAnnotations: annotationsForSession(options.events || [], options.session),
         createdAt: new Date().toISOString()
       };
       const nextViews = payload.views.filter(item => item.name !== options.name).concat(view)
