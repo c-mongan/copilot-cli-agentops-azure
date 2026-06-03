@@ -4455,11 +4455,25 @@ test('benchmark fixture-pack signatures can require suite trust roots', () => {
 
     const suite = loadBenchmarkSuites(path.join(tempDir, 'benchmarks'))[0];
     assert.deepEqual(suite.fixtureTrustRoots, [{ keyId: 'eval-fixtures-v1' }]);
+    assert.deepEqual(suite.fixtureTrustRevocations, []);
     assert.deepEqual(suite.tasks[0].fixtureSealPack.signature, {
       algorithm: 'ed25519',
       keyId: 'eval-fixtures-v1',
       trusted: true
     });
+
+    fs.writeFileSync(path.join(suiteDir, 'suite.json'), `${JSON.stringify({
+      id: 'trusted-suite',
+      title: 'Trusted suite',
+      fixtureTrustRoots: [{
+        keyId: 'eval-fixtures-v1',
+        publicKey: trustedPublicKey
+      }],
+      fixtureTrustRevocations: [{
+        keyId: 'eval-fixtures-v1'
+      }]
+    })}\n`);
+    assert.throws(() => loadBenchmarkSuites(path.join(tempDir, 'benchmarks')), /signature keyId is revoked/);
 
     const { publicKey: otherPublicKey } = crypto.generateKeyPairSync('ed25519');
     fs.writeFileSync(path.join(suiteDir, 'suite.json'), `${JSON.stringify({
