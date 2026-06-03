@@ -2064,14 +2064,15 @@ test('setup guide recommends the shortest non-mutating setup path', () => {
     assert.equal(result.first_run.bind_command, 'agentops configure import-azd');
     assert.match(result.first_run.privacy_smoke_command, /collector smoke --privacy strict --poison/);
     assert.match(result.first_run.smoke_command, /smoke --real-copilot/);
+    assert.match(result.first_run.smoke_command, /--open-browser/);
     assert.match(result.first_run.run_command, /--no-remote/);
     assert.match(result.first_run.privacy_note, /Prompts and responses stay off by default/);
     assert.ok(result.next.includes('agentops configure import-azd'));
     assert.match(output, /This command is read-only/);
     assert.match(output, /One-minute first run/);
     assert.match(output, /Privacy smoke: agentops collector smoke --privacy strict --poison --json/);
-    assert.match(output, /Real smoke: agentops smoke --real-copilot --wait 2m --poll 10s/);
-    assert.match(output, /agentops latest --last 2h && agentops open latest --last 2h/);
+    assert.match(output, /Real smoke: agentops smoke --real-copilot --wait 2m --poll 10s --open-browser/);
+    assert.match(output, /the smoke opens Run Replay/);
     assert.match(output, /agentops dashboard import --yes --resource-group rg-agentops-dev --grafana-name graf-agentops-dev/);
     assert.match(output, /Fastest path/);
     assert.match(output, /agentops collector smoke --privacy strict --poison/);
@@ -2443,6 +2444,7 @@ test('smoke live mode verifies synthetic telemetry in Azure', async () => {
 
 test('smoke real-copilot mode runs safe prompt and prints Run Replay link', async () => {
   let copilotCall = null;
+  let openedUrl = null;
   let latestCalls = 0;
   const result = await agentopsSmoke({
     id: 'agentops-smoke-real',
@@ -2471,6 +2473,11 @@ test('smoke real-copilot mode runs safe prompt and prints Run Replay link', asyn
         }
       };
     },
+    openBrowser: true,
+    openUrl: url => {
+      openedUrl = url;
+      return { ok: true, url };
+    },
     sleep: async () => {}
   });
   const output = renderSmoke(result);
@@ -2486,9 +2493,12 @@ test('smoke real-copilot mode runs safe prompt and prints Run Replay link', asyn
   assert.equal(result.latest_visibility.attempts.length, 2);
   assert.match(result.links.v2_replay_url, /agentops-v2-run-replay/);
   assert.match(result.links.v2_replay_url, /var-session_id=session-real/);
+  assert.equal(result.browser_open.ok, true);
+  assert.equal(openedUrl, result.links.v2_replay_url);
   assert.match(output, /Real Copilot smoke: completed/);
   assert.match(output, /Latest Copilot run: visible after 2 attempts/);
   assert.match(output, /V2 Run Replay:/);
+  assert.match(output, /Browser open: opened Run Replay/);
 });
 
 test('smoke live mode fails closed when Azure ingestion is not observed', async () => {
@@ -2511,6 +2521,7 @@ test('smoke args parse verification wait and poll durations', () => {
 
   assert.equal(args.id, 'smoke-a');
   assert.equal(args.realCopilot, true);
+  assert.equal(parseSmokeArgs(['--open-browser']).openBrowser, true);
   assert.equal(args.copilotTimeoutMs, 9000);
   assert.equal(args.verify, false);
   assert.equal(args.waitMs, 5000);

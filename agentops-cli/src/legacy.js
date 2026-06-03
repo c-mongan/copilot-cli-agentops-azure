@@ -47,7 +47,7 @@ function usage() {
     'validate-collector [endpoint]',
     'validate-azure [--last <duration>] [--production] [--remediation-plan] [--json]',
     'init [--dry-run] [--force-skills] [--json]',
-    'smoke [--dry-run] [--endpoint <url>] [--id <smoke-id>] [--last <duration>] [--wait <duration>] [--poll <duration>] [--no-verify] [--json]',
+    'smoke [--dry-run] [--endpoint <url>] [--id <smoke-id>] [--last <duration>] [--wait <duration>] [--poll <duration>] [--open-browser] [--no-verify] [--json]',
     'attribution-smoke [--dry-run] [--endpoint <url>] [--id <smoke-id>] [--last <duration>] [--wait <duration>] [--poll <duration>] [--no-verify] [--json]',
     'live-replay-smoke [--dry-run] [--endpoint <url>] [--id <smoke-id>] [--last <duration>] [--wait <duration>] [--poll <duration>] [--no-verify] [--json]',
     'validate-enterprise [--json]',
@@ -1368,7 +1368,7 @@ function agentopsSetupGuide(options = {}) {
       ? 'agentops configure import-azd'
       : 'az login && azd provision && agentops configure import-azd',
     privacy_smoke_command: 'agentops collector smoke --privacy strict --poison --json',
-    smoke_command: 'agentops smoke --real-copilot --wait 2m --poll 10s',
+    smoke_command: 'agentops smoke --real-copilot --wait 2m --poll 10s --open-browser',
     run_command: realCopilotSmokeCommand(),
     latest_command: 'agentops latest --last 2h',
     replay_command: 'agentops replay latest --last 2h',
@@ -1453,7 +1453,7 @@ function renderSetupGuide(result) {
   lines.push(`1. Setup/bind: ${result.first_run.bind_command}`);
   lines.push(`2. Privacy smoke: ${result.first_run.privacy_smoke_command}`);
   lines.push(`3. Real smoke: ${result.first_run.smoke_command}`);
-  lines.push(`4. See it: ${result.first_run.latest_command} && ${result.first_run.open_command}`);
+  lines.push(`4. See it: the smoke opens Run Replay, or run ${result.first_run.latest_command} && ${result.first_run.open_command}`);
   lines.push(`5. Dashboards: ${result.first_run.dashboard_import_command} && ${result.first_run.dashboard_verify_command}`);
   lines.push(`Privacy: ${result.first_run.privacy_note}`);
 
@@ -2460,6 +2460,7 @@ function parseSmokeArgs(args) {
     id: optionValue(args, ['--id']),
     last: parseLastArg(args, '2h'),
     realCopilot: args.includes('--real-copilot') || args.includes('--copilot'),
+    openBrowser: args.includes('--open-browser'),
     copilotTimeoutMs: durationToMs(optionValue(args, ['--timeout']), 120000),
     verify: !args.includes('--no-verify'),
     waitMs: durationToMs(optionValue(args, ['--wait']), 60000),
@@ -2518,6 +2519,28 @@ function runRealCopilotSmoke(options = {}) {
     duration_ms: Date.now() - started,
     command: realCopilotSmokeCommand(),
     cwd: options.cwd || process.cwd()
+  };
+}
+
+function openUrlInBrowser(url, options = {}) {
+  if (!url) return { ok: false, reason: 'missing-url' };
+  if (options.openUrl) return options.openUrl(url);
+  const spawnSync = options.spawnSync || childProcess.spawnSync;
+  const platform = options.platform || process.platform;
+  const command = platform === 'darwin' ? 'open' : (platform === 'win32' ? 'cmd' : 'xdg-open');
+  const args = platform === 'win32' ? ['/c', 'start', '', url] : [url];
+  const result = spawnSync(command, args, {
+    encoding: 'utf8',
+    timeout: durationToMs(options.openTimeoutMs, 5000),
+    maxBuffer: 1024 * 1024
+  });
+  const status = result.status === null || result.status === undefined ? 1 : result.status;
+  return {
+    ok: status === 0 && !result.error,
+    command: [command, ...args].join(' '),
+    status,
+    error: result.error?.message || null,
+    url
   };
 }
 
@@ -2658,12 +2681,14 @@ async function agentopsSmoke(options = {}) {
       `POST ${endpoint}/v1/traces`,
       'node agentops-cli/src/index.js validate-azure',
       verify
-        ? `node agentops-cli/src/index.js smoke --id ${id} --wait ${Math.ceil(waitMs / 1000)}s --poll ${Math.ceil(pollMs / 1000)}s${realCopilot ? ' --real-copilot' : ''}`
+        ? `node agentops-cli/src/index.js smoke --id ${id} --wait ${Math.ceil(waitMs / 1000)}s --poll ${Math.ceil(pollMs / 1000)}s${realCopilot ? ' --real-copilot' : ''}${options.openBrowser ? ' --open-browser' : ''}`
         : `az monitor log-analytics query --workspace "${result.workspace_id}" --analytics-query "<azure_query>"`
     ];
     if (realCopilot) {
       next.push(realCopilotSmokeCommand());
-      next.push(`node agentops-cli/src/index.js open latest --last ${last}`);
+      next.push(options.openBrowser
+        ? 'The successful real-Copilot smoke opens Run Replay after latest-run visibility is verified.'
+        : `node agentops-cli/src/index.js open latest --last ${last}`);
     }
     return {
       ...result,
@@ -2679,6 +2704,7 @@ async function agentopsSmoke(options = {}) {
   let verification = null;
   let latestVisibility = null;
   let links = null;
+  let browserOpen = null;
   if (response.ok && realCopilot) {
     copilotRun = runRealCopilotSmoke({ ...options, endpoint });
     if (copilotRun.ok) {
@@ -2689,6 +2715,9 @@ async function agentopsSmoke(options = {}) {
         pollMs
       });
       if (latestVisibility.ok) links = openLinksSummary(latestVisibility.summary);
+      if (options.openBrowser && links?.v2_replay_url) {
+        browserOpen = openUrlInBrowser(links.v2_replay_url, options);
+      }
     }
   }
   if (response.ok && verify) {
@@ -2709,12 +2738,15 @@ async function agentopsSmoke(options = {}) {
     latest_visibility: latestVisibility,
     verification,
     links,
+    browser_open: browserOpen,
     next: response.ok
       ? (verification?.ok
           ? [
               `Verified ${verification.rows} smoke row${verification.rows === 1 ? '' : 's'} in Log Analytics.`,
-              realCopilot && links?.v2_replay_url ? `Open Run Replay: ${links.v2_replay_url}` : 'node agentops-cli/src/index.js latest --last 2h',
-              realCopilot ? `node agentops-cli/src/index.js open latest --last ${last}` : 'node agentops-cli/src/index.js latest --last 2h'
+              realCopilot && links?.v2_replay_url
+                ? `${browserOpen?.ok ? 'Opened' : 'Open'} Run Replay: ${links.v2_replay_url}`
+                : 'node agentops-cli/src/index.js latest --last 2h',
+              realCopilot && links?.v2_replay_url ? 'node agentops-cli/src/index.js triage latest --out .agentops/triage/latest --json' : 'node agentops-cli/src/index.js latest --last 2h'
             ]
           : [
               verify
@@ -2933,6 +2965,11 @@ function renderSmoke(result) {
   }
   if (result.links?.v2_replay_url) {
     lines.push(`V2 Run Replay: ${result.links.v2_replay_url}`);
+  }
+  if (result.browser_open) {
+    lines.push(result.browser_open.ok
+      ? `Browser open: opened Run Replay.`
+      : `Browser open: failed (${result.browser_open.error || result.browser_open.status || result.browser_open.reason || 'unknown'}).`);
   }
   lines.push('', 'Azure verification query:', result.azure_query, '', 'Next:');
   for (const item of result.next || []) lines.push(`- ${item}`);
