@@ -46,6 +46,7 @@ It tells the story of one run using metadata that remains useful in strict priva
 - model/tool/test/policy/privacy events;
 - context/cache posture;
 - why the run likely failed and the next check to make;
+- latest recommendation artifact with copyable `agentops recommend` and `agentops ask-context` commands;
 - Ask AgentOps context with a copyable metadata-only investigator prompt and `agentops triage` command;
 - GitHub outcome;
 - eval verdicts;

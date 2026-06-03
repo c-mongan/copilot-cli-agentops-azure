@@ -383,8 +383,12 @@ function validateDashboardUx() {
 
   const replay = byUid.get('agentops-v2-run-replay');
   const replayTitles = new Set((replay?.body.panels || []).map(panel => panel.title));
-  for (const title of ['Run summary', 'Replay timeline', 'Agent, skill, and MCP lineage', 'Context and cache posture', 'Why this failed / next check', 'Ask AgentOps context', 'Transcript availability', 'Prompt and response viewer (explicit opt-in)', 'Policy, privacy, tests, and GitHub outcome']) {
+  for (const title of ['Run summary', 'Replay timeline', 'Agent, skill, and MCP lineage', 'Context and cache posture', 'Why this failed / next check', 'Latest recommendation', 'Ask AgentOps context', 'Transcript availability', 'Prompt and response viewer (explicit opt-in)', 'Policy, privacy, tests, and GitHub outcome']) {
     if (!replayTitles.has(title)) errors.push(`run replay missing panel ${title}`);
+  }
+  const latestRecommendationQuery = queryFromPanel(panelByTitle(replay, 'Latest recommendation'));
+  for (const field of ['RecommendationId', 'Action', 'ObservedPattern', 'NextAction', 'RecommendationCommand', 'AskContextCommand', 'OpenReplay', 'OpenPattern']) {
+    if (!latestRecommendationQuery.includes(field)) errors.push(`latest recommendation panel missing ${field}`);
   }
   const askQuery = queryFromPanel(panelByTitle(replay, 'Ask AgentOps context'));
   for (const field of ['RunReplayUrl', 'InvestigationKql', 'AskContextCommand', 'BundleCommand', 'AskPrompt', 'TriageCommand', 'OpenReplay', 'Do not request or enable prompt']) {
