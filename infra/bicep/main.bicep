@@ -30,6 +30,16 @@ param dailyIngestionCapGb int = 0
 @description('Deploy the placeholder Azure Function actioner. Disabled by default for v0.1 validation because it is not required for the core telemetry loop.')
 param deployActioner bool = false
 
+@description('Deploy shared Azure Blob storage for metadata-only saved-view and recommendation exports.')
+param deploySharedStore bool = false
+
+@allowed([
+  'Enabled'
+  'Disabled'
+])
+@description('Shared storage public network access. Use Disabled only after private access has been designed and tested.')
+param sharedStorePublicNetworkAccess string = 'Enabled'
+
 @description('Deploy disabled proposal-only Azure Monitor scheduled query alert rules for AgentOps telemetry. Rules are disabled by default until thresholds are tuned.')
 param deployAlerts bool = false
 
@@ -86,6 +96,7 @@ var tags = {
   telemetryContent: 'metadata-only'
 }
 var compactBaseName = replace(baseName, '-', '')
+var compactEnvironmentName = replace(environmentName, '-', '')
 var defaultLogRetentionDays = deploymentProfile == 'enterprise' ? 90 : 30
 var effectiveLogRetentionDays = logRetentionDays == 0 ? defaultLogRetentionDays : logRetentionDays
 var defaultDailyIngestionCapGb = deploymentProfile == 'enterprise' ? 5 : deploymentProfile == 'team' ? 2 : 1
@@ -156,6 +167,16 @@ module actioner 'actioner-function.bicep' = if (deployActioner) {
   }
 }
 
+module sharedStore 'shared-store.bicep' = if (deploySharedStore) {
+  name: 'shared-store'
+  params: {
+    location: location
+    storageName: take('stagops${compactEnvironmentName}${uniqueString(resourceGroup().id)}', 24)
+    publicNetworkAccess: sharedStorePublicNetworkAccess
+    tags: tags
+  }
+}
+
 module alerts 'alerts.bicep' = if (deployAlerts) {
   name: 'agentops-alerts'
   params: {
@@ -208,3 +229,8 @@ output GRAFANA_NAME string = grafana.outputs.name
 output GRAFANA_PUBLIC_NETWORK_ACCESS string = grafana.outputs.publicNetworkAccess
 output GRAFANA_ZONE_REDUNDANCY string = grafana.outputs.zoneRedundancy
 output KEY_VAULT_RESOURCE_ID string = keyVault.outputs.resourceId
+output SHARED_STORE_DEPLOYED bool = deploySharedStore
+output SHARED_STORE_ACCOUNT_NAME string = deploySharedStore ? sharedStore!.outputs.name : ''
+output SHARED_STORE_BLOB_ENDPOINT string = deploySharedStore ? sharedStore!.outputs.blobEndpoint : ''
+output SHARED_STORE_CONTAINER_NAME string = deploySharedStore ? sharedStore!.outputs.containerName : ''
+output SHARED_STORE_RESOURCE_ID string = deploySharedStore ? sharedStore!.outputs.resourceId : ''

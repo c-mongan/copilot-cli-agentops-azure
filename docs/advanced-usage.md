@@ -315,6 +315,7 @@ agentops experimental alert recommend --last 14d
 agentops saved-view add latest-risk --session <conversation-id> --tag risk --events .agentops/demo/latest/AgentOpsEvents_CL.jsonl
 agentops saved-view list
 agentops saved-view export --events .agentops/demo/latest/AgentOpsEvents_CL.jsonl --out .agentops/saved-views/latest
+agentops azure-ingest upload-plan --dir .agentops/saved-views/latest --account <storage-account> --container agentops-shared --prefix team-a/latest
 ```
 
 These commands print Grafana links or Azure Log Analytics queries. You can use them without learning KQL first, and an analyst can inspect the generated query when needed.

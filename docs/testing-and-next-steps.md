@@ -248,9 +248,10 @@ node agentops-cli/src/index.js saved-view add latest-risk --session <conversatio
 node agentops-cli/src/index.js saved-view list
 node agentops-cli/src/index.js saved-view open latest-risk
 node agentops-cli/src/index.js saved-view export --events .agentops/demo/latest/AgentOpsEvents_CL.jsonl --out .agentops/saved-views/latest
+node agentops-cli/src/index.js azure-ingest upload-plan --dir .agentops/saved-views/latest --account <storage-account> --container agentops-shared
 ```
 
-Saved views are stored outside the repo in `~/.agentops/views.json` unless `AGENTOPS_VIEWS_PATH` is set.
+Saved views are stored outside the repo in `~/.agentops/views.json` unless `AGENTOPS_VIEWS_PATH` is set. The upload plan is preview-only: it validates metadata-only saved-view/recommendation exports and prints `az storage blob upload --auth-mode login` commands for a shared Blob container.
 
 ## Permission Friction Checks
 
