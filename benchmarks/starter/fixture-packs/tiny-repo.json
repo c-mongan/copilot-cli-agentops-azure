@@ -1,0 +1,9 @@
+{
+  "id": "tiny-repo-sealed",
+  "title": "Tiny repo sealed fixture pack",
+  "fixture": "fixtures/tiny-repo",
+  "algorithm": "sha256",
+  "files": {
+    "README.md": "f991cba765390e2b6f5668e68cd0cf427c084310c2d30b60f80c6d56a188eecd"
+  }
+}

@@ -4240,6 +4240,29 @@ test('benchmark schema validation accepts sealed fixture checksums', () => {
   assert.deepEqual(Object.keys(validated.fixtureSeal.files), ['README.md']);
 });
 
+test('benchmark schema validation accepts sealed fixture packs', () => {
+  const suiteDir = path.join(root, 'benchmarks', 'starter');
+  const task = {
+    id: 'sealed-fixture-pack',
+    title: 'Sealed fixture pack',
+    fixture: 'fixtures/tiny-repo',
+    prompt: 'Do nothing.',
+    copilotArgs: [],
+    fixtureSealPack: 'fixture-packs/tiny-repo.json',
+    successCommands: [],
+    expectedFiles: [],
+    forbiddenFiles: [],
+    timeoutSec: 10,
+    tags: []
+  };
+
+  const validated = validateBenchmarkTask(task, suiteDir, 'test-task');
+  assert.equal(validated.fixtureSealPack.id, 'tiny-repo-sealed');
+  assert.equal(validated.fixtureSealPack.algorithm, 'sha256');
+  assert.equal(validated.fixtureSealPack.fixture, 'fixtures/tiny-repo');
+  assert.deepEqual(Object.keys(validated.fixtureSealPack.files), ['README.md']);
+});
+
 test('benchmark schema validation rejects tampered sealed fixtures', () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-bench-seal-schema-'));
   const suiteDir = path.join(tempDir, 'suite');
@@ -4272,6 +4295,25 @@ test('benchmark schema validation rejects tampered sealed fixtures', () => {
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
+});
+
+test('benchmark schema validation rejects sealed fixture packs outside suite', () => {
+  const suiteDir = path.join(root, 'benchmarks', 'starter');
+  const task = {
+    id: 'bad-fixture-pack-path',
+    title: 'Bad fixture pack path',
+    fixture: 'fixtures/tiny-repo',
+    prompt: 'Do nothing.',
+    copilotArgs: [],
+    fixtureSealPack: '../secret-pack.json',
+    successCommands: [],
+    expectedFiles: [],
+    forbiddenFiles: [],
+    timeoutSec: 10,
+    tags: []
+  };
+
+  assert.throws(() => validateBenchmarkTask(task, suiteDir, 'test-task'), /fixture seal pack path cannot leave the suite/);
 });
 
 test('benchmark schema validation normalizes line endings for sealed fixtures', () => {
@@ -4561,6 +4603,14 @@ test('benchmark dry run plans fixture copy, Copilot args, labels, checks, and ti
     fileCount: 1,
     files: ['README.md']
   });
+  assert.deepEqual(plan.runs[0].successChecks.fixtureSealPack, {
+    id: 'tiny-repo-sealed',
+    title: 'Tiny repo sealed fixture pack',
+    algorithm: 'sha256',
+    fixture: 'fixtures/tiny-repo',
+    fileCount: 1,
+    source: 'benchmarks/starter/fixture-packs/tiny-repo.json'
+  });
   assert.equal(plan.runs[0].otelLabels['agentops.benchmark.variant'], 'baseline');
   assert.equal(plan.runs[0].otelLabels['agentops.hypothesis.id'], 'shorter-prompt');
   assert.equal(plan.runs[0].otelLabels['agentops.benchmark.task_id'], 'create-note');
@@ -4662,6 +4712,14 @@ test('benchmark run executes Copilot in an isolated fixture copy and writes a su
       id: pack.id,
       commandCount: pack.commandCount
     })), [{ id: 'create-note-sealed', commandCount: 1 }]);
+    assert.deepEqual(result.summaries[0].fixtureSealPack, {
+      id: 'tiny-repo-sealed',
+      title: 'Tiny repo sealed fixture pack',
+      algorithm: 'sha256',
+      fixture: 'fixtures/tiny-repo',
+      fileCount: 1,
+      source: 'benchmarks/starter/fixture-packs/tiny-repo.json'
+    });
     assert.equal(result.summaries[0].semanticScore, 100);
     assert.deepEqual(result.summaries[0].semanticChecks, [{
       id: 'hello-note-content',
@@ -4683,6 +4741,7 @@ test('benchmark run executes Copilot in an isolated fixture copy and writes a su
       id: pack.id,
       commandCount: pack.commandCount
     })), [{ id: 'create-note-sealed', commandCount: 1 }]);
+    assert.equal(result.report.tasks[0].fixtureSealPack.id, 'tiny-repo-sealed');
     assert.deepEqual(result.report.semanticChecks, { count: 1, averageScore: 100 });
     assert.deepEqual(result.report.promotionGates, {
       minPassRatePct: 100,

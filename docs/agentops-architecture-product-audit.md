@@ -819,7 +819,7 @@ Current anti-cheat limitations:
 
 - The starter task uses `--allow-all`, which is acceptable for an isolated tiny fixture but should not be the default posture for serious evals.
 - Permission profiles enforce broad-flag validation and read-only workspace immutability for benchmark fixture copies, task tool policies can reject observed risky tool telemetry, and the Evals & Quality dashboard surfaces metadata-only policy review. They do not yet enforce OS-level sandboxing.
-- Hidden check packs exist as separate masked command packs, fixture seals can reject checksum drift, and the Evals & Quality dashboard surfaces metadata-only hidden pack review. Full sealed fixture pack distribution is still missing.
+- Hidden check packs exist as separate masked command packs, fixture seals can reject checksum drift, and reusable fixture seal pack manifests can distribute fixture checksum sets across tasks. The Evals & Quality dashboard surfaces metadata-only hidden pack review. External sealed fixture pack distribution is still missing.
 - There is no network isolation; network tool policies are report-time rejection signals, not egress prevention.
 - Read-only benchmark profiles now block any workspace file change in the copied fixture.
 - Semantic evaluator adapters exist for deterministic file-content and regex checks, and the Evals & Quality dashboard surfaces metadata-only semantic check review. There is no LLM or rubric-judge scoring yet.
@@ -1272,7 +1272,7 @@ Required work:
 ### P3 - Build Eval And Anti-Cheat
 
 - Expand benchmark schemas.
-- Add full sealed fixture pack distribution.
+- Add external sealed fixture pack distribution and import tooling.
 - Add LLM or rubric-judge semantic evaluator adapters.
 - Expand enforced permission profiles to network and tool sandboxing.
 - Add unified artifact content diff UI review for approved benchmark artifacts.
