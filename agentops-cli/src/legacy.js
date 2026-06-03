@@ -7413,6 +7413,132 @@ function verifyGitHubExternalReview(review, options = {}) {
   };
 }
 
+function parseAzureDevOpsExternalReviewTarget(review) {
+  const url = review.url || '';
+  let urlMatch = url.match(/^https?:\/\/dev\.azure\.com\/([^/]+)\/([^/]+)\/_git\/([^/]+)\/pullrequest\/(\d+)(?:[/?#].*)?$/i);
+  if (urlMatch) {
+    return {
+      organizationUrl: `https://dev.azure.com/${urlMatch[1]}`,
+      project: safeDecodeURIComponent(urlMatch[2]),
+      repository: safeDecodeURIComponent(urlMatch[3]),
+      pr: urlMatch[4]
+    };
+  }
+
+  urlMatch = url.match(/^https?:\/\/([^/.]+)\.visualstudio\.com\/([^/]+)\/_git\/([^/]+)\/pullrequest\/(\d+)(?:[/?#].*)?$/i);
+  if (urlMatch) {
+    return {
+      organizationUrl: `https://${urlMatch[1]}.visualstudio.com`,
+      project: safeDecodeURIComponent(urlMatch[2]),
+      repository: safeDecodeURIComponent(urlMatch[3]),
+      pr: urlMatch[4]
+    };
+  }
+
+  const id = review.id || '';
+  const idMatch = id.match(/^([^/\s]+)\/([^/\s]+)\/([^#\s]+)#(\d+)$/);
+  if (idMatch) {
+    return {
+      organizationUrl: `https://dev.azure.com/${idMatch[1]}`,
+      project: idMatch[2],
+      repository: idMatch[3],
+      pr: idMatch[4]
+    };
+  }
+
+  return null;
+}
+
+function safeDecodeURIComponent(value) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+function verifyAzureDevOpsExternalReview(review, options = {}) {
+  const target = parseAzureDevOpsExternalReviewTarget(review);
+  if (!target) {
+    return {
+      provider: 'azure-devops',
+      ok: false,
+      status: 'pending',
+      error: 'Azure DevOps review verification requires a pull request URL or org/project/repo#number id'
+    };
+  }
+
+  const spawnSync = options.spawnSync || childProcess.spawnSync;
+  const result = spawnSync('az', [
+    'repos',
+    'pr',
+    'show',
+    '--id',
+    target.pr,
+    '--organization',
+    target.organizationUrl,
+    '--project',
+    target.project,
+    '--repository',
+    target.repository,
+    '--output',
+    'json'
+  ], {
+    encoding: 'utf8'
+  });
+
+  if (result.status !== 0) {
+    return {
+      provider: 'azure-devops',
+      ok: false,
+      status: 'pending',
+      organizationUrl: target.organizationUrl,
+      project: target.project,
+      repository: target.repository,
+      number: Number(target.pr),
+      error: (result.stderr || result.stdout || 'az repos pr show failed').trim()
+    };
+  }
+
+  let payload = {};
+  try {
+    payload = JSON.parse(result.stdout || '{}');
+  } catch (error) {
+    return {
+      provider: 'azure-devops',
+      ok: false,
+      status: 'pending',
+      organizationUrl: target.organizationUrl,
+      project: target.project,
+      repository: target.repository,
+      number: Number(target.pr),
+      error: `az repos pr show returned invalid JSON: ${error.message}`
+    };
+  }
+
+  const pullRequestStatus = String(payload.status || '').toLowerCase();
+  const reviewers = Array.isArray(payload.reviewers) ? payload.reviewers : [];
+  const approvals = reviewers.filter(reviewer => Number(reviewer.vote || 0) >= 5).length;
+  const rejections = reviewers.filter(reviewer => Number(reviewer.vote || 0) <= -5).length;
+  const completed = pullRequestStatus === 'completed';
+  const rejected = pullRequestStatus === 'abandoned' || rejections > 0;
+  const ok = completed || (approvals > 0 && !rejected);
+
+  return {
+    provider: 'azure-devops',
+    ok,
+    status: ok ? 'approved' : (rejected ? 'rejected' : 'pending'),
+    organizationUrl: target.organizationUrl,
+    project: target.project,
+    repository: target.repository,
+    number: Number(payload.pullRequestId || target.pr),
+    url: payload.url || review.url || null,
+    pullRequestStatus: pullRequestStatus || null,
+    approvals,
+    rejections
+  };
+}
+
 function parseJiraExternalReviewTarget(review) {
   const id = review.id || '';
   const idMatch = id.match(/[A-Z][A-Z0-9]+-\d+/);
@@ -7537,13 +7663,14 @@ function verifyBenchmarkExternalReview(review, options = {}) {
   if (!review) return null;
   const system = String(review.system || '').toLowerCase();
   if (system === 'github') return verifyGitHubExternalReview(review, options);
+  if (['azure-devops', 'azdo', 'ado'].includes(system)) return verifyAzureDevOpsExternalReview(review, options);
   if (system === 'jira') return verifyJiraExternalReview(review, options);
   {
     return {
       provider: system || 'unknown',
       ok: false,
       status: 'pending',
-      error: 'external review verification currently supports GitHub pull requests and Jira issues only'
+      error: 'external review verification currently supports GitHub pull requests, Azure DevOps pull requests, and Jira issues only'
     };
   }
 }
