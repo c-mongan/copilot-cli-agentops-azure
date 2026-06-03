@@ -230,6 +230,12 @@ agentops ask-context latest \
   --insights .agentops/insights/latest/AgentOpsInsights_CL.jsonl
 ```
 
+After installing the bundled skills, the memorable Copilot prompt is:
+
+```text
+Use agentops-latest-run to find my latest AgentOps run, open the Run Replay link, explain it, and recommend one next action.
+```
+
 To preview the Azure Managed Grafana import command:
 
 ```bash
