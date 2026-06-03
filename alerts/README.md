@@ -47,10 +47,11 @@ When an alert fires, generate a deterministic issue/work-item plan before notify
 node agentops-cli/src/index.js alert action-plan --rule content-capture --session <conversation-id> --last 24h
 node agentops-cli/src/index.js alert export --rule content-capture --session <conversation-id> --output .agentops/alerts/content-capture.json --last 24h
 node agentops-cli/src/index.js alert handoff --rule content-capture --session <conversation-id> --owner agentops-oncall --output .agentops/alerts/content-capture-handoff.json --last 24h
+node agentops-cli/src/index.js alert route-plan --rule content-capture --session <conversation-id> --owner agentops-oncall --target github-issue --output .agentops/alerts/content-capture-route.json --last 24h
 node agentops-cli/src/index.js incident timeline --artifact .agentops/alerts/content-capture.json --output .agentops/incidents/content-capture.json
 ```
 
-The plan, exported artifact, handoff bundle, and incident timeline include only safe metadata, KQL, and dashboard links. They do not create the issue, mutate Azure resources, or include prompts, responses, tool arguments, tool results, or file contents.
+The plan, exported artifact, handoff bundle, route-plan payloads, and incident timeline include only safe metadata, KQL, and dashboard links. They do not post the issue, mutate Azure resources, or include prompts, responses, tool arguments, tool results, or file contents.
 
 The same evidence is available in the generated `agentops-alert-tuning` Grafana dashboard after rebuilding the dashboard pack:
 

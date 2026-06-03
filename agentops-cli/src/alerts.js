@@ -575,6 +575,84 @@ ${selectedSession}
     };
   }
 
+  function alertRoutePlan({ rule, session, last = '24h', owners = [], service = 'agentops', timezone = 'UTC', targets = [], createdAt, resourceGroup = null } = {}) {
+    const handoff = alertHandoff({ rule, session, last, owners, service, timezone, createdAt, resourceGroup });
+    const selectedTargets = targets.length > 0 ? targets : ['github-issue', 'azure-devops-work-item'];
+    const allowedTargets = new Set(handoff.escalation.allowed_targets);
+    const unknownTarget = selectedTargets.find(target => !allowedTargets.has(target));
+    if (unknownTarget) throw new Error(`alert route-plan target must be one of: ${Array.from(allowedTargets).join(', ')}`);
+
+    const title = `AgentOps alert: ${handoff.alert.rule} for session ${handoff.alert.session}`;
+    const bodyLines = [
+      `AgentOps alert route preview for ${handoff.alert.rule}.`,
+      '',
+      `Session: ${handoff.alert.session}`,
+      `Severity: ${handoff.alert.severity}`,
+      `Lookback: ${handoff.alert.last}`,
+      `Owner: ${handoff.status.owner || 'needs-owner'}`,
+      `Service: ${service}`,
+      '',
+      'Evidence to review:',
+      '- Session dashboard/KQL link from the handoff detail evidence.',
+      '- Alert history KQL scoped to this rule and session.',
+      '- Tune-plan threshold evidence before changing alert rules.',
+      '',
+      'Privacy guardrails:',
+      '- Do not include prompts, responses, tool arguments, tool results, or file contents.',
+      '- Do not page, create tickets, edit Bicep, enable alerts, or attach action groups automatically.'
+    ].join('\n');
+
+    const destinationPayloads = selectedTargets.map(target => {
+      if (target === 'github-issue') {
+        return {
+          target,
+          operation: 'preview-only',
+          payload: {
+            title,
+            body: bodyLines,
+            labels: ['agentops-alert', handoff.alert.rule, handoff.alert.severity],
+            assignees: handoff.ownership.owners
+          }
+        };
+      }
+      return {
+        target,
+        operation: 'preview-only',
+        payload: [
+          { op: 'add', path: '/fields/System.Title', value: title },
+          { op: 'add', path: '/fields/System.Description', value: bodyLines },
+          { op: 'add', path: '/fields/System.Tags', value: `AgentOps; ${handoff.alert.rule}; ${handoff.alert.severity}` }
+        ]
+      };
+    });
+
+    return {
+      schema_version: 'agentops.alert-route-plan.v1',
+      created_at: handoff.created_at,
+      workspace_id: workspaceId,
+      mode: 'preview-only-routing-plan',
+      alert: handoff.alert,
+      ownership: handoff.ownership,
+      destinations: destinationPayloads,
+      evidence: {
+        handoff_schema: handoff.schema_version,
+        history_query: handoff.evidence.detail.history_query,
+        session_link: handoff.evidence.detail.session_link,
+        tune_plan_schema: handoff.evidence.tune_plan.schema_version
+      },
+      guardrails: [
+        'Do not post these payloads automatically; review the handoff evidence first.',
+        'Keep prompts, responses, tool arguments, tool results, and file contents out of route payloads.',
+        'Do not enable alert rules or attach action groups from this route plan.'
+      ],
+      next: [
+        'Review the generated payload for the selected destination.',
+        'Create the issue or work item manually only after confirming safe metadata and owner assignment.',
+        'Attach the exported handoff artifact if your incident process allows metadata-only JSON.'
+      ]
+    };
+  }
+
   return {
     alertRecommendationQuery,
     alertRecommendations,
@@ -587,7 +665,8 @@ ${selectedSession}
     alertActionPlan,
     alertArtifact,
     alertIncidentTimeline,
-    alertHandoff
+    alertHandoff,
+    alertRoutePlan
   };
 }
 
