@@ -1,6 +1,9 @@
 # Actioner
 
-The actioner is an opt-in Azure Functions HTTP handler for Azure Monitor alert payloads. It turns a fired alert into a metadata-only review packet with run links, alert history KQL, action-plan evidence, and an optional preview-only GitHub route plan.
+The actioner is an opt-in Azure Functions package for metadata-only AgentOps workflow APIs. It includes:
+
+- `AlertActioner`: turns an Azure Monitor alert payload into a metadata-only review packet with run links, alert history KQL, action-plan evidence, and an optional preview-only GitHub route plan.
+- `SharedStoreWrite`: accepts one metadata-only recommendation or saved-view row and writes it to the shared Blob artifact store.
 
 Local handler contract:
 
@@ -17,6 +20,42 @@ The actioner expects Azure Monitor common alert schema payloads with:
 - optional `data.customProperties["agentops.last"]`
 
 If required metadata is missing, it returns `needs-review` and does not create a route plan.
+
+## Shared Store Write API
+
+Deploy with both `deployActioner=true` and `deploySharedStore=true` to let the Function App write metadata-only rows to the shared Blob container through managed identity. The deployment grants the Function App `Storage Blob Data Contributor` on the shared storage account and configures the blob output binding with `AgentOpsSharedStorage__blobServiceUri`.
+
+HTTP route:
+
+```text
+POST /api/shared-store/{table}/{id}
+```
+
+Allowed `table` values:
+
+- `AgentOpsRecommendations_CL`
+- `AgentOpsSavedViews_CL`
+
+Body shape:
+
+```json
+{
+  "owner": "agentops-oncall",
+  "row": {
+    "TimeGenerated": "2026-06-03T12:00:00.000Z",
+    "SavedViewId": "view-123",
+    "Name": "latest-risk",
+    "Url": "https://grafana.example/d/agentops-session-detail",
+    "QueryHash": "query_123"
+  }
+}
+```
+
+The write API rejects unsupported tables, missing required columns, invalid recommendation rows, and content-like or secret-like payloads. It writes one JSON blob per accepted row under:
+
+```text
+<container>/<prefix>/<table>/<id>.json
+```
 
 The related CLI review workflow is:
 
@@ -49,6 +88,6 @@ The history and detail commands provide metadata-only KQL and session links for 
 - ownership and escalation guardrails
 - review guardrails
 
-The Function handler uses the same safe alert review primitives as the CLI. The route-plan command turns that safe handoff context into preview-only GitHub Issue or Azure DevOps Work Item payloads. The action-group-plan command previews receiver setup for an Azure Monitor action group without creating it. The route-github, route-azure-devops, and route-action-group commands are dry-run by default and only create issues/work items or attach action groups when `--yes` is passed with destination config and an owner. The tune-plan, threshold-simulate, threshold-patch, review, policy, handoff, route-plan, action-group-plan, incident timeline, and HTTP actioner keep remediation as review placeholders; they do not edit alert thresholds or page anyone.
+The Function handlers use the same safe alert/recommendation/saved-view primitives as the CLI. The route-plan command turns safe handoff context into preview-only GitHub Issue or Azure DevOps Work Item payloads. The action-group-plan command previews receiver setup for an Azure Monitor action group without creating it. The route-github, route-azure-devops, and route-action-group commands are dry-run by default and only create issues/work items or attach action groups when `--yes` is passed with destination config and an owner. The tune-plan, threshold-simulate, threshold-patch, review, policy, handoff, route-plan, action-group-plan, incident timeline, and HTTP actioner keep remediation as review placeholders; they do not edit alert thresholds or page anyone.
 
 It must not call broad LLM tools, read unrelated secrets, mutate Azure resources broadly, or change repository files automatically.

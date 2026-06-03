@@ -37,6 +37,8 @@ Use Azure Monitor Logs Ingestion API with a Data Collection Rule:
 
 Set `deploySharedStore=true` to create an optional Azure Blob container for metadata-only `AgentOpsRecommendations_CL.jsonl` and `AgentOpsSavedViews_CL.jsonl` exports. The storage account disables public blob access and shared-key access; upload plans use Entra-backed `az storage blob upload --auth-mode login`.
 
+Set `deployActioner=true` with `deploySharedStore=true` to enable the hosted write API. The Function App uses managed identity and writes one metadata-only row per blob at `/api/shared-store/{table}/{id}`. It accepts only `AgentOpsRecommendations_CL` and `AgentOpsSavedViews_CL` rows and rejects content-like payloads.
+
 Preview the upload commands before sharing artifacts:
 
 ```bash
