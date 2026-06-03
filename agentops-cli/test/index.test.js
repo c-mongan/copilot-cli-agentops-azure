@@ -1993,6 +1993,8 @@ test('workflows map README goals to invocable skills and commands', () => {
   assert.equal(byName.orchestrate.skill, 'agentops-orchestrator');
   assert.ok(byName.orchestrate.commands.includes('node agentops-cli/src/index.js workflows show attribution'));
   assert.equal(byName['latest-run'].skill, 'agentops-latest-run');
+  assert.ok(byName['latest-run'].commands.includes('node agentops-cli/src/index.js ask-context latest --last 2h'));
+  assert.equal(byName['latest-run'].commands.indexOf('node agentops-cli/src/index.js ask-context latest --last 2h') < byName['latest-run'].commands.indexOf('node agentops-cli/src/index.js explain latest --last 7d'), true);
   assert.ok(byName['latest-run'].commands.includes('node agentops-cli/src/index.js open latest --last 2h'));
   assert.ok(byName['latest-run'].commands.includes('node agentops-cli/src/index.js explain latest --last 7d'));
   assert.equal(byName.attribution.skill, 'agentops-attribution');
@@ -2005,6 +2007,13 @@ test('workflows map README goals to invocable skills and commands', () => {
   assert.ok(byName['analyst-mode'].commands.includes('node agentops-cli/src/index.js alert recommend --last 14d'));
   assert.ok(byName.operations.commands.includes('node agentops-cli/src/index.js plugin uninstall'));
   assert.ok(byName.operations.commands.includes('node agentops-cli/src/index.js uninstall'));
+});
+
+test('advanced usage points latest-run investigation at core ask-context', () => {
+  const advancedUsage = fs.readFileSync(path.join(root, 'docs', 'advanced-usage.md'), 'utf8');
+
+  assert.match(advancedUsage, /agentops ask-context latest --last 24h/);
+  assert.doesNotMatch(advancedUsage, /agentops experimental ask-context/);
 });
 
 test('workflow renderers show prompts and command details', () => {

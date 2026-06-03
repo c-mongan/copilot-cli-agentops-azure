@@ -21,12 +21,14 @@ Use agentops-latest-run to find my latest AgentOps run, open the Run Replay link
 Preferred local commands:
 
 ```bash
+node agentops-cli/src/index.js ask-context latest --last 2h
 node agentops-cli/src/index.js open latest --last 2h
 node agentops-cli/src/index.js latest --last 2h
 node agentops-cli/src/index.js explain latest --last 2h
 node agentops-cli/src/index.js recommend latest --last 2h
-node agentops-cli/src/index.js ask-context latest --last 2h
 ```
+
+Start with `ask-context` when the user wants investigation, because it bundles the Run Replay link, KQL query, latest recommendation, and metadata-only evidence rows for the Copilot investigator path.
 
 If the local CLI has V2 JSONL exports, prefer the run-scoped commands:
 
