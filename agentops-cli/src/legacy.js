@@ -5084,6 +5084,36 @@ function validateBenchmarkFixtureSeal(seal, fixturePath, source = 'task') {
   };
 }
 
+function validateBenchmarkPromotionGates(gates, source = 'suite') {
+  if (gates === undefined) return null;
+  if (!isPlainObject(gates)) {
+    throw new Error(`Invalid benchmark ${source}: promotionGates must be an object`);
+  }
+
+  const allowedFields = new Set([
+    'minPassRatePct',
+    'minAverageScore',
+    'maxToolFailures',
+    'maxSafetyViolationCount',
+    'maxTotalTokens',
+    'maxCost'
+  ]);
+  const normalized = {};
+
+  for (const [field, value] of Object.entries(gates)) {
+    if (!allowedFields.has(field)) {
+      throw new Error(`Invalid benchmark ${source}: unknown promotion gate: ${field}`);
+    }
+    const number = Number(value);
+    if (!Number.isFinite(number) || number < 0) {
+      throw new Error(`Invalid benchmark ${source}: promotion gate ${field} must be a non-negative number`);
+    }
+    normalized[field] = number;
+  }
+
+  return Object.keys(normalized).length > 0 ? normalized : null;
+}
+
 function validateBenchmarkSemanticChecks(checks, source = 'task') {
   if (checks === undefined) return [];
   if (!Array.isArray(checks)) {
@@ -5191,6 +5221,7 @@ function loadBenchmarkSuites(baseDir = benchmarksDir) {
       const taskFiles = fs.existsSync(tasksDir)
         ? fs.readdirSync(tasksDir).filter(file => file.endsWith('.json')).sort()
         : [];
+      const promotionGates = validateBenchmarkPromotionGates(metadata.promotionGates, path.relative(root, suitePath));
       const tasks = taskFiles.map(file => {
         const taskPath = path.join(tasksDir, file);
         return validateBenchmarkTask(readJson(taskPath), suiteDir, path.relative(root, taskPath));
@@ -5201,6 +5232,7 @@ function loadBenchmarkSuites(baseDir = benchmarksDir) {
         title: metadata.title || entry.name,
         description: metadata.description || '',
         path: path.relative(root, suiteDir),
+        promotionGates,
         tasks
       };
     })
@@ -5367,6 +5399,7 @@ function benchmarkRunPlan(suiteId, options = {}) {
           'agentops.benchmark.repeat': String(repeatIndex),
           ...(hypothesis ? { 'agentops.hypothesis.id': hypothesis } : {})
         },
+        promotionGates: suite.promotionGates,
         successChecks: {
           commands: task.successCommands,
           fixtureSeal: task.fixtureSeal ? {
@@ -5691,6 +5724,7 @@ function executeBenchmarkRun(plan, run, options = {}) {
     taskId: run.taskId,
     taskTitle: run.taskTitle,
     permissionProfile: run.permissionProfile,
+    promotionGates: run.promotionGates || null,
     repeat: run.repeat,
     startedAt: startedAt.toISOString(),
     endedAt: endedAt.toISOString(),
@@ -6062,6 +6096,51 @@ function benchmarkPermissionProfileSummary(scoredSummaries) {
   }, {});
 }
 
+function benchmarkPromotionGates(scoredSummaries) {
+  const gates = scoredSummaries
+    .map(summary => summary.promotionGates)
+    .filter(isPlainObject);
+  if (gates.length === 0) return null;
+
+  const merged = {};
+  for (const gate of gates) {
+    for (const [field, value] of Object.entries(gate)) {
+      if (field.startsWith('min')) {
+        merged[field] = Math.max(numberValue(merged[field], 0), numberValue(value));
+      } else if (merged[field] === undefined) {
+        merged[field] = numberValue(value);
+      } else {
+        merged[field] = Math.min(numberValue(merged[field]), numberValue(value));
+      }
+    }
+  }
+  return merged;
+}
+
+function benchmarkPromotionGateFailures(report) {
+  const gates = report.promotionGates;
+  if (!isPlainObject(gates)) return [];
+
+  const checks = [
+    ['minPassRatePct', report.passRatePct, value => value >= gates.minPassRatePct],
+    ['minAverageScore', report.averageScore, value => value >= gates.minAverageScore],
+    ['maxToolFailures', report.toolFailures, value => value <= gates.maxToolFailures],
+    ['maxSafetyViolationCount', report.safetyViolationCount, value => value <= gates.maxSafetyViolationCount],
+    ['maxTotalTokens', report.totalTokens, value => value <= gates.maxTotalTokens],
+    ['maxCost', report.cost, value => value <= gates.maxCost]
+  ];
+
+  return checks
+    .filter(([field]) => gates[field] !== undefined)
+    .map(([field, actual, passes]) => ({
+      gate: field,
+      expected: gates[field],
+      actual,
+      ok: passes(actual)
+    }))
+    .filter(result => !result.ok);
+}
+
 function benchmarkCheatSignals(scoredSummaries, azureTelemetry = null) {
   const signals = [];
   const forbidden = scoredSummaries.reduce((total, summary) => total + numberValue(summary.forbiddenFilesChanged), 0);
@@ -6133,6 +6212,12 @@ function benchmarkRecommendation(report) {
     return {
       action: 'reject',
       message: 'reject: anti-cheat signals blocked promotion.'
+    };
+  }
+  if (report.promotionGateFailures?.length > 0) {
+    return {
+      action: 'reject',
+      message: 'reject: candidate promotion gates were not met.'
     };
   }
   if (report.safetyViolationCount > 0) {
@@ -6280,6 +6365,8 @@ function benchmarkReport(runId, summaries = null, options = {}) {
 
   if (azureTelemetry) report.azureTelemetry = azureTelemetry;
   report.antiCheat = benchmarkCheatSignals(scoredSummaries, azureTelemetry);
+  report.promotionGates = benchmarkPromotionGates(scoredSummaries);
+  report.promotionGateFailures = benchmarkPromotionGateFailures(report);
   report.recommendation = benchmarkRecommendation(report);
   report.promotion = benchmarkPromotionSummary(report);
   return report;
@@ -6299,6 +6386,8 @@ function benchmarkPromotionSummary(report) {
       totalTokens: report.totalTokens,
       cost: report.cost
     },
+    gates: report.promotionGates || null,
+    gateFailures: report.promotionGateFailures || [],
     validation: report.azureTelemetry?.ok === false
       ? 'local benchmark summary only; rerun with --azure when live telemetry is required'
       : 'benchmark summary includes local checks' + (report.azureTelemetry ? ' and Azure telemetry' : ''),

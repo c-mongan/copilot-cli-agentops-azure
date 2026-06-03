@@ -106,6 +106,7 @@ const {
   listDefaultSkills,
   listGrafanaDashboardFiles,
   listBenchmarks,
+  loadBenchmarkSuites,
   loadBenchmarkSummaries,
   liveViewFromArgs,
   openLinksSummary,
@@ -4308,6 +4309,39 @@ test('benchmark schema validation rejects invalid semantic checks', () => {
   assert.throws(() => validateBenchmarkTask(task, suiteDir, 'test-task'), /adapter must be one of/);
 });
 
+test('benchmark schema validation rejects invalid promotion gates', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-bench-gate-schema-'));
+  const suiteDir = path.join(tempDir, 'benchmarks', 'bad-gate-suite');
+
+  try {
+    fs.mkdirSync(path.join(suiteDir, 'fixtures', 'tiny-repo'), { recursive: true });
+    fs.mkdirSync(path.join(suiteDir, 'tasks'), { recursive: true });
+    fs.writeFileSync(path.join(suiteDir, 'suite.json'), `${JSON.stringify({
+      id: 'bad-gate-suite',
+      title: 'Bad gate suite',
+      promotionGates: {
+        minPassRatePct: -1
+      }
+    })}\n`);
+    fs.writeFileSync(path.join(suiteDir, 'tasks', 'noop.json'), `${JSON.stringify({
+      id: 'noop',
+      title: 'Noop',
+      fixture: 'fixtures/tiny-repo',
+      prompt: 'Do nothing.',
+      copilotArgs: [],
+      successCommands: [],
+      expectedFiles: [],
+      forbiddenFiles: [],
+      timeoutSec: 10,
+      tags: []
+    })}\n`);
+
+    assert.throws(() => loadBenchmarkSuites(path.join(tempDir, 'benchmarks')), /promotion gate minPassRatePct must be a non-negative number/);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
 test('benchmark schema validation rejects invalid permission profiles', () => {
   const suiteDir = path.join(root, 'benchmarks', 'starter');
   const task = {
@@ -4365,6 +4399,12 @@ test('benchmark dry run plans fixture copy, Copilot args, labels, checks, and ti
   assert.deepEqual(plan.runs[0].copilot.args, ['--allow-all']);
   assert.match(plan.runs[0].copilot.prompt, /notes\/hello\.txt/);
   assert.equal(plan.runs[0].permissionProfile, 'allow-all-isolated');
+  assert.deepEqual(plan.runs[0].promotionGates, {
+    minPassRatePct: 100,
+    minAverageScore: 90,
+    maxToolFailures: 0,
+    maxSafetyViolationCount: 0
+  });
   assert.deepEqual(plan.runs[0].successChecks.fixtureSeal, {
     algorithm: 'sha256',
     fileCount: 1,
@@ -4448,6 +4488,12 @@ test('benchmark run executes Copilot in an isolated fixture copy and writes a su
     assert.equal(result.summaries.length, 1);
     assert.equal(result.summaries[0].success, true);
     assert.equal(result.summaries[0].permissionProfile, 'allow-all-isolated');
+    assert.deepEqual(result.summaries[0].promotionGates, {
+      minPassRatePct: 100,
+      minAverageScore: 90,
+      maxToolFailures: 0,
+      maxSafetyViolationCount: 0
+    });
     assert.deepEqual(result.summaries[0].changedFiles.map(file => file.replaceAll(path.sep, '/')), ['README.md', 'notes/hello.txt']);
     assert.deepEqual(result.summaries[0].artifactDiff.added.map(file => file.replaceAll(path.sep, '/')), ['notes/hello.txt']);
     assert.deepEqual(result.summaries[0].artifactDiff.modified.map(file => file.replaceAll(path.sep, '/')), ['README.md']);
@@ -4486,6 +4532,13 @@ test('benchmark run executes Copilot in an isolated fixture copy and writes a su
       commandCount: pack.commandCount
     })), [{ id: 'create-note-sealed', commandCount: 1 }]);
     assert.deepEqual(result.report.semanticChecks, { count: 1, averageScore: 100 });
+    assert.deepEqual(result.report.promotionGates, {
+      minPassRatePct: 100,
+      minAverageScore: 90,
+      maxToolFailures: 0,
+      maxSafetyViolationCount: 0
+    });
+    assert.deepEqual(result.report.promotionGateFailures, []);
     assert.equal(result.report.tasks[0].semanticScore, 100);
     assert.equal(result.report.recommendation.action, 'keep');
     assert.equal(result.report.promotion.decision, 'promote');
@@ -4722,6 +4775,29 @@ test('benchmark report scores a passing stored run', () => {
   assert.equal(report.averageScore, 100);
   assert.equal(report.recommendation.action, 'keep');
   assert.match(report.recommendation.message, /^keep:/);
+});
+
+test('benchmark report rejects candidates that miss promotion gates', () => {
+  const summaries = loadBenchmarkSummaries('pass-run', { summariesDir: benchmarkSummariesDir })
+    .map(summary => ({
+      ...summary,
+      promotionGates: {
+        minPassRatePct: 100,
+        minAverageScore: 101,
+        maxToolFailures: 0
+      }
+    }));
+  const report = benchmarkReport('pass-run', summaries);
+
+  assert.equal(report.averageScore, 100);
+  assert.deepEqual(report.promotionGateFailures, [{
+    gate: 'minAverageScore',
+    expected: 101,
+    actual: 100,
+    ok: false
+  }]);
+  assert.equal(report.recommendation.action, 'reject');
+  assert.equal(report.promotion.decision, 'reject');
 });
 
 test('benchmark report enriches stored summaries with Azure telemetry', () => {

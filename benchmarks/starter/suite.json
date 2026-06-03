@@ -1,5 +1,11 @@
 {
   "id": "starter",
   "title": "Starter Safe Tasks",
-  "description": "Tiny fixture tasks for validating benchmark planning and isolated Copilot CLI execution."
+  "description": "Tiny fixture tasks for validating benchmark planning and isolated Copilot CLI execution.",
+  "promotionGates": {
+    "minPassRatePct": 100,
+    "minAverageScore": 90,
+    "maxToolFailures": 0,
+    "maxSafetyViolationCount": 0
+  }
 }
