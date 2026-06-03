@@ -4996,7 +4996,7 @@ function isPlainObject(value) {
 }
 
 const benchmarkPermissionProfiles = new Set(['allow-all-isolated', 'least-privilege', 'read-only']);
-const benchmarkSemanticAdapters = new Set(['file-contains']);
+const benchmarkSemanticAdapters = new Set(['file-contains', 'file-regex']);
 const benchmarkToolRisks = new Set([
   'read-only',
   'write-file',
@@ -5145,17 +5145,32 @@ function validateBenchmarkSemanticChecks(checks, source = 'task') {
       errors.push(`adapter must be one of: ${[...benchmarkSemanticAdapters].join(', ')}`);
     }
     if (typeof check.file !== 'string' || check.file.trim() === '') errors.push('file must be a non-empty string');
-    if (typeof check.contains !== 'string' || check.contains.trim() === '') errors.push('contains must be a non-empty string');
+    if (check.adapter === 'file-contains' && (typeof check.contains !== 'string' || check.contains.trim() === '')) {
+      errors.push('contains must be a non-empty string');
+    }
+    if (check.adapter === 'file-regex') {
+      if (typeof check.pattern !== 'string' || check.pattern.trim() === '') {
+        errors.push('pattern must be a non-empty string');
+      } else {
+        try {
+          new RegExp(check.pattern);
+        } catch {
+          errors.push('pattern must be a valid regular expression');
+        }
+      }
+    }
     if (errors.length > 0) {
       throw new Error(`Invalid benchmark task ${source}: semanticChecks[${index}] ${errors.join('; ')}`);
     }
 
-    return {
+    const normalized = {
       id: check.id,
       adapter: check.adapter,
-      file: check.file,
-      contains: check.contains
+      file: check.file
     };
+    if (check.adapter === 'file-contains') normalized.contains = check.contains;
+    if (check.adapter === 'file-regex') normalized.pattern = check.pattern;
+    return normalized;
   });
 }
 
@@ -5630,7 +5645,7 @@ function benchmarkPermissionPolicyChecks(run, changedFiles) {
 
 function runBenchmarkSemanticChecks(checks = [], workspace) {
   return checks.map(check => {
-    if (check.adapter !== 'file-contains') {
+    if (!benchmarkSemanticAdapters.has(check.adapter)) {
       return {
         id: check.id,
         adapter: check.adapter,
@@ -5642,7 +5657,10 @@ function runBenchmarkSemanticChecks(checks = [], workspace) {
 
     const filePath = safeBenchmarkPath(workspace, check.file);
     const exists = fs.existsSync(filePath) && fs.statSync(filePath).isFile();
-    const ok = exists && fs.readFileSync(filePath, 'utf8').includes(check.contains);
+    const text = exists ? fs.readFileSync(filePath, 'utf8') : '';
+    const ok = check.adapter === 'file-regex'
+      ? exists && new RegExp(check.pattern, 'm').test(text)
+      : exists && text.includes(check.contains);
     return {
       id: check.id,
       adapter: check.adapter,

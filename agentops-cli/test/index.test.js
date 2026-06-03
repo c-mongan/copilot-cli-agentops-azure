@@ -4310,6 +4310,9 @@ test('benchmark schema validation rejects invalid semantic checks', () => {
   };
 
   assert.throws(() => validateBenchmarkTask(task, suiteDir, 'test-task'), /adapter must be one of/);
+
+  task.semanticChecks = [{ id: 'bad-regex', adapter: 'file-regex', file: 'README.md', pattern: '[' }];
+  assert.throws(() => validateBenchmarkTask(task, suiteDir, 'test-task'), /pattern must be a valid regular expression/);
 });
 
 test('benchmark schema validation rejects invalid tool policies', () => {
@@ -4788,6 +4791,72 @@ test('benchmark semantic checks reject wrong artifact content', () => {
     }]);
     assert.equal(result.report.semanticChecks.averageScore, 0);
     assert.equal(result.report.recommendation.action, 'reject');
+  } finally {
+    fs.rmSync(path.join(benchmarkRunBaseDir, runId), { recursive: true, force: true });
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('benchmark semantic checks support regex file assertions', () => {
+  const runId = `bench-semantic-regex-${Date.now()}`;
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-bench-semantic-regex-'));
+  const suiteDir = path.join(tempDir, 'benchmarks', 'semantic-regex-suite');
+  const fixtureDir = path.join(suiteDir, 'fixtures', 'tiny-repo');
+  const tasksDir = path.join(suiteDir, 'tasks');
+
+  try {
+    fs.mkdirSync(fixtureDir, { recursive: true });
+    fs.mkdirSync(tasksDir, { recursive: true });
+    fs.writeFileSync(path.join(suiteDir, 'suite.json'), `${JSON.stringify({ id: 'semantic-regex-suite', title: 'Semantic regex suite' })}\n`);
+    fs.writeFileSync(path.join(fixtureDir, 'README.md'), '# Semantic fixture\n');
+    fs.writeFileSync(path.join(tasksDir, 'write-note.json'), `${JSON.stringify({
+      id: 'write-note',
+      title: 'Write note',
+      fixture: 'fixtures/tiny-repo',
+      prompt: 'Create notes/hello.txt.',
+      copilotArgs: [],
+      permissionProfile: 'least-privilege',
+      successCommands: [],
+      semanticChecks: [{
+        id: 'note-regex',
+        adapter: 'file-regex',
+        file: 'notes/hello.txt',
+        pattern: '^hello\\s+agentops$'
+      }],
+      expectedFiles: ['notes/hello.txt'],
+      forbiddenFiles: [],
+      timeoutSec: 10,
+      tags: []
+    })}\n`);
+
+    const result = runBenchmarkSuite('semantic-regex-suite', {
+      benchmarksDir: path.join(tempDir, 'benchmarks'),
+      variant: 'candidate',
+      repeat: 1,
+      runId,
+      summariesDir: path.join(tempDir, 'summaries'),
+      spawnSync: (command, args, options = {}) => {
+        if (command === 'copilot') {
+          fs.mkdirSync(path.join(options.cwd, 'notes'), { recursive: true });
+          fs.writeFileSync(path.join(options.cwd, 'notes', 'hello.txt'), 'hello agentops\n');
+          return { status: 0, stdout: 'created note', stderr: '' };
+        }
+        return { status: 0, stdout: '', stderr: '' };
+      }
+    });
+
+    assert.equal(result.summaries[0].success, true);
+    assert.equal(result.summaries[0].semanticScore, 100);
+    assert.deepEqual(result.summaries[0].semanticChecks, [{
+      id: 'note-regex',
+      adapter: 'file-regex',
+      file: 'notes/hello.txt',
+      ok: true,
+      score: 100,
+      detail: null
+    }]);
+    assert.equal(result.report.semanticChecks.averageScore, 100);
+    assert.equal(result.report.recommendation.action, 'keep');
   } finally {
     fs.rmSync(path.join(benchmarkRunBaseDir, runId), { recursive: true, force: true });
     fs.rmSync(tempDir, { recursive: true, force: true });
