@@ -4402,6 +4402,89 @@ test('benchmark fixture-pack command signs and verifies reusable seal manifests'
   }
 });
 
+test('benchmark fixture-pack signatures can require suite trust roots', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-bench-pack-trust-'));
+  const suiteDir = path.join(tempDir, 'benchmarks', 'trusted-suite');
+  const fixtureDir = path.join(suiteDir, 'fixtures', 'tiny-repo');
+  const keyPath = path.join(suiteDir, 'keys', 'fixture-signing-key.pem');
+  const packPath = path.join(suiteDir, 'fixture-packs', 'tiny-repo.json');
+
+  try {
+    fs.mkdirSync(fixtureDir, { recursive: true });
+    fs.mkdirSync(path.dirname(keyPath), { recursive: true });
+    fs.mkdirSync(path.join(suiteDir, 'tasks'), { recursive: true });
+    fs.writeFileSync(path.join(fixtureDir, 'README.md'), '# Fixture\n');
+    const { privateKey, publicKey } = crypto.generateKeyPairSync('ed25519');
+    const trustedPublicKey = publicKey.export({ type: 'spki', format: 'pem' });
+    fs.writeFileSync(keyPath, privateKey.export({ type: 'pkcs8', format: 'pem' }));
+
+    benchmarkFixturePack({
+      cwd: suiteDir,
+      fixtureDir: 'fixtures/tiny-repo',
+      id: 'tiny-repo-sealed',
+      fixture: 'fixtures/tiny-repo',
+      signKeyId: 'eval-fixtures-v1',
+      signPrivateKey: 'keys/fixture-signing-key.pem',
+      output: 'fixture-packs/tiny-repo.json'
+    });
+    fs.writeFileSync(path.join(suiteDir, 'suite.json'), `${JSON.stringify({
+      id: 'trusted-suite',
+      title: 'Trusted suite',
+      fixtureTrustRoots: [{
+        keyId: 'eval-fixtures-v1',
+        publicKey: trustedPublicKey
+      }]
+    })}\n`);
+    fs.writeFileSync(path.join(suiteDir, 'tasks', 'noop.json'), `${JSON.stringify({
+      id: 'noop',
+      title: 'Noop',
+      fixture: 'fixtures/tiny-repo',
+      prompt: 'Do nothing.',
+      copilotArgs: [],
+      fixtureSealPack: 'fixture-packs/tiny-repo.json',
+      successCommands: [],
+      expectedFiles: [],
+      forbiddenFiles: [],
+      timeoutSec: 10,
+      tags: []
+    })}\n`);
+
+    const suite = loadBenchmarkSuites(path.join(tempDir, 'benchmarks'))[0];
+    assert.deepEqual(suite.fixtureTrustRoots, [{ keyId: 'eval-fixtures-v1' }]);
+    assert.deepEqual(suite.tasks[0].fixtureSealPack.signature, {
+      algorithm: 'ed25519',
+      keyId: 'eval-fixtures-v1',
+      trusted: true
+    });
+
+    const { publicKey: otherPublicKey } = crypto.generateKeyPairSync('ed25519');
+    fs.writeFileSync(path.join(suiteDir, 'suite.json'), `${JSON.stringify({
+      id: 'trusted-suite',
+      title: 'Trusted suite',
+      fixtureTrustRoots: [{
+        keyId: 'eval-fixtures-v1',
+        publicKey: otherPublicKey.export({ type: 'spki', format: 'pem' })
+      }]
+    })}\n`);
+    assert.throws(() => loadBenchmarkSuites(path.join(tempDir, 'benchmarks')), /signature public key does not match trust root/);
+
+    const unsignedPack = JSON.parse(fs.readFileSync(packPath, 'utf8'));
+    delete unsignedPack.signature;
+    fs.writeFileSync(packPath, `${JSON.stringify(unsignedPack, null, 2)}\n`);
+    fs.writeFileSync(path.join(suiteDir, 'suite.json'), `${JSON.stringify({
+      id: 'trusted-suite',
+      title: 'Trusted suite',
+      fixtureTrustRoots: [{
+        keyId: 'eval-fixtures-v1',
+        publicKey: trustedPublicKey
+      }]
+    })}\n`);
+    assert.throws(() => loadBenchmarkSuites(path.join(tempDir, 'benchmarks')), /signature required by fixture trust roots/);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
 test('benchmark schema validation rejects tampered sealed fixtures', () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-bench-seal-schema-'));
   const suiteDir = path.join(tempDir, 'suite');

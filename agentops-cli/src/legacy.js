@@ -5124,7 +5124,47 @@ function signBenchmarkFixtureSealPack(pack, options = {}) {
   };
 }
 
-function validateBenchmarkFixtureSealPackSignature(pack, source = 'fixture seal pack') {
+function canonicalBenchmarkPublicKey(publicKey, source) {
+  try {
+    return crypto.createPublicKey(publicKey).export({ type: 'spki', format: 'pem' });
+  } catch {
+    throw new Error(`Invalid benchmark fixture trust root ${source}: publicKey must be a PEM public key`);
+  }
+}
+
+function validateBenchmarkFixtureTrustRoots(trustRoots, source = 'suite') {
+  if (trustRoots === undefined) return [];
+  if (!Array.isArray(trustRoots)) {
+    throw new Error(`Invalid benchmark ${source}: fixtureTrustRoots must be an array`);
+  }
+
+  const seen = new Set();
+  return trustRoots.map((rootEntry, index) => {
+    const errors = [];
+    if (!isPlainObject(rootEntry)) {
+      throw new Error(`Invalid benchmark ${source}: fixtureTrustRoots[${index}] must be an object`);
+    }
+    if (typeof rootEntry.keyId !== 'string' || rootEntry.keyId.trim() === '') errors.push('keyId must be a non-empty string');
+    if (typeof rootEntry.publicKey !== 'string' || rootEntry.publicKey.trim() === '') errors.push('publicKey must be a PEM public key');
+    if (errors.length > 0) {
+      throw new Error(`Invalid benchmark ${source}: fixtureTrustRoots[${index}] ${errors.join('; ')}`);
+    }
+    if (seen.has(rootEntry.keyId)) {
+      throw new Error(`Invalid benchmark ${source}: duplicate fixtureTrustRoots keyId: ${rootEntry.keyId}`);
+    }
+    seen.add(rootEntry.keyId);
+
+    return {
+      keyId: rootEntry.keyId,
+      publicKey: canonicalBenchmarkPublicKey(rootEntry.publicKey, `${source} fixtureTrustRoots[${index}]`)
+    };
+  });
+}
+
+function validateBenchmarkFixtureSealPackSignature(pack, source = 'fixture seal pack', trustRoots = []) {
+  if (pack.signature === undefined && trustRoots.length > 0) {
+    throw new Error(`Invalid benchmark fixture seal pack ${source}: signature required by fixture trust roots`);
+  }
   if (pack.signature === undefined) return null;
   if (!isPlainObject(pack.signature)) {
     throw new Error(`Invalid benchmark fixture seal pack ${source}: signature must be an object`);
@@ -5155,9 +5195,21 @@ function validateBenchmarkFixtureSealPackSignature(pack, source = 'fixture seal 
     throw new Error(`Invalid benchmark fixture seal pack ${source}: signature verification failed`);
   }
 
+  if (trustRoots.length > 0) {
+    const trustedRoot = trustRoots.find(rootEntry => rootEntry.keyId === signature.keyId);
+    if (!trustedRoot) {
+      throw new Error(`Invalid benchmark fixture seal pack ${source}: signature keyId is not trusted`);
+    }
+    const signaturePublicKey = canonicalBenchmarkPublicKey(signature.publicKey, `${source} signature`);
+    if (signaturePublicKey !== trustedRoot.publicKey) {
+      throw new Error(`Invalid benchmark fixture seal pack ${source}: signature public key does not match trust root`);
+    }
+  }
+
   return {
     algorithm: signature.algorithm,
-    keyId: signature.keyId
+    keyId: signature.keyId,
+    ...(trustRoots.length > 0 ? { trusted: true } : {})
   };
 }
 
@@ -5275,7 +5327,7 @@ function validateBenchmarkFixtureSeal(seal, fixturePath, source = 'task') {
   };
 }
 
-function validateBenchmarkFixtureSealPack(pack, fixturePath, source = 'fixture seal pack') {
+function validateBenchmarkFixtureSealPack(pack, fixturePath, source = 'fixture seal pack', options = {}) {
   const errors = [];
   if (!isPlainObject(pack)) {
     throw new Error(`Invalid benchmark fixture seal pack ${source}: must be an object`);
@@ -5286,7 +5338,7 @@ function validateBenchmarkFixtureSealPack(pack, fixturePath, source = 'fixture s
     throw new Error(`Invalid benchmark fixture seal pack ${source}: ${errors.join('; ')}`);
   }
 
-  const signature = validateBenchmarkFixtureSealPackSignature(pack, source);
+  const signature = validateBenchmarkFixtureSealPackSignature(pack, source, options.fixtureTrustRoots || []);
   const fixtureSeal = validateBenchmarkFixtureSeal({
     algorithm: pack.algorithm,
     files: pack.files
@@ -5303,7 +5355,7 @@ function validateBenchmarkFixtureSealPack(pack, fixturePath, source = 'fixture s
   };
 }
 
-function loadBenchmarkFixtureSealPack(task, suiteDir, fixturePath, source = 'task') {
+function loadBenchmarkFixtureSealPack(task, suiteDir, fixturePath, source = 'task', options = {}) {
   if (task.fixtureSealPack === undefined) return null;
   if (typeof task.fixtureSealPack !== 'string' || task.fixtureSealPack.trim() === '') {
     throw new Error(`Invalid benchmark task ${source}: fixtureSealPack must be a non-empty string`);
@@ -5318,7 +5370,7 @@ function loadBenchmarkFixtureSealPack(task, suiteDir, fixturePath, source = 'tas
     throw new Error(`Invalid benchmark task ${source}: fixture seal pack does not exist: ${packPath}`);
   }
 
-  const fixtureSealPack = validateBenchmarkFixtureSealPack(readJson(fullPath), fixturePath, displaySourcePath(fullPath));
+  const fixtureSealPack = validateBenchmarkFixtureSealPack(readJson(fullPath), fixturePath, displaySourcePath(fullPath), options);
   if (fixtureSealPack.fixture !== normalizeBenchmarkRelativePath(task.fixture)) {
     throw new Error(`Invalid benchmark task ${source}: fixtureSealPack fixture must match task fixture`);
   }
@@ -5498,7 +5550,7 @@ function benchmarkAllowedToolPolicyViolations(args = [], toolPolicy = null) {
     .sort((left, right) => left.risk.localeCompare(right.risk) || left.name.localeCompare(right.name));
 }
 
-function validateBenchmarkTask(task, suiteDir, source = 'task') {
+function validateBenchmarkTask(task, suiteDir, source = 'task', options = {}) {
   const errors = [];
   const stringFields = ['id', 'title', 'fixture', 'prompt'];
   const arrayFields = ['copilotArgs', 'successCommands', 'expectedFiles', 'forbiddenFiles', 'tags'];
@@ -5547,7 +5599,7 @@ function validateBenchmarkTask(task, suiteDir, source = 'task') {
   const hiddenPackCommands = hiddenCheckPacks.flatMap(pack => pack.commands);
   const semanticChecks = validateBenchmarkSemanticChecks(task.semanticChecks, source);
   const fixtureSeal = validateBenchmarkFixtureSeal(task.fixtureSeal, fixturePath, source);
-  const fixtureSealPack = loadBenchmarkFixtureSealPack(task, suiteDir, fixturePath, source);
+  const fixtureSealPack = loadBenchmarkFixtureSealPack(task, suiteDir, fixturePath, source, options);
   const toolPolicy = validateBenchmarkToolPolicy(task.toolPolicy, source);
   const toolPolicyEnforcement = {
     blockedRisks: toolPolicy?.blockedRisks || [],
@@ -5580,6 +5632,7 @@ function loadBenchmarkSuites(baseDir = benchmarksDir) {
       const suiteDir = path.join(baseDir, entry.name);
       const suitePath = path.join(suiteDir, 'suite.json');
       const metadata = fs.existsSync(suitePath) ? readJson(suitePath) : {};
+      const fixtureTrustRoots = validateBenchmarkFixtureTrustRoots(metadata.fixtureTrustRoots, path.relative(root, suitePath));
       const tasksDir = path.join(suiteDir, 'tasks');
       const taskFiles = fs.existsSync(tasksDir)
         ? fs.readdirSync(tasksDir).filter(file => file.endsWith('.json')).sort()
@@ -5587,7 +5640,7 @@ function loadBenchmarkSuites(baseDir = benchmarksDir) {
       const promotionGates = validateBenchmarkPromotionGates(metadata.promotionGates, path.relative(root, suitePath));
       const tasks = taskFiles.map(file => {
         const taskPath = path.join(tasksDir, file);
-        return validateBenchmarkTask(readJson(taskPath), suiteDir, path.relative(root, taskPath));
+        return validateBenchmarkTask(readJson(taskPath), suiteDir, path.relative(root, taskPath), { fixtureTrustRoots });
       });
 
       return {
@@ -5595,6 +5648,7 @@ function loadBenchmarkSuites(baseDir = benchmarksDir) {
         title: metadata.title || entry.name,
         description: metadata.description || '',
         path: path.relative(root, suiteDir),
+        fixtureTrustRoots: fixtureTrustRoots.map(rootEntry => ({ keyId: rootEntry.keyId })),
         promotionGates,
         tasks
       };
