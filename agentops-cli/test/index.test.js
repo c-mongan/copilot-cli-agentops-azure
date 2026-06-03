@@ -69,6 +69,7 @@ const {
   agentopsLiveReplaySmoke,
   agentopsStatusSummary,
   agentopsWorkflows,
+  alertGithubIssueRoute,
   alertActionPlan,
   alertArtifact,
   alertDetail,
@@ -7815,4 +7816,60 @@ test('alert route plan previews destination payloads without posting', () => {
   assert.equal(allDestinations.destinations.length, 2);
   assert.ok(allDestinations.destinations.some(destination => destination.target === 'azure-devops-work-item'));
   assert.throws(() => alertRoutePlan({ rule: 'failed-spans', session: 'session-456', targets: ['pager'] }), /target must be one of/);
+});
+
+test('alert github route requires review gates before posting', () => {
+  const dryRun = alertGithubIssueRoute({
+    rule: 'content-capture',
+    session: 'session-123',
+    last: '6h',
+    owners: ['agentops-oncall'],
+    service: 'copilot-agentops',
+    repo: 'c-mongan/azure-agentops-observability'
+  });
+
+  assert.equal(dryRun.schema_version, 'agentops.alert-github-route.v1');
+  assert.equal(dryRun.mode, 'dry-run-github-issue-route');
+  assert.equal(dryRun.command.executable, 'gh');
+  assert.deepEqual(dryRun.command.args.slice(0, 4), ['issue', 'create', '--repo', 'c-mongan/azure-agentops-observability']);
+  assert.ok(dryRun.command.args.includes('--title'));
+  assert.ok(dryRun.command.args.includes('--body'));
+  assert.ok(dryRun.command.args.includes('--assignee'));
+  assert.ok(dryRun.payload.labels.includes('critical'));
+  assert.match(dryRun.payload.body, /Do not include prompts/);
+  assert.ok(dryRun.guardrails.some(item => item.includes('Review the route-plan')));
+  assert.doesNotMatch(JSON.stringify(dryRun), /SECRET_FAKE_TEST_VALUE|raw transcript/);
+
+  let invoked = null;
+  const posted = alertGithubIssueRoute({
+    rule: 'failed-spans',
+    session: 'session-456',
+    owners: ['agentops-oncall'],
+    repo: 'c-mongan/azure-agentops-observability',
+    yes: true,
+    spawnSync: (command, args, options) => {
+      invoked = { command, args, options };
+      return { status: 0, stdout: 'https://github.com/c-mongan/azure-agentops-observability/issues/123\n', stderr: '' };
+    }
+  });
+
+  assert.equal(posted.mode, 'posted-github-issue');
+  assert.equal(posted.issue_url, 'https://github.com/c-mongan/azure-agentops-observability/issues/123');
+  assert.equal(invoked.command, 'gh');
+  assert.equal(invoked.args[0], 'issue');
+  assert.equal(invoked.options.encoding, 'utf8');
+
+  const failed = alertGithubIssueRoute({
+    rule: 'failed-spans',
+    session: 'session-456',
+    owners: ['agentops-oncall'],
+    repo: 'c-mongan/azure-agentops-observability',
+    yes: true,
+    spawnSync: () => ({ status: 1, stdout: '', stderr: 'not authenticated' })
+  });
+  assert.equal(failed.mode, 'failed-github-issue-route');
+  assert.equal(failed.error, 'not authenticated');
+
+  assert.throws(() => alertGithubIssueRoute({ rule: 'failed-spans', session: 'session-456', repo: 'c-mongan/azure-agentops-observability' }), /requires at least one --owner/);
+  assert.throws(() => alertGithubIssueRoute({ rule: 'failed-spans', session: 'session-456', owners: ['agentops-oncall'], repo: 'bad repo' }), /requires --repo/);
 });
