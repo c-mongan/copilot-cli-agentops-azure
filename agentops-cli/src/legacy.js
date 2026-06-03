@@ -71,7 +71,7 @@ function usage() {
     'policy [--last <duration>]',
     'mcp [--last <duration>]',
     'benchmark list',
-    'benchmark fixture-pack <fixture-dir> --id <id> [--fixture <path>] [--title <title>] [--output <file>]',
+    'benchmark fixture-pack <fixture-dir> --id <id> [--fixture <path>] [--title <title>] [--output <file>] [--sign-key-id <id> --sign-private-key <pem>]',
     'benchmark run <suite> --variant <name> --repeat <n> [--hypothesis <id>] [--dry-run]',
     'benchmark report <run-id> [--azure] [--last <duration>] [--approval-file <json>]',
     'benchmark compare <before-run-id> <after-run-id> [--azure] [--last <duration>] [--approval-file <json>]'
@@ -1006,6 +1006,7 @@ function agentopsWorkflows() {
       commands: [
         `${cli} benchmark list`,
         `${cli} benchmark fixture-pack benchmarks/starter/fixtures/tiny-repo --id tiny-repo-sealed --fixture fixtures/tiny-repo --output benchmarks/starter/fixture-packs/tiny-repo.json`,
+        `${cli} benchmark fixture-pack benchmarks/starter/fixtures/tiny-repo --id tiny-repo-sealed --fixture fixtures/tiny-repo --sign-key-id eval-fixtures-v1 --sign-private-key keys/eval-fixtures-v1.pem --output benchmarks/starter/fixture-packs/tiny-repo.json`,
         `${cli} benchmark run starter --variant baseline --repeat 1 --hypothesis safer-tool-policy --dry-run`,
         `${cli} benchmark run starter --variant baseline --repeat 1 --hypothesis safer-tool-policy`,
         `${cli} benchmark report <run-id>`,
@@ -5082,6 +5083,84 @@ function benchmarkFixtureFiles(fixtureDir) {
   return files.sort();
 }
 
+function stableJson(value) {
+  if (Array.isArray(value)) return value.map(stableJson);
+  if (isPlainObject(value)) {
+    return Object.keys(value).sort().reduce((object, key) => {
+      object[key] = stableJson(value[key]);
+      return object;
+    }, {});
+  }
+  return value;
+}
+
+function benchmarkFixtureSealPackSigningPayload(pack) {
+  const { output, signature, ...payload } = pack;
+  return Buffer.from(JSON.stringify(stableJson(payload)));
+}
+
+function signBenchmarkFixtureSealPack(pack, options = {}) {
+  if (typeof options.signKeyId !== 'string' || options.signKeyId.trim() === '') {
+    throw new Error('benchmark fixture-pack requires --sign-key-id when signing');
+  }
+  if (typeof options.signPrivateKey !== 'string' || options.signPrivateKey.trim() === '') {
+    throw new Error('benchmark fixture-pack requires --sign-private-key when signing');
+  }
+
+  const cwd = options.cwd || process.cwd();
+  const privateKeyPath = path.resolve(cwd, options.signPrivateKey);
+  if (!fs.existsSync(privateKeyPath) || !fs.statSync(privateKeyPath).isFile()) {
+    throw new Error(`benchmark fixture-pack signing private key does not exist: ${options.signPrivateKey}`);
+  }
+
+  const privateKey = fs.readFileSync(privateKeyPath, 'utf8');
+  const publicKey = crypto.createPublicKey(privateKey).export({ type: 'spki', format: 'pem' });
+  const signature = crypto.sign(null, benchmarkFixtureSealPackSigningPayload(pack), privateKey).toString('base64');
+  return {
+    algorithm: 'ed25519',
+    keyId: options.signKeyId,
+    publicKey,
+    value: signature
+  };
+}
+
+function validateBenchmarkFixtureSealPackSignature(pack, source = 'fixture seal pack') {
+  if (pack.signature === undefined) return null;
+  if (!isPlainObject(pack.signature)) {
+    throw new Error(`Invalid benchmark fixture seal pack ${source}: signature must be an object`);
+  }
+
+  const signature = pack.signature;
+  const errors = [];
+  if (signature.algorithm !== 'ed25519') errors.push('signature.algorithm must be ed25519');
+  if (typeof signature.keyId !== 'string' || signature.keyId.trim() === '') errors.push('signature.keyId must be a non-empty string');
+  if (typeof signature.publicKey !== 'string' || signature.publicKey.trim() === '') errors.push('signature.publicKey must be a PEM public key');
+  if (typeof signature.value !== 'string' || signature.value.trim() === '') errors.push('signature.value must be a base64 signature');
+  if (errors.length > 0) {
+    throw new Error(`Invalid benchmark fixture seal pack ${source}: ${errors.join('; ')}`);
+  }
+
+  let verified = false;
+  try {
+    verified = crypto.verify(
+      null,
+      benchmarkFixtureSealPackSigningPayload(pack),
+      signature.publicKey,
+      Buffer.from(signature.value, 'base64')
+    );
+  } catch {
+    verified = false;
+  }
+  if (!verified) {
+    throw new Error(`Invalid benchmark fixture seal pack ${source}: signature verification failed`);
+  }
+
+  return {
+    algorithm: signature.algorithm,
+    keyId: signature.keyId
+  };
+}
+
 function parseBenchmarkFixturePackArgs(args) {
   const fixtureDir = args[0];
   if (!fixtureDir) throw new Error('benchmark fixture-pack requires a fixture directory');
@@ -5104,6 +5183,14 @@ function parseBenchmarkFixturePackArgs(args) {
     } else if (arg === '--output') {
       if (!args[index + 1]) throw new Error('--output requires a path');
       options.output = args[index + 1];
+      index += 1;
+    } else if (arg === '--sign-key-id') {
+      if (!args[index + 1]) throw new Error('--sign-key-id requires a value');
+      options.signKeyId = args[index + 1];
+      index += 1;
+    } else if (arg === '--sign-private-key') {
+      if (!args[index + 1]) throw new Error('--sign-private-key requires a path');
+      options.signPrivateKey = args[index + 1];
       index += 1;
     } else {
       throw new Error(`Unknown benchmark fixture-pack option: ${arg}`);
@@ -5139,6 +5226,9 @@ function benchmarkFixturePack(options = {}) {
     algorithm: 'sha256',
     files
   };
+  if (options.signKeyId || options.signPrivateKey) {
+    pack.signature = signBenchmarkFixtureSealPack(pack, { ...options, cwd });
+  }
 
   if (options.output) {
     const outputPath = path.resolve(cwd, options.output);
@@ -5196,6 +5286,7 @@ function validateBenchmarkFixtureSealPack(pack, fixturePath, source = 'fixture s
     throw new Error(`Invalid benchmark fixture seal pack ${source}: ${errors.join('; ')}`);
   }
 
+  const signature = validateBenchmarkFixtureSealPackSignature(pack, source);
   const fixtureSeal = validateBenchmarkFixtureSeal({
     algorithm: pack.algorithm,
     files: pack.files
@@ -5207,6 +5298,7 @@ function validateBenchmarkFixtureSealPack(pack, fixturePath, source = 'fixture s
     fixture: normalizeBenchmarkRelativePath(pack.fixture),
     algorithm: fixtureSeal.algorithm,
     files: fixtureSeal.files,
+    signature,
     source
   };
 }
@@ -5682,6 +5774,7 @@ function benchmarkRunPlan(suiteId, options = {}) {
             algorithm: task.fixtureSealPack.algorithm,
             fixture: task.fixtureSealPack.fixture,
             fileCount: Object.keys(task.fixtureSealPack.files).length,
+            ...(task.fixtureSealPack.signature ? { signature: task.fixtureSealPack.signature } : {}),
             source: task.fixtureSealPack.source
           } : null,
           hiddenCommandCount: task.hiddenSuccessCommands.length + task.hiddenPackCommands.length,
