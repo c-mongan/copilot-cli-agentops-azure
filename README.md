@@ -53,6 +53,7 @@ agentops install
 agentops uninstall
 agentops status
 agentops doctor
+agentops doctor --local-only
 agentops health --json
 agentops configure show|set|import-azd
 agentops collector start|stop|status|validate|smoke|install-binary|uninstall-binary
@@ -308,7 +309,7 @@ Offline checks:
 
 ```bash
 npm --prefix agentops-cli test
-agentops doctor --json
+agentops doctor --local-only --json
 agentops validate-enterprise --json
 agentops collector validate --mode auto --privacy strict --json
 agentops collector smoke --privacy strict --poison --json
@@ -317,6 +318,7 @@ agentops collector smoke --privacy strict --poison --json
 Live E2E:
 
 ```bash
+agentops doctor --json
 agentops e2e run --live --browser-report --last 2h --json
 agentops e2e report --last 2h --out .agentops/e2e/latest/report.html
 agentops e2e browser-check --report .agentops/e2e/latest/report.html --json

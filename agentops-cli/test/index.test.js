@@ -23,6 +23,7 @@ const { buildContentStatus, renderOptInGuide } = require('../src/commands/conten
 const { removeAgentOpsCopilotFlags } = require('../src/commands/copilot');
 const { buildCopilotSessionEnrichment } = require('../src/commands/copilot-session');
 const { dashboardImportPlan, dashboardKqlCheck, dashboardVerify, runDashboardImport, validateDashboardContentGuardrails, validateDashboardFilters, validateDashboardLinks, validateDashboardUx, validateDashboards } = require('../src/commands/dashboard');
+const { doctorSummary } = require('../src/commands/doctor');
 const { browserProfileOptionsFromArgs, checkReportHtml, e2eAuthProfile, grafanaAuthRemediation, grafanaScreenshotTargets, grafanaVisualOk, renderAuthProfile, renderReportHtml, safeE2eEnv } = require('../src/commands/e2e');
 const { hasV2Args } = require('../src/commands/explain');
 const { openV2FromFiles, renderOpenV2 } = require('../src/commands/open');
@@ -3771,6 +3772,31 @@ test('doctor local checks pass', () => {
   const checks = doctor({ localOnly: true });
   assert.equal(checks.every(check => check.ok), true);
   assert.ok(checks.some(check => check.name === 'plain-copilot-shadow'));
+});
+
+test('doctor cloud checks reuse Grafana validation results', async () => {
+  const summary = await doctorSummary({
+    mode: 'none',
+    validateAzure: () => ({
+      ok: false,
+      next: ['agentops dashboard import --yes --resource-group rg-agentops-dev --grafana-name graf-agentops-dev'],
+      checks: [
+        { name: 'log-analytics-workspace-id', ok: false, detail: 'not relevant to doctor cloud summary' },
+        { name: 'grafana-base-url', ok: true, detail: 'configured' },
+        { name: 'grafana-resource', ok: true, detail: 'found' },
+        { name: 'grafana-datasource', ok: true, expected_uid: 'azure-monitor-oob', detail: 'found' },
+        { name: 'grafana-dashboards', ok: false, expected: 2, missing: ['agentops-sessions'], detail: '1 expected dashboard missing' }
+      ]
+    })
+  });
+  const byName = Object.fromEntries(summary.checks.map(check => [check.name, check]));
+
+  assert.equal(byName['grafana-datasource'].ok, true);
+  assert.equal(byName['grafana-datasource'].expected_uid, 'azure-monitor-oob');
+  assert.equal(byName['grafana-dashboards'].ok, false);
+  assert.deepEqual(byName['grafana-dashboards'].missing, ['agentops-sessions']);
+  assert.equal(byName['grafana-dashboards'].severity, 'warning');
+  assert.ok(summary.cloud.next[0].includes('agentops dashboard import --yes'));
 });
 
 test('installed shim status reports expected paths', () => {

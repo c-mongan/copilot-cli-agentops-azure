@@ -335,7 +335,7 @@ What works well:
 - The shadow shim records the real Copilot path in `COPILOT_CLI_BIN` to avoid recursive calls.
 - The installer also installs bundled AgentOps skills into the default Copilot home.
 - `agentops status` gives a beginner-readable privacy/setup summary.
-- `agentops doctor --local-only` has good basic checks.
+- `agentops doctor --local-only` has good basic checks; default `agentops doctor` also surfaces Grafana base URL, resource, datasource, and dashboard validation from the Azure preflight path.
 - Uninstall and disable-shadow paths are present.
 
 Current friction:
@@ -347,7 +347,7 @@ Current friction:
   - `AGENTOPS_GRAFANA_BASE_URL`
   - sometimes `APPLICATIONINSIGHTS_NAME`
 - The CLI is usually invoked as `node agentops-cli/src/index.js`, even though `package.json` exposes a bin name. That feels less native than `agentops`.
-- Cloud readiness is still split across docs and scripts, but `agentops validate-azure` now performs a read-only Azure CLI/resource/query preflight.
+- Cloud readiness is available through `agentops doctor` for quick Grafana readiness and `agentops validate-azure` for the full read-only Azure CLI/resource/query preflight.
 - Grafana import assumes the Azure Managed Grafana CLI extension, dashboard data source UID, Grafana RBAC, and workspace access are correct.
 
 Product recommendation:
@@ -360,15 +360,7 @@ Product recommendation:
   - installs shadow shim and skills
   - runs a smoke Copilot task
   - opens or prints the exact session link
-- Add `agentops doctor --cloud` with actual Azure checks:
-  - App Insights exists
-  - connection string can be retrieved
-  - Log Analytics workspace ID matches App Insights workspace
-  - Grafana exists
-  - Grafana datasource UID resolves
-  - dashboards exist
-  - current identity has query access
-  - collector can export a smoke trace
+- Keep folding high-signal Azure readiness into `agentops doctor` while preserving `--local-only` for offline setup checks.
 
 ### Copilot Wrapper And Attribute Enrichment Plane
 
@@ -1245,7 +1237,6 @@ Required work:
 - Add `doctor` checks for Azure collector config parity and pinned collector image.
 - Make `agentops validate-azure` optionally import missing dashboards after explicit confirmation.
 - Make `agentops smoke` optionally launch a real Copilot smoke prompt and deep-link to the resulting latest run.
-- Add cloud doctor checks that reuse the same Grafana datasource/dashboard checks without requiring a separate command.
 - Keep real Copilot OTel fixture snapshot contract tests in CI as Copilot fields evolve.
 
 ### P1 - Make It Native To Copilot
@@ -1294,7 +1285,7 @@ If I had to choose only five next tasks:
 
 1. Add dashboard import remediation to `agentops validate-azure`.
 2. Add a real Copilot smoke-run mode that prints the exact latest-run URL.
-3. Add cloud doctor checks that reuse the same Grafana datasource/dashboard checks without requiring a separate command.
+3. Add Azure collector config parity and pinned collector image checks to `agentops doctor`.
 4. Build a polished session-first dashboard landing page with recommendation and ask-AgentOps context.
 5. Expand benchmark/eval support with hidden checks, permission profiles, and artifact diffing.
 
