@@ -53,6 +53,7 @@ agentops install
 agentops uninstall
 agentops status
 agentops doctor
+agentops health --json
 agentops configure show|set|import-azd
 agentops collector start|stop|status|validate|smoke|install-binary|uninstall-binary
 agentops copilot [...args]
