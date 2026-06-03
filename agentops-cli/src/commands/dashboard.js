@@ -250,6 +250,7 @@ const v2KqlSmokePanels = [
   { uid: 'agentops-v2-evals-quality', panel: 'Low-score runs', requireRows: true },
   { uid: 'agentops-v2-evals-quality', panel: 'Benchmark artifact diff review', requireRows: false },
   { uid: 'agentops-v2-evals-quality', panel: 'Benchmark artifact files', requireRows: false },
+  { uid: 'agentops-v2-evals-quality', panel: 'Benchmark hidden check packs', requireRows: false },
   { uid: 'agentops-v2-evals-quality', panel: 'Benchmark promotion approvals', requireRows: false },
   { uid: 'agentops-v2-insights-regressions', panel: 'Latest insights', requireRows: true },
   { uid: 'agentops-v2-insights-regressions', panel: 'Recurring patterns', requireRows: false },
@@ -414,6 +415,7 @@ function validateDashboardUx() {
   const evalsTitles = new Set((evals?.body.panels || []).map(panel => panel.title));
   if (!evalsTitles.has('Benchmark artifact diff review')) errors.push('evals dashboard missing Benchmark artifact diff review panel');
   if (!evalsTitles.has('Benchmark artifact files')) errors.push('evals dashboard missing Benchmark artifact files panel');
+  if (!evalsTitles.has('Benchmark hidden check packs')) errors.push('evals dashboard missing Benchmark hidden check packs panel');
   if (!evalsTitles.has('Benchmark promotion approvals')) errors.push('evals dashboard missing Benchmark promotion approvals panel');
   const artifactDiffQuery = queryFromPanel(panelByTitle(evals, 'Benchmark artifact diff review'));
   for (const field of ['BenchmarkRunId', 'BenchmarkArtifactAdded', 'BenchmarkArtifactModified', 'BenchmarkArtifactDeleted', 'BenchmarkArtifactTotalChanged', 'ReviewAction', 'ChangeTargetRefs']) {
@@ -422,6 +424,10 @@ function validateDashboardUx() {
   const artifactFilesQuery = queryFromPanel(panelByTitle(evals, 'Benchmark artifact files'));
   for (const field of ['BenchmarkArtifactFiles', 'mv-expand', 'ArtifactTaskId', 'ArtifactChange', 'ArtifactPath']) {
     if (!artifactFilesQuery.includes(field)) errors.push(`benchmark artifact files missing ${field}`);
+  }
+  const hiddenCheckQuery = queryFromPanel(panelByTitle(evals, 'Benchmark hidden check packs'));
+  for (const field of ['BenchmarkHiddenCheckPacks', 'mv-expand', 'BenchmarkHiddenChecksPassed', 'BenchmarkHiddenChecksFailed', 'HiddenTaskId', 'HiddenPackId', 'HiddenCommandCount']) {
+    if (!hiddenCheckQuery.includes(field)) errors.push(`benchmark hidden check packs missing ${field}`);
   }
   const approvalQuery = queryFromPanel(panelByTitle(evals, 'Benchmark promotion approvals'));
   for (const field of ['BenchmarkRunId', 'BenchmarkApprovalStatus', 'BenchmarkApprovalCount', 'BenchmarkRequiredApprovals', 'BenchmarkApprovalTicket', 'ApprovalAction']) {
@@ -437,7 +443,7 @@ function validateDashboardUx() {
     if (!patternsQuery.includes(field)) errors.push(`recurring patterns panel missing ${field}`);
   }
   const recommendationsQuery = queryFromPanel(panelByTitle(insights, 'Recommendation artifacts'));
-  for (const field of ['RecommendationId', 'Action', 'ObservedPattern', 'NextAction', 'BenchmarkRunId', 'BenchmarkDecision', 'BenchmarkArtifactTotalChanged', 'BenchmarkArtifactFiles', 'BenchmarkApprovalStatus', 'ChangeTargetRefs', 'OpenReplay', 'OpenPattern']) {
+  for (const field of ['RecommendationId', 'Action', 'ObservedPattern', 'NextAction', 'BenchmarkRunId', 'BenchmarkDecision', 'BenchmarkArtifactTotalChanged', 'BenchmarkArtifactFiles', 'BenchmarkHiddenCheckPacks', 'BenchmarkApprovalStatus', 'ChangeTargetRefs', 'OpenReplay', 'OpenPattern']) {
     if (!recommendationsQuery.includes(field)) errors.push(`recommendation artifacts panel missing ${field}`);
   }
 
@@ -456,6 +462,7 @@ function validateDashboardUx() {
       recommendation_artifacts: true,
       artifact_diff_review: true,
       artifact_file_review: true,
+      hidden_check_review: true,
       promotion_approvals: true,
       pattern_drilldowns: true,
       empty_state_dashboards: emptyStateDashboards
