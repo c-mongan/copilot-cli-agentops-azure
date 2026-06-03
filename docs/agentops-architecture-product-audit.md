@@ -812,7 +812,7 @@ What works well:
   - cost
   - AIU
   - models/tools/conversations
-- It rejects safety violations, content capture, forbidden file changes, severe quality regressions, and configured promotion gate misses.
+- It rejects safety violations, content capture, forbidden file changes, severe quality regressions, and configured promotion gate misses in reports and comparisons.
 
 Current anti-cheat limitations:
 
