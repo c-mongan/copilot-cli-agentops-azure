@@ -823,7 +823,7 @@ Current anti-cheat limitations:
 - There is no network egress isolation; network tool policies can block explicit `--allow-tool` network allowances before execution, but they are not OS-level egress prevention.
 - Read-only benchmark profiles now block any workspace file change in the copied fixture.
 - Semantic evaluator adapters exist for deterministic file-content, regex, file-rubric checks, and command-backed `llm-judge` scoring, and suites can configure reusable judge provider command templates for hosted judge CLIs. The CLI now includes hosted judge provider setup guidance. The Evals & Quality dashboard surfaces metadata-only semantic check review. Hosted judge service provisioning is still external to the benchmark runner.
-- Candidate promotion gates can require approval evidence from an approval file, named approver identities, approval counts, and approved external review metadata such as a GitHub PR, Jira ticket, or change workflow URL. The CLI can generate run-scoped approval evidence, and the Evals & Quality dashboard now surfaces metadata-only approval review status. Live external workflow API verification is still not integrated.
+- Candidate promotion gates can require approval evidence from an approval file, named approver identities, approval counts, and approved external review metadata such as a GitHub PR, Jira ticket, or change workflow URL. The CLI can generate run-scoped approval evidence, and `benchmark report` / `benchmark compare` can now verify GitHub PR review evidence through `gh pr view` when `--verify-external-review` is set. The Evals & Quality dashboard surfaces metadata-only approval review status. Jira/change-system API verification is still not integrated.
 - Suites can seal command harness files with `commandFileSeal`; benchmark runs now reject candidates that change sealed test scripts or command files in the copied fixture. This is not a replacement for OS-level sandboxing.
 - The Evals & Quality dashboard now includes metadata-only artifact diff counts, per-file artifact path review, hidden check pack review, policy review, and semantic check review for benchmark recommendations. The CLI can now review artifact file paths and explicit fixture-to-workspace content diffs for local benchmark runs; a Grafana-native file-content diff viewer is still missing.
 - Benchmark reports flag network and browser-control tool usage as external answer-source evidence for review. This is metadata-only and does not prove the answer came from an external source.
@@ -1276,7 +1276,7 @@ Required work:
 - Add managed hosted judge service provisioning for `llm-judge` semantic scoring.
 - Expand enforced permission profiles to OS-level network and tool sandboxing.
 - Add Grafana-native artifact content diff UI review for approved benchmark artifacts.
-- Add live external team workflow API integrations for candidate promotion gates.
+- Add Jira and change-management workflow API integrations for candidate promotion gates.
 - Expand eval scorecard and regression dashboards as production usage reveals more review slices.
 
 ### P4 - Productize For Teams
