@@ -5345,6 +5345,18 @@ function benchmarkJudgeProviderGuide() {
         '  --data @<(node -e \'const fs=require("fs"); const [file,check]=process.argv.slice(1); process.stdout.write(JSON.stringify({check_id:check,file,content:fs.readFileSync(file,"utf8")}));\' "$file" "$check_id")'
       ]
     },
+    provisioningPlan: {
+      target: 'Azure Container Apps',
+      requiredSecrets: ['OPENAI_API_KEY', 'AGENTOPS_JUDGE_TOKEN'],
+      commands: [
+        'az group create --name rg-agentops-judges --location eastus',
+        'az containerapp env create --name agentops-judge-env --resource-group rg-agentops-judges --location eastus',
+        'az containerapp create --name agentops-hosted-judge --resource-group rg-agentops-judges --environment agentops-judge-env --image <acr-or-registry>/agentops-hosted-judge:latest --ingress external --target-port 8080 --secrets openai-api-key=$OPENAI_API_KEY judge-token=$AGENTOPS_JUDGE_TOKEN --env-vars OPENAI_API_KEY=secretref:openai-api-key AGENTOPS_JUDGE_TOKEN=secretref:judge-token',
+        'az containerapp show --name agentops-hosted-judge --resource-group rg-agentops-judges --query properties.configuration.ingress.fqdn --output tsv'
+      ],
+      healthCheck: 'curl -fsS https://<judge-fqdn>/health -H "Authorization: Bearer $AGENTOPS_JUDGE_TOKEN"',
+      bindCommand: 'export AGENTOPS_JUDGE_ENDPOINT=https://<judge-fqdn>/score'
+    },
     suiteSnippet: {
       judgeProviders: {
         hosted: {
@@ -5364,6 +5376,7 @@ function benchmarkJudgeProviderGuide() {
       detail: 'short reason for the score'
     },
     validation: [
+      'Provision the hosted judge only after reviewing the plan and storing secrets outside the repo.',
       'Run the wrapper directly against a local fixture file and confirm it prints JSON with score.',
       'Run `agentops benchmark run <suite> --variant candidate --repeat 1 --dry-run` before executing.',
       'Run `agentops benchmark report <run-id>` and inspect semanticChecks.averageScore.'
@@ -5388,6 +5401,16 @@ function renderBenchmarkJudgeProviderGuide(guide = benchmarkJudgeProviderGuide()
     'Wrapper example',
     '```bash',
     ...guide.wrapperScript.example,
+    '```',
+    '',
+    `Provisioning target: ${guide.provisioningPlan.target}`,
+    `Required secrets: ${guide.provisioningPlan.requiredSecrets.join(', ')}`,
+    '',
+    'Provisioning commands',
+    '```bash',
+    ...guide.provisioningPlan.commands,
+    guide.provisioningPlan.healthCheck,
+    guide.provisioningPlan.bindCommand,
     '```',
     '',
     'suite.json snippet',
