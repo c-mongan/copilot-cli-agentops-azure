@@ -197,7 +197,7 @@ To remove everything installed by the one-shot path, including the local Collect
 
 ## Useful Agent Prompts
 
-After `agentops experimental init` or `agentops plugin install`, you can ask Copilot:
+After `agentops init --full` or `agentops plugin install`, you can ask Copilot:
 
 ```text
 Use agentops-orchestrator to figure out which AgentOps workflow I need and run the first read-only check.
@@ -283,10 +283,11 @@ agentops lineage --last 2h
 
 ```bash
 agentops status
-agentops experimental init --dry-run
+agentops init --dry-run
+agentops init --full
 agentops validate-azure
-agentops experimental smoke --dry-run
-agentops experimental smoke --wait 2m --poll 10s
+agentops smoke --dry-run
+agentops smoke --real-copilot --wait 2m --poll 10s --open-browser
 agentops experimental attribution-smoke --wait 5m --poll 15s
 agentops open
 agentops experimental link session <conversation>

@@ -70,7 +70,7 @@ node agentops-cli/src/index.js collector start --mode auto --privacy strict
 Send a privacy-safe OTLP trace through the local collector:
 
 ```bash
-node agentops-cli/src/index.js experimental smoke --wait 2m --poll 10s
+node agentops-cli/src/index.js smoke --real-copilot --wait 2m --poll 10s --open-browser
 ./scripts/otlp-smoke-trace.sh
 ```
 

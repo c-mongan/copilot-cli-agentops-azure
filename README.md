@@ -237,6 +237,8 @@ agentops ask-context latest \
 After installing the bundled skills, the memorable Copilot prompt is:
 
 ```text
+Use agentops-setup to install AgentOps, run the guided init --full path, report the Run Replay link, and recommend one next action.
+
 Use agentops-latest-run to find my latest AgentOps run, open the Run Replay link, explain it, and recommend one next action.
 ```
 

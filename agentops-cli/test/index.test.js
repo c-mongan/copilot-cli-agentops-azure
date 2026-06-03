@@ -1891,6 +1891,7 @@ test('default skills install copies bundled skills into Copilot home', () => {
   try {
     const result = installDefaultSkills({ copilotHome: tempDir });
     const latestSkill = path.join(tempDir, 'skills', 'agentops-latest-run', 'SKILL.md');
+    const setupSkill = path.join(tempDir, 'skills', 'agentops-setup', 'SKILL.md');
     const liveSkill = path.join(tempDir, 'skills', 'agentops-live-triage', 'SKILL.md');
     const benchmarkSkill = path.join(tempDir, 'skills', 'agentops-benchmark-gate', 'SKILL.md');
 
@@ -1898,9 +1899,12 @@ test('default skills install copies bundled skills into Copilot home', () => {
     assert.equal(result.targetDir, path.join(tempDir, 'skills'));
     assert.ok(result.installed >= 2);
     assert.equal(fs.existsSync(latestSkill), true);
+    assert.equal(fs.existsSync(setupSkill), true);
     assert.equal(fs.existsSync(liveSkill), true);
     assert.equal(fs.existsSync(benchmarkSkill), true);
     assert.match(fs.readFileSync(latestSkill, 'utf8'), /find my latest AgentOps run/i);
+    assert.match(fs.readFileSync(setupSkill, 'utf8'), /init --full/);
+    assert.match(fs.readFileSync(setupSkill, 'utf8'), /one evidence-backed next action/);
     assert.match(fs.readFileSync(liveSkill, 'utf8'), /what happened in the latest Copilot CLI session/);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
@@ -1983,6 +1987,8 @@ test('workflows map README goals to invocable skills and commands', () => {
 
   assert.ok(byName.setup.commands.includes('./setup-agentops.sh'));
   assert.equal(byName.setup.skill, 'agentops-setup');
+  assert.ok(byName.setup.commands.includes('node agentops-cli/src/index.js init --full'));
+  assert.equal(byName.setup.commands.some(command => command.includes('experimental')), false);
   assert.ok(byName.setup.commands.includes('node agentops-cli/src/index.js plugin install'));
   assert.equal(byName.orchestrate.skill, 'agentops-orchestrator');
   assert.ok(byName.orchestrate.commands.includes('node agentops-cli/src/index.js workflows show attribution'));
@@ -2009,6 +2015,7 @@ test('workflow renderers show prompts and command details', () => {
   assert.match(listOutput, /AgentOps workflows/);
   assert.match(listOutput, /agentops-live-triage/);
   assert.match(setupOutput, /Ask Copilot: Use agentops-setup/);
+  assert.match(setupOutput, /init --full/);
   assert.match(setupOutput, /\.\/setup-agentops\.sh/);
 });
 
@@ -3172,6 +3179,8 @@ test('validateAzure runs read-only Azure checks with mocked az output', () => {
   assert.equal(byName['grafana-dashboards'].ok, true);
   assert.equal(byName['alert-routing-posture'].ok, true);
   assert.ok(calls.some(([, args]) => args.includes('log-analytics') && args.includes('query')));
+  assert.ok(result.next.includes('node agentops-cli/src/index.js smoke --real-copilot --wait 2m --poll 10s --open-browser'));
+  assert.equal(result.next.some(command => command.includes('experimental')), false);
 });
 
 test('validateAzure reports missing Grafana dashboards with import guidance', () => {

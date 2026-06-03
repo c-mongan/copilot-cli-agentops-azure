@@ -14,24 +14,16 @@ Preferred local commands:
 
 ```bash
 az login
-export AZURE_RESOURCE_GROUP=rg-agentops-dev
-export AGENTOPS_LOG_ANALYTICS_WORKSPACE_ID="<workspace-id>"
-export AGENTOPS_GRAFANA_BASE_URL="https://<your-grafana>.grafana.azure.com"
 ./setup-agentops.sh
-node agentops-cli/src/index.js status
-node agentops-cli/src/index.js workflows show latest-run
+node agentops-cli/src/index.js init --full
 ```
 
 PowerShell:
 
 ```powershell
 az login
-$env:AZURE_RESOURCE_GROUP = "rg-agentops-dev"
-$env:AGENTOPS_LOG_ANALYTICS_WORKSPACE_ID = "<workspace-id>"
-$env:AGENTOPS_GRAFANA_BASE_URL = "https://<your-grafana>.grafana.azure.com"
 ./setup-agentops.ps1
-node agentops-cli/src/index.js status
-node agentops-cli/src/index.js workflows show latest-run
+node agentops-cli/src/index.js init --full
 ```
 
 Verify:
@@ -40,7 +32,8 @@ Verify:
 - Plain `copilot` shadowing is either observed or the user has the PATH command to enable it.
 - Content capture is off.
 - Collector endpoints are localhost.
-- Bundled skills are installed or skipped because local copies already exist.
-- The next smoke command is clear.
+- The guided `init --full` output reports cloud provision, dashboard import, real smoke, and latest triage status.
+- The response includes a Run Replay link when available, or the exact follow-up command when telemetry is missing.
+- The response includes one evidence-backed next action or recommendation.
 
 Do not ask the user to enable content capture, paste secrets, or expose prompt/code/tool argument content.
