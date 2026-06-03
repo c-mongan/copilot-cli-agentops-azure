@@ -1137,7 +1137,7 @@ A new Copilot CLI user can run one setup command, one smoke command, and see the
 Implemented first slice:
 
 - `agentops init --dry-run` for setup readiness, bundled skill install planning, and first-run next steps.
-- `agentops setup` now prints a read-only one-minute first-run loop: bind, strict poison smoke, `agentops smoke --real-copilot`, latest/open, dashboard import, and live dashboard verification.
+- `agentops setup` now prints a read-only one-minute first-run loop that recommends `agentops init --full` first, then keeps bind, strict poison smoke, `agentops smoke --real-copilot`, latest/open, dashboard import, and live dashboard verification as fallbacks.
 - `agentops smoke --real-copilot` sends the synthetic OTLP smoke, runs a safe no-edit Copilot prompt with content capture off, waits for the latest Copilot run to appear, then prints the V2 Run Replay link.
 - `agentops validate-azure` for read-only Azure CLI, subscription, resource group, workspace, App Insights, query, Grafana resource, datasource, and dashboard UID checks.
 - `agentops validate-azure --import-dashboards` for explicit remediation when validation finds missing Grafana dashboards.
