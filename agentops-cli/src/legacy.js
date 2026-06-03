@@ -225,13 +225,20 @@ let copilot = AppDependencies
 | summarize LastCopilotSpan=max(TimeGenerated), CopilotSpans=count(), AgentOpsSpans=countif(Properties has "agentops."), FailedSpans=countif(Success == false or tostring(Success) =~ "false" or isnotempty(tostring(Properties["error.type"])));
 let collectorLogs = AppTraces
 | where TimeGenerated > ago(lookback)
-| where Message has_any ("otelcol", "azuremonitor", "exporter", "dropped", "retry", "queue", "refused", "timeout")
-| summarize LastCollectorLog=max(TimeGenerated), CollectorErrors=countif(SeverityLevel >= 3 or Message has_any ("error", "failed", "dropped", "refused", "timeout")), CollectorWarnings=countif(SeverityLevel == 2 or Message has "warn");
+| where Message has_any ("otelcol", "azuremonitor", "exporter", "dropped", "retry", "queue", "queued", "sending_queue", "refused", "timeout", "backpressure", "memory_limiter")
+| summarize LastCollectorLog=max(TimeGenerated),
+    CollectorErrors=countif(SeverityLevel >= 3 or Message has_any ("error", "failed", "dropped", "refused", "timeout")),
+    CollectorWarnings=countif(SeverityLevel == 2 or Message has "warn"),
+    QueueSignals=countif(Message has_any ("queue", "queued", "sending_queue", "enqueue")),
+    DroppedSignals=countif(Message has_any ("dropped", "drop", "refused")),
+    RetrySignals=countif(Message has_any ("retry", "retried", "retrying")),
+    TimeoutSignals=countif(Message has_any ("timeout", "timed out")),
+    BackpressureSignals=countif(Message has_any ("backpressure", "memory_limiter", "queue is full", "sending queue", "refused"));
 copilot
 | extend joinKey=1
 | join kind=fullouter (collectorLogs | extend joinKey=1) on joinKey
-| project LastCopilotSpan, CopilotSpans, AgentOpsSpans, FailedSpans, LastCollectorLog, CollectorErrors, CollectorWarnings
-| extend Health=case(isnull(LastCopilotSpan), "no_copilot_spans", CollectorErrors > 0, "collector_errors", "healthy")`;
+| project LastCopilotSpan, CopilotSpans, AgentOpsSpans, FailedSpans, LastCollectorLog, CollectorErrors, CollectorWarnings, QueueSignals, DroppedSignals, RetrySignals, TimeoutSignals, BackpressureSignals
+| extend Health=case(isnull(LastCopilotSpan), "no_copilot_spans", CollectorErrors > 0, "collector_errors", BackpressureSignals > 0 or DroppedSignals > 0, "collector_backpressure", "healthy")`;
 }
 
 function otelCompatibilityQuery(last = '2h') {

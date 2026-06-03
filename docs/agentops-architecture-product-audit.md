@@ -428,6 +428,7 @@ What works well:
 - Docker Compose maps the Azure collector ports to `127.0.0.1`, even though the collector process listens on `0.0.0.0` inside the container.
 - The privacy processor deletes known high-risk GenAI and HTTP content fields.
 - The field catalog query now labels exact content keys and unknown sensitive key families for review.
+- Collector health now counts queue, retry, timeout, drop, and backpressure log signals instead of only generic collector errors.
 - Application Insights connection string is fetched at runtime and not committed.
 - Content capture is off in wrapper defaults and checked by `doctor`.
 - The design deliberately avoids capturing prompts, code, tool args, tool outputs, URLs, and file contents.
@@ -439,7 +440,7 @@ Both local and Azure Monitor collector configs now hash `code.filepath`. The rem
 Current gaps:
 
 - The collector image is pinned by default and checked by `doctor`, but the chosen pin still needs an intentional release cadence.
-- Collector health now has a local health endpoint and a Data Quality dashboard panel, but exporter queue/drop/backpressure metrics are still thin.
+- Collector health now has a local health endpoint, Data Quality dashboard panel, and log-derived queue/drop/backpressure counters, but it still does not scrape dedicated collector exporter metrics.
 - `validate-collector` checks OTLP reachability plus the health endpoint; Azure export is proven by `agentops smoke --wait ...`.
 - `doctor` checks local collector localhost endpoints, Azure Monitor compose localhost bindings, pinned image defaults, and Azure Monitor privacy/exporter config essentials.
 - Privacy filters still depend on explicit schema decisions. The field-catalog detector now flags likely sensitive future keys, but production export policy still needs periodic review.
@@ -447,7 +448,7 @@ Current gaps:
 Product recommendation:
 
 - Keep collector image pins fresh through releases.
-- Expand collector health telemetry beyond smoke/log signals into exporter queue/drop/backpressure metrics.
+- Expand collector health telemetry from log-derived queue/drop/backpressure counters into dedicated collector exporter metrics when those are available.
 - Continue tightening toward a stricter allowlist mode for exported attributes and review field-catalog content-risk findings during releases.
 
 ### Azure Infrastructure Plane
