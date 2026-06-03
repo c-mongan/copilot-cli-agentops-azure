@@ -881,6 +881,7 @@ What works well:
 - No action groups are attached by default.
 - `agentops alert history` and `agentops alert detail` provide metadata-only fired-alert candidate review with KQL and session links.
 - `agentops alert open` turns an alert rule/session pair into Run Replay, Runs Explorer, session detail, content-viewer, and Azure Logs links.
+- `agentops alert review` bundles alert detail, open links, action-plan metadata, and export evidence into one metadata-only packet.
 - The Alert Tuning dashboard includes metadata-only threshold recommendations, suggested threshold impact, and fired-alert candidates with session detail, replay, Azure Logs links, and `agentops alert open` review commands.
 - `agentops alert action-plan` generates deterministic GitHub issue or Azure DevOps work-item payload metadata with KQL, session links, and guardrails.
 - `agentops alert export` writes durable metadata-only alert artifacts for later incident review.
