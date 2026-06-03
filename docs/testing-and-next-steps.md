@@ -279,9 +279,10 @@ node agentops-cli/src/index.js alert tune-plan --last 14d --owner agentops-oncal
 node agentops-cli/src/index.js alert threshold-simulate --rule failed-spans --threshold 1 --owner agentops-oncall --last 14d
 node agentops-cli/src/index.js alert threshold-patch --rule failed-spans --threshold 1 --owner agentops-oncall --last 14d
 node agentops-cli/src/index.js alert resources --resource-group "${AZURE_RESOURCE_GROUP:-rg-agentops-dev}"
+node agentops-cli/src/index.js alert handoff --rule failed-spans --session <conversation-id> --owner agentops-oncall --events .agentops/demo/latest/AgentOpsEvents_CL.jsonl --last 24h
 ```
 
-`alert tune-plan` is proposal-only and summarizes reviewable threshold changes with Bicep patch targets. `alert threshold-simulate` is preview-only and prints metadata-only KQL that compares current and proposed alert windows. `alert threshold-patch` is also preview-only and prints a concrete `infra/bicep/alerts.bicep` diff for owner-approved direct threshold changes. `alert resources` is read-only and summarizes current scheduled-query rule enabled/disabled state plus attached action groups.
+`alert tune-plan` is proposal-only and summarizes reviewable threshold changes with Bicep patch targets. `alert threshold-simulate` is preview-only and prints metadata-only KQL that compares current and proposed alert windows. `alert threshold-patch` is also preview-only and prints a concrete `infra/bicep/alerts.bicep` diff for owner-approved direct threshold changes. `alert resources` is read-only and summarizes current scheduled-query rule enabled/disabled state plus attached action groups. `alert handoff --events` adds session-matched config-change annotations and a session-scoped annotation query to the metadata-only operator packet.
 
 ## Read-Only MCP Investigation Smoke Test
 

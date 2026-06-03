@@ -8637,7 +8637,26 @@ test('alert handoff bundles operator evidence without actioning', () => {
     service: 'copilot-agentops',
     timezone: 'Europe/Dublin',
     resourceGroup: 'rg-agentops-dev',
-    createdAt: '2026-06-03T12:00:00.000Z'
+    createdAt: '2026-06-03T12:00:00.000Z',
+    events: [
+      {
+        TimeGenerated: '2026-06-03T11:58:00.000Z',
+        EventName: 'agentops.config.changed',
+        ChangeComponent: 'skill',
+        ChangeTarget: 'agentops-latest-run',
+        ChangeType: 'promoted',
+        ChangeId: 'change-42',
+        Version: 'v2',
+        SessionId: 'session-123'
+      },
+      {
+        TimeGenerated: '2026-06-03T11:50:00.000Z',
+        EventName: 'agentops.config.changed',
+        ChangeComponent: 'model',
+        ChangeTarget: 'gpt-5-chat',
+        SessionId: 'other-session'
+      }
+    ]
   });
 
   assert.equal(handoff.schema_version, 'agentops.alert-handoff.v1');
@@ -8653,9 +8672,15 @@ test('alert handoff bundles operator evidence without actioning', () => {
   assert.equal(handoff.evidence.resources.mode, 'read-only-resource-state');
   assert.equal(handoff.evidence.resources.resource_group, 'rg-agentops-dev');
   assert.equal(handoff.evidence.timeline.schema_version, 'agentops.incident-timeline.v1');
+  assert.match(handoff.evidence.config_changes.query, /agentops\.config\.changed/);
+  assert.match(handoff.evidence.config_changes.query, /SessionId == selected_session/);
+  assert.equal(handoff.evidence.config_changes.matched_count, 1);
+  assert.equal(handoff.evidence.config_changes.matched_annotations[0].component, 'skill');
+  assert.equal(handoff.evidence.config_changes.matched_annotations[0].target, 'agentops-latest-run');
   assert.match(handoff.evidence.detail.history_query, /Conversation == "session-123"/);
   assert.ok(handoff.guardrails.some(item => item.includes('Do not page')));
   assert.ok(handoff.operator_steps.some(item => item.includes('Review the session link')));
+  assert.ok(handoff.operator_steps.some(item => item.includes('config-change annotations')));
   assert.doesNotMatch(JSON.stringify(handoff), /SECRET_FAKE_TEST_VALUE|raw transcript/);
 });
 
@@ -8668,7 +8693,13 @@ test('alert route plan previews destination payloads without posting', () => {
     service: 'copilot-agentops',
     timezone: 'Europe/Dublin',
     targets: ['github-issue'],
-    createdAt: '2026-06-03T12:00:00.000Z'
+    createdAt: '2026-06-03T12:00:00.000Z',
+    events: [{
+      EventName: 'agentops.config.changed',
+      ChangeComponent: 'hook',
+      ChangeTarget: 'notification-sidecar',
+      SessionId: 'session-123'
+    }]
   });
 
   assert.equal(plan.schema_version, 'agentops.alert-route-plan.v1');
@@ -8683,7 +8714,10 @@ test('alert route plan previews destination payloads without posting', () => {
   assert.deepEqual(plan.destinations[0].payload.assignees, ['agentops-oncall']);
   assert.ok(plan.destinations[0].payload.labels.includes('critical'));
   assert.match(plan.destinations[0].payload.body, /Do not include prompts/);
+  assert.match(plan.destinations[0].payload.body, /Config-change annotation query/);
   assert.match(plan.evidence.history_query, /Conversation == "session-123"/);
+  assert.equal(plan.evidence.config_changes.matched_count, 1);
+  assert.equal(plan.evidence.config_changes.matched_annotations[0].component, 'hook');
   assert.equal(plan.evidence.handoff_schema, 'agentops.alert-handoff.v1');
   assert.ok(plan.guardrails.some(item => item.includes('Do not post')));
   assert.doesNotMatch(JSON.stringify(plan), /SECRET_FAKE_TEST_VALUE|raw transcript/);

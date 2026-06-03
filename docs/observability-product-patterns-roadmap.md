@@ -163,8 +163,8 @@ Implemented local MVP:
 - `agentops alert policy` generates local ownership, dedupe/noise, quiet-hours placeholder, and manual-escalation metadata.
 - `agentops alert resources` reports current Azure scheduled-query enabled/disabled state and action-group routing without mutating Azure.
 - `agentops incident timeline` collects exported alert artifacts into a durable metadata-only incident review record.
-- `agentops alert handoff` bundles alert detail, tune-plan, policy, resource-state placeholder, and incident timeline evidence into one operator review packet.
-- `agentops alert route-plan` generates preview-only GitHub Issue and Azure DevOps Work Item payloads from safe handoff metadata.
+- `agentops alert handoff` bundles alert detail, config-change annotation context, tune-plan, policy, resource-state placeholder, and incident timeline evidence into one operator review packet.
+- `agentops alert route-plan` generates preview-only GitHub Issue and Azure DevOps Work Item payloads from safe handoff metadata, including config-change annotation context when supplied.
 - `agentops alert route-github` dry-runs a guarded GitHub Issue route and only posts when `--yes`, `--repo`, and `--owner` are supplied.
 - `agentops alert route-azure-devops` dry-runs a guarded Azure DevOps Work Item route and only posts when `--yes`, `--org`, `--project`, and `--owner` are supplied.
 - `agentops alert action-group-plan` previews Azure Monitor action group receiver setup without creating or updating the action group.

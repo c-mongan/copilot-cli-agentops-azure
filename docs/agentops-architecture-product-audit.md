@@ -885,8 +885,8 @@ What works well:
 - `agentops alert policy` generates local ownership, dedupe/noise, quiet-hours placeholder, and manual-escalation metadata.
 - `agentops alert resources` reports current Azure scheduled-query enabled/disabled state and action-group routing without mutating Azure.
 - `agentops incident timeline` collects exported alert artifacts into a durable metadata-only incident review record.
-- `agentops alert handoff` bundles alert detail, tune-plan, policy, resource-state placeholder, and incident timeline evidence into one metadata-only operator review packet.
-- `agentops alert route-plan` generates preview-only GitHub Issue and Azure DevOps Work Item payloads from safe handoff metadata.
+- `agentops alert handoff` bundles alert detail, config-change annotation evidence, tune-plan, policy, resource-state placeholder, and incident timeline evidence into one metadata-only operator review packet.
+- `agentops alert route-plan` generates preview-only GitHub Issue and Azure DevOps Work Item payloads from safe handoff metadata, including config-change annotation review context when provided.
 - `agentops alert route-github` can create a GitHub Issue only with explicit `--yes`, a repo, and an owner; without `--yes`, it prints the exact `gh issue create` command.
 - `agentops alert route-azure-devops` can create an Azure DevOps Work Item only with explicit `--yes`, organization, project, and owner; without `--yes`, it prints the exact `az boards work-item create` command.
 - `agentops alert action-group-plan` previews Azure Monitor action group email/webhook receiver setup without mutating Azure.
@@ -1148,6 +1148,7 @@ Implemented first slice:
 - The latest-run workflow and bundled skill now prefer `agentops ask-context latest` as the metadata-only Copilot investigation bundle before explain/recommend commands.
 - `agentops annotation config-change` now emits metadata-only `agentops.config.changed` events for skill, hook, MCP, model, deployment, and benchmark changes, with an Insights dashboard panel for change/regression correlation.
 - `agentops recommend --events` now attaches matching config-change annotations to regression recommendations and persists them as metadata-only `ChangeAnnotations` plus concrete `ChangeTargetRefs`.
+- `agentops alert handoff --events` now attaches matching config-change annotations plus a session-scoped annotation KQL query to alert operator handoffs and route previews.
 - `agentops init --import-dashboards` now runs the dashboard import remediation stage explicitly during the init flow, then continues toward smoke/open next steps.
 - `agentops init --run-smoke` now runs the real-Copilot smoke/open-link stage explicitly during the init flow and reports follow-up commands when it fails.
 - `agentops init --triage-latest` now packages the latest run into the AgentOps triage evidence bundle explicitly during the init flow and reports latest/open follow-up commands when it fails.
@@ -1210,7 +1211,7 @@ Required work:
 - Persist recommendations.
 - Link recommendations to files and benchmark runs.
 - Track before/after telemetry.
-- Expand annotation use beyond recommendations into saved views and alert handoffs.
+- Expand annotation use into saved views.
 
 ### 4. Robust Eval Center
 
