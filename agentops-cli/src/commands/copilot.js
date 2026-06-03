@@ -19,6 +19,13 @@ async function copilotCommand(args = []) {
   const observedArgs = removeAgentOpsCopilotFlags(args);
   const envelope = createWrapperEnvelope();
   let fallbackUnobserved = false;
+  const baseEvent = {
+    RunId: envelope.runId,
+    SessionId: envelope.sessionId,
+    Surface: 'cli',
+    PrivacyMode: privacy,
+    CollectorMode: mode
+  };
 
   if (helpOnly) {
     const resolved = resolveCopilotBinary();
@@ -29,18 +36,25 @@ async function copilotCommand(args = []) {
     return;
   }
 
+  appendWrapperEvent({
+    ...baseEvent,
+    EventName: 'agentops.run.start'
+  });
+
   const currentStatus = await collector.status({ mode, privacy });
   if (!currentStatus.running && mode !== 'none') {
     const started = await collector.start({ mode, privacy, unsafeNoCollector });
     if (!started.ok) {
+      appendWrapperEvent({
+        ...baseEvent,
+        EventName: 'agentops.collector.start_failed',
+        Reason: started.error || 'collector start failed'
+      });
       if (process.env.AGENTOPS_ALLOW_UNOBSERVED_FALLBACK === '1') {
         fallbackUnobserved = true;
         const eventFile = appendWrapperEvent({
-          RunId: envelope.runId,
-          SessionId: envelope.sessionId,
-          Surface: 'cli',
-          PrivacyMode: privacy,
-          CollectorMode: mode,
+          ...baseEvent,
+          EventName: 'agentops.wrapper.fallback_unobserved',
           Reason: started.error || 'collector start failed'
         });
         process.stderr.write(`WARNING: AgentOps collector unavailable; running unobserved because AGENTOPS_ALLOW_UNOBSERVED_FALLBACK=1. ${started.error || ''}\n`);
@@ -69,6 +83,13 @@ async function copilotCommand(args = []) {
     AGENTOPS_WRAPPER_FALLBACK_UNOBSERVED: fallbackUnobserved ? 'true' : 'false'
   };
   const result = childProcess.spawnSync(observeScript, observedArgs, { stdio: 'inherit', env });
+  appendWrapperEvent({
+    ...baseEvent,
+    EventName: 'agentops.run.end',
+    ExitCode: result.status === null ? 1 : result.status,
+    Error: result.error ? result.error.message : '',
+    FallbackUnobserved: fallbackUnobserved
+  });
   if (result.error) throw result.error;
   process.exitCode = result.status === null ? 1 : result.status;
 }

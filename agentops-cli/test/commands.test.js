@@ -226,12 +226,19 @@ test('copilotCommand records fallback envelope when unobserved fallback is allow
   try {
     const { copilotCommand } = freshRequire('src/commands/copilot.js');
     await copilotCommand(['-p', 'hello']);
-    const event = JSON.parse(fs.readFileSync(eventFile, 'utf8').trim());
-    assert.equal(event.EventName, 'agentops.wrapper.fallback_unobserved');
-    assert.equal(event.Reason, 'collector unavailable in test');
+    const events = fs.readFileSync(eventFile, 'utf8').trim().split(/\r?\n/).map(line => JSON.parse(line));
+    const byName = Object.fromEntries(events.map(event => [event.EventName, event]));
+    assert.deepEqual(events.map(event => event.EventName), [
+      'agentops.run.start',
+      'agentops.collector.start_failed',
+      'agentops.wrapper.fallback_unobserved',
+      'agentops.run.end'
+    ]);
+    assert.equal(byName['agentops.wrapper.fallback_unobserved'].Reason, 'collector unavailable in test');
+    assert.equal(byName['agentops.run.end'].FallbackUnobserved, true);
     assert.equal(spawned.env.AGENTOPS_WRAPPER_FALLBACK_UNOBSERVED, 'true');
-    assert.equal(spawned.env.AGENTOPS_WRAPPER_RUN_ID, event.RunId);
-    assert.equal(spawned.env.AGENTOPS_WRAPPER_SESSION_ID, event.SessionId);
+    assert.equal(spawned.env.AGENTOPS_WRAPPER_RUN_ID, byName['agentops.run.start'].RunId);
+    assert.equal(spawned.env.AGENTOPS_WRAPPER_SESSION_ID, byName['agentops.run.start'].SessionId);
   } finally {
     restore.reverse().forEach(fn => fn());
     if (originalFallback === undefined) delete process.env.AGENTOPS_ALLOW_UNOBSERVED_FALLBACK;

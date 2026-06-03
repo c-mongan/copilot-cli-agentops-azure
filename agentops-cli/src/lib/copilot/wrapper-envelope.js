@@ -24,7 +24,7 @@ function appendWrapperEvent(event, options = {}) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.appendFileSync(file, `${JSON.stringify({
     TimeGenerated: new Date().toISOString(),
-    EventName: 'agentops.wrapper.fallback_unobserved',
+    EventName: event.EventName || 'agentops.wrapper.event',
     ...event
   })}\n`);
   return file;
