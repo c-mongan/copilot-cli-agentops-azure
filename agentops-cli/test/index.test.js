@@ -1367,7 +1367,12 @@ test('V2 recommend carries benchmark gate and change-target metadata', () => {
           added: ['notes/hello.txt'],
           modified: ['README.md', 'package.json'],
           deleted: []
-        }
+        },
+        artifactContentDiffs: [{
+          change: 'modified',
+          path: 'README.md',
+          diff: '--- a/README.md\n+++ b/README.md\n-Old\n+New'
+        }]
       }],
       promotion: {
         decision: 'reject',
@@ -1411,6 +1416,12 @@ test('V2 recommend carries benchmark gate and change-target metadata', () => {
       { task_id: 'create-note', change: 'modified', path: 'README.md' },
       { task_id: 'create-note', change: 'modified', path: 'package.json' }
     ]);
+    assert.deepEqual(row.BenchmarkArtifactContentDiffs, [{
+      task_id: 'create-note',
+      change: 'modified',
+      path: 'README.md',
+      diff_preview: '--- a/README.md\n+++ b/README.md\n-Old\n+New'
+    }]);
     assert.equal(row.BenchmarkHiddenChecksPassed, 1);
     assert.equal(row.BenchmarkHiddenChecksFailed, 0);
     assert.deepEqual(row.BenchmarkHiddenCheckPacks, [{
@@ -3665,11 +3676,14 @@ test('V2 dashboard links preserve drilldown contracts', () => {
   assert.match(JSON.stringify(evalsDashboard), /Eval regression follow-up/);
   assert.match(JSON.stringify(evalsDashboard), /Benchmark artifact diff review/);
   assert.match(JSON.stringify(evalsDashboard), /Benchmark artifact files/);
+  assert.match(JSON.stringify(evalsDashboard), /Benchmark artifact content diffs/);
   assert.match(JSON.stringify(evalsDashboard), /Benchmark hidden check packs/);
   assert.match(JSON.stringify(evalsDashboard), /Benchmark policy review/);
   assert.match(JSON.stringify(evalsDashboard), /Benchmark semantic checks/);
   assert.match(JSON.stringify(evalsDashboard), /BenchmarkArtifactTotalChanged/);
   assert.match(JSON.stringify(evalsDashboard), /ArtifactPath/);
+  assert.match(JSON.stringify(evalsDashboard), /BenchmarkArtifactContentDiffs/);
+  assert.match(JSON.stringify(evalsDashboard), /DiffPreview/);
   assert.match(JSON.stringify(evalsDashboard), /HiddenPackId/);
   assert.match(JSON.stringify(evalsDashboard), /ViolationRisks/);
   assert.match(JSON.stringify(evalsDashboard), /SemanticCheckId/);

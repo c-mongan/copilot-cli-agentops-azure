@@ -167,6 +167,38 @@ function benchmarkArtifactFileRefs(report = null) {
   return rows.slice(0, 200);
 }
 
+function benchmarkArtifactContentDiffRefs(report = null) {
+  const rows = [];
+  for (const task of Array.isArray(report?.tasks) ? report.tasks : []) {
+    const explicitDiffs = Array.isArray(task.artifactContentDiffs) ? task.artifactContentDiffs : [];
+    for (const diff of explicitDiffs) {
+      if (!diff || typeof diff !== 'object') continue;
+      const artifactPath = String(diff.path || diff.file || '').replaceAll('\\', '/').trim();
+      if (!artifactPath) continue;
+      rows.push({
+        task_id: task.taskId || '',
+        change: diff.change || diff.status || '',
+        path: artifactPath,
+        diff_preview: String(diff.diff || diff.preview || '').split(/\r?\n/).slice(0, 80).join('\n').slice(0, 12000)
+      });
+    }
+
+    const files = Array.isArray(task.artifactReview?.files) ? task.artifactReview.files : [];
+    for (const file of files) {
+      const artifactPath = String(file.path || file.file || '').replaceAll('\\', '/').trim();
+      const diffLines = Array.isArray(file.diff) ? file.diff : [];
+      if (!artifactPath || diffLines.length === 0) continue;
+      rows.push({
+        task_id: task.taskId || '',
+        change: file.change || file.status || '',
+        path: artifactPath,
+        diff_preview: diffLines.map(line => String(line).slice(0, 300)).slice(0, 80).join('\n')
+      });
+    }
+  }
+  return rows.filter(row => row.diff_preview).slice(0, 50);
+}
+
 function benchmarkHiddenCheckPackRefs(report = null) {
   const rows = [];
   for (const task of Array.isArray(report?.tasks) ? report.tasks : []) {
@@ -243,6 +275,7 @@ function benchmarkEvidenceFromReport(report = null) {
       total_changed: artifactDiff.totalChanged ?? null
     },
     artifact_files: benchmarkArtifactFileRefs(report),
+    artifact_content_diffs: benchmarkArtifactContentDiffRefs(report),
     hidden_checks: {
       passed: report.hiddenChecks?.passed ?? null,
       failed: report.hiddenChecks?.failed ?? null,
@@ -409,6 +442,7 @@ function recommendationRow(recommendation, timeGenerated = new Date().toISOStrin
     BenchmarkArtifactDeleted: benchmark.artifact_diff?.deleted ?? null,
     BenchmarkArtifactTotalChanged: benchmark.artifact_diff?.total_changed ?? null,
     BenchmarkArtifactFiles: benchmark.artifact_files || [],
+    BenchmarkArtifactContentDiffs: benchmark.artifact_content_diffs || [],
     BenchmarkHiddenChecksPassed: benchmark.hidden_checks?.passed ?? null,
     BenchmarkHiddenChecksFailed: benchmark.hidden_checks?.failed ?? null,
     BenchmarkHiddenCheckPacks: benchmark.hidden_checks?.packs || [],

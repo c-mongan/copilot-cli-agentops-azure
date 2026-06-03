@@ -422,6 +422,7 @@ function validateDashboardUx() {
   if (!evalsTitles.has('Eval regression follow-up')) errors.push('evals dashboard missing Eval regression follow-up panel');
   if (!evalsTitles.has('Benchmark artifact diff review')) errors.push('evals dashboard missing Benchmark artifact diff review panel');
   if (!evalsTitles.has('Benchmark artifact files')) errors.push('evals dashboard missing Benchmark artifact files panel');
+  if (!evalsTitles.has('Benchmark artifact content diffs')) errors.push('evals dashboard missing Benchmark artifact content diffs panel');
   if (!evalsTitles.has('Benchmark hidden check packs')) errors.push('evals dashboard missing Benchmark hidden check packs panel');
   if (!evalsTitles.has('Benchmark policy review')) errors.push('evals dashboard missing Benchmark policy review panel');
   if (!evalsTitles.has('Benchmark semantic checks')) errors.push('evals dashboard missing Benchmark semantic checks panel');
@@ -441,6 +442,10 @@ function validateDashboardUx() {
   const artifactFilesQuery = queryFromPanel(panelByTitle(evals, 'Benchmark artifact files'));
   for (const field of ['BenchmarkArtifactFiles', 'mv-expand', 'ArtifactTaskId', 'ArtifactChange', 'ArtifactPath']) {
     if (!artifactFilesQuery.includes(field)) errors.push(`benchmark artifact files missing ${field}`);
+  }
+  const artifactContentDiffQuery = queryFromPanel(panelByTitle(evals, 'Benchmark artifact content diffs'));
+  for (const field of ['BenchmarkArtifactContentDiffs', 'mv-expand', 'ArtifactTaskId', 'ArtifactChange', 'ArtifactPath', 'DiffPreview']) {
+    if (!artifactContentDiffQuery.includes(field)) errors.push(`benchmark artifact content diffs missing ${field}`);
   }
   const hiddenCheckQuery = queryFromPanel(panelByTitle(evals, 'Benchmark hidden check packs'));
   for (const field of ['BenchmarkHiddenCheckPacks', 'mv-expand', 'BenchmarkHiddenChecksPassed', 'BenchmarkHiddenChecksFailed', 'HiddenTaskId', 'HiddenPackId', 'HiddenCommandCount']) {
@@ -492,6 +497,7 @@ function validateDashboardUx() {
       recommendation_artifacts: true,
       artifact_diff_review: true,
       artifact_file_review: true,
+      artifact_content_diff_review: true,
       hidden_check_review: true,
       policy_review: true,
       semantic_review: true,
