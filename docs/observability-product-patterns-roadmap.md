@@ -152,14 +152,16 @@ Implementation surface:
 
 Alert history should be part of the product, not just notifications. AgentOps alerts are currently disabled proposal-only rules, which is the right default. The next step is an alert-tuning dashboard.
 
-Recommended MVP:
+Implemented local MVP:
 
-- Add `agentops-alerts` dashboard or a row in `agentops-quality` with:
-  - current disabled/enabled state
-  - rule thresholds
-  - how many times each rule would have fired over 7/14/30 days
-  - top contributing sessions/models/tools/repos
-  - suggested threshold values using percentiles
+- Alert Tuning dashboard now includes threshold recommendations and fired-alert candidate review.
+- `agentops alert history`, `agentops alert detail`, and `agentops alert action-plan` generate metadata-only review/action JSON.
+
+Remaining MVP:
+
+- Add current disabled/enabled state from Azure scheduled-query alert resources.
+- Add persisted incident timeline or exported alert artifacts.
+- Add on-call/noise policy and ownership metadata.
 - Keep remediation proposal-only.
 
 Implementation surface:

@@ -3386,6 +3386,23 @@ test('Grafana dashboard inventory reads stable dashboard UIDs from repo', () => 
   assert.ok(uids.includes('agentops-attribution'));
 });
 
+test('Alert Tuning dashboard surfaces fired alert candidates', () => {
+  const dashboard = JSON.parse(fs.readFileSync(path.join(root, 'grafana', 'agentops-alert-tuning.json'), 'utf8'));
+  const panels = Object.fromEntries(dashboard.panels.map(panel => [panel.title, panel]));
+  const recommendationsQuery = panels['Threshold recommendations'].targets[0].azureLogAnalytics.query;
+  const historyPanel = panels['Fired alert candidates'];
+  const historyQuery = historyPanel.targets[0].azureLogAnalytics.query;
+  const overrides = JSON.stringify(historyPanel.fieldConfig.overrides);
+
+  assert.ok(historyPanel);
+  assert.match(recommendationsQuery, /cost-spike/);
+  assert.match(recommendationsQuery, /runaway-tool-loop/);
+  assert.match(historyQuery, /alert_history/);
+  assert.match(historyQuery, /TriggerValue/);
+  assert.match(historyQuery, /content-capture/);
+  assert.match(overrides, /agentops-session-detail/);
+});
+
 test('V2 dashboard pack follows global AgentOps UX contract', () => {
   const result = validateDashboards();
   assert.equal(result.ok, true, result.errors.join('\n'));
