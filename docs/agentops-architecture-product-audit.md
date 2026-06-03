@@ -412,7 +412,7 @@ Current gaps:
 
 Product recommendation:
 
-- Add contract tests using real Copilot OTel fixture snapshots when available.
+- Keep real Copilot OTel fixture snapshot contract tests in CI as Copilot fields evolve.
 - Generate Bash/PowerShell flag metadata from one source of truth if this grows further.
 
 ### Collector And Privacy Plane
@@ -1246,7 +1246,7 @@ Required work:
 - Make `agentops validate-azure` optionally import missing dashboards after explicit confirmation.
 - Make `agentops smoke` optionally launch a real Copilot smoke prompt and deep-link to the resulting latest run.
 - Add cloud doctor checks that reuse the same Grafana datasource/dashboard checks without requiring a separate command.
-- Add contract tests using real Copilot OTel fixture snapshots when available.
+- Keep real Copilot OTel fixture snapshot contract tests in CI as Copilot fields evolve.
 
 ### P1 - Make It Native To Copilot
 
@@ -1294,7 +1294,7 @@ If I had to choose only five next tasks:
 
 1. Add dashboard import remediation to `agentops validate-azure`.
 2. Add a real Copilot smoke-run mode that prints the exact latest-run URL.
-3. Add real Copilot OTel fixture snapshot contract tests.
+3. Add cloud doctor checks that reuse the same Grafana datasource/dashboard checks without requiring a separate command.
 4. Build a polished session-first dashboard landing page with recommendation and ask-AgentOps context.
 5. Expand benchmark/eval support with hidden checks, permission profiles, and artifact diffing.
 

@@ -4756,6 +4756,31 @@ test('span source reads local JSONL without Azure access', () => {
   assert.equal(source.error, null);
 });
 
+test('real Copilot OTel snapshot preserves wrapper envelope contract', () => {
+  const rows = spanRowsFromSource(['--file', path.join(root, 'tests', 'sample-otel', 'copilot-cli-wrapper-snapshot.jsonl')]).rows;
+  const result = rollupSpanRows(rows, { baseTime: '2026-06-01T12:00:00.000Z' });
+  const run = result.tables.AgentOpsRunSummary_CL[0];
+  const tool = result.tables.AgentOpsToolCalls_CL[0];
+  const mcp = result.tables.AgentOpsMcpCalls_CL[0];
+
+  assert.equal(result.ok, true);
+  assert.equal(result.runs, 1);
+  assert.equal(run.RunId, 'wrapper_run_snapshot');
+  assert.equal(run.SessionId, 'wrapper_session_snapshot');
+  assert.equal(run.TraceId, 'trace-copilot-snapshot');
+  assert.equal(run.AgentName, 'telemetry-investigator');
+  assert.equal(run.ModelActual, 'gpt-5-mini');
+  assert.equal(run.InputTokens, 1200);
+  assert.equal(run.OutputTokens, 180);
+  assert.equal(run.PrivacyMode, 'strict');
+  assert.equal(run.ContentCaptureSignal, false);
+  assert.equal(run.OutcomeStatus, 'success');
+  assert.equal(tool.ToolName, 'mcp__azure__monitor_query');
+  assert.equal(tool.Allowed, true);
+  assert.equal(mcp.McpServerName, 'azure');
+  assert.equal(mcp.ResultSizeBytes, 2048);
+});
+
 test('saved views add, list, show, and open durable investigations', () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-views-test-'));
   const viewsPath = path.join(tempDir, 'views.json');

@@ -158,7 +158,7 @@ function rollupSpanRows(rows, options = {}) {
     let sessionId = row.SessionId
       || row.session
       || row.conversation
-      || attr(attrs, ['agentops.session.id', 'gen_ai.conversation.id', 'github.copilot.interaction_id'], 'unknown-session');
+      || attr(attrs, ['agentops.session.id', 'agentops.wrapper.session_id', 'gen_ai.conversation.id', 'github.copilot.interaction_id'], 'unknown-session');
     if (sessionId === 'unknown-session' && currentSessionId) sessionId = currentSessionId;
     if (sessionId !== 'unknown-session') currentSessionId = sessionId;
     if (!sessions.has(sessionId)) sessions.set(sessionId, []);
@@ -167,7 +167,7 @@ function rollupSpanRows(rows, options = {}) {
 
   for (const [sessionId, items] of sessions.entries()) {
     const first = items[0];
-    const runId = attr(first.attrs, ['agentops.run.id'], stableHash(sessionId, 'run'));
+    const runId = attr(first.attrs, ['agentops.run.id', 'agentops.wrapper.run_id'], stableHash(sessionId, 'run'));
     const traceId = first.row.OperationId || first.row.TraceId || stableHash(`${sessionId}:trace`, 'trace');
     const repoHash = attr(first.attrs, ['agentops.repo.hash'], stableHash(options.repo || 'unknown-repo', 'repo'));
     const branchHash = attr(first.attrs, ['agentops.branch.hash'], stableHash(options.branch || 'unknown-branch', 'branch'));
