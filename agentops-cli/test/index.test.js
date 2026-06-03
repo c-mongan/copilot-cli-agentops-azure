@@ -78,6 +78,7 @@ const {
   benchmarkApproval,
   benchmarkArtifactReview,
   benchmarkFixturePack,
+  benchmarkJudgeProviderGuide,
   benchmarkReport,
   benchmarkRunBaseDir,
   benchmarkRunPlan,
@@ -147,6 +148,7 @@ const {
   renderSmoke,
   renderAgentsInstall,
   renderAgentsUninstall,
+  renderBenchmarkJudgeProviderGuide,
   renderPluginInstall,
   renderPluginUninstall,
   renderSkillsInstall,
@@ -1869,6 +1871,9 @@ test('workflows map README goals to invocable skills and commands', () => {
   assert.equal(byName.attribution.skill, 'agentops-attribution');
   assert.ok(byName.attribution.commands.includes('node agentops-cli/src/index.js attribution --last 7d'));
   assert.equal(byName['science-mode'].skill, 'agentops-benchmark-gate');
+  assert.ok(byName['science-mode'].commands.includes('node agentops-cli/src/index.js benchmark judge-provider'));
+  assert.equal(byName['judge-provider'].skill, 'agentops-benchmark-gate');
+  assert.ok(byName['judge-provider'].commands.includes('node agentops-cli/src/index.js benchmark judge-provider --json'));
   assert.ok(byName['offline-test'].commands.includes('node agentops-cli/src/index.js live --file tests/sample-otel/tool-failure.jsonl'));
   assert.ok(byName['analyst-mode'].commands.includes('node agentops-cli/src/index.js alert recommend --last 14d'));
   assert.ok(byName.operations.commands.includes('node agentops-cli/src/index.js plugin uninstall'));
@@ -1884,6 +1889,20 @@ test('workflow renderers show prompts and command details', () => {
   assert.match(listOutput, /agentops-live-triage/);
   assert.match(setupOutput, /Ask Copilot: Use agentops-setup/);
   assert.match(setupOutput, /\.\/setup-agentops\.sh/);
+});
+
+test('benchmark judge provider guide renders hosted llm judge setup', () => {
+  const guide = benchmarkJudgeProviderGuide();
+  assert.equal(guide.suiteSnippet.judgeProviders.hosted.command, 'benchmark-judges/hosted-judge.sh {file} {checkId}');
+  assert.equal(guide.semanticCheckSnippet.adapter, 'llm-judge');
+  assert.equal(guide.semanticCheckSnippet.provider, 'hosted');
+  assert.ok(guide.wrapperScript.env.includes('AGENTOPS_JUDGE_TOKEN'));
+
+  const rendered = renderBenchmarkJudgeProviderGuide(guide);
+  assert.match(rendered, /Benchmark hosted judge provider guide/);
+  assert.match(rendered, /suite\.json snippet/);
+  assert.match(rendered, /AGENTOPS_JUDGE_ENDPOINT/);
+  assert.match(rendered, /semanticChecks snippet/);
 });
 
 test('configure stores non-secret Azure and Grafana settings once', () => {
