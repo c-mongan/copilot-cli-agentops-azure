@@ -53,7 +53,7 @@ Every V2 dashboard uses:
 - Evals & Quality exposes a **Benchmark artifact files** table with task ID, change type, and artifact path rows. It must stay metadata-only and avoid file contents.
 - Evals & Quality exposes a **Benchmark hidden check packs** table with hidden pass/fail counts, task ID, pack ID/title, and command count. It must stay metadata-only and avoid hidden command text.
 - Evals & Quality exposes a **Benchmark policy review** table with task ID, permission profile, policy block count, configured blocked risks, and observed violation risks. It must avoid tool arguments and command text.
-- Evals & Quality exposes a **Benchmark semantic checks** table with task ID, check ID, adapter, file, pass/fail state, score, and failure detail. It must avoid expected content strings and regex patterns.
+- Evals & Quality exposes a **Benchmark semantic checks** table with task ID, check ID, adapter, file, pass/fail state, score, and failure detail. It must avoid expected content strings, regex patterns, and judge commands.
 - Evals & Quality exposes a **Benchmark promotion approvals** table with approval status, required/observed approval counts, ticket, and review action.
 - Run Replay exposes an **Ask AgentOps context** panel with a metadata-only prompt and `agentops triage` command.
 - Empty states point to the smallest command that generates data.

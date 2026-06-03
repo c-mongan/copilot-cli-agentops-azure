@@ -4604,7 +4604,7 @@ test('benchmark schema validation rejects invalid semantic checks', () => {
     prompt: 'Do nothing.',
     copilotArgs: [],
     successCommands: [],
-    semanticChecks: [{ id: 'bad', adapter: 'llm-judge', file: 'README.md', contains: 'hello' }],
+    semanticChecks: [{ id: 'bad', adapter: 'unknown-judge', file: 'README.md', contains: 'hello' }],
     expectedFiles: [],
     forbiddenFiles: [],
     timeoutSec: 10,
@@ -4623,6 +4623,13 @@ test('benchmark schema validation rejects invalid semantic checks', () => {
     criteria: [{ id: 'ambiguous', contains: 'hello', pattern: 'hello' }]
   }];
   assert.throws(() => validateBenchmarkTask(task, suiteDir, 'test-task'), /must define exactly one of contains or pattern/);
+
+  task.semanticChecks = [{
+    id: 'bad-judge',
+    adapter: 'llm-judge',
+    file: 'README.md'
+  }];
+  assert.throws(() => validateBenchmarkTask(task, suiteDir, 'test-task'), /command must be a non-empty string/);
 });
 
 test('benchmark schema validation rejects invalid tool policies', () => {
@@ -5407,6 +5414,145 @@ test('benchmark semantic rubric checks score partial matches', () => {
     ]);
     assert.equal(result.summaries[0].semanticChecks[0].detail, 'rubric criteria passed: 1/2');
     assert.equal(result.report.semanticChecks.averageScore, 50);
+    assert.equal(result.report.recommendation.action, 'reject');
+  } finally {
+    fs.rmSync(path.join(benchmarkRunBaseDir, runId), { recursive: true, force: true });
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('benchmark semantic checks support LLM judge command scoring', () => {
+  const runId = `bench-semantic-judge-${Date.now()}`;
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-bench-semantic-judge-'));
+  const suiteDir = path.join(tempDir, 'benchmarks', 'semantic-judge-suite');
+  const fixtureDir = path.join(suiteDir, 'fixtures', 'tiny-repo');
+  const tasksDir = path.join(suiteDir, 'tasks');
+
+  try {
+    fs.mkdirSync(fixtureDir, { recursive: true });
+    fs.mkdirSync(tasksDir, { recursive: true });
+    fs.writeFileSync(path.join(suiteDir, 'suite.json'), `${JSON.stringify({ id: 'semantic-judge-suite', title: 'Semantic judge suite' })}\n`);
+    fs.writeFileSync(path.join(fixtureDir, 'README.md'), '# Semantic fixture\n');
+    fs.writeFileSync(path.join(tasksDir, 'write-note.json'), `${JSON.stringify({
+      id: 'write-note',
+      title: 'Write note',
+      fixture: 'fixtures/tiny-repo',
+      prompt: 'Create notes/hello.txt.',
+      copilotArgs: [],
+      permissionProfile: 'least-privilege',
+      successCommands: [],
+      semanticChecks: [{
+        id: 'note-quality',
+        adapter: 'llm-judge',
+        file: 'notes/hello.txt',
+        command: 'agentops-judge notes/hello.txt',
+        minScore: 80
+      }],
+      expectedFiles: ['notes/hello.txt'],
+      forbiddenFiles: [],
+      timeoutSec: 10,
+      tags: []
+    })}\n`);
+
+    const result = runBenchmarkSuite('semantic-judge-suite', {
+      benchmarksDir: path.join(tempDir, 'benchmarks'),
+      variant: 'candidate',
+      repeat: 1,
+      runId,
+      summariesDir: path.join(tempDir, 'summaries'),
+      spawnSync: (command, args, options = {}) => {
+        if (command === 'copilot') {
+          fs.mkdirSync(path.join(options.cwd, 'notes'), { recursive: true });
+          fs.writeFileSync(path.join(options.cwd, 'notes', 'hello.txt'), 'hello agentops\n');
+          return { status: 0, stdout: 'created note', stderr: '' };
+        }
+        if (command === 'sh' || command.toLowerCase().endsWith('cmd.exe')) {
+          return { status: 0, stdout: '{"score":92,"detail":"strong answer"}', stderr: '' };
+        }
+        return { status: 0, stdout: '', stderr: '' };
+      }
+    });
+
+    assert.equal(result.summaries[0].success, true);
+    assert.deepEqual(result.summaries[0].semanticChecks, [{
+      id: 'note-quality',
+      adapter: 'llm-judge',
+      file: 'notes/hello.txt',
+      ok: true,
+      score: 92,
+      detail: null
+    }]);
+    assert.equal(result.report.semanticChecks.averageScore, 92);
+    assert.equal(result.report.recommendation.action, 'keep');
+  } finally {
+    fs.rmSync(path.join(benchmarkRunBaseDir, runId), { recursive: true, force: true });
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('benchmark semantic LLM judge rejects low scores', () => {
+  const runId = `bench-semantic-judge-low-${Date.now()}`;
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-bench-semantic-judge-low-'));
+  const suiteDir = path.join(tempDir, 'benchmarks', 'semantic-judge-low-suite');
+  const fixtureDir = path.join(suiteDir, 'fixtures', 'tiny-repo');
+  const tasksDir = path.join(suiteDir, 'tasks');
+
+  try {
+    fs.mkdirSync(fixtureDir, { recursive: true });
+    fs.mkdirSync(tasksDir, { recursive: true });
+    fs.writeFileSync(path.join(suiteDir, 'suite.json'), `${JSON.stringify({ id: 'semantic-judge-low-suite', title: 'Semantic judge low suite' })}\n`);
+    fs.writeFileSync(path.join(fixtureDir, 'README.md'), '# Semantic fixture\n');
+    fs.writeFileSync(path.join(tasksDir, 'write-note.json'), `${JSON.stringify({
+      id: 'write-note',
+      title: 'Write note',
+      fixture: 'fixtures/tiny-repo',
+      prompt: 'Create notes/hello.txt.',
+      copilotArgs: [],
+      permissionProfile: 'least-privilege',
+      successCommands: [],
+      semanticChecks: [{
+        id: 'note-quality',
+        adapter: 'llm-judge',
+        file: 'notes/hello.txt',
+        command: 'agentops-judge notes/hello.txt',
+        minScore: 80
+      }],
+      expectedFiles: ['notes/hello.txt'],
+      forbiddenFiles: [],
+      timeoutSec: 10,
+      tags: []
+    })}\n`);
+
+    const result = runBenchmarkSuite('semantic-judge-low-suite', {
+      benchmarksDir: path.join(tempDir, 'benchmarks'),
+      variant: 'candidate',
+      repeat: 1,
+      runId,
+      summariesDir: path.join(tempDir, 'summaries'),
+      spawnSync: (command, args, options = {}) => {
+        if (command === 'copilot') {
+          fs.mkdirSync(path.join(options.cwd, 'notes'), { recursive: true });
+          fs.writeFileSync(path.join(options.cwd, 'notes', 'hello.txt'), 'hello world\n');
+          return { status: 0, stdout: 'created note', stderr: '' };
+        }
+        if (command === 'sh' || command.toLowerCase().endsWith('cmd.exe')) {
+          return { status: 0, stdout: '{"score":42,"detail":"missing requested intent"}', stderr: '' };
+        }
+        return { status: 0, stdout: '', stderr: '' };
+      }
+    });
+
+    assert.equal(result.summaries[0].success, false);
+    assert.deepEqual(result.summaries[0].semanticChecks, [{
+      id: 'note-quality',
+      adapter: 'llm-judge',
+      file: 'notes/hello.txt',
+      ok: false,
+      score: 42,
+      detail: 'missing requested intent'
+    }]);
+    assert.equal(result.summaries[0].errorCategory, 'assertion_failure');
+    assert.equal(result.report.semanticChecks.averageScore, 42);
     assert.equal(result.report.recommendation.action, 'reject');
   } finally {
     fs.rmSync(path.join(benchmarkRunBaseDir, runId), { recursive: true, force: true });
