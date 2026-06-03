@@ -822,10 +822,10 @@ Current anti-cheat limitations:
 - Hidden check packs exist as separate masked command packs, fixture seals can reject checksum drift, and the Evals & Quality dashboard surfaces metadata-only hidden pack review. Full sealed fixture pack distribution is still missing.
 - There is no network isolation; network tool policies are report-time rejection signals, not egress prevention.
 - Read-only benchmark profiles now block any workspace file change in the copied fixture.
-- Semantic evaluator adapters exist for deterministic file-content and regex checks, but there is no LLM or rubric-judge scoring yet.
+- Semantic evaluator adapters exist for deterministic file-content and regex checks, and the Evals & Quality dashboard surfaces metadata-only semantic check review. There is no LLM or rubric-judge scoring yet.
 - Candidate promotion gates can require approval evidence from an approval file, and the Evals & Quality dashboard now surfaces metadata-only approval review status. There is still no interactive team approval workflow yet.
 - There is no defense against an agent changing the test commands if the eval harness files are available to it.
-- The Evals & Quality dashboard now includes metadata-only artifact diff counts, per-file artifact path review, hidden check pack review, and policy review for benchmark recommendations, but there is no unified file-content diff viewer yet.
+- The Evals & Quality dashboard now includes metadata-only artifact diff counts, per-file artifact path review, hidden check pack review, policy review, and semantic check review for benchmark recommendations, but there is no unified file-content diff viewer yet.
 - There is no "agent used external answer source" detector.
 - There is no "agent optimized for benchmark but harmed real-world telemetry" comparison beyond the report heuristics.
 
