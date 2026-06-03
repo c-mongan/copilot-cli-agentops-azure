@@ -286,7 +286,8 @@ test('collector privacy processor artifacts and poison fixtures are present', ()
 
   const owasp = collectorManager.validateOwaspFixtures();
   assert.equal(owasp.ok, true, owasp.errors.join('\n'));
-  assert.equal(owasp.fixtures.length, 5);
+  assert.equal(owasp.fixtures.length, 6);
+  assert.ok(owasp.fixtures.some(fixture => fixture.file === 'mcp-dangerous-tool-classes.json'));
   assert.ok(owasp.fixtures.every(fixture => fixture.ok));
   assert.ok(owasp.fixtures.every(fixture => fixture.content_signal));
 });
@@ -815,6 +816,7 @@ test('mcp HTTP observer injects trace context and stores metadata only', () => {
 
 test('mcp-proxy risk classifier covers sensitive and destructive tools', () => {
   assert.equal(classifyMcpToolRisk('read_file'), 'read-only');
+  assert.equal(classifyMcpToolRisk('http_fetch_url'), 'network');
   assert.equal(classifyMcpToolRisk('shell_exec'), 'shell');
   assert.equal(classifyMcpToolRisk('delete_workspace'), 'destructive');
   assert.equal(classifyMcpToolRisk('get_secret_token'), 'secret-access');
