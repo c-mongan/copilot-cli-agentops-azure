@@ -200,6 +200,26 @@ function benchmarkPolicyRefs(report = null) {
   return rows.slice(0, 200);
 }
 
+function benchmarkSemanticCheckRefs(report = null) {
+  const rows = [];
+  for (const task of Array.isArray(report?.tasks) ? report.tasks : []) {
+    const checks = Array.isArray(task.semanticChecks) ? task.semanticChecks : [];
+    for (const check of checks) {
+      if (!check || typeof check !== 'object') continue;
+      rows.push({
+        task_id: task.taskId || '',
+        id: check.id || '',
+        adapter: check.adapter || '',
+        file: check.file || '',
+        ok: check.ok === undefined ? null : Boolean(check.ok),
+        score: check.score ?? null,
+        detail: check.detail || ''
+      });
+    }
+  }
+  return rows.slice(0, 200);
+}
+
 function benchmarkEvidenceFromReport(report = null) {
   if (!report || typeof report !== 'object') return null;
   const artifactDiff = report.artifactDiff || {};
@@ -232,6 +252,11 @@ function benchmarkEvidenceFromReport(report = null) {
       blocks: report.policyBlocks ?? null,
       permission_profiles: report.permissionProfiles || {},
       tasks: benchmarkPolicyRefs(report)
+    },
+    semantic_checks: {
+      count: report.semanticChecks?.count ?? null,
+      average_score: report.semanticChecks?.averageScore ?? null,
+      checks: benchmarkSemanticCheckRefs(report)
     },
     approval: {
       status: approval.status || '',
@@ -390,6 +415,9 @@ function recommendationRow(recommendation, timeGenerated = new Date().toISOStrin
     BenchmarkPolicyBlocks: benchmark.policy?.blocks ?? null,
     BenchmarkPermissionProfiles: benchmark.policy?.permission_profiles || {},
     BenchmarkPolicyTasks: benchmark.policy?.tasks || [],
+    BenchmarkSemanticCheckCount: benchmark.semantic_checks?.count ?? null,
+    BenchmarkSemanticAverageScore: benchmark.semantic_checks?.average_score ?? null,
+    BenchmarkSemanticChecks: benchmark.semantic_checks?.checks || [],
     BenchmarkApprovalStatus: benchmark.approval?.status || '',
     BenchmarkApprovalCount: benchmark.approval?.approved_count ?? null,
     BenchmarkRequiredApprovals: benchmark.approval?.required_count ?? null,

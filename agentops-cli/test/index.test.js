@@ -1329,6 +1329,10 @@ test('V2 recommend carries benchmark gate and change-target metadata', () => {
       permissionProfiles: {
         'allow-all-isolated': 1
       },
+      semanticChecks: {
+        count: 1,
+        averageScore: 100
+      },
       tasks: [{
         taskId: 'create-note',
         permissionProfile: 'allow-all-isolated',
@@ -1337,6 +1341,15 @@ test('V2 recommend carries benchmark gate and change-target metadata', () => {
         },
         policyBlocks: 1,
         toolPolicyViolations: [{ tool: 'http_fetch_url', risk: 'network' }],
+        semanticScore: 100,
+        semanticChecks: [{
+          id: 'hello-note-content',
+          adapter: 'file-contains',
+          file: 'notes/hello.txt',
+          ok: true,
+          score: 100,
+          detail: null
+        }],
         hiddenCheckPacks: [{
           id: 'create-note-sealed',
           title: 'Create note sealed checks',
@@ -1407,6 +1420,17 @@ test('V2 recommend carries benchmark gate and change-target metadata', () => {
       blocked_risks: ['browser-control', 'destructive', 'network', 'secret-access'],
       violation_count: 1,
       violation_risks: ['network']
+    }]);
+    assert.equal(row.BenchmarkSemanticCheckCount, 1);
+    assert.equal(row.BenchmarkSemanticAverageScore, 100);
+    assert.deepEqual(row.BenchmarkSemanticChecks, [{
+      task_id: 'create-note',
+      id: 'hello-note-content',
+      adapter: 'file-contains',
+      file: 'notes/hello.txt',
+      ok: true,
+      score: 100,
+      detail: ''
     }]);
     assert.equal(row.BenchmarkApprovalStatus, 'approved');
     assert.equal(row.BenchmarkApprovalCount, 1);
@@ -3327,6 +3351,7 @@ test('V2 dashboard ux-check protects the Datadog-style operator flow', () => {
   assert.equal(result.contracts.artifact_file_review, true);
   assert.equal(result.contracts.hidden_check_review, true);
   assert.equal(result.contracts.policy_review, true);
+  assert.equal(result.contracts.semantic_review, true);
   assert.equal(result.contracts.promotion_approvals, true);
   assert.equal(result.contracts.ask_agentops_context, true);
 });
@@ -3571,7 +3596,7 @@ test('dashboard verify combines static UX and optional live KQL gates', () => {
   });
   assert.equal(live.ok, true, live.errors.join('\n'));
   assert.equal(live.live, true);
-  assert.equal(live.summary.kql_checks, 24);
+  assert.equal(live.summary.kql_checks, 25);
 });
 
 test('V2 dashboard links preserve drilldown contracts', () => {
@@ -3609,10 +3634,12 @@ test('V2 dashboard links preserve drilldown contracts', () => {
   assert.match(JSON.stringify(evalsDashboard), /Benchmark artifact files/);
   assert.match(JSON.stringify(evalsDashboard), /Benchmark hidden check packs/);
   assert.match(JSON.stringify(evalsDashboard), /Benchmark policy review/);
+  assert.match(JSON.stringify(evalsDashboard), /Benchmark semantic checks/);
   assert.match(JSON.stringify(evalsDashboard), /BenchmarkArtifactTotalChanged/);
   assert.match(JSON.stringify(evalsDashboard), /ArtifactPath/);
   assert.match(JSON.stringify(evalsDashboard), /HiddenPackId/);
   assert.match(JSON.stringify(evalsDashboard), /ViolationRisks/);
+  assert.match(JSON.stringify(evalsDashboard), /SemanticCheckId/);
   assert.match(JSON.stringify(evalsDashboard), /ReviewAction/);
   assert.match(JSON.stringify(evalsDashboard), /Benchmark promotion approvals/);
   assert.match(JSON.stringify(evalsDashboard), /BenchmarkApprovalStatus/);
@@ -3681,7 +3708,7 @@ test('dashboard kql-check renders representative V2 panel queries', () => {
   });
 
   assert.equal(result.ok, true, result.errors.join('\n'));
-  assert.equal(result.checks.length, 24);
+  assert.equal(result.checks.length, 25);
   assert.ok(queries.every(item => item.options.workspaceId === 'workspace-123'));
   assert.ok(queries.every(item => item.query.includes('ago(24h)')));
   assert.ok(queries.every(item => !item.query.includes('$__timeFrom')));

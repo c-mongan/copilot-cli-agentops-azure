@@ -138,6 +138,8 @@ The **Benchmark hidden check packs** panel shows hidden check pass/fail counts p
 
 The **Benchmark policy review** panel shows each benchmark task's permission profile, policy block count, configured blocked risk categories, and observed violation risk categories. It keeps tool arguments and hidden check commands out of the dashboard.
 
+The **Benchmark semantic checks** panel shows deterministic semantic check IDs, adapters, files, pass/fail state, scores, and failure detail. It does not show expected strings or regex patterns.
+
 The **Benchmark promotion approvals** panel shows promotion approval status, required/observed approval counts, approved-at time, ticket, and evidence source so teams can see whether a candidate is missing approval evidence before promotion.
 
 Use `agentops triage latest --runs <AgentOpsRunSummary_CL.jsonl> --events <AgentOpsEvents_CL.jsonl> --tools <AgentOpsToolCalls_CL.jsonl> --evals <AgentOpsEval_CL.jsonl> --insights <AgentOpsInsights_CL.jsonl>` to package links, evidence counts, a safe investigator prompt, and one recommendation.

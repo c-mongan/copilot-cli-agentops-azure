@@ -252,6 +252,7 @@ const v2KqlSmokePanels = [
   { uid: 'agentops-v2-evals-quality', panel: 'Benchmark artifact files', requireRows: false },
   { uid: 'agentops-v2-evals-quality', panel: 'Benchmark hidden check packs', requireRows: false },
   { uid: 'agentops-v2-evals-quality', panel: 'Benchmark policy review', requireRows: false },
+  { uid: 'agentops-v2-evals-quality', panel: 'Benchmark semantic checks', requireRows: false },
   { uid: 'agentops-v2-evals-quality', panel: 'Benchmark promotion approvals', requireRows: false },
   { uid: 'agentops-v2-insights-regressions', panel: 'Latest insights', requireRows: true },
   { uid: 'agentops-v2-insights-regressions', panel: 'Recurring patterns', requireRows: false },
@@ -418,6 +419,7 @@ function validateDashboardUx() {
   if (!evalsTitles.has('Benchmark artifact files')) errors.push('evals dashboard missing Benchmark artifact files panel');
   if (!evalsTitles.has('Benchmark hidden check packs')) errors.push('evals dashboard missing Benchmark hidden check packs panel');
   if (!evalsTitles.has('Benchmark policy review')) errors.push('evals dashboard missing Benchmark policy review panel');
+  if (!evalsTitles.has('Benchmark semantic checks')) errors.push('evals dashboard missing Benchmark semantic checks panel');
   if (!evalsTitles.has('Benchmark promotion approvals')) errors.push('evals dashboard missing Benchmark promotion approvals panel');
   const artifactDiffQuery = queryFromPanel(panelByTitle(evals, 'Benchmark artifact diff review'));
   for (const field of ['BenchmarkRunId', 'BenchmarkArtifactAdded', 'BenchmarkArtifactModified', 'BenchmarkArtifactDeleted', 'BenchmarkArtifactTotalChanged', 'ReviewAction', 'ChangeTargetRefs']) {
@@ -435,6 +437,10 @@ function validateDashboardUx() {
   for (const field of ['BenchmarkPolicyTasks', 'mv-expand', 'BenchmarkPolicyBlocks', 'BenchmarkPermissionProfiles', 'PolicyTaskId', 'PermissionProfile', 'BlockedRisks', 'ViolationRisks']) {
     if (!policyQuery.includes(field)) errors.push(`benchmark policy review missing ${field}`);
   }
+  const semanticQuery = queryFromPanel(panelByTitle(evals, 'Benchmark semantic checks'));
+  for (const field of ['BenchmarkSemanticChecks', 'mv-expand', 'BenchmarkSemanticCheckCount', 'BenchmarkSemanticAverageScore', 'SemanticTaskId', 'SemanticCheckId', 'SemanticAdapter', 'SemanticScore']) {
+    if (!semanticQuery.includes(field)) errors.push(`benchmark semantic checks missing ${field}`);
+  }
   const approvalQuery = queryFromPanel(panelByTitle(evals, 'Benchmark promotion approvals'));
   for (const field of ['BenchmarkRunId', 'BenchmarkApprovalStatus', 'BenchmarkApprovalCount', 'BenchmarkRequiredApprovals', 'BenchmarkApprovalTicket', 'ApprovalAction']) {
     if (!approvalQuery.includes(field)) errors.push(`benchmark promotion approvals missing ${field}`);
@@ -449,7 +455,7 @@ function validateDashboardUx() {
     if (!patternsQuery.includes(field)) errors.push(`recurring patterns panel missing ${field}`);
   }
   const recommendationsQuery = queryFromPanel(panelByTitle(insights, 'Recommendation artifacts'));
-  for (const field of ['RecommendationId', 'Action', 'ObservedPattern', 'NextAction', 'BenchmarkRunId', 'BenchmarkDecision', 'BenchmarkArtifactTotalChanged', 'BenchmarkArtifactFiles', 'BenchmarkHiddenCheckPacks', 'BenchmarkPolicyTasks', 'BenchmarkApprovalStatus', 'ChangeTargetRefs', 'OpenReplay', 'OpenPattern']) {
+  for (const field of ['RecommendationId', 'Action', 'ObservedPattern', 'NextAction', 'BenchmarkRunId', 'BenchmarkDecision', 'BenchmarkArtifactTotalChanged', 'BenchmarkArtifactFiles', 'BenchmarkHiddenCheckPacks', 'BenchmarkPolicyTasks', 'BenchmarkSemanticChecks', 'BenchmarkApprovalStatus', 'ChangeTargetRefs', 'OpenReplay', 'OpenPattern']) {
     if (!recommendationsQuery.includes(field)) errors.push(`recommendation artifacts panel missing ${field}`);
   }
 
@@ -470,6 +476,7 @@ function validateDashboardUx() {
       artifact_file_review: true,
       hidden_check_review: true,
       policy_review: true,
+      semantic_review: true,
       promotion_approvals: true,
       pattern_drilldowns: true,
       empty_state_dashboards: emptyStateDashboards

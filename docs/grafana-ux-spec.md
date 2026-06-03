@@ -53,6 +53,7 @@ Every V2 dashboard uses:
 - Evals & Quality exposes a **Benchmark artifact files** table with task ID, change type, and artifact path rows. It must stay metadata-only and avoid file contents.
 - Evals & Quality exposes a **Benchmark hidden check packs** table with hidden pass/fail counts, task ID, pack ID/title, and command count. It must stay metadata-only and avoid hidden command text.
 - Evals & Quality exposes a **Benchmark policy review** table with task ID, permission profile, policy block count, configured blocked risks, and observed violation risks. It must avoid tool arguments and command text.
+- Evals & Quality exposes a **Benchmark semantic checks** table with task ID, check ID, adapter, file, pass/fail state, score, and failure detail. It must avoid expected content strings and regex patterns.
 - Evals & Quality exposes a **Benchmark promotion approvals** table with approval status, required/observed approval counts, ticket, and review action.
 - Run Replay exposes an **Ask AgentOps context** panel with a metadata-only prompt and `agentops triage` command.
 - Empty states point to the smallest command that generates data.
@@ -71,7 +72,7 @@ agentops dashboard import
 ```
 
 `links-check` verifies V2 nav targets, Run Replay links, tool/model/repo drilldowns, and time-range preservation.
-`ux-check` verifies the operator flow: Home top strip, Runs action cells, Run Replay story panels, Ask AgentOps context, transcript safety column order, tool risk correlation, Code Outcomes delivery timing, benchmark artifact diff/file review, hidden check review, policy review, and promotion approval review.
+`ux-check` verifies the operator flow: Home top strip, Runs action cells, Run Replay story panels, Ask AgentOps context, transcript safety column order, tool risk correlation, Code Outcomes delivery timing, benchmark artifact diff/file review, hidden check review, policy review, semantic review, and promotion approval review.
 `verify` runs the static dashboard gates together. Add `--live --last 24h` to include Azure KQL checks.
 
 `import` is a dry-run by default. Use `agentops dashboard import --yes --resource-group <rg> --grafana-name <name>` to import the V2 pack into the `AgentOps for Azure` folder.
