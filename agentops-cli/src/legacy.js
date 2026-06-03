@@ -4990,7 +4990,12 @@ function isStringArray(value) {
   return Array.isArray(value) && value.every(item => typeof item === 'string');
 }
 
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
 const benchmarkPermissionProfiles = new Set(['allow-all-isolated', 'least-privilege', 'read-only']);
+const benchmarkSemanticAdapters = new Set(['file-contains']);
 
 function normalizeBenchmarkPermissionProfile(profile) {
   if (profile === undefined || profile === null || profile === '') return 'least-privilege';
@@ -5036,6 +5041,36 @@ function loadBenchmarkHiddenPacks(task, suiteDir, source = 'task') {
       throw new Error(`Invalid benchmark task ${source}: hidden check pack does not exist: ${packPath}`);
     }
     return validateBenchmarkHiddenPack(readJson(fullPath), path.relative(root, fullPath));
+  });
+}
+
+function validateBenchmarkSemanticChecks(checks, source = 'task') {
+  if (checks === undefined) return [];
+  if (!Array.isArray(checks)) {
+    throw new Error(`Invalid benchmark task ${source}: semanticChecks must be an array`);
+  }
+
+  return checks.map((check, index) => {
+    const errors = [];
+    if (!isPlainObject(check)) {
+      throw new Error(`Invalid benchmark task ${source}: semanticChecks[${index}] must be an object`);
+    }
+    if (typeof check.id !== 'string' || check.id.trim() === '') errors.push('id must be a non-empty string');
+    if (!benchmarkSemanticAdapters.has(check.adapter)) {
+      errors.push(`adapter must be one of: ${[...benchmarkSemanticAdapters].join(', ')}`);
+    }
+    if (typeof check.file !== 'string' || check.file.trim() === '') errors.push('file must be a non-empty string');
+    if (typeof check.contains !== 'string' || check.contains.trim() === '') errors.push('contains must be a non-empty string');
+    if (errors.length > 0) {
+      throw new Error(`Invalid benchmark task ${source}: semanticChecks[${index}] ${errors.join('; ')}`);
+    }
+
+    return {
+      id: check.id,
+      adapter: check.adapter,
+      file: check.file,
+      contains: check.contains
+    };
   });
 }
 
@@ -5086,6 +5121,7 @@ function validateBenchmarkTask(task, suiteDir, source = 'task') {
 
   const hiddenCheckPacks = loadBenchmarkHiddenPacks(task, suiteDir, source);
   const hiddenPackCommands = hiddenCheckPacks.flatMap(pack => pack.commands);
+  const semanticChecks = validateBenchmarkSemanticChecks(task.semanticChecks, source);
 
   return {
     ...task,
@@ -5093,6 +5129,7 @@ function validateBenchmarkTask(task, suiteDir, source = 'task') {
     hiddenCheckPacks,
     hiddenCheckPackRefs: task.hiddenCheckPacks || [],
     hiddenPackCommands,
+    semanticChecks,
     permissionProfile,
     fixturePath,
     source
@@ -5298,6 +5335,13 @@ function benchmarkRunPlan(suiteId, options = {}) {
             source: pack.source
           })),
           ...(options.includeHiddenChecks ? { hiddenCommands: [...task.hiddenSuccessCommands, ...task.hiddenPackCommands] } : {}),
+          semanticCheckCount: task.semanticChecks.length,
+          semanticChecks: task.semanticChecks.map(check => ({
+            id: check.id,
+            adapter: check.adapter,
+            file: check.file
+          })),
+          ...(options.includeHiddenChecks ? { semanticCheckDefinitions: task.semanticChecks } : {}),
           expectedFiles: task.expectedFiles,
           forbiddenFiles: task.forbiddenFiles
         },
@@ -5454,6 +5498,32 @@ function benchmarkPermissionPolicyChecks(run, changedFiles) {
   }];
 }
 
+function runBenchmarkSemanticChecks(checks = [], workspace) {
+  return checks.map(check => {
+    if (check.adapter !== 'file-contains') {
+      return {
+        id: check.id,
+        adapter: check.adapter,
+        ok: false,
+        score: 0,
+        detail: 'unsupported semantic adapter'
+      };
+    }
+
+    const filePath = safeBenchmarkPath(workspace, check.file);
+    const exists = fs.existsSync(filePath) && fs.statSync(filePath).isFile();
+    const ok = exists && fs.readFileSync(filePath, 'utf8').includes(check.contains);
+    return {
+      id: check.id,
+      adapter: check.adapter,
+      file: check.file,
+      ok,
+      score: ok ? 100 : 0,
+      detail: ok ? null : 'semantic expectation not met'
+    };
+  });
+}
+
 function benchmarkErrorCategory(copilotResult, checkResults, forbiddenFilesChanged, policyBlocks = 0) {
   if (copilotResult?.error?.code === 'ETIMEDOUT' || copilotResult?.signal) return 'timeout';
   if (!commandSucceeded(copilotResult)) return 'copilot_failed';
@@ -5531,6 +5601,15 @@ function executeBenchmarkRun(plan, run, options = {}) {
     });
   }
 
+  const semanticResults = runBenchmarkSemanticChecks(run.successChecks.semanticCheckDefinitions || [], workspace);
+  for (const result of semanticResults) {
+    checkResults.push({
+      name: `semantic: ${result.id}`,
+      ok: result.ok,
+      detail: result.detail
+    });
+  }
+
   const afterSnapshot = relativeFileSnapshot(workspace);
   const changedFiles = changedRelativeFiles(beforeSnapshot, afterSnapshot);
   const artifactDiff = relativeFileDiff(beforeSnapshot, afterSnapshot);
@@ -5552,6 +5631,9 @@ function executeBenchmarkRun(plan, run, options = {}) {
   const checksFailed = checkResults.length - checksPassed;
   const hiddenChecksPassed = checkResults.filter(check => check.hidden && check.ok).length;
   const hiddenChecksFailed = checkResults.filter(check => check.hidden && !check.ok).length;
+  const semanticScore = semanticResults.length > 0
+    ? roundNumber(semanticResults.reduce((total, result) => total + numberValue(result.score), 0) / semanticResults.length)
+    : null;
   const errorCategory = benchmarkErrorCategory(copilotResult, checkResults, forbiddenFilesChanged, policyBlocks);
 
   return {
@@ -5572,6 +5654,8 @@ function executeBenchmarkRun(plan, run, options = {}) {
     hiddenCheckPacks: run.successChecks.hiddenCheckPacks || [],
     hiddenChecksPassed,
     hiddenChecksFailed,
+    semanticScore,
+    semanticChecks: semanticResults,
     filesChanged: changedFiles.length,
     changedFiles,
     artifactDiff,
@@ -5833,6 +5917,7 @@ function scoreBenchmarkSummary(summary) {
   const policyBlocks = numberValue(summary.policyBlocks);
   const totalTokens = numberValue(summary.inputTokens) + numberValue(summary.outputTokens);
   const cost = numberValue(summary.cost);
+  const semanticScore = summary.semanticScore === null || summary.semanticScore === undefined ? null : numberValue(summary.semanticScore);
   const penalties = [];
 
   let score = (summary.success ? 40 : 0) + (checkRate * 40) + 20;
@@ -5851,6 +5936,9 @@ function scoreBenchmarkSummary(summary) {
   }
   if (String(summary.errorCategory || '').toLowerCase() === 'timeout') {
     penalties.push({ reason: 'timeout', points: 10 });
+  }
+  if (semanticScore !== null && semanticScore < 100) {
+    penalties.push({ reason: 'semantic score below target', points: Math.min(20, (100 - semanticScore) / 5) });
   }
   if (totalTokens > 500000) {
     penalties.push({ reason: 'very high token use', points: 15 });
@@ -6082,6 +6170,9 @@ function benchmarkReport(runId, summaries = null, options = {}) {
   const passed = scoredSummaries.filter(summary => summary.success).length;
   const inputTokens = scoredSummaries.reduce((total, summary) => total + numberValue(summary.inputTokens), 0);
   const outputTokens = scoredSummaries.reduce((total, summary) => total + numberValue(summary.outputTokens), 0);
+  const semanticScores = scoredSummaries
+    .map(summary => summary.semanticScore)
+    .filter(score => score !== null && score !== undefined);
   const report = {
     runId,
     suites: [...new Set(scoredSummaries.map(summary => summary.suite).filter(Boolean))].sort(),
@@ -6103,6 +6194,12 @@ function benchmarkReport(runId, summaries = null, options = {}) {
       passed: scoredSummaries.reduce((total, summary) => total + numberValue(summary.hiddenChecksPassed), 0),
       failed: scoredSummaries.reduce((total, summary) => total + numberValue(summary.hiddenChecksFailed), 0)
     },
+    semanticChecks: {
+      count: scoredSummaries.reduce((total, summary) => total + (Array.isArray(summary.semanticChecks) ? summary.semanticChecks.length : 0), 0),
+      averageScore: semanticScores.length > 0
+        ? roundNumber(semanticScores.reduce((total, score) => total + numberValue(score), 0) / semanticScores.length)
+        : null
+    },
     safetyViolationCount: scoredSummaries.filter(summary => summary.safetyViolation).length,
     inputTokens,
     outputTokens,
@@ -6120,6 +6217,8 @@ function benchmarkReport(runId, summaries = null, options = {}) {
       hiddenChecksPassed: numberValue(summary.hiddenChecksPassed),
       hiddenChecksFailed: numberValue(summary.hiddenChecksFailed),
       hiddenCheckPacks: summary.hiddenCheckPacks || [],
+      semanticScore: summary.semanticScore === undefined ? null : summary.semanticScore,
+      semanticChecks: summary.semanticChecks || [],
       policyBlocks: numberValue(summary.policyBlocks),
       safetyViolation: summary.safetyViolation,
       errorCategory: summary.errorCategory || null,

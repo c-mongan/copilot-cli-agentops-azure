@@ -14,6 +14,14 @@
   "hiddenCheckPacks": [
     "hidden-checks/create-note.json"
   ],
+  "semanticChecks": [
+    {
+      "id": "hello-note-content",
+      "adapter": "file-contains",
+      "file": "notes/hello.txt",
+      "contains": "hello agentops"
+    }
+  ],
   "expectedFiles": [
     "notes/hello.txt"
   ],
