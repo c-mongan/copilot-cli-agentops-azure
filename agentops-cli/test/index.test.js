@@ -4193,6 +4193,25 @@ test('benchmark schema validation rejects hidden check packs outside suite', () 
   assert.throws(() => validateBenchmarkTask(task, suiteDir, 'test-task'), /hidden check pack path cannot leave the suite/);
 });
 
+test('benchmark schema validation rejects invalid semantic checks', () => {
+  const suiteDir = path.join(root, 'benchmarks', 'starter');
+  const task = {
+    id: 'bad-semantic-check',
+    title: 'Bad semantic check',
+    fixture: 'fixtures/tiny-repo',
+    prompt: 'Do nothing.',
+    copilotArgs: [],
+    successCommands: [],
+    semanticChecks: [{ id: 'bad', adapter: 'llm-judge', file: 'README.md', contains: 'hello' }],
+    expectedFiles: [],
+    forbiddenFiles: [],
+    timeoutSec: 10,
+    tags: []
+  };
+
+  assert.throws(() => validateBenchmarkTask(task, suiteDir, 'test-task'), /adapter must be one of/);
+});
+
 test('benchmark schema validation rejects invalid permission profiles', () => {
   const suiteDir = path.join(root, 'benchmarks', 'starter');
   const task = {
@@ -4264,6 +4283,13 @@ test('benchmark dry run plans fixture copy, Copilot args, labels, checks, and ti
   })), [{ id: 'create-note-sealed', commandCount: 1 }]);
   assert.equal(plan.runs[0].successChecks.hiddenCommands, undefined);
   assert.doesNotMatch(JSON.stringify(plan), /shortcut/);
+  assert.equal(plan.runs[0].successChecks.semanticCheckCount, 1);
+  assert.deepEqual(plan.runs[0].successChecks.semanticChecks, [{
+    id: 'hello-note-content',
+    adapter: 'file-contains',
+    file: 'notes/hello.txt'
+  }]);
+  assert.equal(plan.runs[0].successChecks.semanticCheckDefinitions, undefined);
   assert.equal(plan.runs[0].timeoutSec, 30);
 });
 
@@ -4337,6 +4363,15 @@ test('benchmark run executes Copilot in an isolated fixture copy and writes a su
       id: pack.id,
       commandCount: pack.commandCount
     })), [{ id: 'create-note-sealed', commandCount: 1 }]);
+    assert.equal(result.summaries[0].semanticScore, 100);
+    assert.deepEqual(result.summaries[0].semanticChecks, [{
+      id: 'hello-note-content',
+      adapter: 'file-contains',
+      file: 'notes/hello.txt',
+      ok: true,
+      score: 100,
+      detail: null
+    }]);
     assert.doesNotMatch(JSON.stringify(result.summaries[0].checks), /shortcut/);
     assert.deepEqual(result.report.artifactDiff, { added: 1, modified: 1, deleted: 0, totalChanged: 2 });
     assert.deepEqual(result.report.permissionProfiles, { 'allow-all-isolated': 1 });
@@ -4349,6 +4384,8 @@ test('benchmark run executes Copilot in an isolated fixture copy and writes a su
       id: pack.id,
       commandCount: pack.commandCount
     })), [{ id: 'create-note-sealed', commandCount: 1 }]);
+    assert.deepEqual(result.report.semanticChecks, { count: 1, averageScore: 100 });
+    assert.equal(result.report.tasks[0].semanticScore, 100);
     assert.equal(result.report.recommendation.action, 'keep');
     assert.equal(result.report.promotion.decision, 'promote');
     assert.equal(fs.existsSync(result.summariesPath), true);
@@ -4502,6 +4539,72 @@ test('benchmark forbidden files support path globs', () => {
       detail: 'matched: secrets/token.txt'
     });
     assert.equal(result.summaries[0].errorCategory, 'safety_violation');
+    assert.equal(result.report.recommendation.action, 'reject');
+  } finally {
+    fs.rmSync(path.join(benchmarkRunBaseDir, runId), { recursive: true, force: true });
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('benchmark semantic checks reject wrong artifact content', () => {
+  const runId = `bench-semantic-${Date.now()}`;
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-bench-semantic-'));
+  const suiteDir = path.join(tempDir, 'benchmarks', 'semantic-suite');
+  const fixtureDir = path.join(suiteDir, 'fixtures', 'tiny-repo');
+  const tasksDir = path.join(suiteDir, 'tasks');
+
+  try {
+    fs.mkdirSync(fixtureDir, { recursive: true });
+    fs.mkdirSync(tasksDir, { recursive: true });
+    fs.writeFileSync(path.join(suiteDir, 'suite.json'), `${JSON.stringify({ id: 'semantic-suite', title: 'Semantic suite' })}\n`);
+    fs.writeFileSync(path.join(fixtureDir, 'README.md'), '# Semantic fixture\n');
+    fs.writeFileSync(path.join(tasksDir, 'write-note.json'), `${JSON.stringify({
+      id: 'write-note',
+      title: 'Write note',
+      fixture: 'fixtures/tiny-repo',
+      prompt: 'Create notes/hello.txt.',
+      copilotArgs: [],
+      permissionProfile: 'least-privilege',
+      successCommands: [],
+      semanticChecks: [{
+        id: 'note-intent',
+        adapter: 'file-contains',
+        file: 'notes/hello.txt',
+        contains: 'hello agentops'
+      }],
+      expectedFiles: ['notes/hello.txt'],
+      forbiddenFiles: [],
+      timeoutSec: 10,
+      tags: []
+    })}\n`);
+
+    const result = runBenchmarkSuite('semantic-suite', {
+      benchmarksDir: path.join(tempDir, 'benchmarks'),
+      variant: 'candidate',
+      repeat: 1,
+      runId,
+      summariesDir: path.join(tempDir, 'summaries'),
+      spawnSync: (command, args, options = {}) => {
+        if (command === 'copilot') {
+          fs.mkdirSync(path.join(options.cwd, 'notes'), { recursive: true });
+          fs.writeFileSync(path.join(options.cwd, 'notes', 'hello.txt'), 'hello world\n');
+          return { status: 0, stdout: 'created note', stderr: '' };
+        }
+        return { status: 0, stdout: '', stderr: '' };
+      }
+    });
+
+    assert.equal(result.summaries[0].success, false);
+    assert.equal(result.summaries[0].semanticScore, 0);
+    assert.deepEqual(result.summaries[0].semanticChecks, [{
+      id: 'note-intent',
+      adapter: 'file-contains',
+      file: 'notes/hello.txt',
+      ok: false,
+      score: 0,
+      detail: 'semantic expectation not met'
+    }]);
+    assert.equal(result.report.semanticChecks.averageScore, 0);
     assert.equal(result.report.recommendation.action, 'reject');
   } finally {
     fs.rmSync(path.join(benchmarkRunBaseDir, runId), { recursive: true, force: true });

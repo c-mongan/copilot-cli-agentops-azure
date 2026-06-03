@@ -792,6 +792,7 @@ What works well:
   - success commands
   - hidden success commands with masked command text
   - sealed hidden check packs with masked command text
+  - semantic evaluator adapters
   - expected files
   - forbidden files and forbidden path globs
   - timeout
@@ -819,7 +820,7 @@ Current anti-cheat limitations:
 - Hidden check packs exist as separate masked command packs, but there is no sealed fixture workflow yet.
 - There is no network isolation.
 - Read-only benchmark profiles now block any workspace file change in the copied fixture.
-- There is no semantic rubric scoring.
+- Semantic evaluator adapters exist for deterministic file-content checks, but there is no LLM or rubric-judge scoring yet.
 - There is no defense against an agent changing the test commands if the eval harness files are available to it.
 - There is no artifact diff viewer in the UI; artifact diffs are currently CLI/report metadata only.
 - There is no "agent used external answer source" detector.
@@ -845,7 +846,7 @@ Build a real Eval Center:
   - diff and artifact review
 - Scorecards:
   - task success
-  - semantic quality
+  - deterministic semantic quality
   - safety
   - cost
   - latency
@@ -1209,7 +1210,7 @@ Users can compare baseline vs candidate agents and detect safety, quality, cost,
 Required work:
 
 - Hidden tests.
-- Rubric/semantic scoring.
+- Rubric/semantic scoring beyond deterministic file-content adapters.
 - Network and permission profiles.
 - Immutable harness.
 - Artifact diffing.
@@ -1269,7 +1270,7 @@ Required work:
 
 - Expand benchmark schemas.
 - Add sealed fixture packs.
-- Add semantic evaluator adapters.
+- Add richer semantic evaluator adapters.
 - Expand enforced permission profiles to network and tool sandboxing.
 - Add artifact diff UI review.
 - Add candidate promotion gates.
