@@ -74,6 +74,7 @@ const {
   alertDetail,
   alertHistory,
   alertHistoryQuery,
+  alertIncidentTimeline,
   alertRecommendationQuery,
   alertRecommendations,
   askAgentOpsContext,
@@ -7626,4 +7627,37 @@ test('alert artifact persists metadata-only incident evidence', () => {
   assert.match(artifact.evidence.threshold_evidence_query, /let lookback = 4h;/);
   assert.equal(artifact.action_plan.safe_metadata.current_threshold, 0);
   assert.equal(artifact.status.state, 'review');
+});
+
+test('incident timeline collects exported alert artifacts without content', () => {
+  const later = alertArtifact({
+    rule: 'failed-spans',
+    session: 'session-b',
+    last: '4h',
+    createdAt: '2026-06-03T12:10:00.000Z'
+  });
+  const earlier = alertArtifact({
+    rule: 'content-capture',
+    session: 'session-a',
+    last: '4h',
+    createdAt: '2026-06-03T12:00:00.000Z'
+  });
+
+  const timeline = alertIncidentTimeline({
+    artifacts: [later, earlier],
+    createdAt: '2026-06-03T12:30:00.000Z',
+    incidentId: 'incident-123'
+  });
+
+  assert.equal(timeline.schema_version, 'agentops.incident-timeline.v1');
+  assert.equal(timeline.incident_id, 'incident-123');
+  assert.equal(timeline.privacy.mode, 'metadata-only');
+  assert.ok(timeline.privacy.excluded.includes('tool results'));
+  assert.equal(timeline.timeline.length, 2);
+  assert.equal(timeline.timeline[0].rule, 'content-capture');
+  assert.equal(timeline.timeline[1].rule, 'failed-spans');
+  assert.equal(timeline.artifacts[0].evidence.session_link.conversation, 'session-a');
+  assert.equal(timeline.status.state, 'review');
+  assert.ok(timeline.next.some(step => step.includes('assign an owner')));
+  assert.doesNotMatch(JSON.stringify(timeline), /SECRET_FAKE_TEST_VALUE|raw transcript/);
 });

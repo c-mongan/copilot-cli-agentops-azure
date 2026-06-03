@@ -156,11 +156,11 @@ Implemented local MVP:
 
 - Alert Tuning dashboard now includes threshold recommendations and fired-alert candidate review.
 - `agentops alert history`, `agentops alert detail`, `agentops alert action-plan`, and `agentops alert export` generate metadata-only review/action/artifact JSON.
+- `agentops incident timeline` collects exported alert artifacts into a durable metadata-only incident review record.
 
 Remaining MVP:
 
 - Add current disabled/enabled state from Azure scheduled-query alert resources.
-- Add a managed incident timeline that can collect exported alert artifacts.
 - Add on-call/noise policy and ownership metadata.
 - Keep remediation proposal-only.
 

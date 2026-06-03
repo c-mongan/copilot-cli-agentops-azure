@@ -76,6 +76,7 @@ const experimentalCommands = new Set([
   'enable-shadow',
   'fields',
   'import-jsonl',
+  'incident',
   'lineage',
   'link',
   'live',
