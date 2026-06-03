@@ -792,6 +792,7 @@ What works well:
   - success commands
   - hidden success commands with masked command text
   - sealed hidden check packs with masked command text
+  - sealed fixture file checksums
   - semantic evaluator adapters
   - expected files
   - forbidden files and forbidden path globs
@@ -817,7 +818,7 @@ Current anti-cheat limitations:
 
 - The starter task uses `--allow-all`, which is acceptable for an isolated tiny fixture but should not be the default posture for serious evals.
 - Permission profiles enforce broad-flag validation and read-only workspace immutability for benchmark fixture copies, but they do not yet enforce OS/network/tool sandboxing.
-- Hidden check packs exist as separate masked command packs, but there is no sealed fixture workflow yet.
+- Hidden check packs exist as separate masked command packs, and fixture seals can reject checksum drift, but full sealed fixture pack distribution is still missing.
 - There is no network isolation.
 - Read-only benchmark profiles now block any workspace file change in the copied fixture.
 - Semantic evaluator adapters exist for deterministic file-content checks, but there is no LLM or rubric-judge scoring yet.
@@ -1269,7 +1270,7 @@ Required work:
 ### P3 - Build Eval And Anti-Cheat
 
 - Expand benchmark schemas.
-- Add sealed fixture packs.
+- Add full sealed fixture pack distribution.
 - Add richer semantic evaluator adapters.
 - Expand enforced permission profiles to network and tool sandboxing.
 - Add artifact diff UI review.

@@ -4087,6 +4087,102 @@ test('benchmark schema validation accepts starter task files', () => {
   assert.deepEqual(suite.tasks[0].tags, ['starter', 'safe', 'filesystem']);
 });
 
+test('benchmark schema validation accepts sealed fixture checksums', () => {
+  const suiteDir = path.join(root, 'benchmarks', 'starter');
+  const task = {
+    id: 'sealed-fixture',
+    title: 'Sealed fixture',
+    fixture: 'fixtures/tiny-repo',
+    prompt: 'Do nothing.',
+    copilotArgs: [],
+    fixtureSeal: {
+      algorithm: 'sha256',
+      files: {
+        'README.md': crypto.createHash('sha256')
+          .update(fs.readFileSync(path.join(suiteDir, 'fixtures', 'tiny-repo', 'README.md'), 'utf8').replace(/\r\n/g, '\n'))
+          .digest('hex')
+      }
+    },
+    successCommands: [],
+    expectedFiles: [],
+    forbiddenFiles: [],
+    timeoutSec: 10,
+    tags: []
+  };
+
+  const validated = validateBenchmarkTask(task, suiteDir, 'test-task');
+  assert.equal(validated.fixtureSeal.algorithm, 'sha256');
+  assert.deepEqual(Object.keys(validated.fixtureSeal.files), ['README.md']);
+});
+
+test('benchmark schema validation rejects tampered sealed fixtures', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-bench-seal-schema-'));
+  const suiteDir = path.join(tempDir, 'suite');
+  const fixtureDir = path.join(suiteDir, 'fixtures', 'tiny-repo');
+
+  try {
+    fs.mkdirSync(fixtureDir, { recursive: true });
+    fs.writeFileSync(path.join(fixtureDir, 'README.md'), '# Fixture\n');
+
+    const task = {
+      id: 'tampered-fixture',
+      title: 'Tampered fixture',
+      fixture: 'fixtures/tiny-repo',
+      prompt: 'Do nothing.',
+      copilotArgs: [],
+      fixtureSeal: {
+        algorithm: 'sha256',
+        files: {
+          'README.md': crypto.createHash('sha256').update('original\n').digest('hex')
+        }
+      },
+      successCommands: [],
+      expectedFiles: [],
+      forbiddenFiles: [],
+      timeoutSec: 10,
+      tags: []
+    };
+
+    assert.throws(() => validateBenchmarkTask(task, suiteDir, 'test-task'), /sealed fixture file changed: README\.md/);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('benchmark schema validation normalizes line endings for sealed fixtures', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-bench-seal-eol-'));
+  const suiteDir = path.join(tempDir, 'suite');
+  const fixtureDir = path.join(suiteDir, 'fixtures', 'tiny-repo');
+
+  try {
+    fs.mkdirSync(fixtureDir, { recursive: true });
+    fs.writeFileSync(path.join(fixtureDir, 'README.md'), '# Fixture\r\n\r\nSafe.\r\n');
+
+    const task = {
+      id: 'sealed-fixture-eol',
+      title: 'Sealed fixture EOL',
+      fixture: 'fixtures/tiny-repo',
+      prompt: 'Do nothing.',
+      copilotArgs: [],
+      fixtureSeal: {
+        algorithm: 'sha256',
+        files: {
+          'README.md': crypto.createHash('sha256').update('# Fixture\n\nSafe.\n').digest('hex')
+        }
+      },
+      successCommands: [],
+      expectedFiles: [],
+      forbiddenFiles: [],
+      timeoutSec: 10,
+      tags: []
+    };
+
+    assert.equal(validateBenchmarkTask(task, suiteDir, 'test-task').fixtureSeal.algorithm, 'sha256');
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
 test('benchmark schema validation rejects a missing fixture', () => {
   const suiteDir = path.join(root, 'benchmarks', 'starter');
   const task = {
@@ -4269,6 +4365,11 @@ test('benchmark dry run plans fixture copy, Copilot args, labels, checks, and ti
   assert.deepEqual(plan.runs[0].copilot.args, ['--allow-all']);
   assert.match(plan.runs[0].copilot.prompt, /notes\/hello\.txt/);
   assert.equal(plan.runs[0].permissionProfile, 'allow-all-isolated');
+  assert.deepEqual(plan.runs[0].successChecks.fixtureSeal, {
+    algorithm: 'sha256',
+    fileCount: 1,
+    files: ['README.md']
+  });
   assert.equal(plan.runs[0].otelLabels['agentops.benchmark.variant'], 'baseline');
   assert.equal(plan.runs[0].otelLabels['agentops.hypothesis.id'], 'shorter-prompt');
   assert.equal(plan.runs[0].otelLabels['agentops.benchmark.task_id'], 'create-note');
