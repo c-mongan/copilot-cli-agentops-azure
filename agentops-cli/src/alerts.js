@@ -1,5 +1,67 @@
 // Builds KQL queries that recommend alert thresholds based on recent telemetry.
 function createAlerts({ workspaceId, baseFilter, sessionKey, validateKqlDuration, buildLink }) {
+  function kqlString(value) {
+    return JSON.stringify(String(value));
+  }
+
+  function alertRules(last = '14d') {
+    return [
+      {
+        name: 'high-aiu',
+        bicep_resource: 'highAiuAlert',
+        signal: 'hourly session AIU above tuned p95/p99 history',
+        current_threshold: 50000000000,
+        suggested_threshold: 'max(p99_aiu * 1.25, p95_aiu * 2)',
+        validation_query: 'Run alert recommend and inspect p95_aiu, p99_aiu, max_aiu before changing infra/bicep/alerts.bicep.',
+        rollout: 'Keep enableAlerts=false until the threshold has at least 14 days of clean history.'
+      },
+      {
+        name: 'cost-spike',
+        bicep_resource: 'highAiuAlert',
+        signal: 'hourly GitHub Copilot credits above tuned cost history',
+        current_threshold: 1,
+        suggested_threshold: 'max(1, p95_credits * 2)',
+        validation_query: 'Inspect p95_credits and max_credits before changing budget contacts or alert thresholds.',
+        rollout: 'Pair with an Azure Consumption budget and keep action groups off until cost history is understood.'
+      },
+      {
+        name: 'runaway-tool-loop',
+        bicep_resource: 'failureAlert',
+        signal: 'tool calls per conversation-hour above tuned history',
+        current_threshold: 25,
+        suggested_threshold: 'max(25, p95_tool_calls * 2)',
+        validation_query: 'Compare p95_tool_calls and max_tool_calls with the runaway-tool-loop abuse fixture.',
+        rollout: 'Review tool permission policy before routing this rule to action groups.'
+      },
+      {
+        name: 'failed-spans',
+        bicep_resource: 'failureAlert',
+        signal: 'failed spans or failed tools in a one-hour window',
+        current_threshold: 0,
+        suggested_threshold: 'start at max(1, p95_failures) for noisy dev stacks; keep 0 for production safety gates',
+        validation_query: 'Compare max_failures, p95_failures, max_tool_failures, and p95_tool_failures over the selected lookback.',
+        rollout: 'Attach no action group until false positives are reviewed in the Permission Friction dashboard.'
+      },
+      {
+        name: 'content-capture',
+        bicep_resource: 'contentCaptureAlert',
+        signal: 'prompt, completion, message, or Copilot content fields detected',
+        current_threshold: 0,
+        suggested_threshold: 0,
+        validation_query: 'max_content_capture_signals must remain 0 before sharing telemetry.',
+        rollout: 'This rule should stay strict; investigate immediately if it fires.'
+      }
+    ].map(rule => ({ ...rule, last }));
+  }
+
+  function requireAlertRule(rule, commandName) {
+    const normalizedRule = String(rule || '').trim();
+    const rules = alertRules();
+    const matchedRule = rules.find(candidate => candidate.name === normalizedRule);
+    if (!matchedRule) throw new Error(`alert ${commandName} requires --rule ${rules.map(candidate => candidate.name).join('|')}`);
+    return matchedRule;
+  }
+
   function alertRecommendationQuery(last = '14d') {
     const lookback = validateKqlDuration(last);
     return `let lookback = ${lookback};
@@ -70,64 +132,98 @@ union
       last: lookback,
       mode: 'proposal-only',
       evidence_query: alertRecommendationQuery(lookback),
-      rules: [
-        {
-          name: 'high-aiu',
-          bicep_resource: 'highAiuAlert',
-          signal: 'hourly session AIU above tuned p95/p99 history',
-          current_threshold: 50000000000,
-          suggested_threshold: 'max(p99_aiu * 1.25, p95_aiu * 2)',
-          validation_query: 'Run alert recommend and inspect p95_aiu, p99_aiu, max_aiu before changing infra/bicep/alerts.bicep.',
-          rollout: 'Keep enableAlerts=false until the threshold has at least 14 days of clean history.'
-        },
-        {
-          name: 'cost-spike',
-          bicep_resource: 'highAiuAlert',
-          signal: 'hourly GitHub Copilot credits above tuned cost history',
-          current_threshold: 1,
-          suggested_threshold: 'max(1, p95_credits * 2)',
-          validation_query: 'Inspect p95_credits and max_credits before changing budget contacts or alert thresholds.',
-          rollout: 'Pair with an Azure Consumption budget and keep action groups off until cost history is understood.'
-        },
-        {
-          name: 'runaway-tool-loop',
-          bicep_resource: 'failureAlert',
-          signal: 'tool calls per conversation-hour above tuned history',
-          current_threshold: 25,
-          suggested_threshold: 'max(25, p95_tool_calls * 2)',
-          validation_query: 'Compare p95_tool_calls and max_tool_calls with the runaway-tool-loop abuse fixture.',
-          rollout: 'Review tool permission policy before routing this rule to action groups.'
-        },
-        {
-          name: 'failed-spans',
-          bicep_resource: 'failureAlert',
-          signal: 'failed spans or failed tools in a one-hour window',
-          current_threshold: 0,
-          suggested_threshold: 'start at max(1, p95_failures) for noisy dev stacks; keep 0 for production safety gates',
-          validation_query: 'Compare max_failures, p95_failures, max_tool_failures, and p95_tool_failures over the selected lookback.',
-          rollout: 'Attach no action group until false positives are reviewed in the Permission Friction dashboard.'
-        },
-        {
-          name: 'content-capture',
-          bicep_resource: 'contentCaptureAlert',
-          signal: 'prompt, completion, message, or Copilot content fields detected',
-          current_threshold: 0,
-          suggested_threshold: 0,
-          validation_query: 'max_content_capture_signals must remain 0 before sharing telemetry.',
-          rollout: 'This rule should stay strict; investigate immediately if it fires.'
-        }
+      rules: alertRules(lookback)
+    };
+  }
+
+  function alertHistoryQuery(rule, last = '24h', options = {}) {
+    const lookback = validateKqlDuration(last);
+    const matchedRule = requireAlertRule(rule, 'history');
+    const selectedSession = options.session ? `\n| where Conversation == ${kqlString(String(options.session).trim())}` : '';
+    return `let lookback = ${lookback};
+let selected_rule = ${kqlString(matchedRule.name)};
+let hourly =
+AppDependencies
+| where TimeGenerated > ago(lookback)
+| where ${baseFilter}
+| extend conversation=${sessionKey},
+    operation=tostring(Properties["gen_ai.operation.name"]),
+    tool=tostring(Properties["gen_ai.tool.name"]),
+    error=tostring(Properties["error.type"]),
+    AIU=todouble(Properties["github.copilot.aiu"]),
+    Credits=todouble(Properties["github.copilot.cost"])
+| summarize
+    Started=min(TimeGenerated),
+    LastSeen=max(TimeGenerated),
+    Spans=count(),
+    Failures=countif(Success == false or tostring(Success) =~ "false" or isnotempty(error)),
+    ToolFailures=countif((operation == "execute_tool" or isnotempty(tool)) and (Success == false or tostring(Success) =~ "false" or isnotempty(error))),
+    ToolCalls=countif(operation == "execute_tool" or isnotempty(tool)),
+    AIU=sum(AIU),
+    Credits=sum(Credits)
+  by Conversation=conversation, TimeGenerated=bin(TimeGenerated, 1h);
+let content =
+union isfuzzy=true AppDependencies, AppTraces
+| where TimeGenerated > ago(lookback)
+| where tostring(Properties) has_any ("gen_ai.input.messages", "gen_ai.output.messages", "gen_ai.prompt", "gen_ai.completion", "github.copilot.message")
+| summarize Started=min(TimeGenerated), LastSeen=max(TimeGenerated), ContentCaptureSignals=count() by TimeGenerated=bin(TimeGenerated, 1h)
+| extend Conversation="content-capture-window";
+let alert_history =
+union
+(hourly | extend Rule="high-aiu", TriggerValue=AIU, Threshold=50000000000.0, Reason="hourly AIU exceeded static proposal threshold" | where TriggerValue > Threshold),
+(hourly | extend Rule="cost-spike", TriggerValue=Credits, Threshold=1.0, Reason="hourly Copilot credits exceeded static proposal threshold" | where TriggerValue > Threshold),
+(hourly | extend Rule="runaway-tool-loop", TriggerValue=todouble(ToolCalls), Threshold=25.0, Reason="tool calls exceeded static proposal threshold" | where TriggerValue > Threshold),
+(hourly | extend Rule="failed-spans", TriggerValue=todouble(Failures + ToolFailures), Threshold=0.0, Reason="failed spans or tools observed" | where TriggerValue > Threshold),
+(content | extend Rule="content-capture", TriggerValue=todouble(ContentCaptureSignals), Threshold=0.0, Reason="content-like telemetry attributes observed", Spans=long(null), Failures=long(null), ToolFailures=long(null), ToolCalls=long(null), AIU=real(null), Credits=real(null) | where TriggerValue > Threshold);
+alert_history
+| where Rule == selected_rule
+${selectedSession}
+| project Rule, TimeGenerated, Started, LastSeen, Conversation, TriggerValue, Threshold, Reason, Spans, Failures, ToolFailures, ToolCalls, AIU, Credits
+| order by TimeGenerated desc`;
+  }
+
+  function alertHistory({ rule, last = '24h' }) {
+    const matchedRule = requireAlertRule(rule, 'history');
+    const lookback = validateKqlDuration(last);
+    return {
+      workspace_id: workspaceId,
+      mode: 'metadata-only-history',
+      rule: matchedRule.name,
+      last: lookback,
+      query: alertHistoryQuery(matchedRule.name, lookback),
+      next: 'Run the query, choose a Conversation from the result, then run alert detail for session-scoped triage.'
+    };
+  }
+
+  function alertDetail({ rule, session, last = '24h' }) {
+    const matchedRule = requireAlertRule(rule, 'detail');
+    const lookback = validateKqlDuration(last);
+    const normalizedSession = String(session || '').trim();
+    if (!normalizedSession) throw new Error('alert detail requires --session <conversation>');
+    const sessionLink = buildLink
+      ? buildLink('session', normalizedSession, { last: lookback })
+      : { kind: 'session', conversation: normalizedSession, workspace_id: workspaceId };
+    return {
+      workspace_id: workspaceId,
+      mode: 'metadata-only-detail',
+      rule: matchedRule.name,
+      last: lookback,
+      session: normalizedSession,
+      history_query: alertHistoryQuery(matchedRule.name, lookback, { session: normalizedSession }),
+      session_link: sessionLink,
+      action_plan_command: `agentops alert action-plan --rule ${matchedRule.name} --session ${normalizedSession} --last ${lookback}`,
+      guardrails: [
+        'Inspect metadata-only KQL and Grafana links before notifying owners.',
+        'Keep prompt, response, tool argument, tool result, and file content out of alert tickets.'
       ]
     };
   }
 
   function alertActionPlan({ rule, session, last = '24h' }) {
     const lookback = validateKqlDuration(last);
-    const normalizedRule = String(rule || '').trim();
     const normalizedSession = String(session || '').trim();
-    const rules = alertRecommendations(lookback).rules;
-    const matchedRule = rules.find(candidate => candidate.name === normalizedRule);
+    const matchedRule = requireAlertRule(rule, 'action-plan');
 
-    if (!matchedRule) throw new Error(`alert action-plan requires --rule ${rules.map(candidate => candidate.name).join('|')}`);
     if (!normalizedSession) throw new Error('alert action-plan requires --session <conversation>');
 
     const sessionLink = buildLink
@@ -177,6 +273,9 @@ union
   return {
     alertRecommendationQuery,
     alertRecommendations,
+    alertHistoryQuery,
+    alertHistory,
+    alertDetail,
     alertActionPlan
   };
 }

@@ -25,6 +25,15 @@ Use the proposal-only threshold recommender before changing `infra/bicep/alerts.
 node agentops-cli/src/index.js alert recommend --last 14d
 ```
 
+Review metadata-only alert history before opening an incident:
+
+```bash
+node agentops-cli/src/index.js alert history --rule failed-spans --last 24h
+node agentops-cli/src/index.js alert detail --rule failed-spans --session <conversation-id> --last 24h
+```
+
+`alert history` returns a KQL query for fired alert candidates by rule. `alert detail` narrows that query to one session and adds the session dashboard/KQL link plus the matching action-plan command.
+
 When an alert fires, generate a deterministic issue/work-item plan before notifying anyone:
 
 ```bash
