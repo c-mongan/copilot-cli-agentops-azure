@@ -67,6 +67,7 @@ function usage() {
     'attribution [--last <duration>]',
     'permission-friction [--last <duration>]',
     'alert recommend [--last <duration>]',
+    'alert policy [--owner <name>] [--service <name>] [--timezone <tz>]',
     'alert resources [--resource-group <name>]',
     'alert history --rule <name> [--last <duration>]',
     'alert detail --rule <name> --session <conversation> [--last <duration>]',
@@ -4880,6 +4881,7 @@ const {
   alertRecommendationQuery,
   alertRecommendations,
   alertResourceState,
+  alertPolicy,
   alertHistoryQuery,
   alertHistory,
   alertDetail,
@@ -8693,6 +8695,13 @@ async function main(argv) {
       process.stdout.write(JSON.stringify(alertRecommendations(last), null, 2) + '\n');
       return;
     }
+    if (subcommand === 'policy') {
+      const owners = optionValues(alertArgs, '--owner');
+      const service = optionValue(alertArgs, ['--service']) || 'agentops';
+      const timezone = optionValue(alertArgs, ['--timezone', '--tz']) || 'UTC';
+      process.stdout.write(JSON.stringify(alertPolicy({ owners, service, timezone }), null, 2) + '\n');
+      return;
+    }
     if (subcommand === 'resources') {
       const cloud = configuredCloudValues();
       const resourceGroup = optionValue(alertArgs, ['--resource-group', '-g']) || cloud.resourceGroup;
@@ -8746,7 +8755,7 @@ async function main(argv) {
       process.stdout.write(JSON.stringify({ output: outputPath, artifact }, null, 2) + '\n');
       return;
     }
-    throw new Error('alert currently supports: alert recommend, alert resources, alert history, alert detail, alert action-plan, alert export');
+    throw new Error('alert currently supports: alert recommend, alert policy, alert resources, alert history, alert detail, alert action-plan, alert export');
   }
 
   if (command === 'incident') {
@@ -8809,6 +8818,7 @@ module.exports = {
   alertRecommendationQuery,
   alertRecommendations,
   alertResourceState,
+  alertPolicy,
   alertHistoryQuery,
   alertHistory,
   alertDetail,

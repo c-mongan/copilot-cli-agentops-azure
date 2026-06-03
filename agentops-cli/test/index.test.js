@@ -75,6 +75,7 @@ const {
   alertHistory,
   alertHistoryQuery,
   alertIncidentTimeline,
+  alertPolicy,
   alertRecommendationQuery,
   alertRecommendations,
   alertResourceState,
@@ -7606,6 +7607,31 @@ test('alert resources summarize scheduled-query enabled state', () => {
   assert.equal(resources.resources[0].enabled, false);
   assert.equal(resources.resources[1].action_groups.length, 1);
   assert.ok(resources.expected_bicep_resources.some(rule => rule.bicep_resource === 'contentCaptureAlert'));
+});
+
+test('alert policy exposes ownership and noise metadata without actioning', () => {
+  const policy = alertPolicy({
+    owners: ['agentops-oncall'],
+    service: 'copilot-agentops',
+    timezone: 'Europe/Dublin'
+  });
+
+  assert.equal(policy.schema_version, 'agentops.alert-policy.v1');
+  assert.equal(policy.mode, 'metadata-only-policy');
+  assert.equal(policy.service, 'copilot-agentops');
+  assert.equal(policy.ownership.state, 'assigned');
+  assert.deepEqual(policy.ownership.owners, ['agentops-oncall']);
+  assert.equal(policy.noise_policy.dedupe_key.join('|'), 'rule|session');
+  assert.equal(policy.noise_policy.suppress_duplicates_for, 'PT30M');
+  assert.equal(policy.noise_policy.quiet_hours.timezone, 'Europe/Dublin');
+  assert.equal(policy.escalation.page, false);
+  assert.equal(policy.escalation.create_ticket, false);
+  assert.ok(policy.rule_defaults.some(rule => rule.rule === 'content-capture' && rule.severity === 'critical'));
+  assert.ok(policy.guardrails.some(item => item.includes('Do not page owners')));
+
+  const missingOwner = alertPolicy();
+  assert.equal(missingOwner.ownership.state, 'needs-owner');
+  assert.ok(missingOwner.next.some(step => step.includes('Assign at least one owner')));
 });
 
 test('alert action plan exposes deterministic notification payload without actioning', () => {
