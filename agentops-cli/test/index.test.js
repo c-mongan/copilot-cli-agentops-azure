@@ -33,7 +33,7 @@ const { browserProfileOptionsFromArgs, checkReportHtml, e2eAuthProfile, grafanaA
 const { hasV2Args } = require('../src/commands/explain');
 const { openV2FromFiles, renderOpenV2 } = require('../src/commands/open');
 const { productAudit, productAuditWithVisual, renderProductAudit, validateVisualEvidence, visualAuditRecoveryCommands } = require('../src/commands/product');
-const { benchmarkEvidenceFromReport, firstPositional: firstRecommendPositional, recommendFromFiles, recommendationRow, renderRecommendationV2, writeRecommendation } = require('../src/commands/recommend');
+const { benchmarkEvidenceFromReport, changeAnnotationsForRun, firstPositional: firstRecommendPositional, normalizeChangeAnnotation, recommendFromFiles, recommendationRow, renderRecommendationV2, writeRecommendation } = require('../src/commands/recommend');
 const { demoOptionsFromArgs, demoVerifyCommand } = require('../src/commands/demo');
 const { buildTriage, renderTriage, writeTriage } = require('../src/commands/triage');
 const { buildAzureIngestPlan } = require('../src/lib/azure/v2-ingest-plan');
@@ -1529,6 +1529,103 @@ test('V2 recommend carries benchmark gate and change-target metadata', () => {
     assert.equal(validateRecommendationRow({ ...row, Severity: 'urgent' }).ok, false);
     assert.match(validateRecommendationRow({ ...row, ToolArguments: '{"secret":"nope"}' }).errors.join('\n'), /raw content field: ToolArguments/);
     assert.doesNotMatch(JSON.stringify(row), /prompt|source code|tool args/i);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('V2 recommend links config-change annotations to regression recommendations', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-recommend-annotations-'));
+  try {
+    const runsFile = path.join(tempDir, 'AgentOpsRunSummary_CL.jsonl');
+    const insightsFile = path.join(tempDir, 'AgentOpsInsights_CL.jsonl');
+    const eventsFile = path.join(tempDir, 'AgentOpsEvents_CL.jsonl');
+    fs.writeFileSync(runsFile, `${JSON.stringify({
+      TimeGenerated: '2026-06-03T12:00:00Z',
+      RunId: 'run-regression',
+      SessionId: 'session-regression',
+      TraceId: 'trace-regression',
+      RepoHash: 'repo_hash',
+      TaskType: 'review',
+      ModelActual: 'gpt-5.5',
+      OutcomeStatus: 'failed',
+      ConfigHash: 'config_hash_new'
+    })}\n`);
+    fs.writeFileSync(insightsFile, `${JSON.stringify({
+      TimeGenerated: '2026-06-03T12:00:01Z',
+      RunId: 'run-regression',
+      Severity: 'high',
+      InsightType: 'eval-regression',
+      Summary: 'Eval score dropped after a configuration hash changed.',
+      SuggestedNextStep: 'Compare the changed skill annotation before promotion.',
+      ConfigHash: 'config_hash_new'
+    })}\n`);
+    fs.writeFileSync(eventsFile, [
+      JSON.stringify({
+        TimeGenerated: '2026-06-03T11:59:55Z',
+        RunId: 'run-regression',
+        SessionId: 'session-regression',
+        TraceId: 'trace-regression',
+        EventName: 'agentops.config.changed',
+        ChangeComponent: 'skill',
+        ChangeTarget: 'agentops-latest-run',
+        ChangeType: 'updated',
+        ChangeId: 'change-123',
+        Version: '2026.06.03'
+      }),
+      JSON.stringify({
+        TimeGenerated: '2026-06-03T11:58:55Z',
+        RunId: 'other-run',
+        EventName: 'agentops.config.changed',
+        ChangeComponent: 'model',
+        ChangeTarget: 'SECRET_SHOULD_NOT_ATTACH'
+      })
+    ].join('\n') + '\n');
+
+    const normalized = normalizeChangeAnnotation({
+      EventName: 'agentops.config.changed',
+      Properties: {
+        'agentops.custom.annotation_type': 'config_change',
+        'agentops.custom.component': 'hook',
+        'agentops.custom.target': 'agent-stop',
+        'agentops.run.id': 'run-regression'
+      }
+    });
+    assert.equal(normalized.component, 'hook');
+    assert.equal(normalized.target, 'agent-stop');
+    const eventRows = fs.readFileSync(eventsFile, 'utf8').trim().split(/\r?\n/).map(line => JSON.parse(line));
+    assert.equal(changeAnnotationsForRun(eventRows, { RunId: 'run-regression' }).length, 1);
+
+    const recommendation = recommendFromFiles({
+      runId: 'latest',
+      runsFile,
+      insightsFile,
+      eventsFile
+    });
+    const row = recommendationRow(recommendation, '2026-06-03T12:00:02Z');
+    const output = renderRecommendationV2(recommendation);
+
+    assert.equal(recommendation.action, 'compare_regression');
+    assert.equal(recommendation.evidence.change_annotations.length, 1);
+    assert.equal(recommendation.evidence.change_annotations[0].component, 'skill');
+    assert.equal(recommendation.evidence.change_annotations[0].target, 'agentops-latest-run');
+    assert.ok(recommendation.evidence.file_refs.includes('skill:agentops-latest-run'));
+    assert.deepEqual(row.ChangeAnnotations, [{
+      time_generated: '2026-06-03T11:59:55Z',
+      component: 'skill',
+      target: 'agentops-latest-run',
+      change_type: 'updated',
+      change_id: 'change-123',
+      version: '2026.06.03',
+      run_id: 'run-regression',
+      session_id: 'session-regression',
+      trace_id: 'trace-regression',
+      event_name: 'agentops.config.changed'
+    }]);
+    assert.ok(row.ChangeTargetRefs.includes('skill:agentops-latest-run'));
+    assert.match(output, /Config changes:/);
+    assert.doesNotMatch(JSON.stringify(recommendation), /SECRET_SHOULD_NOT_ATTACH/);
+    assert.equal(validateRecommendationRow(row).ok, true);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }

@@ -154,7 +154,7 @@ Use `agentops triage latest --runs <AgentOpsRunSummary_CL.jsonl> --events <Agent
 
 Use `agentops ask-context latest --runs <AgentOpsRunSummary_CL.jsonl> --events <AgentOpsEvents_CL.jsonl> --tools <AgentOpsToolCalls_CL.jsonl> --privacy <AgentOpsPrivacy_CL.jsonl> --github <AgentOpsGitHubOutcome_CL.jsonl> --evals <AgentOpsEval_CL.jsonl> --insights <AgentOpsInsights_CL.jsonl> --recommendations <AgentOpsRecommendations_CL.jsonl>` when you only need the investigator prompt.
 
-Use `agentops recommend latest --runs <AgentOpsRunSummary_CL.jsonl> --evals <AgentOpsEval_CL.jsonl> --insights <AgentOpsInsights_CL.jsonl>` when you want one evidence-backed next action with direct dashboard links.
+Use `agentops recommend latest --runs <AgentOpsRunSummary_CL.jsonl> --events <AgentOpsEvents_CL.jsonl> --evals <AgentOpsEval_CL.jsonl> --insights <AgentOpsInsights_CL.jsonl>` when you want one evidence-backed next action with direct dashboard links and config-change annotation refs.
 
 ## 9. Insights & Regressions
 
@@ -173,7 +173,7 @@ It shows anomalies and regressions for:
 
 The **Eval regression queue** panel combines eval-related insights and recommendations so operators can review score drops and regression next actions in one table.
 
-The **Config change annotations** panel shows metadata-only `agentops.config.changed` events for skill, hook, MCP, model, deployment, or benchmark changes. Use it to line up a regression with the change that may have caused it.
+The **Config change annotations** panel shows metadata-only `agentops.config.changed` events for skill, hook, MCP, model, deployment, or benchmark changes. Use it to line up a regression with the change that may have caused it. Recommendation rows include matching annotations when `agentops recommend` receives the events file.
 
 Recurring pattern rows include `OpenPattern`, `OpenReplay`, and `PatternKey` so operators can keep drilling into one repeated behavior without learning KQL.
 

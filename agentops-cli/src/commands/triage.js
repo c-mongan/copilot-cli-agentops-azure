@@ -56,6 +56,7 @@ function buildTriage(options = {}) {
   const recommendation = recommendFromFiles({
     runId: open.run_id,
     runsFile: options.runsFile,
+    eventsFile: options.eventsFile,
     evalsFile: options.evalsFile,
     insightsFile: options.insightsFile,
     benchmarkReportFile: options.benchmarkReportFile,
@@ -77,6 +78,7 @@ function buildTriage(options = {}) {
       next_action: recommendation.next_action,
       pattern: recommendation.evidence?.pattern || null,
       benchmark: recommendation.evidence?.benchmark || null,
+      change_annotations: recommendation.evidence?.change_annotations || [],
       change_targets: recommendation.evidence?.file_refs || [],
       dashboards: recommendation.evidence?.dashboards || []
     },
@@ -92,7 +94,7 @@ function buildTriage(options = {}) {
     next: [
       `agentops open ${open.run_id} --runs <AgentOpsRunSummary_CL.jsonl>`,
       `agentops ask-context ${open.run_id} --runs <AgentOpsRunSummary_CL.jsonl> --events <AgentOpsEvents_CL.jsonl> --tools <AgentOpsToolCalls_CL.jsonl> --evals <AgentOpsEval_CL.jsonl> --insights <AgentOpsInsights_CL.jsonl>`,
-      `agentops recommend ${open.run_id} --runs <AgentOpsRunSummary_CL.jsonl> --evals <AgentOpsEval_CL.jsonl> --insights <AgentOpsInsights_CL.jsonl> --out <dir>`
+      `agentops recommend ${open.run_id} --runs <AgentOpsRunSummary_CL.jsonl> --events <AgentOpsEvents_CL.jsonl> --evals <AgentOpsEval_CL.jsonl> --insights <AgentOpsInsights_CL.jsonl> --out <dir>`
     ]
   };
 }
@@ -114,6 +116,7 @@ function renderTriage(result) {
   ];
   if (result.recommendation.pattern) lines.push(`Pattern: ${result.recommendation.pattern.key}`);
   if (result.recommendation.benchmark) lines.push(`Benchmark: ${result.recommendation.benchmark.run_id} (${result.recommendation.benchmark.decision || 'unknown'})`);
+  if (result.recommendation.change_annotations?.length) lines.push(`Config changes: ${result.recommendation.change_annotations.map(annotation => [annotation.component, annotation.target].filter(Boolean).join(':')).filter(Boolean).join(', ')}`);
   if (result.recommendation.change_targets.length) lines.push(`Change targets: ${result.recommendation.change_targets.join(', ')}`);
   lines.push('');
   lines.push('Prompt:');
@@ -152,6 +155,7 @@ function triageCommand(args = []) {
         dashboards: result.recommendation.dashboards,
         pattern: result.recommendation.pattern,
         benchmark: result.recommendation.benchmark,
+        change_annotations: result.recommendation.change_annotations,
         file_refs: result.recommendation.change_targets
       },
       validation: [],

@@ -448,7 +448,7 @@ function validateDashboardUx() {
     if (!evalScorecardQuery.includes(field)) errors.push(`eval scorecard missing ${field}`);
   }
   const evalFollowUpQuery = queryFromPanel(panelByTitle(evals, 'Eval regression follow-up'));
-  for (const field of ['EvalBucket', 'ObservedPattern', 'NextAction', 'ChangeTargetRefs', 'OpenReplay', 'OpenPattern']) {
+  for (const field of ['EvalBucket', 'ObservedPattern', 'NextAction', 'ChangeAnnotationCount', 'ChangeTargetRefs', 'OpenReplay', 'OpenPattern']) {
     if (!evalFollowUpQuery.includes(field)) errors.push(`eval regression follow-up missing ${field}`);
   }
   const runComparisonQuery = queryFromPanel(panelByTitle(evals, 'Before/after run comparison'));
@@ -495,7 +495,7 @@ function validateDashboardUx() {
     if (!patternsQuery.includes(field)) errors.push(`recurring patterns panel missing ${field}`);
   }
   const recommendationsQuery = queryFromPanel(panelByTitle(insights, 'Recommendation artifacts'));
-  for (const field of ['RecommendationId', 'Action', 'ObservedPattern', 'NextAction', 'BenchmarkRunId', 'BenchmarkDecision', 'BenchmarkArtifactTotalChanged', 'BenchmarkArtifactFiles', 'BenchmarkHiddenCheckPacks', 'BenchmarkPolicyTasks', 'BenchmarkSemanticChecks', 'BenchmarkApprovalStatus', 'ChangeTargetRefs', 'OpenReplay', 'OpenPattern']) {
+  for (const field of ['RecommendationId', 'Action', 'ObservedPattern', 'NextAction', 'BenchmarkRunId', 'BenchmarkDecision', 'BenchmarkArtifactTotalChanged', 'BenchmarkArtifactFiles', 'BenchmarkHiddenCheckPacks', 'BenchmarkPolicyTasks', 'BenchmarkSemanticChecks', 'BenchmarkApprovalStatus', 'ChangeAnnotationCount', 'ChangeAnnotations', 'ChangeTargetRefs', 'OpenReplay', 'OpenPattern']) {
     if (!recommendationsQuery.includes(field)) errors.push(`recommendation artifacts panel missing ${field}`);
   }
   const evalRegressionQueueQuery = queryFromPanel(panelByTitle(insights, 'Eval regression queue'));

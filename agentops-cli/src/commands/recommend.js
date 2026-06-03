@@ -148,6 +148,92 @@ function fileRefsForRecommendation(action, insight = {}, run = {}) {
   return [...refs];
 }
 
+function stringValue(value) {
+  if (value === undefined || value === null) return '';
+  if (typeof value === 'string') return value;
+  return String(value);
+}
+
+function propertyValue(row = {}, key) {
+  const props = row.Properties && typeof row.Properties === 'object'
+    ? row.Properties
+    : {};
+  return row[key]
+    ?? row[`agentops.custom.${key}`]
+    ?? row[`agentops.${key}`]
+    ?? props[key]
+    ?? props[`agentops.custom.${key}`]
+    ?? props[`agentops.${key}`]
+    ?? '';
+}
+
+function parseDetailsValue(details, key) {
+  const text = stringValue(details);
+  if (!text) return '';
+  const pattern = new RegExp(`${key}[=: ]+([A-Za-z0-9_.@/-]+)`);
+  return pattern.exec(text)?.[1] || '';
+}
+
+function normalizeChangeAnnotation(row = {}) {
+  const props = row.Properties && typeof row.Properties === 'object' ? row.Properties : {};
+  const eventName = stringValue(row.EventName || row.Event || row.event || props['agentops.event.name'] || props['event.name']);
+  const eventType = stringValue(row.EventType || row.Type || row.type);
+  const details = stringValue(row.Details || row.ResultCode || row.details || '');
+  const annotationType = stringValue(propertyValue(row, 'annotation_type') || row.AnnotationType || parseDetailsValue(details, 'annotation_type'));
+  const isConfigAnnotation = eventName === 'agentops.config.changed'
+    || annotationType === 'config_change'
+    || eventType === 'annotation'
+    || details.includes('config_change');
+  if (!isConfigAnnotation) return null;
+
+  const component = stringValue(
+    row.ChangeComponent
+    || propertyValue(row, 'component')
+    || propertyValue(row, 'entity.type')
+    || row.EntityType
+    || parseDetailsValue(details, 'component')
+  );
+  const target = stringValue(
+    row.ChangeTarget
+    || propertyValue(row, 'target')
+    || propertyValue(row, 'entity.id_hash')
+    || row.EntityIdHash
+    || parseDetailsValue(details, 'target')
+  );
+
+  return {
+    time_generated: stringValue(row.TimeGenerated || row.time || row.timestamp),
+    component,
+    target,
+    change_type: stringValue(row.ChangeType || propertyValue(row, 'change_type') || parseDetailsValue(details, 'change_type') || 'updated'),
+    change_id: stringValue(row.ChangeId || propertyValue(row, 'change_id') || parseDetailsValue(details, 'change_id')),
+    version: stringValue(row.Version || propertyValue(row, 'version') || parseDetailsValue(details, 'version')),
+    run_id: stringValue(row.RunId || propertyValue(row, 'run.id')),
+    session_id: stringValue(row.SessionId || propertyValue(row, 'session.id') || props['gen_ai.conversation.id']),
+    trace_id: stringValue(row.TraceId || propertyValue(row, 'trace.id')),
+    event_name: eventName || 'agentops.config.changed'
+  };
+}
+
+function annotationMatchesRun(annotation, run = {}) {
+  if (!annotation) return false;
+  if (annotation.run_id && run.RunId && annotation.run_id === run.RunId) return true;
+  if (annotation.session_id && run.SessionId && annotation.session_id === run.SessionId) return true;
+  if (annotation.trace_id && run.TraceId && annotation.trace_id === run.TraceId) return true;
+  return false;
+}
+
+function changeAnnotationsForRun(events = [], run = {}) {
+  return events
+    .map(normalizeChangeAnnotation)
+    .filter(annotation => annotationMatchesRun(annotation, run))
+    .slice(0, 10);
+}
+
+function changeRef(annotation = {}) {
+  return [annotation.component, annotation.target].filter(Boolean).join(':');
+}
+
 function benchmarkArtifactFileRefs(report = null) {
   const rows = [];
   for (const task of Array.isArray(report?.tasks) ? report.tasks : []) {
@@ -327,7 +413,7 @@ function actionFromInsight(insight, run = {}) {
   return 'investigate';
 }
 
-function buildRecommendation({ run, insight, evaluation, links, benchmarkReport }) {
+function buildRecommendation({ run, insight, evaluation, links, benchmarkReport, changeAnnotations = [] }) {
   if (!run) {
     return {
       ok: false,
@@ -351,10 +437,12 @@ function buildRecommendation({ run, insight, evaluation, links, benchmarkReport 
       : 'Open Run Replay and inspect the failed span, blocked tool, eval score, and GitHub outcome.');
 
   const benchmark = benchmarkEvidenceFromReport(benchmarkReport);
+  const annotationRefs = changeAnnotations.map(changeRef).filter(Boolean);
   const validation = [
     `agentops explain ${run.RunId} --runs <AgentOpsRunSummary_CL.jsonl> --evals <AgentOpsEval_CL.jsonl> --insights <AgentOpsInsights_CL.jsonl>`,
     'agentops dashboard kql-check --last 24h --json'
   ];
+  if (changeAnnotations.length) validation.push(`agentops annotation config-change --component <component> --target <target> --run-id ${run.RunId}`);
   if (benchmark?.run_id) validation.push(`agentops experimental benchmark report ${benchmark.run_id}`);
 
   return {
@@ -380,7 +468,8 @@ function buildRecommendation({ run, insight, evaluation, links, benchmarkReport 
         dimension: insight.PatternDimension || ''
       } : null,
       benchmark,
-      file_refs: fileRefsForRecommendation(action, insight, run)
+      change_annotations: changeAnnotations,
+      file_refs: [...new Set([...fileRefsForRecommendation(action, insight, run), ...annotationRefs])]
     },
     validation,
     rollback_condition: 'Rollback the agent, skill, MCP, model, or instruction change if eval score drops, failures rise, privacy drops appear unexpectedly, or CI worsens.'
@@ -391,6 +480,7 @@ function recommendFromFiles(options = {}) {
   const runs = readJsonl(options.runsFile);
   const evals = readJsonl(options.evalsFile);
   const insights = readJsonl(options.insightsFile);
+  const events = readJsonl(options.eventsFile);
   const benchmarkReport = options.benchmarkReportFile
     ? JSON.parse(fs.readFileSync(options.benchmarkReportFile, 'utf8'))
     : options.benchmarkRunId
@@ -399,7 +489,8 @@ function recommendFromFiles(options = {}) {
   const run = pickRun(runs, options.runId);
   const insight = run ? topInsightForRun(insights, run.RunId) || matchingPatternInsight(insights, run) : null;
   const evaluation = run ? evals.find(row => row.RunId === run.RunId) || null : null;
-  return buildRecommendation({ run, insight, evaluation, links: options.links, benchmarkReport });
+  const changeAnnotations = run ? changeAnnotationsForRun(events, run) : [];
+  return buildRecommendation({ run, insight, evaluation, links: options.links, benchmarkReport, changeAnnotations });
 }
 
 function stableId(value, prefix = 'rec') {
@@ -411,6 +502,7 @@ function recommendationRow(recommendation, timeGenerated = new Date().toISOStrin
   const pattern = recommendation.evidence?.pattern || {};
   const evaluation = recommendation.evidence?.eval || {};
   const benchmark = recommendation.evidence?.benchmark || {};
+  const changeAnnotations = recommendation.evidence?.change_annotations || [];
   return {
     TimeGenerated: timeGenerated,
     RecommendationId: stableId([
@@ -461,6 +553,7 @@ function recommendationRow(recommendation, timeGenerated = new Date().toISOStrin
     BenchmarkApprovalApprovedAt: benchmark.approval?.approved_at || '',
     BenchmarkApprovalTicket: benchmark.approval?.ticket || '',
     BenchmarkApprovalSource: benchmark.approval?.source || '',
+    ChangeAnnotations: changeAnnotations,
     ChangeTargetRefs: recommendation.evidence?.file_refs || [],
     DashboardTitles: dashboards.map(dashboard => dashboard.title),
     DashboardCount: dashboards.length,
@@ -507,6 +600,12 @@ function renderRecommendationV2(recommendation) {
     const benchmark = recommendation.evidence.benchmark;
     lines.push(`Benchmark: ${benchmark.run_id || 'unknown'} (${benchmark.decision || 'unknown'}, score ${benchmark.average_score ?? 'unknown'}, pass ${benchmark.pass_rate_pct ?? 'unknown'}%)`);
   }
+  if (recommendation.evidence?.change_annotations?.length) {
+    lines.push('Config changes:');
+    for (const annotation of recommendation.evidence.change_annotations) {
+      lines.push(`- ${annotation.component || 'config'} ${annotation.target || 'unknown'} (${annotation.change_type || 'updated'}${annotation.version ? `, ${annotation.version}` : ''})`);
+    }
+  }
   if (recommendation.evidence?.file_refs?.length) lines.push(`Change targets: ${recommendation.evidence.file_refs.join(', ')}`);
   if (recommendation.evidence?.dashboards?.length) {
     lines.push('Dashboards:');
@@ -527,6 +626,7 @@ function recommendCommand(args = []) {
     runId,
     runsFile,
     evalsFile: optionValue(args, '--evals'),
+    eventsFile: optionValue(args, '--events'),
     insightsFile: optionValue(args, '--insights'),
     benchmarkReportFile: optionValue(args, '--benchmark-report'),
     benchmarkRunId: optionValue(args, '--benchmark-run')
@@ -551,6 +651,8 @@ function recommendCommand(args = []) {
 module.exports = {
   actionFromInsight,
   buildRecommendation,
+  changeAnnotationsForRun,
+  normalizeChangeAnnotation,
   dashboardUrl,
   benchmarkEvidenceFromReport,
   firstPositional,
