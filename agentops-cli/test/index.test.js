@@ -4287,6 +4287,46 @@ test('pre-tool policy allows explicit false broad content metadata', () => {
   assert.equal(result.stdout, '');
 });
 
+test('agent stop quality gate emits metadata-only warnings without blocking', () => {
+  const hook = path.join(root, 'plugin', 'scripts', 'agent-stop-quality-gate.js');
+  const result = spawnSync(process.execPath, [hook], {
+    input: JSON.stringify({
+      hookType: 'agentStop',
+      unresolvedToolFailures: 2,
+      contentCaptureEnabled: true,
+      changedFiles: ['agent.md']
+    }),
+    encoding: 'utf8'
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  const decision = JSON.parse(result.stdout);
+  assert.equal(decision.decision, 'warn');
+  assert.equal(decision.ok, false);
+  assert.deepEqual(decision.warnings.map(warning => warning.category), [
+    'unresolved-tool-failures',
+    'content-capture',
+    'missing-validation'
+  ]);
+});
+
+test('agent stop quality gate stays quiet for clean validated metadata', () => {
+  const hook = path.join(root, 'plugin', 'scripts', 'agent-stop-quality-gate.js');
+  const result = spawnSync(process.execPath, [hook], {
+    input: JSON.stringify({
+      hook_type: 'subagentStop',
+      tool_failures: 0,
+      content_capture_enabled: false,
+      files_edited: 1,
+      tests_ran: true
+    }),
+    encoding: 'utf8'
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, '');
+});
+
 test('status renders beginner-first privacy and setup checks from fixtures', () => {
   const summary = agentopsStatusSummary({
     checks: [
