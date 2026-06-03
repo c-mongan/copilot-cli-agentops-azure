@@ -24,7 +24,7 @@ The short answer to the product questions:
 - Does it make it simple to use? Simpler. The CLI now covers first-run setup, Azure/Grafana validation, smoke verification, latest-run summaries, ask-context bundles, and benchmark gates. The remaining complexity is cloud provisioning/binding and dashboard import automation.
 - Is it native to Copilot? Locally, almost. The shadow shim, bundled skills, custom agents, hooks, and MCP config all point in the right direction. The missing piece is a single Copilot-facing install/configure/check loop that hides infrastructure details until needed.
 - Can a coding agent monitor another agent through MCP? The architecture supports this concept. The repo includes read-only Azure Monitor MCP and Grafana MCP configs plus telemetry-investigator/optimizer agents. The current implementation is an evidence and prompt workflow, not yet a seamless page-context-aware "Ask AgentOps about this run" product.
-- Can it detect cheating in evals? Only at a starter level. The benchmark runner checks success commands, expected files, forbidden files, safety signals, content capture, tool failures, policy blocks, tokens, and cost. It now has hidden checks, sealed fixture pack manifests, deterministic semantic/rubric checks, and pre-run allowed-tool policy blocking, but it does not yet provide robust OS-level anti-cheat isolation or network egress controls.
+- Can it detect cheating in evals? Only at a starter level. The benchmark runner checks success commands, sealed command harness files, expected files, forbidden files, safety signals, content capture, tool failures, policy blocks, tokens, and cost. It now has hidden checks, sealed fixture pack manifests, deterministic semantic/rubric checks, and pre-run allowed-tool policy blocking, but it does not yet provide robust OS-level anti-cheat isolation or network egress controls.
 
 My product judgment: keep the current metadata-first/privacy-first foundation. Do not add prompt/content capture as the default. To become a world-class Copilot AgentOps product, the next major move should be a session-first UI and setup wizard, not more scattered KQL. The user should land on "what happened, why, what changed, what should I do next" within one minute of running `copilot`.
 
@@ -824,7 +824,7 @@ Current anti-cheat limitations:
 - Read-only benchmark profiles now block any workspace file change in the copied fixture.
 - Semantic evaluator adapters exist for deterministic file-content, regex, file-rubric checks, and command-backed `llm-judge` scoring, and suites can configure reusable judge provider command templates for hosted judge CLIs. The CLI now includes hosted judge provider setup guidance. The Evals & Quality dashboard surfaces metadata-only semantic check review. Hosted judge service provisioning is still external to the benchmark runner.
 - Candidate promotion gates can require approval evidence from an approval file, named approver identities, and approval counts. The CLI can generate run-scoped approval evidence, and the Evals & Quality dashboard now surfaces metadata-only approval review status. There is still no external team workflow integration yet.
-- There is no defense against an agent changing the test commands if the eval harness files are available to it.
+- Suites can seal command harness files with `commandFileSeal`; benchmark runs now reject candidates that change sealed test scripts or command files in the copied fixture. This is not a replacement for OS-level sandboxing.
 - The Evals & Quality dashboard now includes metadata-only artifact diff counts, per-file artifact path review, hidden check pack review, policy review, and semantic check review for benchmark recommendations. The CLI can now review artifact file paths and explicit fixture-to-workspace content diffs for local benchmark runs; a Grafana-native file-content diff viewer is still missing.
 - There is no "agent used external answer source" detector.
 - There is no "agent optimized for benchmark but harmed real-world telemetry" comparison beyond the report heuristics.
@@ -1215,7 +1215,7 @@ Required work:
 - Hidden tests.
 - Rubric/semantic scoring beyond deterministic file-content adapters.
 - Network and permission profiles.
-- Immutable harness.
+- Managed immutable harness isolation beyond command-file seals.
 - Artifact diffing.
 - Scorecard UI.
 - Promotion policy.
