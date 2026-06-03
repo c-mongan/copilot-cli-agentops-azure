@@ -3838,7 +3838,23 @@ test('pre-tool policy emits valid deny decisions for camelCase and snake_case in
   const hook = path.join(root, 'plugin', 'scripts', 'pre-tool-policy.js');
   for (const payload of [
     { toolName: 'shell', toolArgs: { command: 'az keyvault secret show --vault-name x --name y' } },
-    { tool_name: 'shell', tool_input: { command: 'cat .env' } }
+    { tool_name: 'shell', tool_input: { command: 'cat .env' } },
+    {
+      toolName: 'mcp__filesystem__read_file',
+      toolArgs: { path: 'notes.md' },
+      metadata: {
+        allowAllTools: true,
+        contentCaptureEnabled: true
+      }
+    },
+    {
+      tool_name: 'mcp__filesystem__read_file',
+      tool_input: { path: 'notes.md' },
+      metadata: {
+        allow_all_tools: true,
+        content_capture_enabled: true
+      }
+    }
   ]) {
     const result = spawnSync(process.execPath, [hook], {
       input: JSON.stringify(payload),
@@ -3849,6 +3865,24 @@ test('pre-tool policy emits valid deny decisions for camelCase and snake_case in
     assert.equal(decision.permissionDecision, 'deny');
     assert.match(decision.permissionDecisionReason, /demo preToolUse guardrail/);
   }
+});
+
+test('pre-tool policy allows explicit false broad content metadata', () => {
+  const hook = path.join(root, 'plugin', 'scripts', 'pre-tool-policy.js');
+  const result = spawnSync(process.execPath, [hook], {
+    input: JSON.stringify({
+      toolName: 'mcp__filesystem__read_file',
+      toolArgs: { path: 'notes.md' },
+      metadata: {
+        allowAllTools: 'false',
+        contentCaptureEnabled: 'false'
+      }
+    }),
+    encoding: 'utf8'
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, '');
 });
 
 test('status renders beginner-first privacy and setup checks from fixtures', () => {
