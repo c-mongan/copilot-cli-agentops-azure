@@ -364,7 +364,7 @@ function validateDashboardUx() {
 
   const home = byUid.get('agentops-v2-home');
   const homeTitles = new Set((home?.body.panels || []).map(panel => panel.title));
-  for (const title of ['Runs', 'Success rate', 'Failed runs', 'Policy blocks', 'Privacy drops', 'Estimated cost', 'Input tokens', 'Output tokens', 'p95 duration', 'Tests ran %', 'PRs opened', 'Collector health']) {
+  for (const title of ['Runs', 'Success rate', 'Failed runs', 'Policy blocks', 'Privacy drops', 'Estimated cost', 'Input tokens', 'Output tokens', 'p95 duration', 'Tests ran %', 'PRs opened', 'Collector health', 'Saved investigations']) {
     if (!homeTitles.has(title)) errors.push(`home missing top-strip panel ${title}`);
   }
   const homeText = (home?.body.panels || [])
@@ -373,6 +373,10 @@ function validateDashboardUx() {
     .join('\n');
   for (const snippet of ['Open latest run', 'agentops open latest --last 2h --json', 'Get recommendation', 'agentops recommend latest --last 2h', 'Ask AgentOps', 'agentops ask-context latest --last 2h --json', '--recommendations <AgentOpsRecommendations_CL.jsonl>', 'docs/copilot-mcp-agentops-prompts.md']) {
     if (!homeText.includes(snippet)) errors.push(`home action strip missing ${snippet}`);
+  }
+  const savedViewsQuery = queryFromPanel(panelByTitle(home, 'Saved investigations'));
+  for (const field of ['AgentOpsSavedViews_CL', 'SavedViewId', 'Name', 'QueryHash', 'OpenSavedView', 'OpenReplay']) {
+    if (!savedViewsQuery.includes(field)) errors.push(`saved investigations panel missing ${field}`);
   }
 
   const runs = byUid.get('agentops-v2-runs-explorer');
