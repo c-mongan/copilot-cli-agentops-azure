@@ -70,6 +70,9 @@ const {
   agentopsStatusSummary,
   agentopsWorkflows,
   alertActionPlan,
+  alertDetail,
+  alertHistory,
+  alertHistoryQuery,
   alertRecommendationQuery,
   alertRecommendations,
   askAgentOpsContext,
@@ -7559,4 +7562,29 @@ test('alert action plan exposes deterministic notification payload without actio
   assert.ok(plan.action_targets.some(target => target.type === 'github-issue' && target.action === 'create'));
   assert.ok(plan.action_targets.some(target => target.type === 'azure-devops-work-item' && target.action === 'create'));
   assert.ok(plan.guardrails.some(item => item.includes('Do not include prompts')));
+});
+
+test('alert history exposes metadata-only fired-alert query', () => {
+  const history = alertHistory({ rule: 'failed-spans', last: '12h' });
+
+  assert.equal(history.mode, 'metadata-only-history');
+  assert.equal(history.rule, 'failed-spans');
+  assert.equal(history.last, '12h');
+  assert.match(history.query, /let selected_rule = "failed-spans";/);
+  assert.match(history.query, /alert_history/);
+  assert.match(history.query, /TriggerValue/);
+  assert.match(history.query, /Conversation/);
+  assert.match(alertHistoryQuery('content-capture', '3h'), /ContentCaptureSignals/);
+});
+
+test('alert detail links one alert session to history and action plan', () => {
+  const detail = alertDetail({ rule: 'runaway-tool-loop', session: 'session-123', last: '2h' });
+
+  assert.equal(detail.mode, 'metadata-only-detail');
+  assert.equal(detail.rule, 'runaway-tool-loop');
+  assert.equal(detail.session, 'session-123');
+  assert.match(detail.history_query, /let selected_rule = "runaway-tool-loop";/);
+  assert.match(detail.history_query, /Conversation == "session-123"/);
+  assert.equal(detail.session_link.conversation, 'session-123');
+  assert.match(detail.action_plan_command, /alert action-plan --rule runaway-tool-loop --session session-123 --last 2h/);
 });
