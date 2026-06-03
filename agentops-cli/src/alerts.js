@@ -142,6 +142,48 @@ union
     };
   }
 
+  function alertTunePlan({ last = '14d', rule = null, owner = null } = {}) {
+    const lookback = validateKqlDuration(last);
+    const rules = rule ? [requireAlertRule(rule, 'tune-plan')] : alertRules(lookback);
+    const normalizedOwner = owner ? String(owner).trim() : null;
+
+    return {
+      schema_version: 'agentops.alert-tune-plan.v1',
+      workspace_id: workspaceId,
+      mode: 'proposal-only-threshold-plan',
+      last: lookback,
+      owner: normalizedOwner || null,
+      evidence: {
+        threshold_recommendation_query: alertRecommendationQuery(lookback),
+        fired_alert_history: rules.map(candidate => ({
+          rule: candidate.name,
+          query: alertHistoryQuery(candidate.name, lookback)
+        }))
+      },
+      threshold_changes: rules.map(candidate => ({
+        rule: candidate.name,
+        bicep_resource: candidate.bicep_resource,
+        patch_target: 'infra/bicep/alerts.bicep',
+        current_threshold: candidate.current_threshold,
+        suggested_threshold: candidate.suggested_threshold,
+        signal: candidate.signal,
+        validation: candidate.validation_query,
+        rollout: candidate.rollout,
+        decision: candidate.name === 'content-capture' ? 'keep-strict' : 'review'
+      })),
+      guardrails: [
+        'Do not edit infra/bicep/alerts.bicep until the recommendation query and fired-alert history have been reviewed.',
+        'Do not enable alerts or attach action groups from this plan.',
+        'Keep content-capture threshold at 0; investigate any content-like telemetry before sharing or routing alerts.'
+      ],
+      next: [
+        'Run the threshold recommendation query over the selected lookback.',
+        'Review fired-alert history for each rule and record an owner decision.',
+        'Apply any Bicep threshold edits manually in a reviewed PR, then run validate-azure before enabling alerts.'
+      ]
+    };
+  }
+
   function alertResourceState({ resources = [], resourceGroup = null, error = null } = {}) {
     const rules = alertRules();
     const normalized = resources.map(resource => {
@@ -480,6 +522,7 @@ ${selectedSession}
   return {
     alertRecommendationQuery,
     alertRecommendations,
+    alertTunePlan,
     alertResourceState,
     alertPolicy,
     alertHistoryQuery,

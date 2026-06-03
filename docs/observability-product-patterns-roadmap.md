@@ -156,13 +156,14 @@ Implemented local MVP:
 
 - Alert Tuning dashboard now includes threshold recommendations and fired-alert candidate review.
 - `agentops alert history`, `agentops alert detail`, `agentops alert action-plan`, and `agentops alert export` generate metadata-only review/action/artifact JSON.
+- `agentops alert tune-plan` generates proposal-only threshold-change metadata with Bicep patch targets and validation queries.
 - `agentops alert policy` generates local ownership, dedupe/noise, quiet-hours placeholder, and manual-escalation metadata.
 - `agentops alert resources` reports current Azure scheduled-query enabled/disabled state and action-group routing without mutating Azure.
 - `agentops incident timeline` collects exported alert artifacts into a durable metadata-only incident review record.
 
 Remaining MVP:
 
-- Keep remediation proposal-only.
+- Keep automated remediation proposal-only.
 
 Implementation surface:
 
@@ -177,14 +178,14 @@ Alert creation should be staged: choose signal/query, set condition, configure e
 
 Recommended MVP:
 
-- Add `agentops alert recommend` that reads recent telemetry and prints disabled-rule suggestions:
+- `agentops alert recommend` and `agentops alert tune-plan` print disabled-rule suggestions and review artifacts:
   - name
   - KQL
   - percentile evidence
   - suggested threshold
   - validation query
   - Bicep parameter or patch target
-- Add docs that frame alert tuning as a staged workflow.
+- Alert tuning docs frame threshold changes as a staged workflow.
 
 Implementation surface:
 

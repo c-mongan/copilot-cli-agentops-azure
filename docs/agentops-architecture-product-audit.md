@@ -883,6 +883,7 @@ What works well:
 - The Alert Tuning dashboard includes metadata-only fired-alert candidates with session drilldowns.
 - `agentops alert action-plan` generates deterministic GitHub issue or Azure DevOps work-item payload metadata with KQL, session links, and guardrails.
 - `agentops alert export` writes durable metadata-only alert artifacts for later incident review.
+- `agentops alert tune-plan` generates proposal-only threshold-change metadata with Bicep patch targets, validation queries, and fired-alert history evidence.
 - `agentops alert policy` generates local ownership, dedupe/noise, quiet-hours placeholder, and manual-escalation metadata.
 - `agentops alert resources` reports current Azure scheduled-query enabled/disabled state and action-group routing without mutating Azure.
 - `agentops incident timeline` collects exported alert artifacts into a durable metadata-only incident review record.
@@ -891,7 +892,7 @@ Current gaps:
 
 - Alert action routing is still manual; the CLI now creates a safe plan but does not post notifications or create issues/work items.
 - Alert history and timeline review exist as local metadata-only artifacts, but not yet as on-call workflow automation.
-- No automatic threshold tuning loop.
+- Threshold changes are still manual review artifacts; there is no automatic threshold tuning loop.
 - No first-class "open run from alert" UI beyond constructed KQL/dashboard links.
 
 Product recommendation:
@@ -901,12 +902,7 @@ Product recommendation:
   - create an issue/work item with KQL, session URL, and safe metadata
   - never auto-edit repo or resources
   - never call broad LLM tools without explicit approval
-- Add an alert detail workflow:
-  - why it fired
-  - affected sessions
-  - top contributing agents/tools/models
-  - recommended threshold
-  - validation query
+- Promote the alert detail and tune-plan artifacts into a guided UI workflow after more real traffic exists.
 
 ## Sessionization And Data Model
 
