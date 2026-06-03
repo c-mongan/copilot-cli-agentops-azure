@@ -75,6 +75,7 @@ function usage() {
     'alert history --rule <name> [--last <duration>]',
     'alert detail --rule <name> --session <conversation> [--last <duration>]',
     'alert open --rule <name> --session <conversation> [--last <duration>]',
+    'alert review --rule <name> --session <conversation> [--owner <name>] [--last <duration>]',
     'alert action-plan --rule <name> --session <conversation> [--last <duration>]',
     'alert export --rule <name> --session <conversation> --output <json> [--last <duration>]',
     'alert handoff --rule <name> --session <conversation> [--owner <name>] [--output <json>] [--last <duration>]',
@@ -5046,6 +5047,43 @@ function alertOpenRun({ rule, session, last = '24h' } = {}) {
   };
 }
 
+function alertReview({ rule, session, last = '24h', owners = [] } = {}) {
+  const open = alertOpenRun({ rule, session, last });
+  const detail = alertDetail({ rule, session, last });
+  const actionPlan = alertActionPlan({ rule, session, last });
+  const artifact = alertArtifact({ rule, session, last });
+  const normalizedOwners = owners.map(owner => String(owner || '').trim()).filter(Boolean);
+
+  return {
+    schema_version: 'agentops.alert-review.v1',
+    mode: 'metadata-only-alert-review',
+    alert: open.alert,
+    owner: normalizedOwners[0] || null,
+    evidence: {
+      detail,
+      open,
+      action_plan: actionPlan,
+      artifact
+    },
+    commands: {
+      open: `agentops alert open --rule ${open.alert.rule} --session ${open.alert.session} --last ${open.alert.last}`,
+      action_plan: actionPlan.next_command || detail.action_plan_command,
+      export: `agentops alert export --rule ${open.alert.rule} --session ${open.alert.session} --output .agentops/alerts/${open.alert.rule}.json --last ${open.alert.last}`,
+      handoff: `agentops alert handoff --rule ${open.alert.rule} --session ${open.alert.session}${normalizedOwners[0] ? ` --owner ${normalizedOwners[0]}` : ''} --last ${open.alert.last}`
+    },
+    guardrails: [
+      'Metadata-only: this command does not page, post tickets, edit repositories, or mutate Azure resources.',
+      'Review session links, alert history, and action-plan payloads before routing notifications.',
+      'Keep prompts, responses, tool arguments, tool results, and file contents out of follow-up tickets.'
+    ],
+    next: [
+      'Open the session detail or run replay link.',
+      'Review the action-plan payload and threshold evidence.',
+      'Export or hand off the review packet only after assigning an owner.'
+    ]
+  };
+}
+
 const alertThresholdPatchResources = {
   'high-aiu': {
     bicep_resource: 'highAiuAlert',
@@ -9406,6 +9444,14 @@ async function main(argv) {
       process.stdout.write(JSON.stringify(alertOpenRun({ rule, session, last }), null, 2) + '\n');
       return;
     }
+    if (subcommand === 'review') {
+      const rule = optionValue(alertArgs, ['--rule']);
+      const session = optionValue(alertArgs, ['--session', '--conversation']);
+      const owners = optionValues(alertArgs, '--owner');
+      const last = parseLastArg(alertArgs, '24h');
+      process.stdout.write(JSON.stringify(alertReview({ rule, session, owners, last }), null, 2) + '\n');
+      return;
+    }
     if (subcommand === 'export') {
       const rule = optionValue(alertArgs, ['--rule']);
       const session = optionValue(alertArgs, ['--session', '--conversation']);
@@ -9556,7 +9602,7 @@ async function main(argv) {
       }), null, 2) + '\n');
       return;
     }
-    throw new Error('alert currently supports: alert recommend, alert tune-plan, alert threshold-simulate, alert threshold-patch, alert policy, alert resources, alert history, alert detail, alert open, alert action-plan, alert export, alert handoff, alert route-plan, alert route-github, alert route-azure-devops, alert action-group-plan, alert route-action-group');
+    throw new Error('alert currently supports: alert recommend, alert tune-plan, alert threshold-simulate, alert threshold-patch, alert policy, alert resources, alert history, alert detail, alert open, alert review, alert action-plan, alert export, alert handoff, alert route-plan, alert route-github, alert route-azure-devops, alert action-group-plan, alert route-action-group');
   }
 
   if (command === 'incident') {
@@ -9627,6 +9673,7 @@ module.exports = {
   alertHistory,
   alertDetail,
   alertOpenRun,
+  alertReview,
   alertActionPlan,
   alertArtifact,
   alertActionGroupPlan,

@@ -81,6 +81,7 @@ const {
   alertHandoff,
   alertIncidentTimeline,
   alertOpenRun,
+  alertReview,
   alertPolicy,
   alertRecommendationQuery,
   alertRecommendations,
@@ -7803,6 +7804,33 @@ test('alert open builds run-scoped links from alert context', () => {
   assert.doesNotMatch(JSON.stringify(open), /SECRET_FAKE_TEST_VALUE|raw transcript/);
 
   assert.throws(() => alertOpenRun({ rule: 'runaway-tool-loop' }), /alert detail requires --session/);
+});
+
+test('alert review bundles open detail action plan and artifact evidence', () => {
+  const review = alertReview({
+    rule: 'runaway-tool-loop',
+    session: 'session-123',
+    owners: ['agentops-oncall'],
+    last: '2h'
+  });
+
+  assert.equal(review.schema_version, 'agentops.alert-review.v1');
+  assert.equal(review.mode, 'metadata-only-alert-review');
+  assert.equal(review.alert.rule, 'runaway-tool-loop');
+  assert.equal(review.alert.session, 'session-123');
+  assert.equal(review.owner, 'agentops-oncall');
+  assert.equal(review.evidence.detail.mode, 'metadata-only-detail');
+  assert.equal(review.evidence.open.schema_version, 'agentops.alert-open-run.v1');
+  assert.equal(review.evidence.action_plan.mode, 'deterministic-plan');
+  assert.equal(review.evidence.artifact.schema_version, 'agentops.alert-artifact.v1');
+  assert.match(review.commands.open, /alert open --rule runaway-tool-loop --session session-123 --last 2h/);
+  assert.match(review.commands.action_plan, /alert action-plan --rule runaway-tool-loop --session session-123 --last 2h/);
+  assert.match(review.commands.export, /alert export --rule runaway-tool-loop --session session-123/);
+  assert.match(review.commands.handoff, /--owner agentops-oncall/);
+  assert.ok(review.guardrails.some(item => item.includes('Metadata-only')));
+  assert.doesNotMatch(JSON.stringify(review), /SECRET_FAKE_TEST_VALUE|raw transcript/);
+
+  assert.throws(() => alertReview({ rule: 'runaway-tool-loop' }), /alert detail requires --session/);
 });
 
 test('alert artifact persists metadata-only incident evidence', () => {
