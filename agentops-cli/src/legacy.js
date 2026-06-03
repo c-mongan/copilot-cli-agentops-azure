@@ -4994,6 +4994,7 @@ function validateBenchmarkTask(task, suiteDir, source = 'task') {
   const errors = [];
   const stringFields = ['id', 'title', 'fixture', 'prompt'];
   const arrayFields = ['copilotArgs', 'successCommands', 'expectedFiles', 'forbiddenFiles', 'tags'];
+  const optionalArrayFields = ['hiddenSuccessCommands'];
 
   for (const field of stringFields) {
     if (typeof task[field] !== 'string' || task[field].trim() === '') {
@@ -5003,6 +5004,12 @@ function validateBenchmarkTask(task, suiteDir, source = 'task') {
 
   for (const field of arrayFields) {
     if (!isStringArray(task[field])) {
+      errors.push(`${field} must be an array of strings`);
+    }
+  }
+
+  for (const field of optionalArrayFields) {
+    if (task[field] !== undefined && !isStringArray(task[field])) {
       errors.push(`${field} must be an array of strings`);
     }
   }
@@ -5022,6 +5029,7 @@ function validateBenchmarkTask(task, suiteDir, source = 'task') {
 
   return {
     ...task,
+    hiddenSuccessCommands: task.hiddenSuccessCommands || [],
     fixturePath,
     source
   };
@@ -5216,6 +5224,8 @@ function benchmarkRunPlan(suiteId, options = {}) {
         },
         successChecks: {
           commands: task.successCommands,
+          hiddenCommandCount: task.hiddenSuccessCommands.length,
+          ...(options.includeHiddenChecks ? { hiddenCommands: task.hiddenSuccessCommands } : {}),
           expectedFiles: task.expectedFiles,
           forbiddenFiles: task.forbiddenFiles
         },
@@ -5384,6 +5394,16 @@ function executeBenchmarkRun(plan, run, options = {}) {
     });
   }
 
+  for (const [index, command] of (run.successChecks.hiddenCommands || []).entries()) {
+    const result = runShellCheck(command, workspace, { spawnSync });
+    checkResults.push({
+      name: `hidden command #${index + 1}`,
+      hidden: true,
+      ok: commandSucceeded(result),
+      detail: commandSucceeded(result) ? null : 'hidden check failed'
+    });
+  }
+
   for (const file of run.successChecks.expectedFiles) {
     checkResults.push({
       name: `expected file: ${file}`,
@@ -5408,6 +5428,8 @@ function executeBenchmarkRun(plan, run, options = {}) {
     .length;
   const checksPassed = checkResults.filter(check => check.ok).length;
   const checksFailed = checkResults.length - checksPassed;
+  const hiddenChecksPassed = checkResults.filter(check => check.hidden && check.ok).length;
+  const hiddenChecksFailed = checkResults.filter(check => check.hidden && !check.ok).length;
   const errorCategory = benchmarkErrorCategory(copilotResult, checkResults, forbiddenFilesChanged);
 
   return {
@@ -5424,6 +5446,8 @@ function executeBenchmarkRun(plan, run, options = {}) {
     success: checksFailed === 0 && forbiddenFilesChanged === 0,
     checksPassed,
     checksFailed,
+    hiddenChecksPassed,
+    hiddenChecksFailed,
     filesChanged: changedFiles.length,
     changedFiles,
     artifactDiff,
@@ -5444,7 +5468,7 @@ function executeBenchmarkRun(plan, run, options = {}) {
 }
 
 function runBenchmarkSuite(suiteId, options = {}) {
-  const plan = benchmarkRunPlan(suiteId, options);
+  const plan = benchmarkRunPlan(suiteId, { ...options, includeHiddenChecks: !options.dryRun });
   if (plan.dryRun) return plan;
 
   const summaries = plan.runs.map(run => executeBenchmarkRun(plan, run, options));
@@ -5941,6 +5965,10 @@ function benchmarkReport(runId, summaries = null, options = {}) {
     forbiddenFilesChanged: scoredSummaries.reduce((total, summary) => total + numberValue(summary.forbiddenFilesChanged), 0),
     policyBlocks: scoredSummaries.reduce((total, summary) => total + numberValue(summary.policyBlocks), 0),
     contentCaptureDetected: scoredSummaries.some(summary => summary.contentCaptureDetected === true),
+    hiddenChecks: {
+      passed: scoredSummaries.reduce((total, summary) => total + numberValue(summary.hiddenChecksPassed), 0),
+      failed: scoredSummaries.reduce((total, summary) => total + numberValue(summary.hiddenChecksFailed), 0)
+    },
     safetyViolationCount: scoredSummaries.filter(summary => summary.safetyViolation).length,
     inputTokens,
     outputTokens,
@@ -5954,6 +5982,8 @@ function benchmarkReport(runId, summaries = null, options = {}) {
       hypothesis: summary.hypothesis || null,
       success: Boolean(summary.success),
       score: summary.score,
+      hiddenChecksPassed: numberValue(summary.hiddenChecksPassed),
+      hiddenChecksFailed: numberValue(summary.hiddenChecksFailed),
       safetyViolation: summary.safetyViolation,
       errorCategory: summary.errorCategory || null,
       telemetryMatched: Boolean(summary.telemetryMatched),

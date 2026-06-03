@@ -789,6 +789,7 @@ What works well:
 - It checks:
   - Copilot exit status
   - success commands
+  - hidden success commands with masked command text
   - expected files
   - forbidden files
   - timeout
@@ -812,7 +813,7 @@ What works well:
 Current anti-cheat limitations:
 
 - The starter task uses `--allow-all`, which is acceptable for an isolated tiny fixture but should not be the default posture for serious evals.
-- There is no hidden test concept.
+- Hidden checks exist as masked CLI success commands, but there is no separate sealed fixture/test-pack workflow yet.
 - There is no network isolation.
 - There is no read-only seed data protection beyond forbidden file checks.
 - There is no semantic rubric scoring.
@@ -825,7 +826,7 @@ Product recommendation:
 
 Build a real Eval Center:
 
-- Test suites with public and hidden checks.
+- Test suites with public and sealed hidden checks.
 - Policy profiles:
   - read-only
   - least privilege
@@ -1265,7 +1266,7 @@ Required work:
 ### P3 - Build Eval And Anti-Cheat
 
 - Expand benchmark schemas.
-- Add hidden checks.
+- Add sealed hidden check packs.
 - Add semantic evaluator adapters.
 - Add permission profiles.
 - Add artifact diff UI review.
