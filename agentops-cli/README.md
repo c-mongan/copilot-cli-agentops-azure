@@ -20,6 +20,7 @@ node src/index.js compat-check --last 2h
 node src/index.js init --dry-run
 node src/index.js init --import-dashboards
 node src/index.js init --run-smoke
+node src/index.js init --triage-latest
 node src/index.js scan
 node src/index.js primitives --last 7d
 node src/index.js import-jsonl ../tests/sample-otel/tool-failure.jsonl
@@ -54,7 +55,7 @@ node src/index.js alert recommend --last 14d
 node src/index.js saved-view add latest-risk --session <conversation>
 ```
 
-`init` performs the local first-run checklist, installs or dry-runs bundled agents and skills, checks shim posture, and prints the next commands needed for Azure validation and a real Copilot smoke run.
+`init` performs the local first-run checklist, installs or dry-runs bundled agents and skills, checks shim posture, and prints the next commands needed for Azure validation, a real Copilot smoke run, and latest-run triage.
 
 `install` installs the `agentops` and `copilot-agentops` commands into `~/.local/bin`. Pass `--shadow-copilot` when you want plain `copilot` to route through AgentOps too.
 

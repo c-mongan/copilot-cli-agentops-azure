@@ -219,6 +219,7 @@ node agentops-cli/src/index.js configure show
 node agentops-cli/src/index.js init --dry-run
 node agentops-cli/src/index.js init --import-dashboards
 node agentops-cli/src/index.js init --run-smoke
+node agentops-cli/src/index.js init --triage-latest
 node agentops-cli/src/index.js validate-azure
 node agentops-cli/src/index.js smoke --wait 2m --poll 10s
 node agentops-cli/src/index.js live --last 2h

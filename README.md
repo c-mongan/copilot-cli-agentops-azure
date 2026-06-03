@@ -71,6 +71,7 @@ agentops init --dry-run
 agentops init --provision-cloud
 agentops init --import-dashboards
 agentops init --run-smoke
+agentops init --triage-latest
 agentops mcp-proxy
 agentops recommend
 agentops triage
