@@ -814,10 +814,10 @@ What works well:
 Current anti-cheat limitations:
 
 - The starter task uses `--allow-all`, which is acceptable for an isolated tiny fixture but should not be the default posture for serious evals.
-- Permission profiles exist as task metadata and validation for broad flags, but they do not yet enforce OS/network/tool sandboxing.
+- Permission profiles enforce broad-flag validation and read-only workspace immutability for benchmark fixture copies, but they do not yet enforce OS/network/tool sandboxing.
 - Hidden checks exist as masked CLI success commands, but there is no separate sealed fixture/test-pack workflow yet.
 - There is no network isolation.
-- There is no read-only seed data protection beyond forbidden file checks.
+- Read-only benchmark profiles now block any workspace file change in the copied fixture.
 - There is no semantic rubric scoring.
 - There is no defense against an agent changing the test commands if the eval harness files are available to it.
 - There is no artifact diff viewer in the UI; artifact diffs are currently CLI/report metadata only.
@@ -830,7 +830,7 @@ Build a real Eval Center:
 
 - Test suites with public and sealed hidden checks.
 - Enforced policy profiles:
-  - read-only
+  - read-only workspace immutability
   - least privilege
   - allow selected tools
   - no network
@@ -1270,7 +1270,7 @@ Required work:
 - Expand benchmark schemas.
 - Add sealed hidden check packs.
 - Add semantic evaluator adapters.
-- Add enforced permission profiles.
+- Expand enforced permission profiles to network and tool sandboxing.
 - Add artifact diff UI review.
 - Add candidate promotion gates.
 - Add dashboards for eval scorecards and regressions.
