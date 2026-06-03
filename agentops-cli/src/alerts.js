@@ -270,13 +270,49 @@ ${selectedSession}
     };
   }
 
+  function alertArtifact({ rule, session, last = '24h', createdAt } = {}) {
+    const detail = alertDetail({ rule, session, last });
+    const actionPlan = alertActionPlan({ rule, session, last });
+    return {
+      schema_version: 'agentops.alert-artifact.v1',
+      created_at: createdAt || new Date().toISOString(),
+      workspace_id: workspaceId,
+      rule: detail.rule,
+      session: detail.session,
+      last: detail.last,
+      privacy: {
+        mode: 'metadata-only',
+        excluded: ['prompts', 'responses', 'tool arguments', 'tool results', 'file contents']
+      },
+      evidence: {
+        history_query: detail.history_query,
+        session_link: detail.session_link,
+        threshold_evidence_query: actionPlan.links.threshold_evidence_query
+      },
+      action_plan: {
+        title: actionPlan.title,
+        severity: actionPlan.severity,
+        safe_metadata: actionPlan.safe_metadata,
+        action_targets: actionPlan.action_targets,
+        guardrails: actionPlan.guardrails
+      },
+      status: {
+        state: 'review',
+        owner: null,
+        ticket: null,
+        notes: []
+      }
+    };
+  }
+
   return {
     alertRecommendationQuery,
     alertRecommendations,
     alertHistoryQuery,
     alertHistory,
     alertDetail,
-    alertActionPlan
+    alertActionPlan,
+    alertArtifact
   };
 }
 
