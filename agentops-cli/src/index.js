@@ -123,7 +123,7 @@ Core commands:
   explain latest|<run-id> [--runs <jsonl>] [--evals <jsonl>] [--insights <jsonl>] [--json]
   insights [generate|patterns] [--runs <jsonl>] [--insights <jsonl>] [--tools <jsonl>] [--privacy <jsonl>] [--github <jsonl>] [--out <dir>] [--json]
   init [--dry-run] [--full] [--provision-cloud] [--import-dashboards] [--run-smoke] [--triage-latest] [--force-skills] [--no-skills] [--json]
-  recommend latest|<run-id> [--runs <jsonl>] [--evals <jsonl>] [--insights <jsonl>] [--benchmark-run <id>] [--benchmark-report <json>] [--out <dir>] [--json]
+  recommend latest|<run-id> [--runs <jsonl>] [--events <jsonl>] [--evals <jsonl>] [--insights <jsonl>] [--benchmark-run <id>] [--benchmark-report <json>] [--out <dir>] [--json]
   triage latest|<run-id> [--runs <jsonl>] [--events <jsonl>] [--tools <jsonl>] [--privacy <jsonl>] [--github <jsonl>] [--evals <jsonl>] [--insights <jsonl>] [--benchmark-run <id>] [--out <dir>] [--json]
   mcp-proxy --server-name <name> [--out <jsonl>] -- <server command> [args...]
   latest [--file <jsonl>] [--last <duration>] [--json]

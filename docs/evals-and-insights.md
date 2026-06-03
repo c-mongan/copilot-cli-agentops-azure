@@ -53,15 +53,16 @@ Recommend one next action with dashboard drilldowns:
 ```bash
 agentops recommend latest \
   --runs .agentops/demo/latest/AgentOpsRunSummary_CL.jsonl \
+  --events .agentops/demo/latest/AgentOpsEvents_CL.jsonl \
   --evals .agentops/insights/latest/AgentOpsEval_CL.jsonl \
   --insights .agentops/insights/latest/AgentOpsInsights_CL.jsonl \
   --benchmark-run pass-run \
   --out .agentops/demo/latest
 ```
 
-The recommendation is metadata-only. It links to Run Replay, Tools & MCP Risk, Models/Cost, Safety/Privacy, Code Outcomes, or Insights based on the run and top insight. If the selected run has no direct insight but matches a recurring metadata pattern, the recommendation falls back to that pattern and links Insights & Regressions with `$pattern_key`.
+The recommendation is metadata-only. It links to Run Replay, Tools & MCP Risk, Models/Cost, Safety/Privacy, Code Outcomes, or Insights based on the run and top insight. If `--events` includes `agentops.config.changed` annotations for the same run, session, or trace, the recommendation also carries the changed component and target. If the selected run has no direct insight but matches a recurring metadata pattern, the recommendation falls back to that pattern and links Insights & Regressions with `$pattern_key`.
 
-When `--out` is provided, AgentOps appends an `AgentOpsRecommendations_CL.jsonl` row containing the action, severity, observed pattern, next action, pattern id/key, eval bucket, benchmark-gate summary, validation steps, dashboard count, and metadata-only change-target refs. It does not store prompt text, model responses, tool arguments, tool results, source code, or file contents.
+When `--out` is provided, AgentOps appends an `AgentOpsRecommendations_CL.jsonl` row containing the action, severity, observed pattern, next action, pattern id/key, eval bucket, benchmark-gate summary, config-change annotations, validation steps, dashboard count, and metadata-only change-target refs. It does not store prompt text, model responses, tool arguments, tool results, source code, or file contents.
 
 Create a privacy-safe bundle for Copilot/Codex or a telemetry investigator:
 

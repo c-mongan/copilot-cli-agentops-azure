@@ -145,7 +145,7 @@ function demoVerifyCommand(args = []) {
     next: [
       `agentops replay latest --file ${writtenDemo.files.AgentOpsEvents_CL}`,
       `agentops open latest --runs ${writtenDemo.files.AgentOpsRunSummary_CL}`,
-      `agentops recommend latest --runs ${writtenDemo.files.AgentOpsRunSummary_CL} --evals ${writtenInsights.evalFile} --insights ${writtenInsights.insightsFile}`,
+      `agentops recommend latest --runs ${writtenDemo.files.AgentOpsRunSummary_CL} --events ${writtenDemo.files.AgentOpsEvents_CL} --evals ${writtenInsights.evalFile} --insights ${writtenInsights.insightsFile}`,
       `agentops azure-ingest plan --dir ${writtenDemo.out_dir}`,
       `agentops explain latest --runs ${writtenDemo.files.AgentOpsRunSummary_CL} --evals ${writtenInsights.evalFile} --insights ${writtenInsights.insightsFile}`
     ]

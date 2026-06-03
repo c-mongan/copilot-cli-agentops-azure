@@ -43,6 +43,7 @@ const arrayFields = [
   'BenchmarkHiddenCheckPacks',
   'BenchmarkPolicyTasks',
   'BenchmarkSemanticChecks',
+  'ChangeAnnotations',
   'ChangeTargetRefs',
   'DashboardTitles',
   'Validation'
