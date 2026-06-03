@@ -160,6 +160,7 @@ Implemented local MVP:
 - `agentops alert policy` generates local ownership, dedupe/noise, quiet-hours placeholder, and manual-escalation metadata.
 - `agentops alert resources` reports current Azure scheduled-query enabled/disabled state and action-group routing without mutating Azure.
 - `agentops incident timeline` collects exported alert artifacts into a durable metadata-only incident review record.
+- `agentops alert handoff` bundles alert detail, tune-plan, policy, resource-state placeholder, and incident timeline evidence into one operator review packet.
 
 Remaining MVP:
 

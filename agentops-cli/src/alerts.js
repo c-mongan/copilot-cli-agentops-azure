@@ -519,6 +519,62 @@ ${selectedSession}
     };
   }
 
+  function alertHandoff({ rule, session, last = '24h', owners = [], service = 'agentops', timezone = 'UTC', createdAt, resourceGroup = null } = {}) {
+    const created = createdAt || new Date().toISOString();
+    const artifact = alertArtifact({ rule, session, last, createdAt: created });
+    const tunePlan = alertTunePlan({ last, rule: artifact.rule, owner: owners[0] || null });
+    const policy = alertPolicy({ owners, service, timezone });
+    const resources = alertResourceState({ resourceGroup });
+    const timeline = alertIncidentTimeline({
+      artifacts: [artifact],
+      createdAt: created,
+      incidentId: `handoff-${artifact.rule}-${artifact.session}`.replace(/[^A-Za-z0-9_.-]/g, '-')
+    });
+
+    return {
+      schema_version: 'agentops.alert-handoff.v1',
+      created_at: created,
+      workspace_id: workspaceId,
+      mode: 'metadata-only-operator-handoff',
+      alert: {
+        rule: artifact.rule,
+        session: artifact.session,
+        last: artifact.last,
+        severity: artifact.action_plan.severity
+      },
+      ownership: policy.ownership,
+      noise_policy: policy.noise_policy,
+      escalation: policy.escalation,
+      evidence: {
+        detail: {
+          history_query: artifact.evidence.history_query,
+          session_link: artifact.evidence.session_link,
+          threshold_evidence_query: artifact.evidence.threshold_evidence_query
+        },
+        tune_plan: tunePlan,
+        resources,
+        timeline
+      },
+      operator_steps: [
+        'Review the session link and metadata-only alert history.',
+        'Review the tune-plan threshold evidence before changing any alert rule.',
+        'Assign an owner and create a ticket manually only after confirming the evidence.',
+        'Run validate-azure before enabling alert rules or attaching action groups.'
+      ],
+      guardrails: [
+        'Do not include prompts, responses, tool arguments, tool results, or file contents in handoff notes.',
+        'Do not page, create tickets, edit Bicep, enable alerts, or attach action groups from this handoff.',
+        'Treat this as an operator review packet, not an automated remediation.'
+      ],
+      status: {
+        state: 'review',
+        owner: policy.ownership.owners[0] || null,
+        ticket: null,
+        notes: []
+      }
+    };
+  }
+
   return {
     alertRecommendationQuery,
     alertRecommendations,
@@ -530,7 +586,8 @@ ${selectedSession}
     alertDetail,
     alertActionPlan,
     alertArtifact,
-    alertIncidentTimeline
+    alertIncidentTimeline,
+    alertHandoff
   };
 }
 

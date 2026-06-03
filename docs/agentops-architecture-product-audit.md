@@ -887,11 +887,12 @@ What works well:
 - `agentops alert policy` generates local ownership, dedupe/noise, quiet-hours placeholder, and manual-escalation metadata.
 - `agentops alert resources` reports current Azure scheduled-query enabled/disabled state and action-group routing without mutating Azure.
 - `agentops incident timeline` collects exported alert artifacts into a durable metadata-only incident review record.
+- `agentops alert handoff` bundles alert detail, tune-plan, policy, resource-state placeholder, and incident timeline evidence into one metadata-only operator review packet.
 
 Current gaps:
 
 - Alert action routing is still manual; the CLI now creates a safe plan but does not post notifications or create issues/work items.
-- Alert history and timeline review exist as local metadata-only artifacts, but not yet as on-call workflow automation.
+- Alert history and timeline review now have a local metadata-only handoff bundle, but not yet automated notification or ticket posting.
 - Threshold changes are still manual review artifacts; there is no automatic threshold tuning loop.
 - No first-class "open run from alert" UI beyond constructed KQL/dashboard links.
 
