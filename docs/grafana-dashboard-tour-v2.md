@@ -8,6 +8,7 @@ Start here when you want the answer in one screen.
 
 It shows:
 
+- a first-row action strip for opening the latest Run Replay, generating one recommendation, and building an Ask AgentOps context bundle;
 - runs, success rate, failed runs, policy blocks, privacy drops, estimated cost, input/output tokens, p95 duration, tests ran percent, PRs opened, and collector health;
 - recent failed runs;
 - recommended next actions from insight rows;
