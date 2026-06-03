@@ -70,4 +70,4 @@ node scripts/build-grafana-dashboard-pack.js
 ```
 
 The dashboard includes a Suggested threshold impact table that compares current and proposed alert-window counts before any threshold patch is generated.
-Fired alert candidates include session detail, replay, Azure Logs links, and an `agentops alert open` command for the same metadata-only review path.
+Fired alert candidates include session detail, replay, Azure Logs links, and an `agentops alert review` command for the same metadata-only review path.

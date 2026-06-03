@@ -3421,7 +3421,8 @@ test('Alert Tuning dashboard surfaces fired alert candidates', () => {
   assert.match(impactQuery, /agentops alert threshold-simulate/);
   assert.match(historyQuery, /alert_history/);
   assert.match(historyQuery, /TriggerValue/);
-  assert.match(historyQuery, /ReviewCommand=strcat\('agentops alert open/);
+  assert.match(historyQuery, /ReviewCommand=strcat\('agentops alert review/);
+  assert.match(historyQuery, /--owner <owner>/);
   assert.match(historyQuery, /content-capture/);
   assert.match(overrides, /agentops-session-detail/);
   assert.match(overrides, /agentops-live-replay/);
