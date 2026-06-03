@@ -223,6 +223,8 @@ function benchmarkPolicyRefs(report = null) {
     rows.push({
       task_id: task.taskId || '',
       permission_profile: task.permissionProfile || '',
+      os_sandbox_mode: task.osSandbox?.mode || '',
+      os_sandbox_active: task.osSandboxRuntime?.active === undefined ? null : Boolean(task.osSandboxRuntime.active),
       policy_blocks: task.policyBlocks ?? null,
       blocked_risks: Array.isArray(task.toolPolicy?.blockedRisks) ? task.toolPolicy.blockedRisks : [],
       violation_count: violations.length,

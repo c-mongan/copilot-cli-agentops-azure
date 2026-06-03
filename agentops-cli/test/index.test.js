@@ -1344,6 +1344,14 @@ test('V2 recommend carries benchmark gate and change-target metadata', () => {
       tasks: [{
         taskId: 'create-note',
         permissionProfile: 'allow-all-isolated',
+        osSandbox: {
+          mode: 'macos-network-blocked'
+        },
+        osSandboxRuntime: {
+          mode: 'macos-network-blocked',
+          active: true,
+          command: 'sandbox-exec'
+        },
         toolPolicy: {
           blockedRisks: ['browser-control', 'destructive', 'network', 'secret-access']
         },
@@ -1435,6 +1443,8 @@ test('V2 recommend carries benchmark gate and change-target metadata', () => {
     assert.deepEqual(row.BenchmarkPolicyTasks, [{
       task_id: 'create-note',
       permission_profile: 'allow-all-isolated',
+      os_sandbox_mode: 'macos-network-blocked',
+      os_sandbox_active: true,
       policy_blocks: 1,
       blocked_risks: ['browser-control', 'destructive', 'network', 'secret-access'],
       violation_count: 1,
@@ -4979,6 +4989,26 @@ test('benchmark schema validation rejects broad args without isolated profile', 
   assert.throws(() => validateBenchmarkTask(task, suiteDir, 'test-task'), /broad permissions/);
 });
 
+test('benchmark schema validation rejects invalid OS sandbox profiles', () => {
+  const suiteDir = path.join(root, 'benchmarks', 'starter');
+  const task = {
+    id: 'bad-os-sandbox',
+    title: 'Bad OS sandbox',
+    fixture: 'fixtures/tiny-repo',
+    prompt: 'Do nothing.',
+    copilotArgs: [],
+    permissionProfile: 'least-privilege',
+    osSandbox: { mode: 'linux-rootless' },
+    successCommands: [],
+    expectedFiles: [],
+    forbiddenFiles: [],
+    timeoutSec: 10,
+    tags: []
+  };
+
+  assert.throws(() => validateBenchmarkTask(task, suiteDir, 'test-task'), /osSandbox\.mode must be one of/);
+});
+
 test('benchmark dry run plans fixture copy, Copilot args, labels, checks, and timeout', () => {
   const plan = benchmarkRunPlan('starter', {
     variant: 'baseline',
@@ -4998,6 +5028,12 @@ test('benchmark dry run plans fixture copy, Copilot args, labels, checks, and ti
   assert.deepEqual(plan.runs[0].copilot.args, ['--allow-all']);
   assert.match(plan.runs[0].copilot.prompt, /notes\/hello\.txt/);
   assert.equal(plan.runs[0].permissionProfile, 'allow-all-isolated');
+  assert.deepEqual(plan.runs[0].osSandbox, {
+    mode: 'none',
+    enforced: false,
+    network: 'not_enforced',
+    tool: 'not_enforced'
+  });
   assert.deepEqual(plan.runs[0].toolPolicy, {
     blockedRisks: ['browser-control', 'destructive', 'network', 'secret-access']
   });
@@ -5372,6 +5408,133 @@ test('benchmark read-only permission profile blocks workspace changes', () => {
     });
     assert.equal(result.report.tasks[0].policyBlocks, 1);
     assert.equal(result.report.recommendation.action, 'reject');
+  } finally {
+    fs.rmSync(path.join(benchmarkRunBaseDir, runId), { recursive: true, force: true });
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('benchmark OS sandbox wraps Copilot with macOS network isolation when configured', () => {
+  const runId = `bench-os-sandbox-${Date.now()}`;
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-bench-os-sandbox-'));
+  const suiteDir = path.join(tempDir, 'benchmarks', 'sandbox-suite');
+  const fixtureDir = path.join(suiteDir, 'fixtures', 'tiny-repo');
+  const tasksDir = path.join(suiteDir, 'tasks');
+  let sandboxCall = null;
+
+  try {
+    fs.mkdirSync(fixtureDir, { recursive: true });
+    fs.mkdirSync(tasksDir, { recursive: true });
+    fs.writeFileSync(path.join(suiteDir, 'suite.json'), `${JSON.stringify({ id: 'sandbox-suite', title: 'Sandbox suite' })}\n`);
+    fs.writeFileSync(path.join(fixtureDir, 'README.md'), '# Sandbox fixture\n');
+    fs.writeFileSync(path.join(tasksDir, 'inspect.json'), `${JSON.stringify({
+      id: 'inspect',
+      title: 'Inspect with OS sandbox',
+      fixture: 'fixtures/tiny-repo',
+      prompt: 'Inspect the repo without network.',
+      copilotArgs: [],
+      permissionProfile: 'least-privilege',
+      osSandbox: { mode: 'macos-network-blocked' },
+      successCommands: [],
+      expectedFiles: [],
+      forbiddenFiles: [],
+      timeoutSec: 10,
+      tags: []
+    })}\n`);
+
+    const dryRun = benchmarkRunPlan('sandbox-suite', {
+      benchmarksDir: path.join(tempDir, 'benchmarks'),
+      variant: 'candidate',
+      dryRun: true,
+      runId
+    });
+    assert.deepEqual(dryRun.runs[0].osSandbox, {
+      mode: 'macos-network-blocked',
+      enforced: true,
+      network: 'blocked',
+      tool: 'copilot_command_wrapped',
+      platform: 'darwin',
+      command: 'sandbox-exec'
+    });
+
+    const result = runBenchmarkSuite('sandbox-suite', {
+      benchmarksDir: path.join(tempDir, 'benchmarks'),
+      variant: 'candidate',
+      repeat: 1,
+      runId,
+      summariesDir: path.join(tempDir, 'summaries'),
+      platform: 'darwin',
+      spawnSync: (command, args) => {
+        sandboxCall = { command, args };
+        return { status: 0, stdout: 'inspected', stderr: '' };
+      }
+    });
+
+    assert.equal(sandboxCall.command, 'sandbox-exec');
+    assert.equal(sandboxCall.args[0], '-p');
+    assert.match(sandboxCall.args[1], /\(deny network\*\)/);
+    assert.equal(sandboxCall.args[2], 'copilot');
+    assert.deepEqual(result.summaries[0].osSandboxRuntime, {
+      mode: 'macos-network-blocked',
+      active: true,
+      command: 'sandbox-exec'
+    });
+    assert.equal(result.report.tasks[0].osSandboxRuntime.active, true);
+  } finally {
+    fs.rmSync(path.join(benchmarkRunBaseDir, runId), { recursive: true, force: true });
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('benchmark OS sandbox fails closed when configured on unsupported platforms', () => {
+  const runId = `bench-os-sandbox-fail-${Date.now()}`;
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-bench-os-sandbox-fail-'));
+  const suiteDir = path.join(tempDir, 'benchmarks', 'sandbox-fail-suite');
+  const fixtureDir = path.join(suiteDir, 'fixtures', 'tiny-repo');
+  const tasksDir = path.join(suiteDir, 'tasks');
+  let copilotCalled = false;
+
+  try {
+    fs.mkdirSync(fixtureDir, { recursive: true });
+    fs.mkdirSync(tasksDir, { recursive: true });
+    fs.writeFileSync(path.join(suiteDir, 'suite.json'), `${JSON.stringify({ id: 'sandbox-fail-suite', title: 'Sandbox fail suite' })}\n`);
+    fs.writeFileSync(path.join(fixtureDir, 'README.md'), '# Sandbox fixture\n');
+    fs.writeFileSync(path.join(tasksDir, 'inspect.json'), `${JSON.stringify({
+      id: 'inspect',
+      title: 'Inspect with unsupported OS sandbox',
+      fixture: 'fixtures/tiny-repo',
+      prompt: 'Inspect the repo without network.',
+      copilotArgs: [],
+      permissionProfile: 'least-privilege',
+      osSandbox: { mode: 'macos-network-blocked' },
+      successCommands: [],
+      expectedFiles: [],
+      forbiddenFiles: [],
+      timeoutSec: 10,
+      tags: []
+    })}\n`);
+
+    const result = runBenchmarkSuite('sandbox-fail-suite', {
+      benchmarksDir: path.join(tempDir, 'benchmarks'),
+      variant: 'candidate',
+      repeat: 1,
+      runId,
+      summariesDir: path.join(tempDir, 'summaries'),
+      platform: 'linux',
+      spawnSync: (command) => {
+        if (command === 'copilot') copilotCalled = true;
+        return { status: 0, stdout: '', stderr: '' };
+      }
+    });
+
+    assert.equal(copilotCalled, false);
+    assert.equal(result.summaries[0].success, false);
+    assert.equal(result.summaries[0].errorCategory, 'sandbox_unavailable');
+    assert.deepEqual(result.summaries[0].checks, [{
+      name: 'os sandbox: macos-network-blocked',
+      ok: false,
+      detail: 'macos-network-blocked requires macOS sandbox-exec'
+    }]);
   } finally {
     fs.rmSync(path.join(benchmarkRunBaseDir, runId), { recursive: true, force: true });
     fs.rmSync(tempDir, { recursive: true, force: true });
