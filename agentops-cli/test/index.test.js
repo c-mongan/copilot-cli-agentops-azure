@@ -4092,7 +4092,7 @@ test('dashboard verify combines static UX and optional live KQL gates', () => {
   });
   assert.equal(live.ok, true, live.errors.join('\n'));
   assert.equal(live.live, true);
-  assert.equal(live.summary.kql_checks, 28);
+  assert.equal(live.summary.kql_checks, 29);
 });
 
 test('V2 dashboard links preserve drilldown contracts', () => {
@@ -4108,9 +4108,12 @@ test('V2 dashboard links preserve drilldown contracts', () => {
     assert.ok(variables.includes(variable), `missing global variable: ${variable}`);
   }
   const homeTitles = homeDashboard.panels.map(panel => panel.title);
-  for (const title of ['Policy blocks', 'Input tokens', 'Output tokens', 'p95 duration', 'Tests ran %', 'PRs opened']) {
+  for (const title of ['Policy blocks', 'Input tokens', 'Output tokens', 'p95 duration', 'Tests ran %', 'PRs opened', 'Session Health']) {
     assert.ok(homeTitles.includes(title), `missing home stat: ${title}`);
   }
+  assert.match(JSON.stringify(homeDashboard), /RecommendedNextAction/);
+  assert.match(JSON.stringify(homeDashboard), /RootAgent/);
+  assert.match(JSON.stringify(homeDashboard), /HealthStatus/);
   assert.match(JSON.stringify(replayDashboard), /OpenTranscript/);
   assert.match(JSON.stringify(replayDashboard), /viewPanel=26/);
   assert.match(JSON.stringify(replayDashboard), /MessageText/);
@@ -4212,7 +4215,7 @@ test('dashboard kql-check renders representative V2 panel queries', () => {
   });
 
   assert.equal(result.ok, true, result.errors.join('\n'));
-  assert.equal(result.checks.length, 28);
+  assert.equal(result.checks.length, 29);
   assert.ok(queries.every(item => item.options.workspaceId === 'workspace-123'));
   assert.ok(queries.every(item => item.query.includes('ago(24h)')));
   assert.ok(queries.every(item => !item.query.includes('$__timeFrom')));
@@ -4233,6 +4236,9 @@ test('dashboard kql-check renders representative V2 panel queries', () => {
   assert.ok(queries.some(item => item.query.includes('Eval regression queue') || item.query.includes("Source='insight'")));
   assert.ok(queries.some(item => item.query.includes('AgentOpsRecommendations_CL')));
   assert.ok(queries.some(item => item.query.includes('RecommendationId')));
+  assert.ok(queries.some(item => item.query.includes('RecommendedNextAction')));
+  assert.ok(queries.some(item => item.query.includes('HealthStatus')));
+  assert.ok(queries.some(item => item.query.includes('RootAgent')));
   assert.ok(queries.some(item => item.query.includes('BadOutcomeRuns')));
   assert.ok(queries.some(item => item.query.includes('RunOutcomeStatus')));
   assert.ok(queries.some(item => item.query.includes('TimeToPrMinutes')));
@@ -4250,7 +4256,7 @@ test('dashboard kql-check can require live rows', () => {
   });
 
   assert.equal(result.ok, false);
-  assert.equal(result.errors.length, 17);
+  assert.equal(result.errors.length, 18);
   assert.match(result.errors[0], /query returned no rows/);
   assert.equal(result.checks.find(check => check.panel === 'Prompt and response viewer (explicit opt-in)').ok, true);
 });
