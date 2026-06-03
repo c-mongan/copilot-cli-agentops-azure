@@ -823,7 +823,7 @@ Current anti-cheat limitations:
 - There is no network egress isolation; network tool policies can block explicit `--allow-tool` network allowances before execution, but they are not OS-level egress prevention.
 - Read-only benchmark profiles now block any workspace file change in the copied fixture.
 - Semantic evaluator adapters exist for deterministic file-content, regex, file-rubric checks, and command-backed `llm-judge` scoring, and suites can configure reusable judge provider command templates for hosted judge CLIs. The Evals & Quality dashboard surfaces metadata-only semantic check review. Hosted judge service provisioning is still external to the benchmark runner.
-- Candidate promotion gates can require approval evidence from an approval file, the CLI can generate run-scoped approval evidence, and the Evals & Quality dashboard now surfaces metadata-only approval review status. There is still no interactive multi-reviewer team workflow yet.
+- Candidate promotion gates can require approval evidence from an approval file, named approver identities, and approval counts. The CLI can generate run-scoped approval evidence, and the Evals & Quality dashboard now surfaces metadata-only approval review status. There is still no external team workflow integration yet.
 - There is no defense against an agent changing the test commands if the eval harness files are available to it.
 - The Evals & Quality dashboard now includes metadata-only artifact diff counts, per-file artifact path review, hidden check pack review, policy review, and semantic check review for benchmark recommendations. The CLI can now review artifact file paths and explicit fixture-to-workspace content diffs for local benchmark runs; a Grafana-native file-content diff viewer is still missing.
 - There is no "agent used external answer source" detector.
@@ -1276,7 +1276,7 @@ Required work:
 - Add hosted judge service provisioning guidance for `llm-judge` semantic scoring.
 - Expand enforced permission profiles to OS-level network and tool sandboxing.
 - Add Grafana-native artifact content diff UI review for approved benchmark artifacts.
-- Add interactive multi-reviewer team workflow integrations for candidate promotion gates.
+- Add external team workflow integrations for candidate promotion gates.
 - Add dashboards for eval scorecards and regressions.
 
 ### P4 - Productize For Teams

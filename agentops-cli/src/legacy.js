@@ -5450,13 +5450,25 @@ function validateBenchmarkPromotionGates(gates, source = 'suite') {
     'maxSafetyViolationCount',
     'maxTotalTokens',
     'maxCost',
-    'requiredApprovals'
+    'requiredApprovals',
+    'requiredApprovers'
   ]);
   const normalized = {};
 
   for (const [field, value] of Object.entries(gates)) {
     if (!allowedFields.has(field)) {
       throw new Error(`Invalid benchmark ${source}: unknown promotion gate: ${field}`);
+    }
+    if (field === 'requiredApprovers') {
+      if (!isStringArray(value)) {
+        throw new Error(`Invalid benchmark ${source}: promotion gate requiredApprovers must be an array of strings`);
+      }
+      const approvers = [...new Set(value.map(name => name.trim()).filter(Boolean))].sort();
+      if (approvers.length === 0) {
+        throw new Error(`Invalid benchmark ${source}: promotion gate requiredApprovers must include at least one approver`);
+      }
+      normalized[field] = approvers;
+      continue;
     }
     const number = Number(value);
     if (!Number.isFinite(number) || number < 0) {
@@ -6906,7 +6918,9 @@ function benchmarkPromotionGates(scoredSummaries) {
   const merged = {};
   for (const gate of gates) {
     for (const [field, value] of Object.entries(gate)) {
-      if (field.startsWith('min')) {
+      if (field === 'requiredApprovers') {
+        merged[field] = [...new Set([...(merged[field] || []), ...value])].sort();
+      } else if (field.startsWith('min')) {
         merged[field] = Math.max(numberValue(merged[field], 0), numberValue(value));
       } else if (merged[field] === undefined) {
         merged[field] = numberValue(value);
@@ -6921,9 +6935,13 @@ function benchmarkPromotionGates(scoredSummaries) {
 function benchmarkPromotionGateFailures(report) {
   const gates = report.promotionGates;
   if (!isPlainObject(gates)) return [];
+  const approvedBy = report.promotionApproval?.status === 'approved'
+    ? (report.promotionApproval.approvedBy || [])
+    : [];
   const approvalCount = report.promotionApproval?.status === 'approved'
-    ? (report.promotionApproval.approvedBy || []).length
+    ? approvedBy.length
     : 0;
+  const approvedBySet = new Set(approvedBy);
 
   const checks = [
     ['minPassRatePct', report.passRatePct, value => value >= gates.minPassRatePct],
@@ -6935,7 +6953,7 @@ function benchmarkPromotionGateFailures(report) {
     ['requiredApprovals', approvalCount, value => value >= gates.requiredApprovals]
   ];
 
-  return checks
+  const failures = checks
     .filter(([field]) => gates[field] !== undefined)
     .map(([field, actual, passes]) => ({
       gate: field,
@@ -6944,6 +6962,21 @@ function benchmarkPromotionGateFailures(report) {
       ok: passes(actual)
     }))
     .filter(result => !result.ok);
+
+  if (Array.isArray(gates.requiredApprovers)) {
+    const missingApprovers = gates.requiredApprovers.filter(approver => !approvedBySet.has(approver));
+    if (missingApprovers.length > 0) {
+      failures.push({
+        gate: 'requiredApprovers',
+        expected: gates.requiredApprovers,
+        actual: approvedBy,
+        missing: missingApprovers,
+        ok: false
+      });
+    }
+  }
+
+  return failures;
 }
 
 function benchmarkCheatSignals(scoredSummaries, azureTelemetry = null) {
