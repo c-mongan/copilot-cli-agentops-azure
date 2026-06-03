@@ -4841,6 +4841,15 @@ test('benchmark schema validation rejects invalid promotion gates', () => {
     })}\n`);
 
     assert.throws(() => loadBenchmarkSuites(path.join(tempDir, 'benchmarks')), /promotion gate minPassRatePct must be a non-negative number/);
+
+    fs.writeFileSync(path.join(suiteDir, 'suite.json'), `${JSON.stringify({
+      id: 'bad-gate-suite',
+      title: 'Bad gate suite',
+      promotionGates: {
+        requiredApprovers: []
+      }
+    })}\n`);
+    assert.throws(() => loadBenchmarkSuites(path.join(tempDir, 'benchmarks')), /requiredApprovers must include at least one approver/);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
@@ -5875,6 +5884,42 @@ test('benchmark report promotes candidates with required approval evidence', () 
     ticket: 'APPROVAL-123',
     source: 'options.promotionApproval'
   });
+});
+
+test('benchmark report requires named promotion approvers', () => {
+  const summaries = loadBenchmarkSummaries('pass-run', { summariesDir: benchmarkSummariesDir })
+    .map(summary => ({
+      ...summary,
+      promotionGates: {
+        requiredApprovals: 2,
+        requiredApprovers: ['security-team', 'sre-team']
+      }
+    }));
+  const partialReport = benchmarkReport('pass-run', summaries, {
+    promotionApproval: {
+      approvedBy: ['sre-team', 'platform-team'],
+      approvedAt: '2026-06-03T04:00:00Z'
+    }
+  });
+
+  assert.deepEqual(partialReport.promotionGateFailures, [{
+    gate: 'requiredApprovers',
+    expected: ['security-team', 'sre-team'],
+    actual: ['platform-team', 'sre-team'],
+    missing: ['security-team'],
+    ok: false
+  }]);
+  assert.equal(partialReport.promotion.decision, 'reject');
+
+  const approvedReport = benchmarkReport('pass-run', summaries, {
+    promotionApproval: {
+      approvedBy: ['sre-team', 'security-team'],
+      approvedAt: '2026-06-03T04:00:00Z'
+    }
+  });
+
+  assert.deepEqual(approvedReport.promotionGateFailures, []);
+  assert.equal(approvedReport.promotion.decision, 'promote');
 });
 
 test('benchmark approve writes run-scoped promotion approval evidence', () => {
