@@ -2,6 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const { repoRoot } = require('../paths');
+const { trackedFlags } = require('./flag-contract');
 
 const wrapperFiles = [
   'copilot/copilot-observe',
@@ -73,42 +74,7 @@ const sharedTerms = [
   'agentops.mcp.disabled.servers',
   'agentops.mcp.github.tools',
   'agentops.mcp.github.toolsets',
-  '--mode',
-  '--plan',
-  '--autopilot',
-  '--model',
-  '--effort',
-  '--reasoning-effort',
-  '--output-format',
-  '--remote',
-  '--no-remote',
-  '--agent',
-  '--stream',
-  '--acp',
-  '-C',
-  '--session-id',
-  '--share',
-  '--share-gist',
-  '--attachment',
-  '--plugin-dir',
-  '--additional-mcp-config',
-  '--disable-mcp-server',
-  '--add-github-mcp-tool',
-  '--add-github-mcp-toolset',
-  '--enable-all-github-mcp-tools',
-  '--disable-builtin-mcps',
-  '--allow-all',
-  '--yolo',
-  '--allow-all-tools',
-  '--allow-all-paths',
-  '--allow-all-urls',
-  '--allow-tool',
-  '--allow-url',
-  '--deny-tool',
-  '--deny-url',
-  '--available-tools',
-  '--excluded-tools',
-  '--secret-env-vars'
+  ...trackedFlags
 ];
 
 function validateWrapperContract(root = repoRoot) {
