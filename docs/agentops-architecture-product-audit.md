@@ -791,6 +791,7 @@ What works well:
   - Copilot exit status
   - success commands
   - hidden success commands with masked command text
+  - sealed hidden check packs with masked command text
   - expected files
   - forbidden files and forbidden path globs
   - timeout
@@ -815,7 +816,7 @@ Current anti-cheat limitations:
 
 - The starter task uses `--allow-all`, which is acceptable for an isolated tiny fixture but should not be the default posture for serious evals.
 - Permission profiles enforce broad-flag validation and read-only workspace immutability for benchmark fixture copies, but they do not yet enforce OS/network/tool sandboxing.
-- Hidden checks exist as masked CLI success commands, but there is no separate sealed fixture/test-pack workflow yet.
+- Hidden check packs exist as separate masked command packs, but there is no sealed fixture workflow yet.
 - There is no network isolation.
 - Read-only benchmark profiles now block any workspace file change in the copied fixture.
 - There is no semantic rubric scoring.
@@ -828,7 +829,7 @@ Product recommendation:
 
 Build a real Eval Center:
 
-- Test suites with public and sealed hidden checks.
+- Test suites with public checks, hidden check packs, and sealed fixture packs.
 - Enforced policy profiles:
   - read-only workspace immutability
   - least privilege
@@ -1267,7 +1268,7 @@ Required work:
 ### P3 - Build Eval And Anti-Cheat
 
 - Expand benchmark schemas.
-- Add sealed hidden check packs.
+- Add sealed fixture packs.
 - Add semantic evaluator adapters.
 - Expand enforced permission profiles to network and tool sandboxing.
 - Add artifact diff UI review.

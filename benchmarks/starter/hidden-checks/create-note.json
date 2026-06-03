@@ -1,0 +1,7 @@
+{
+  "id": "create-note-sealed",
+  "title": "Create note sealed checks",
+  "commands": [
+    "test ! -f notes/shortcut.txt"
+  ]
+}

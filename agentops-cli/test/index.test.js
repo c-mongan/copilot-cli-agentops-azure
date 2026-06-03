@@ -4142,6 +4142,57 @@ test('benchmark schema validation rejects invalid hidden checks', () => {
   assert.throws(() => validateBenchmarkTask(task, suiteDir, 'test-task'), /hiddenSuccessCommands must be an array of strings/);
 });
 
+test('benchmark schema validation rejects invalid hidden check packs', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-bench-pack-schema-'));
+  const suiteDir = path.join(tempDir, 'suite');
+
+  try {
+    fs.mkdirSync(path.join(suiteDir, 'fixtures', 'tiny-repo'), { recursive: true });
+    fs.mkdirSync(path.join(suiteDir, 'hidden-checks'), { recursive: true });
+    fs.writeFileSync(path.join(suiteDir, 'hidden-checks', 'bad.json'), `${JSON.stringify({
+      id: 'bad-pack',
+      commands: ['test true', 123]
+    })}\n`);
+
+    const task = {
+      id: 'bad-hidden-pack',
+      title: 'Bad hidden pack',
+      fixture: 'fixtures/tiny-repo',
+      prompt: 'Do nothing.',
+      copilotArgs: [],
+      successCommands: [],
+      hiddenCheckPacks: ['hidden-checks/bad.json'],
+      expectedFiles: [],
+      forbiddenFiles: [],
+      timeoutSec: 10,
+      tags: []
+    };
+
+    assert.throws(() => validateBenchmarkTask(task, suiteDir, 'test-task'), /commands must be an array of strings/);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('benchmark schema validation rejects hidden check packs outside suite', () => {
+  const suiteDir = path.join(root, 'benchmarks', 'starter');
+  const task = {
+    id: 'bad-hidden-pack-path',
+    title: 'Bad hidden pack path',
+    fixture: 'fixtures/tiny-repo',
+    prompt: 'Do nothing.',
+    copilotArgs: [],
+    successCommands: [],
+    hiddenCheckPacks: ['../secret-pack.json'],
+    expectedFiles: [],
+    forbiddenFiles: [],
+    timeoutSec: 10,
+    tags: []
+  };
+
+  assert.throws(() => validateBenchmarkTask(task, suiteDir, 'test-task'), /hidden check pack path cannot leave the suite/);
+});
+
 test('benchmark schema validation rejects invalid permission profiles', () => {
   const suiteDir = path.join(root, 'benchmarks', 'starter');
   const task = {
@@ -4207,7 +4258,12 @@ test('benchmark dry run plans fixture copy, Copilot args, labels, checks, and ti
   assert.deepEqual(plan.runs[0].successChecks.expectedFiles, ['notes/hello.txt']);
   assert.deepEqual(plan.runs[0].successChecks.forbiddenFiles, ['.env', 'secrets.txt']);
   assert.equal(plan.runs[0].successChecks.hiddenCommandCount, 1);
+  assert.deepEqual(plan.runs[0].successChecks.hiddenCheckPacks.map(pack => ({
+    id: pack.id,
+    commandCount: pack.commandCount
+  })), [{ id: 'create-note-sealed', commandCount: 1 }]);
   assert.equal(plan.runs[0].successChecks.hiddenCommands, undefined);
+  assert.doesNotMatch(JSON.stringify(plan), /shortcut/);
   assert.equal(plan.runs[0].timeoutSec, 30);
 });
 
@@ -4277,6 +4333,10 @@ test('benchmark run executes Copilot in an isolated fixture copy and writes a su
       ok: true,
       detail: null
     });
+    assert.deepEqual(result.summaries[0].hiddenCheckPacks.map(pack => ({
+      id: pack.id,
+      commandCount: pack.commandCount
+    })), [{ id: 'create-note-sealed', commandCount: 1 }]);
     assert.doesNotMatch(JSON.stringify(result.summaries[0].checks), /shortcut/);
     assert.deepEqual(result.report.artifactDiff, { added: 1, modified: 1, deleted: 0, totalChanged: 2 });
     assert.deepEqual(result.report.permissionProfiles, { 'allow-all-isolated': 1 });
@@ -4285,6 +4345,10 @@ test('benchmark run executes Copilot in an isolated fixture copy and writes a su
     assert.equal(result.report.tasks[0].permissionProfile, 'allow-all-isolated');
     assert.equal(result.report.tasks[0].hiddenChecksPassed, 1);
     assert.equal(result.report.tasks[0].hiddenChecksFailed, 0);
+    assert.deepEqual(result.report.tasks[0].hiddenCheckPacks.map(pack => ({
+      id: pack.id,
+      commandCount: pack.commandCount
+    })), [{ id: 'create-note-sealed', commandCount: 1 }]);
     assert.equal(result.report.recommendation.action, 'keep');
     assert.equal(result.report.promotion.decision, 'promote');
     assert.equal(fs.existsSync(result.summariesPath), true);
