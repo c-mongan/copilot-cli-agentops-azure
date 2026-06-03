@@ -10,6 +10,9 @@
     "test -f notes/hello.txt",
     "grep -q 'hello agentops' notes/hello.txt"
   ],
+  "hiddenSuccessCommands": [
+    "test ! -f notes/shortcut.txt"
+  ],
   "expectedFiles": [
     "notes/hello.txt"
   ],

@@ -4122,6 +4122,25 @@ test('benchmark schema validation rejects invalid timeout', () => {
   assert.throws(() => validateBenchmarkTask(task, suiteDir, 'test-task'), /timeoutSec must be a positive integer/);
 });
 
+test('benchmark schema validation rejects invalid hidden checks', () => {
+  const suiteDir = path.join(root, 'benchmarks', 'starter');
+  const task = {
+    id: 'bad-hidden-check',
+    title: 'Bad hidden check',
+    fixture: 'fixtures/tiny-repo',
+    prompt: 'Do nothing.',
+    copilotArgs: [],
+    successCommands: [],
+    hiddenSuccessCommands: ['test true', 123],
+    expectedFiles: [],
+    forbiddenFiles: [],
+    timeoutSec: 10,
+    tags: []
+  };
+
+  assert.throws(() => validateBenchmarkTask(task, suiteDir, 'test-task'), /hiddenSuccessCommands must be an array of strings/);
+});
+
 test('benchmark dry run plans fixture copy, Copilot args, labels, checks, and timeout', () => {
   const plan = benchmarkRunPlan('starter', {
     variant: 'baseline',
@@ -4146,6 +4165,8 @@ test('benchmark dry run plans fixture copy, Copilot args, labels, checks, and ti
   assert.equal(plan.runs[0].otelLabels['agentops.benchmark.task'], undefined);
   assert.deepEqual(plan.runs[0].successChecks.expectedFiles, ['notes/hello.txt']);
   assert.deepEqual(plan.runs[0].successChecks.forbiddenFiles, ['.env', 'secrets.txt']);
+  assert.equal(plan.runs[0].successChecks.hiddenCommandCount, 1);
+  assert.equal(plan.runs[0].successChecks.hiddenCommands, undefined);
   assert.equal(plan.runs[0].timeoutSec, 30);
 });
 
@@ -4206,8 +4227,20 @@ test('benchmark run executes Copilot in an isolated fixture copy and writes a su
     assert.deepEqual(result.summaries[0].artifactDiff.added.map(file => file.replaceAll(path.sep, '/')), ['notes/hello.txt']);
     assert.deepEqual(result.summaries[0].artifactDiff.modified.map(file => file.replaceAll(path.sep, '/')), ['README.md']);
     assert.deepEqual(result.summaries[0].artifactDiff.deleted, []);
+    assert.equal(result.summaries[0].hiddenChecksPassed, 1);
+    assert.equal(result.summaries[0].hiddenChecksFailed, 0);
+    assert.deepEqual(result.summaries[0].checks.find(check => check.hidden), {
+      name: 'hidden command #1',
+      hidden: true,
+      ok: true,
+      detail: null
+    });
+    assert.doesNotMatch(JSON.stringify(result.summaries[0].checks), /shortcut/);
     assert.deepEqual(result.report.artifactDiff, { added: 1, modified: 1, deleted: 0, totalChanged: 2 });
+    assert.deepEqual(result.report.hiddenChecks, { passed: 1, failed: 0 });
     assert.equal(result.report.tasks[0].artifactDiff.totalChanged, 2);
+    assert.equal(result.report.tasks[0].hiddenChecksPassed, 1);
+    assert.equal(result.report.tasks[0].hiddenChecksFailed, 0);
     assert.equal(result.report.recommendation.action, 'keep');
     assert.equal(result.report.promotion.decision, 'promote');
     assert.equal(fs.existsSync(result.summariesPath), true);
