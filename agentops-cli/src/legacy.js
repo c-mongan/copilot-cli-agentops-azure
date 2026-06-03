@@ -14,6 +14,7 @@ const { createSavedViews } = require('./saved-views');
 const { createTelemetry } = require('./telemetry');
 const { repoRoot } = require('./lib/paths');
 const { classifyToolName, extractAllowedTools } = require('./lib/copilot/tool-classifier');
+const { contentLikeKeys, safeAttributeKeys } = require('./lib/privacy');
 
 const root = repoRoot;
 
@@ -199,7 +200,9 @@ function traceQuery(operationId, last = '24h') {
 }
 
 function fieldCatalogQuery(last = '7d') {
-  return `AppDependencies\n| where TimeGenerated > ago(${last})\n| where ${baseFilter}\n| extend fields = bag_keys(Properties)\n| mv-expand field = fields to typeof(string)\n| extend value = tostring(Properties[field])\n| summarize observed=count(), example_values=make_set_if(value, isnotempty(value), 5) by field\n| order by observed desc, field asc`;
+  const contentKeys = contentLikeKeys.map(key => JSON.stringify(key)).join(', ');
+  const safeKeys = safeAttributeKeys.map(key => JSON.stringify(key)).join(', ');
+  return `let exact_content_keys = dynamic([${contentKeys}]);\nlet known_safe_keys = dynamic([${safeKeys}]);\nAppDependencies\n| where TimeGenerated > ago(${last})\n| where ${baseFilter}\n| extend fields = bag_keys(Properties)\n| mv-expand field = fields to typeof(string)\n| extend value = tostring(Properties[field])\n| summarize observed=count(), example_values=make_set_if(value, isnotempty(value), 5) by field\n| extend content_risk = case(field in (exact_content_keys), "exact-content-key", field !in (known_safe_keys) and field matches regex "(?i)(prompt|completion|message|instruction|argument|result|body|secret|password|credential|cookie|url|filepath|file_path|path|token)", "sensitive-key-family", "")\n| order by content_risk desc, observed desc, field asc`;
 }
 
 function contextPressureQuery(last = '7d') {
