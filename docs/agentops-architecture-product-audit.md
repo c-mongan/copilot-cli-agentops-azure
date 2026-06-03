@@ -783,6 +783,7 @@ What works well:
   - suite
   - task ID
   - variant
+  - permission profile
   - repeat
   - hypothesis
 - The runner records stdout/stderr under temp run folders.
@@ -813,6 +814,7 @@ What works well:
 Current anti-cheat limitations:
 
 - The starter task uses `--allow-all`, which is acceptable for an isolated tiny fixture but should not be the default posture for serious evals.
+- Permission profiles exist as task metadata and validation for broad flags, but they do not yet enforce OS/network/tool sandboxing.
 - Hidden checks exist as masked CLI success commands, but there is no separate sealed fixture/test-pack workflow yet.
 - There is no network isolation.
 - There is no read-only seed data protection beyond forbidden file checks.
@@ -827,7 +829,7 @@ Product recommendation:
 Build a real Eval Center:
 
 - Test suites with public and sealed hidden checks.
-- Policy profiles:
+- Enforced policy profiles:
   - read-only
   - least privilege
   - allow selected tools
@@ -1268,7 +1270,7 @@ Required work:
 - Expand benchmark schemas.
 - Add sealed hidden check packs.
 - Add semantic evaluator adapters.
-- Add permission profiles.
+- Add enforced permission profiles.
 - Add artifact diff UI review.
 - Add candidate promotion gates.
 - Add dashboards for eval scorecards and regressions.
