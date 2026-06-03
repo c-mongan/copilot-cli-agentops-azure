@@ -71,6 +71,7 @@ function usage() {
     'alert detail --rule <name> --session <conversation> [--last <duration>]',
     'alert action-plan --rule <name> --session <conversation> [--last <duration>]',
     'alert export --rule <name> --session <conversation> --output <json> [--last <duration>]',
+    'incident timeline --artifact <json> [--artifact <json> ...] --output <json> [--incident <id>]',
     'lineage [--last <duration>]',
     'policy [--last <duration>]',
     'mcp [--last <duration>]',
@@ -4881,7 +4882,8 @@ const {
   alertHistory,
   alertDetail,
   alertActionPlan,
-  alertArtifact
+  alertArtifact,
+  alertIncidentTimeline
 } = createAlerts({
   workspaceId,
   baseFilter,
@@ -8725,6 +8727,25 @@ async function main(argv) {
     throw new Error('alert currently supports: alert recommend, alert history, alert detail, alert action-plan, alert export');
   }
 
+  if (command === 'incident') {
+    const [subcommand, ...incidentArgs] = args;
+    if (subcommand === 'timeline') {
+      const artifactPaths = optionValues(incidentArgs, '--artifact');
+      const output = optionValue(incidentArgs, ['--output', '--out']);
+      const incidentId = optionValue(incidentArgs, ['--incident', '--incident-id']);
+      if (artifactPaths.length === 0) throw new Error('incident timeline requires --artifact <json>');
+      if (!output) throw new Error('incident timeline requires --output <json>');
+      const artifacts = artifactPaths.map(artifactPath => JSON.parse(fs.readFileSync(path.resolve(process.cwd(), artifactPath), 'utf8')));
+      const timeline = alertIncidentTimeline({ artifacts, incidentId });
+      const outputPath = path.resolve(process.cwd(), output);
+      fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+      fs.writeFileSync(outputPath, `${JSON.stringify(timeline, null, 2)}\n`);
+      process.stdout.write(JSON.stringify({ output: outputPath, timeline }, null, 2) + '\n');
+      return;
+    }
+    throw new Error('incident currently supports: incident timeline');
+  }
+
   if (command === 'lineage') {
     const last = parseLastArg(args, '24h');
     process.stdout.write(JSON.stringify({ workspace_id: workspaceId, query: kqlFileQuery('19-agent-flow-lineage.kql', last) }, null, 2) + '\n');
@@ -8770,6 +8791,7 @@ module.exports = {
   alertDetail,
   alertActionPlan,
   alertArtifact,
+  alertIncidentTimeline,
   askAgentOpsContext,
   attributionUsageQuery,
   benchmarkCheatSignals,
