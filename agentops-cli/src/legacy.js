@@ -5136,6 +5136,18 @@ function canonicalBenchmarkPublicKey(publicKey, source) {
   }
 }
 
+function parseBenchmarkTrustRootTime(value, field, source) {
+  if (value === undefined) return null;
+  if (typeof value !== 'string' || value.trim() === '') {
+    throw new Error(`Invalid benchmark ${source}: ${field} must be an ISO timestamp`);
+  }
+  const time = Date.parse(value);
+  if (!Number.isFinite(time)) {
+    throw new Error(`Invalid benchmark ${source}: ${field} must be an ISO timestamp`);
+  }
+  return value;
+}
+
 function validateBenchmarkFixtureTrustRoots(trustRoots, source = 'suite') {
   if (trustRoots === undefined) return [];
   if (!Array.isArray(trustRoots)) {
@@ -5158,9 +5170,17 @@ function validateBenchmarkFixtureTrustRoots(trustRoots, source = 'suite') {
     }
     seen.add(rootEntry.keyId);
 
+    const rootSource = `${source} fixtureTrustRoots[${index}]`;
+    const notBefore = parseBenchmarkTrustRootTime(rootEntry.notBefore, `${rootSource}.notBefore`, source);
+    const notAfter = parseBenchmarkTrustRootTime(rootEntry.notAfter, `${rootSource}.notAfter`, source);
+    if (notBefore && notAfter && Date.parse(notAfter) <= Date.parse(notBefore)) {
+      throw new Error(`Invalid benchmark ${source}: ${rootSource}.notAfter must be after notBefore`);
+    }
     return {
       keyId: rootEntry.keyId,
-      publicKey: canonicalBenchmarkPublicKey(rootEntry.publicKey, `${source} fixtureTrustRoots[${index}]`)
+      publicKey: canonicalBenchmarkPublicKey(rootEntry.publicKey, rootSource),
+      notBefore,
+      notAfter
     };
   });
 }
@@ -5227,6 +5247,13 @@ function validateBenchmarkFixtureSealPackSignature(pack, source = 'fixture seal 
     const trustedRoot = trustRoots.find(rootEntry => rootEntry.keyId === signature.keyId);
     if (!trustedRoot) {
       throw new Error(`Invalid benchmark fixture seal pack ${source}: signature keyId is not trusted`);
+    }
+    const now = Date.now();
+    if (trustedRoot.notBefore && now < Date.parse(trustedRoot.notBefore)) {
+      throw new Error(`Invalid benchmark fixture seal pack ${source}: signature keyId is not active yet`);
+    }
+    if (trustedRoot.notAfter && now > Date.parse(trustedRoot.notAfter)) {
+      throw new Error(`Invalid benchmark fixture seal pack ${source}: signature keyId trust root expired`);
     }
     const signaturePublicKey = canonicalBenchmarkPublicKey(signature.publicKey, `${source} signature`);
     if (signaturePublicKey !== trustedRoot.publicKey) {
@@ -5720,7 +5747,11 @@ function loadBenchmarkSuites(baseDir = benchmarksDir) {
         title: metadata.title || entry.name,
         description: metadata.description || '',
         path: path.relative(root, suiteDir),
-        fixtureTrustRoots: fixtureTrustRoots.map(rootEntry => ({ keyId: rootEntry.keyId })),
+        fixtureTrustRoots: fixtureTrustRoots.map(rootEntry => ({
+          keyId: rootEntry.keyId,
+          ...(rootEntry.notBefore ? { notBefore: rootEntry.notBefore } : {}),
+          ...(rootEntry.notAfter ? { notAfter: rootEntry.notAfter } : {})
+        })),
         fixtureTrustRevocations,
         judgeProviders: [...judgeProviders.values()].map(provider => ({ id: provider.id })),
         promotionGates,
