@@ -142,7 +142,7 @@ The alert rules are disabled by default. This page is evidence for choosing thre
 
 The **Suggested threshold impact** table compares current and proposed alert-window counts so an owner can review likely noise reduction before running `agentops alert threshold-simulate` or `agentops alert threshold-patch`.
 
-The **Fired alert candidates** table includes dashboard links and an `agentops alert open` command for each candidate, keeping alert review tied to session detail, replay, and Azure Logs evidence.
+The **Fired alert candidates** table includes dashboard links and an `agentops alert review` command for each candidate, keeping alert review tied to session detail, replay, Azure Logs, and action-plan evidence.
 
 This page needs enough history before it becomes visually interesting. On a fresh install, it may have little to recommend. Run real traffic, real custom lifecycle events, and the safe policy-block check over time, then use the recommendations here before turning on scheduled-query alerts.
 

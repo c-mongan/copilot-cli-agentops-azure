@@ -155,7 +155,7 @@ Alert history should be part of the product, not just notifications. AgentOps al
 Implemented local MVP:
 
 - Alert Tuning dashboard now includes threshold recommendations, suggested threshold impact, and fired-alert candidate review.
-- Fired-alert candidates include session detail, replay, Azure Logs links, and `agentops alert open` review commands.
+- Fired-alert candidates include session detail, replay, Azure Logs links, and `agentops alert review` commands.
 - `agentops alert history`, `agentops alert detail`, `agentops alert open`, `agentops alert review`, `agentops alert action-plan`, and `agentops alert export` generate metadata-only review/link/action/artifact JSON.
 - `agentops alert tune-plan` generates proposal-only threshold-change metadata with Bicep patch targets and validation queries.
 - `agentops alert threshold-simulate` generates preview-only KQL comparing current and proposed alert-window counts.
