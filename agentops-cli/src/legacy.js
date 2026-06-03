@@ -38,6 +38,7 @@ function usage() {
     'import-jsonl <file>',
     'custom emit --event <name> --agent <name> [--parent-agent <name>] [--delegation-id <id>] [--workflow <name>] [--step <name>] [--outcome <value>] [--risk <value>] [--score <number>] [--tag <tag>] [--custom key=value] [--attribute key=value] [--dry-run] [--json]',
     'custom import <file> [--agent <name>] [--workflow <name>] [--dry-run] [--json]',
+    'annotation config-change --component <name> --target <name> [--change-type <type>] [--change-id <id>] [--version <value>] [--run-id <id>] [--session <id>] [--trace-id <id>] [--dry-run] [--json]',
     'configure show|set|import-azd [--json]',
     'install [--shadow-copilot]',
     'otel-setup [--endpoint <url>] [--service-name <name>] [--shell bash|powershell|json]',
@@ -4488,6 +4489,32 @@ function parseCustomArgs(args) {
   };
 }
 
+function parseAnnotationArgs(args) {
+  const [subcommand, ...rest] = args;
+  return {
+    subcommand,
+    component: optionValue(rest, ['--component']),
+    target: optionValue(rest, ['--target', '--name']),
+    changeType: optionValue(rest, ['--change-type', '--type']) || 'updated',
+    changeId: optionValue(rest, ['--change-id']),
+    version: optionValue(rest, ['--version']),
+    runId: optionValue(rest, ['--run-id']),
+    session: optionValue(rest, ['--session', '--session-id']),
+    traceId: optionValue(rest, ['--trace-id']),
+    agent: optionValue(rest, ['--agent']) || 'agentops',
+    risk: optionValue(rest, ['--risk']),
+    endpoint: optionValue(rest, ['--endpoint']),
+    runtime: optionValue(rest, ['--runtime']) || process.env.AGENTOPS_RUNTIME || 'github-copilot-cli',
+    framework: optionValue(rest, ['--framework']) || process.env.AGENTOPS_FRAMEWORK || 'github-copilot',
+    dryRun: rest.includes('--dry-run'),
+    verify: !rest.includes('--no-verify'),
+    last: parseLastArg(rest, '2h'),
+    waitMs: durationToMs(optionValue(rest, ['--wait']), 60000),
+    pollMs: durationToMs(optionValue(rest, ['--poll']), 10000),
+    json: rest.includes('--json')
+  };
+}
+
 function customEventId(now = new Date()) {
   const stamp = now.toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
   return `agentops-custom-${stamp}-${crypto.randomBytes(3).toString('hex')}`;
@@ -4667,6 +4694,38 @@ async function agentopsCustomEmit(options = {}) {
       ? ['node agentops-cli/src/index.js attribution --last 2h', 'Open Grafana: AgentOps Attribution or Runtime Events.']
       : ['Start the collector with `node agentops-cli/src/index.js collector start` or `./scripts/collector-azuremonitor-up.sh`.']
   };
+}
+
+async function agentopsAnnotationConfigChange(options = {}) {
+  if (!options.component) throw new Error('annotation config-change requires --component');
+  if (!options.target) throw new Error('annotation config-change requires --target');
+
+  const custom = {
+    'agentops.custom.annotation_type': 'config_change',
+    'agentops.custom.component': options.component,
+    'agentops.custom.target': options.target,
+    'agentops.custom.change_type': options.changeType || 'updated'
+  };
+  if (options.changeId) custom['agentops.custom.change_id'] = options.changeId;
+  if (options.version) custom['agentops.custom.version'] = options.version;
+
+  const attributes = {
+    ...(options.runId ? { 'agentops.run.id': options.runId } : {}),
+    ...(options.traceId ? { 'agentops.trace.id': options.traceId } : {})
+  };
+
+  return agentopsCustomEmit({
+    ...options,
+    event: 'agentops.config.changed',
+    workflow: 'config-change',
+    step: options.component,
+    outcome: 'changed',
+    entityType: options.component,
+    entityIdHash: options.target,
+    tags: ['annotation', 'config-change'],
+    custom,
+    attributes
+  });
 }
 
 async function agentopsCustomImport(filePath, options = {}) {
@@ -9443,6 +9502,17 @@ async function main(argv) {
     throw new Error('custom requires emit or import');
   }
 
+  if (command === 'annotation' || command === 'annotate') {
+    const options = parseAnnotationArgs(args);
+    if (options.subcommand === 'config-change') {
+      const result = await agentopsAnnotationConfigChange(options);
+      process.stdout.write(options.json ? JSON.stringify(result, null, 2) + '\n' : renderCustom(result));
+      process.exitCode = result.ok ? 0 : 1;
+      return;
+    }
+    throw new Error('annotation requires config-change');
+  }
+
   if (command === 'configure' || command === 'config') {
     const options = parseConfigureArgs(args);
     const result = agentopsConfigure(options);
@@ -9991,6 +10061,7 @@ module.exports = {
   copilotPrimitivesInventory,
   agentopsCustomEmit,
   agentopsCustomImport,
+  agentopsAnnotationConfigChange,
   customAzureQuery,
   customEventAttributes,
   customEventId,
@@ -10032,6 +10103,7 @@ module.exports = {
   parseConfigureArgs,
   parseConfigureSetArgs,
   parseCustomArgs,
+  parseAnnotationArgs,
   parseEnvAssignments,
   parseOtelSetupArgs,
   parseFrontmatter,

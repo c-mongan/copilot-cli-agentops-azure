@@ -160,6 +160,7 @@ Custom agent lifecycle fields:
 Recommended lifecycle event names:
 
 - `agent.run.started`
+- `agentops.config.changed`
 - `agent.delegation.started`
 - `agent.step.started`
 - `agent.tool.used`
@@ -168,6 +169,15 @@ Recommended lifecycle event names:
 - `agent.policy.blocked`
 - `agent.eval.scored`
 - `agent.delegation.completed`
+
+Config-change annotations use `agentops.config.changed` plus metadata-only custom fields:
+
+- `agentops.custom.annotation_type=config_change`
+- `agentops.custom.component`
+- `agentops.custom.target`
+- `agentops.custom.change_type`
+- `agentops.custom.change_id`
+- `agentops.custom.version`
 - `agent.run.completed`
 - `agent.run.failed`
 

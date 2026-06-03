@@ -173,6 +173,8 @@ It shows anomalies and regressions for:
 
 The **Eval regression queue** panel combines eval-related insights and recommendations so operators can review score drops and regression next actions in one table.
 
+The **Config change annotations** panel shows metadata-only `agentops.config.changed` events for skill, hook, MCP, model, deployment, or benchmark changes. Use it to line up a regression with the change that may have caused it.
+
 Recurring pattern rows include `OpenPattern`, `OpenReplay`, and `PatternKey` so operators can keep drilling into one repeated behavior without learning KQL.
 
 ## 10. Collector Health

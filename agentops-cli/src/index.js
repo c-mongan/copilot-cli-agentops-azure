@@ -34,6 +34,8 @@ const coreCommands = [
   'configure',
   'collector',
   'azure-ingest',
+  'annotation',
+  'annotate',
   'ask-context',
   'content',
   'copilot',
@@ -107,6 +109,7 @@ Core commands:
   configure show|set|import-azd [--json]
   collector start|stop|status|validate|smoke|install-binary|uninstall-binary [--mode auto|docker|binary|none] [--privacy strict|compat] [--json]
   azure-ingest plan [--dir <AgentOps table dir>] [--allow-content] [--json]
+  annotation config-change --component <name> --target <name> [--change-type <type>] [--change-id <id>] [--version <value>] [--run-id <id>] [--session <id>] [--trace-id <id>] [--dry-run] [--json]
   ask-context latest|<run-id> [--last <duration>] [--runs <jsonl>] [--events <jsonl>] [--tools <jsonl>] [--evals <jsonl>] [--insights <jsonl>] [--recommendations <jsonl>] [--json]
   content status|opt-in [--dir <AgentOps table dir>] [--runs <jsonl>] [--allow-content] [--json]
   copilot [copilot-args...]

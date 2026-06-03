@@ -114,6 +114,7 @@ const {
   compactConfig,
   contextPressureQuery,
   copilotPrimitivesInventory,
+  agentopsAnnotationConfigChange,
   agentopsCustomEmit,
   agentopsCustomImport,
   doctor,
@@ -149,6 +150,7 @@ const {
   parseBenchmarkReportArgs,
   parseBenchmarkRunArgs,
   parseConfigureArgs,
+  parseAnnotationArgs,
   parseCustomArgs,
   parseEnvAssignments,
   parseOtelSetupArgs,
@@ -2993,6 +2995,45 @@ test('custom import maps JSONL agent rows without CI-specific coupling', async (
   }
 });
 
+test('annotation config-change emits metadata-only custom telemetry', async () => {
+  const result = await agentopsAnnotationConfigChange({
+    dryRun: true,
+    id: 'agentops-config-annotation-test',
+    component: 'skill',
+    target: 'agentops-latest-run',
+    changeType: 'updated',
+    changeId: 'change-123',
+    version: '2026.06.03',
+    runId: 'run-123',
+    session: 'session-123',
+    traceId: 'trace-123',
+    risk: 'low',
+    workspaceId: 'workspace-123'
+  });
+  const event = result.events[0];
+  const output = renderCustom(result);
+
+  assert.equal(result.ok, true);
+  assert.equal(event.event, 'agentops.config.changed');
+  assert.equal(event.workflow, 'config-change');
+  assert.equal(event.step, 'skill');
+  assert.equal(event.outcome, 'changed');
+  assert.equal(event.entityType, 'skill');
+  assert.equal(event.entityIdHash, 'agentops-latest-run');
+  assert.deepEqual(event.tags, ['annotation', 'config-change']);
+  assert.equal(event.custom['agentops.custom.annotation_type'], 'config_change');
+  assert.equal(event.custom['agentops.custom.component'], 'skill');
+  assert.equal(event.custom['agentops.custom.target'], 'agentops-latest-run');
+  assert.equal(event.custom['agentops.custom.change_type'], 'updated');
+  assert.equal(event.custom['agentops.custom.change_id'], 'change-123');
+  assert.equal(event.custom['agentops.custom.version'], '2026.06.03');
+  assert.equal(event.attributes['agentops.run.id'], 'run-123');
+  assert.equal(event.attributes['agentops.trace.id'], 'trace-123');
+  assert.equal(result.payload_preview.content_capture_enabled, false);
+  assert.doesNotMatch(JSON.stringify(result), /SECRET_/);
+  assert.match(output, /agentops\.config\.changed/);
+});
+
 test('Copilot session enricher extracts agent skill and MCP metadata without content', () => {
   const rows = enrichCopilotSessionEvents([
     {
@@ -3081,6 +3122,22 @@ test('custom args parse repeated tags and delegation dimensions', () => {
   assert.equal(args.attributes['agentops.content_capture.signal'], 'true');
   assert.equal(args.attributes['github.copilot.policy.decision'], 'blocked');
   assert.equal(args.score, 0.7);
+});
+
+test('annotation args parse config-change metadata', () => {
+  const args = parseAnnotationArgs(['config-change', '--component', 'model', '--target', 'gpt-5-chat', '--change-type', 'promoted', '--change-id', 'deploy-42', '--version', 'v2', '--run-id', 'run-a', '--session-id', 'session-a', '--trace-id', 'trace-a', '--dry-run', '--json']);
+
+  assert.equal(args.subcommand, 'config-change');
+  assert.equal(args.component, 'model');
+  assert.equal(args.target, 'gpt-5-chat');
+  assert.equal(args.changeType, 'promoted');
+  assert.equal(args.changeId, 'deploy-42');
+  assert.equal(args.version, 'v2');
+  assert.equal(args.runId, 'run-a');
+  assert.equal(args.session, 'session-a');
+  assert.equal(args.traceId, 'trace-a');
+  assert.equal(args.dryRun, true);
+  assert.equal(args.json, true);
 });
 
 test('validateAzure reports missing local Azure prerequisites without mutating Azure', () => {
@@ -4092,7 +4149,7 @@ test('dashboard verify combines static UX and optional live KQL gates', () => {
   });
   assert.equal(live.ok, true, live.errors.join('\n'));
   assert.equal(live.live, true);
-  assert.equal(live.summary.kql_checks, 30);
+  assert.equal(live.summary.kql_checks, 31);
 });
 
 test('V2 dashboard links preserve drilldown contracts', () => {
@@ -4156,6 +4213,10 @@ test('V2 dashboard links preserve drilldown contracts', () => {
   assert.match(JSON.stringify(insightsDashboard), /OpenPattern/);
   assert.match(JSON.stringify(insightsDashboard), /Eval regression queue/);
   assert.match(JSON.stringify(insightsDashboard), /Recommendation artifacts/);
+  assert.match(JSON.stringify(insightsDashboard), /Config change annotations/);
+  assert.match(JSON.stringify(insightsDashboard), /agentops\.config\.changed/);
+  assert.match(JSON.stringify(insightsDashboard), /ChangeComponent/);
+  assert.match(JSON.stringify(insightsDashboard), /agentops\.custom\.annotation_type/);
   assert.match(JSON.stringify(insightsDashboard), /var-pattern_key/);
 });
 
@@ -4218,7 +4279,7 @@ test('dashboard kql-check renders representative V2 panel queries', () => {
   });
 
   assert.equal(result.ok, true, result.errors.join('\n'));
-  assert.equal(result.checks.length, 30);
+  assert.equal(result.checks.length, 31);
   assert.ok(queries.every(item => item.options.workspaceId === 'workspace-123'));
   assert.ok(queries.every(item => item.query.includes('ago(24h)')));
   assert.ok(queries.every(item => !item.query.includes('$__timeFrom')));
