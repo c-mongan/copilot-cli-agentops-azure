@@ -57,7 +57,7 @@ function usage() {
     'uninstall',
     'collector start|stop',
     'saved-view add <name> --url <url> [--query-file <file>] [--description <text>] [--tag <tag>]',
-    'saved-view list|show|open <name>',
+    'saved-view list|show|open|export [name] [--out <dir>]',
     'link session <conversation>',
     'link trace <operationId>',
     'fields [--last <duration>]',

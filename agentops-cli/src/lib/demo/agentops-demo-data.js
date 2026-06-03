@@ -14,6 +14,7 @@ const tableNames = [
   'AgentOpsGithubOutcomes_CL',
   'AgentOpsInsights_CL',
   'AgentOpsRecommendations_CL',
+  'AgentOpsSavedViews_CL',
   'AgentOpsCollectorHealth_CL',
   'AgentOpsContent_CL'
 ];

@@ -562,7 +562,7 @@ What works well:
   - expected metric movement
   - validation
   - rollback condition
-- It includes saved views, links, primitive inventory, and benchmark compare.
+- It includes saved views, metadata-only saved-view export artifacts, links, primitive inventory, and benchmark compare.
 - Recommendation artifacts now have an internal JSON schema and validator before `AgentOpsRecommendations_CL` rows are written.
 - Tests are broad for the CLI.
 
@@ -1068,7 +1068,7 @@ Missing world-class behavior:
 - The agent needs explicit session context.
 - The dashboard does not have an embedded agent assistant.
 - Recommendations are not integrated into the UI as first-class artifacts.
-- Saved investigations are local JSON only.
+- Saved investigations can be exported as metadata-only `AgentOpsSavedViews_CL` artifacts, but there is still no shared hosted saved-view store.
 
 Target experience:
 
