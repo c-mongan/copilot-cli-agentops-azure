@@ -4902,6 +4902,15 @@ test('benchmark schema validation rejects invalid promotion gates', () => {
       }
     })}\n`);
     assert.throws(() => loadBenchmarkSuites(path.join(tempDir, 'benchmarks')), /requiredApprovers must include at least one approver/);
+
+    fs.writeFileSync(path.join(suiteDir, 'suite.json'), `${JSON.stringify({
+      id: 'bad-gate-suite',
+      title: 'Bad gate suite',
+      promotionGates: {
+        requiredExternalReview: 'yes'
+      }
+    })}\n`);
+    assert.throws(() => loadBenchmarkSuites(path.join(tempDir, 'benchmarks')), /requiredExternalReview must be a boolean/);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
@@ -6058,6 +6067,52 @@ test('benchmark report requires named promotion approvers', () => {
   assert.equal(approvedReport.promotion.decision, 'promote');
 });
 
+test('benchmark report requires approved external review evidence', () => {
+  const summaries = loadBenchmarkSummaries('pass-run', { summariesDir: benchmarkSummariesDir })
+    .map(summary => ({
+      ...summary,
+      promotionGates: {
+        requiredExternalReview: true
+      }
+    }));
+  const missingReviewReport = benchmarkReport('pass-run', summaries, {
+    promotionApproval: {
+      approvedBy: ['sre-team'],
+      approvedAt: '2026-06-03T04:00:00Z'
+    }
+  });
+
+  assert.deepEqual(missingReviewReport.promotionGateFailures, [{
+    gate: 'requiredExternalReview',
+    expected: true,
+    actual: null,
+    ok: false
+  }]);
+  assert.equal(missingReviewReport.promotion.decision, 'reject');
+
+  const approvedReviewReport = benchmarkReport('pass-run', summaries, {
+    promotionApproval: {
+      approvedBy: ['sre-team'],
+      approvedAt: '2026-06-03T04:00:00Z',
+      externalReview: {
+        system: 'github',
+        id: 'PR-123',
+        url: 'https://github.com/example/repo/pull/123',
+        status: 'approved'
+      }
+    }
+  });
+
+  assert.deepEqual(approvedReviewReport.promotionGateFailures, []);
+  assert.equal(approvedReviewReport.promotion.decision, 'promote');
+  assert.deepEqual(approvedReviewReport.promotion.approval.externalReview, {
+    status: 'approved',
+    system: 'github',
+    id: 'PR-123',
+    url: 'https://github.com/example/repo/pull/123'
+  });
+});
+
 test('benchmark approve writes run-scoped promotion approval evidence', () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-bench-approval-'));
   const output = path.join(tempDir, 'approval.json');
@@ -6071,6 +6126,14 @@ test('benchmark approve writes run-scoped promotion approval evidence', () => {
       'alice@example.com',
       '--ticket',
       'CHG-123',
+      '--review-system',
+      'github',
+      '--review-id',
+      'PR-123',
+      '--review-url',
+      'https://github.com/example/repo/pull/123',
+      '--review-status',
+      'approved',
       '--output',
       output
     ]), {
@@ -6078,6 +6141,12 @@ test('benchmark approve writes run-scoped promotion approval evidence', () => {
       approvedBy: ['bob@example.com', 'alice@example.com'],
       status: 'approved',
       ticket: 'CHG-123',
+      externalReview: {
+        system: 'github',
+        id: 'PR-123',
+        url: 'https://github.com/example/repo/pull/123',
+        status: 'approved'
+      },
       output
     });
 
@@ -6085,6 +6154,12 @@ test('benchmark approve writes run-scoped promotion approval evidence', () => {
       runId: 'pass-run',
       approvedBy: ['bob@example.com', 'alice@example.com', 'alice@example.com'],
       ticket: 'CHG-123',
+      externalReview: {
+        system: 'github',
+        id: 'PR-123',
+        url: 'https://github.com/example/repo/pull/123',
+        status: 'approved'
+      },
       output,
       now: new Date('2026-06-03T08:00:00.000Z')
     });
@@ -6095,6 +6170,12 @@ test('benchmark approve writes run-scoped promotion approval evidence', () => {
       approvedBy: ['alice@example.com', 'bob@example.com'],
       approvedAt: '2026-06-03T08:00:00.000Z',
       ticket: 'CHG-123',
+      externalReview: {
+        status: 'approved',
+        system: 'github',
+        id: 'PR-123',
+        url: 'https://github.com/example/repo/pull/123'
+      },
       source: 'benchmark approve',
       output
     });
@@ -6103,7 +6184,13 @@ test('benchmark approve writes run-scoped promotion approval evidence', () => {
       runId: 'pass-run',
       approvedBy: ['alice@example.com', 'bob@example.com'],
       approvedAt: '2026-06-03T08:00:00.000Z',
-      ticket: 'CHG-123'
+      ticket: 'CHG-123',
+      externalReview: {
+        status: 'approved',
+        system: 'github',
+        id: 'PR-123',
+        url: 'https://github.com/example/repo/pull/123'
+      }
     });
 
     const summaries = loadBenchmarkSummaries('pass-run', { summariesDir: benchmarkSummariesDir })
