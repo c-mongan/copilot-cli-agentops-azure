@@ -217,6 +217,7 @@ Use the live and replay commands when you want immediate local session visibilit
 ```bash
 node agentops-cli/src/index.js configure show
 node agentops-cli/src/index.js init --dry-run
+node agentops-cli/src/index.js init --import-dashboards
 node agentops-cli/src/index.js validate-azure
 node agentops-cli/src/index.js smoke --wait 2m --poll 10s
 node agentops-cli/src/index.js live --last 2h
