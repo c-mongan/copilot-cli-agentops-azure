@@ -4971,6 +4971,30 @@ test('benchmark compare keeps an after run that improves', () => {
   assert.equal(comparison.recommendation.action, 'keep');
 });
 
+test('benchmark compare rejects an after run that misses promotion gates', () => {
+  const summaries = [
+    ...loadBenchmarkSummaries('regress-run', { summariesDir: benchmarkSummariesDir }),
+    ...loadBenchmarkSummaries('pass-run', { summariesDir: benchmarkSummariesDir })
+      .map(summary => ({
+        ...summary,
+        promotionGates: {
+          minAverageScore: 101
+        }
+      }))
+  ];
+  const comparison = compareBenchmarkRuns('regress-run', 'pass-run', summaries);
+
+  assert.ok(comparison.averageScoreDelta > 0);
+  assert.deepEqual(comparison.afterPromotionGateFailures, [{
+    gate: 'minAverageScore',
+    expected: 101,
+    actual: 100,
+    ok: false
+  }]);
+  assert.equal(comparison.recommendation.action, 'reject');
+  assert.equal(comparison.promotion.decision, 'reject');
+});
+
 test('benchmark compare returns a clear placeholder when summaries are absent', () => {
   const comparison = compareBenchmarkRuns('missing-before', 'missing-after', []);
 

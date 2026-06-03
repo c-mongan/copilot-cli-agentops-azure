@@ -6404,6 +6404,12 @@ function compareRecommendation(comparison) {
       message: 'reject: the after run introduces safety regressions.'
     };
   }
+  if (comparison.afterPromotionGateFailures.length > 0) {
+    return {
+      action: 'reject',
+      message: 'reject: the after run misses candidate promotion gates.'
+    };
+  }
   if (comparison.passRateDelta < -0.05 || comparison.averageScoreDelta < -5) {
     return {
       action: 'reject',
@@ -6473,7 +6479,8 @@ function compareBenchmarkRuns(beforeRunId, afterRunId, summaries = null, options
       averageScore: before.averageScore,
       toolFailures: before.toolFailures,
       totalTokens: before.totalTokens,
-      cost: before.cost
+      cost: before.cost,
+      promotionGateFailures: before.promotionGateFailures || []
     },
     after: {
       passRate: after.passRate,
@@ -6481,7 +6488,9 @@ function compareBenchmarkRuns(beforeRunId, afterRunId, summaries = null, options
       averageScore: after.averageScore,
       toolFailures: after.toolFailures,
       totalTokens: after.totalTokens,
-      cost: after.cost
+      cost: after.cost,
+      promotionGates: after.promotionGates || null,
+      promotionGateFailures: after.promotionGateFailures || []
     },
     passRateDelta: roundNumber(after.passRate - before.passRate, 3),
     averageScoreDelta: roundNumber(after.averageScore - before.averageScore),
@@ -6489,6 +6498,7 @@ function compareBenchmarkRuns(beforeRunId, afterRunId, summaries = null, options
     tokenDelta: after.totalTokens - before.totalTokens,
     costDelta: roundNumber(after.cost - before.cost, 4),
     safetyRegressionWarnings,
+    afterPromotionGateFailures: after.promotionGateFailures || [],
     topFailureCategories: after.topFailureCategories
   };
 
@@ -6510,7 +6520,8 @@ function compareBenchmarkRuns(beforeRunId, afterRunId, summaries = null, options
       toolFailuresDelta: comparison.toolFailuresDelta,
       tokenDelta: comparison.tokenDelta,
       costDelta: comparison.costDelta,
-      safetyRegressionWarnings: comparison.safetyRegressionWarnings
+      safetyRegressionWarnings: comparison.safetyRegressionWarnings,
+      afterPromotionGateFailures: comparison.afterPromotionGateFailures
     },
     rollback: 'revert the candidate if the benchmark or live telemetry later shows lower pass rate, new safety warnings, or unacceptable token/cost growth'
   };
