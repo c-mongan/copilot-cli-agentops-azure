@@ -880,6 +880,7 @@ What works well:
 - Failure and high-AIU alerts exist as infrastructure.
 - No action groups are attached by default.
 - `agentops alert history` and `agentops alert detail` provide metadata-only fired-alert candidate review with KQL and session links.
+- `agentops alert open` turns an alert rule/session pair into Run Replay, Runs Explorer, session detail, content-viewer, and Azure Logs links.
 - The Alert Tuning dashboard includes metadata-only fired-alert candidates with session drilldowns.
 - `agentops alert action-plan` generates deterministic GitHub issue or Azure DevOps work-item payload metadata with KQL, session links, and guardrails.
 - `agentops alert export` writes durable metadata-only alert artifacts for later incident review.
@@ -899,7 +900,7 @@ Current gaps:
 - Alert action routing is partially manual; the CLI can now post GitHub Issues, Azure DevOps Work Items, preview email/webhook action group receivers, and attach Azure Monitor action groups behind explicit review gates, but Teams and paging destinations still depend on approved receiver setup outside the CLI.
 - Alert history and timeline review now have a local metadata-only handoff bundle, route preview, guarded ticket creation, and guarded action-group attachment, but not yet broad paging automation.
 - Threshold changes are still manual review artifacts; there is no automatic threshold tuning loop.
-- No first-class "open run from alert" UI beyond constructed KQL/dashboard links.
+- Alert-to-run opening is now available as a CLI link artifact, but not yet a fully guided visual workflow.
 
 Product recommendation:
 

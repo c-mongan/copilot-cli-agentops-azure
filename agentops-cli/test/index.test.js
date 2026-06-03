@@ -80,6 +80,7 @@ const {
   alertHistoryQuery,
   alertHandoff,
   alertIncidentTimeline,
+  alertOpenRun,
   alertPolicy,
   alertRecommendationQuery,
   alertRecommendations,
@@ -7699,6 +7700,28 @@ test('alert detail links one alert session to history and action plan', () => {
   assert.match(detail.history_query, /Conversation == "session-123"/);
   assert.equal(detail.session_link.conversation, 'session-123');
   assert.match(detail.action_plan_command, /alert action-plan --rule runaway-tool-loop --session session-123 --last 2h/);
+});
+
+test('alert open builds run-scoped links from alert context', () => {
+  const open = alertOpenRun({ rule: 'runaway-tool-loop', session: 'session-123', last: '2h' });
+
+  assert.equal(open.schema_version, 'agentops.alert-open-run.v1');
+  assert.equal(open.mode, 'metadata-only-alert-run-links');
+  assert.equal(open.alert.rule, 'runaway-tool-loop');
+  assert.equal(open.alert.session, 'session-123');
+  assert.match(open.links.session_detail, /agentops-session-detail/);
+  assert.match(open.links.run_replay, /agentops-v2-run-replay/);
+  assert.match(open.links.run_replay, /var-session_id=session-123/);
+  assert.match(open.links.run_replay, /var-run_id=__all/);
+  assert.match(open.links.content_viewer, /viewPanel=26/);
+  assert.match(open.queries.alert_history, /Conversation == "session-123"/);
+  assert.match(open.queries.session, /session-123/);
+  assert.match(open.commands.replay, /agentops replay session-123 --last 2h/);
+  assert.match(open.commands.handoff, /alert handoff --rule runaway-tool-loop --session session-123/);
+  assert.ok(open.guardrails.some(item => item.includes('metadata-only alert context')));
+  assert.doesNotMatch(JSON.stringify(open), /SECRET_FAKE_TEST_VALUE|raw transcript/);
+
+  assert.throws(() => alertOpenRun({ rule: 'runaway-tool-loop' }), /alert detail requires --session/);
 });
 
 test('alert artifact persists metadata-only incident evidence', () => {

@@ -37,9 +37,10 @@ Review metadata-only alert history before opening an incident:
 ```bash
 node agentops-cli/src/index.js alert history --rule failed-spans --last 24h
 node agentops-cli/src/index.js alert detail --rule failed-spans --session <conversation-id> --last 24h
+node agentops-cli/src/index.js alert open --rule failed-spans --session <conversation-id> --last 24h
 ```
 
-`alert history` returns a KQL query for fired alert candidates by rule. `alert detail` narrows that query to one session and adds the session dashboard/KQL link plus the matching action-plan command.
+`alert history` returns a KQL query for fired alert candidates by rule. `alert detail` narrows that query to one session and adds the session dashboard/KQL link plus the matching action-plan command. `alert open` prints the session-scoped Run Replay, Runs Explorer, session detail, content-viewer, and Azure Logs links for that alert.
 
 When an alert fires, generate a deterministic issue/work-item plan before notifying anyone:
 
