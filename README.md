@@ -68,6 +68,7 @@ agentops explain
 agentops github-enrich
 agentops insights generate|patterns
 agentops init --dry-run
+agentops init --full
 agentops init --provision-cloud
 agentops init --import-dashboards
 agentops init --run-smoke

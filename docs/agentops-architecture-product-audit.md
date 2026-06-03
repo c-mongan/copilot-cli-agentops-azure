@@ -352,7 +352,7 @@ Current friction:
 
 Product recommendation:
 
-- Continue expanding `agentops init` into the single guided command:
+- Keep hardening `agentops init --full` as the single guided command:
   - detects Copilot, Node, Docker, az, subscription, resource group, and existing resources
   - deploys or binds to Azure resources
   - imports dashboards
@@ -1142,6 +1142,7 @@ Implemented first slice:
 - `agentops validate-azure` for read-only Azure CLI, subscription, resource group, workspace, App Insights, query, Grafana resource, datasource, and dashboard UID checks.
 - `agentops validate-azure --import-dashboards` for explicit remediation when validation finds missing Grafana dashboards.
 - `agentops init --dry-run` now points to the same core first-run loop instead of older experimental smoke/context commands.
+- `agentops init --full` now runs the explicit cloud provision, dashboard import, smoke/open-link, and latest triage stages together.
 - `agentops init --import-dashboards` now runs the dashboard import remediation stage explicitly during the init flow, then continues toward smoke/open next steps.
 - `agentops init --run-smoke` now runs the real-Copilot smoke/open-link stage explicitly during the init flow and reports follow-up commands when it fails.
 - `agentops init --triage-latest` now packages the latest run into the AgentOps triage evidence bundle explicitly during the init flow and reports latest/open follow-up commands when it fails.
@@ -1254,7 +1255,7 @@ Required work:
 
 ### P1 - Make It Native To Copilot
 
-- Continue expanding `agentops init` beyond local readiness/skill install into one complete guided cloud bind, dashboard import, first smoke, open-link, and triage flow.
+- Keep hardening `agentops init --full` into one complete guided cloud bind, dashboard import, first smoke, open-link, and triage flow.
 - Make skill install and shadow install part of one guided flow.
 - Wire the "latest run" context bundle command into the Copilot skill path.
 - Add a Copilot skill that calls the right CLI commands and returns session URL plus one recommendation.

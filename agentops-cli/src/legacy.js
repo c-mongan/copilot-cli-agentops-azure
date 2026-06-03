@@ -47,7 +47,7 @@ function usage() {
     'compat-check [--last <duration>]',
     'validate-collector [endpoint]',
     'validate-azure [--last <duration>] [--production] [--remediation-plan] [--json]',
-    'init [--dry-run] [--provision-cloud] [--import-dashboards] [--run-smoke] [--triage-latest] [--force-skills] [--json]',
+    'init [--dry-run] [--full] [--provision-cloud] [--import-dashboards] [--run-smoke] [--triage-latest] [--force-skills] [--json]',
     'smoke [--dry-run] [--endpoint <url>] [--id <smoke-id>] [--last <duration>] [--wait <duration>] [--poll <duration>] [--open-browser] [--no-verify] [--json]',
     'attribution-smoke [--dry-run] [--endpoint <url>] [--id <smoke-id>] [--last <duration>] [--wait <duration>] [--poll <duration>] [--no-verify] [--json]',
     'live-replay-smoke [--dry-run] [--endpoint <url>] [--id <smoke-id>] [--last <duration>] [--wait <duration>] [--poll <duration>] [--no-verify] [--json]',
@@ -1966,15 +1966,17 @@ function isConfiguredValue(value, placeholderPattern) {
 }
 
 function parseInitArgs(args) {
+  const full = args.includes('--full');
   return {
     dryRun: args.includes('--dry-run'),
+    full,
     forceSkills: args.includes('--force-skills') || args.includes('--force'),
     json: args.includes('--json'),
-    importDashboards: args.includes('--import-dashboards'),
+    importDashboards: full || args.includes('--import-dashboards'),
     noSkills: args.includes('--no-skills') || args.includes('--no-plugin'),
-    provisionCloud: args.includes('--provision-cloud'),
-    runSmoke: args.includes('--run-smoke'),
-    triageLatest: args.includes('--triage-latest'),
+    provisionCloud: full || args.includes('--provision-cloud'),
+    runSmoke: full || args.includes('--run-smoke'),
+    triageLatest: full || args.includes('--triage-latest'),
     copilotHome: optionValue(args, ['--copilot-home', '--home'])
   };
 }

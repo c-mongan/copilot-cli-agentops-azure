@@ -18,6 +18,7 @@ node src/index.js otel-setup
 node src/index.js otel-setup --shell powershell
 node src/index.js compat-check --last 2h
 node src/index.js init --dry-run
+node src/index.js init --full
 node src/index.js init --import-dashboards
 node src/index.js init --run-smoke
 node src/index.js init --triage-latest
@@ -55,7 +56,7 @@ node src/index.js alert recommend --last 14d
 node src/index.js saved-view add latest-risk --session <conversation>
 ```
 
-`init` performs the local first-run checklist, installs or dry-runs bundled agents and skills, checks shim posture, and prints the next commands needed for Azure validation, a real Copilot smoke run, and latest-run triage.
+`init` performs the local first-run checklist, installs or dry-runs bundled agents and skills, checks shim posture, and prints the next commands needed for Azure validation, a real Copilot smoke run, and latest-run triage. Pass `--full` to run the explicit cloud provision, dashboard import, smoke, and triage stages together.
 
 `install` installs the `agentops` and `copilot-agentops` commands into `~/.local/bin`. Pass `--shadow-copilot` when you want plain `copilot` to route through AgentOps too.
 
