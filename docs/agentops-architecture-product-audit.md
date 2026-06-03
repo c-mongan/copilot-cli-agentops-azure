@@ -891,11 +891,12 @@ What works well:
 - `agentops alert route-plan` generates preview-only GitHub Issue and Azure DevOps Work Item payloads from safe handoff metadata.
 - `agentops alert route-github` can create a GitHub Issue only with explicit `--yes`, a repo, and an owner; without `--yes`, it prints the exact `gh issue create` command.
 - `agentops alert route-azure-devops` can create an Azure DevOps Work Item only with explicit `--yes`, organization, project, and owner; without `--yes`, it prints the exact `az boards work-item create` command.
+- `agentops alert route-action-group` can attach approved Azure Monitor action groups only with explicit `--yes`, resource group, scheduled-query rule, action group ID, and owner.
 
 Current gaps:
 
-- Alert action routing is partially manual; the CLI can now post GitHub Issues and Azure DevOps Work Items behind explicit review gates, but Teams, email, paging, and action-group routes are still preview/manual.
-- Alert history and timeline review now have a local metadata-only handoff bundle, route preview, guarded GitHub issue creation, and guarded Azure DevOps work-item creation, but not yet broad notification or paging.
+- Alert action routing is partially manual; the CLI can now post GitHub Issues, Azure DevOps Work Items, and attach Azure Monitor action groups behind explicit review gates, but Teams, email, and paging destinations still depend on the approved action group receivers.
+- Alert history and timeline review now have a local metadata-only handoff bundle, route preview, guarded ticket creation, and guarded action-group attachment, but not yet broad paging automation.
 - Threshold changes are still manual review artifacts; there is no automatic threshold tuning loop.
 - No first-class "open run from alert" UI beyond constructed KQL/dashboard links.
 

@@ -78,6 +78,7 @@ function usage() {
     'alert route-plan --rule <name> --session <conversation> [--owner <name>] [--target <github-issue|azure-devops-work-item>] [--output <json>]',
     'alert route-github --repo <owner/repo> --rule <name> --session <conversation> --owner <github-login> [--yes]',
     'alert route-azure-devops --org <url> --project <name> --rule <name> --session <conversation> --owner <user> [--yes]',
+    'alert route-action-group --resource-group <rg> --scheduled-query <name> --action-group <id> --rule <name> --session <conversation> --owner <name> [--yes]',
     'incident timeline --artifact <json> [--artifact <json> ...] --output <json> [--incident <id>]',
     'lineage [--last <duration>]',
     'policy [--last <duration>]',
@@ -5092,6 +5093,89 @@ function alertAzureDevOpsWorkItemRoute({ rule, session, last = '24h', owners = [
   };
 }
 
+function alertActionGroupRoute({ rule, session, last = '24h', owners = [], service = 'agentops', timezone = 'UTC', resourceGroup, scheduledQuery, actionGroups = [], enableAlert = false, yes = false, spawnSync = childProcess.spawnSync } = {}) {
+  const normalizedResourceGroup = String(resourceGroup || '').trim();
+  if (!normalizedResourceGroup) throw new Error('alert route-action-group requires --resource-group <rg>');
+
+  const normalizedScheduledQuery = String(scheduledQuery || '').trim();
+  if (!normalizedScheduledQuery) throw new Error('alert route-action-group requires --scheduled-query <name>');
+
+  const normalizedActionGroups = actionGroups.map(item => String(item || '').trim()).filter(Boolean);
+  if (normalizedActionGroups.length === 0) throw new Error('alert route-action-group requires at least one --action-group <id>');
+
+  const normalizedOwners = owners.map(owner => String(owner || '').trim()).filter(Boolean);
+  if (normalizedOwners.length === 0) throw new Error('alert route-action-group requires at least one --owner <name>');
+
+  const handoff = alertHandoff({
+    rule,
+    session,
+    last,
+    owners: normalizedOwners,
+    service,
+    timezone,
+    resourceGroup: normalizedResourceGroup
+  });
+
+  const args = [
+    'monitor',
+    'scheduled-query',
+    'update',
+    '--resource-group',
+    normalizedResourceGroup,
+    '--name',
+    normalizedScheduledQuery,
+    '--action-groups',
+    ...normalizedActionGroups
+  ];
+  if (enableAlert) args.push('--disabled', 'false');
+
+  const route = {
+    schema_version: 'agentops.alert-action-group-route.v1',
+    mode: yes ? 'routed-action-group' : 'dry-run-action-group-route',
+    alert: handoff.alert,
+    resource_group: normalizedResourceGroup,
+    scheduled_query: normalizedScheduledQuery,
+    action_groups: normalizedActionGroups,
+    owner: normalizedOwners[0],
+    enable_alert: Boolean(enableAlert),
+    command: {
+      executable: 'az',
+      args
+    },
+    evidence: {
+      handoff_schema: handoff.schema_version,
+      session_link: handoff.evidence.detail.session_link,
+      history_query: handoff.evidence.detail.history_query
+    },
+    guardrails: [
+      'Review the handoff evidence, threshold tune-plan, and action group receivers before routing notifications.',
+      'Keep prompts, responses, tool arguments, tool results, and file contents out of notification routes.',
+      'This command only attaches approved Azure Monitor action groups; use --enable-alert only after threshold review.'
+    ]
+  };
+
+  if (!yes) return route;
+
+  const result = spawnSync('az', args, {
+    encoding: 'utf8',
+    env: process.env
+  });
+  if (result.status !== 0) {
+    return {
+      ...route,
+      mode: 'failed-action-group-route',
+      status: result.status,
+      error: String(result.stderr || result.stdout || 'az monitor scheduled-query update failed').trim()
+    };
+  }
+
+  return {
+    ...route,
+    status: result.status,
+    output: String(result.stdout || '').trim()
+  };
+}
+
 const {
   copilotPrimitivesInventory
 } = createPrimitives({
@@ -9049,7 +9133,34 @@ async function main(argv) {
       }), null, 2) + '\n');
       return;
     }
-    throw new Error('alert currently supports: alert recommend, alert tune-plan, alert policy, alert resources, alert history, alert detail, alert action-plan, alert export, alert handoff, alert route-plan, alert route-github, alert route-azure-devops');
+    if (subcommand === 'route-action-group') {
+      const rule = optionValue(alertArgs, ['--rule']);
+      const session = optionValue(alertArgs, ['--session', '--conversation']);
+      const owners = optionValues(alertArgs, '--owner');
+      const service = optionValue(alertArgs, ['--service']) || 'agentops';
+      const timezone = optionValue(alertArgs, ['--timezone', '--tz']) || 'UTC';
+      const resourceGroup = optionValue(alertArgs, ['--resource-group', '-g']) || configuredCloudValues().resourceGroup;
+      const scheduledQuery = optionValue(alertArgs, ['--scheduled-query', '--scheduled-query-rule', '--alert-rule']);
+      const actionGroups = optionValues(alertArgs, '--action-group');
+      const last = parseLastArg(alertArgs, '24h');
+      const yes = alertArgs.includes('--yes');
+      const enableAlert = alertArgs.includes('--enable-alert');
+      process.stdout.write(JSON.stringify(alertActionGroupRoute({
+        rule,
+        session,
+        last,
+        owners,
+        service,
+        timezone,
+        resourceGroup,
+        scheduledQuery,
+        actionGroups,
+        enableAlert,
+        yes
+      }), null, 2) + '\n');
+      return;
+    }
+    throw new Error('alert currently supports: alert recommend, alert tune-plan, alert policy, alert resources, alert history, alert detail, alert action-plan, alert export, alert handoff, alert route-plan, alert route-github, alert route-azure-devops, alert route-action-group');
   }
 
   if (command === 'incident') {
@@ -9119,6 +9230,7 @@ module.exports = {
   alertDetail,
   alertActionPlan,
   alertArtifact,
+  alertActionGroupRoute,
   alertIncidentTimeline,
   alertAzureDevOpsWorkItemRoute,
   alertHandoff,

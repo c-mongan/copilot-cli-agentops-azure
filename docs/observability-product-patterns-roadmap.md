@@ -164,6 +164,7 @@ Implemented local MVP:
 - `agentops alert route-plan` generates preview-only GitHub Issue and Azure DevOps Work Item payloads from safe handoff metadata.
 - `agentops alert route-github` dry-runs a guarded GitHub Issue route and only posts when `--yes`, `--repo`, and `--owner` are supplied.
 - `agentops alert route-azure-devops` dry-runs a guarded Azure DevOps Work Item route and only posts when `--yes`, `--org`, `--project`, and `--owner` are supplied.
+- `agentops alert route-action-group` dry-runs a guarded Azure Monitor action-group attachment and only updates scheduled-query rules when `--yes`, `--resource-group`, `--scheduled-query`, `--action-group`, and `--owner` are supplied.
 
 Remaining MVP:
 

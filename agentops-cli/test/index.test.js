@@ -69,6 +69,7 @@ const {
   agentopsLiveReplaySmoke,
   agentopsStatusSummary,
   agentopsWorkflows,
+  alertActionGroupRoute,
   alertAzureDevOpsWorkItemRoute,
   alertGithubIssueRoute,
   alertActionPlan,
@@ -7936,4 +7937,72 @@ test('alert azure devops route requires review gates before posting', () => {
   assert.throws(() => alertAzureDevOpsWorkItemRoute({ rule: 'failed-spans', session: 'session-456', project: 'AgentOps', owners: ['agentops-oncall@example.com'] }), /requires --org/);
   assert.throws(() => alertAzureDevOpsWorkItemRoute({ rule: 'failed-spans', session: 'session-456', org: 'https://dev.azure.com/contoso', owners: ['agentops-oncall@example.com'] }), /requires --project/);
   assert.throws(() => alertAzureDevOpsWorkItemRoute({ rule: 'failed-spans', session: 'session-456', org: 'https://dev.azure.com/contoso', project: 'AgentOps' }), /requires at least one --owner/);
+});
+
+test('alert action group route requires review gates before updating scheduled queries', () => {
+  const actionGroupId = '/subscriptions/sub-123/resourceGroups/rg-agentops-dev/providers/microsoft.insights/actionGroups/ag-agentops';
+  const dryRun = alertActionGroupRoute({
+    rule: 'failed-spans',
+    session: 'session-123',
+    last: '6h',
+    owners: ['agentops-oncall'],
+    service: 'copilot-agentops',
+    resourceGroup: 'rg-agentops-dev',
+    scheduledQuery: 'sqr-agentops-failed-spans',
+    actionGroups: [actionGroupId]
+  });
+
+  assert.equal(dryRun.schema_version, 'agentops.alert-action-group-route.v1');
+  assert.equal(dryRun.mode, 'dry-run-action-group-route');
+  assert.equal(dryRun.command.executable, 'az');
+  assert.deepEqual(dryRun.command.args.slice(0, 4), ['monitor', 'scheduled-query', 'update', '--resource-group']);
+  assert.ok(dryRun.command.args.includes('--action-groups'));
+  assert.ok(dryRun.command.args.includes(actionGroupId));
+  assert.equal(dryRun.enable_alert, false);
+  assert.match(dryRun.evidence.history_query, /Conversation == "session-123"/);
+  assert.ok(dryRun.guardrails.some(item => item.includes('Review the handoff evidence')));
+  assert.doesNotMatch(JSON.stringify(dryRun), /SECRET_FAKE_TEST_VALUE|raw transcript/);
+
+  let invoked = null;
+  const routed = alertActionGroupRoute({
+    rule: 'failed-spans',
+    session: 'session-456',
+    owners: ['agentops-oncall'],
+    resourceGroup: 'rg-agentops-dev',
+    scheduledQuery: 'sqr-agentops-failed-spans',
+    actionGroups: [actionGroupId],
+    enableAlert: true,
+    yes: true,
+    spawnSync: (command, args, options) => {
+      invoked = { command, args, options };
+      return { status: 0, stdout: '{"name":"sqr-agentops-failed-spans"}', stderr: '' };
+    }
+  });
+
+  assert.equal(routed.mode, 'routed-action-group');
+  assert.equal(routed.status, 0);
+  assert.match(routed.output, /sqr-agentops-failed-spans/);
+  assert.equal(invoked.command, 'az');
+  assert.equal(invoked.args[0], 'monitor');
+  assert.ok(invoked.args.includes('--disabled'));
+  assert.ok(invoked.args.includes('false'));
+  assert.equal(invoked.options.encoding, 'utf8');
+
+  const failed = alertActionGroupRoute({
+    rule: 'failed-spans',
+    session: 'session-456',
+    owners: ['agentops-oncall'],
+    resourceGroup: 'rg-agentops-dev',
+    scheduledQuery: 'sqr-agentops-failed-spans',
+    actionGroups: [actionGroupId],
+    yes: true,
+    spawnSync: () => ({ status: 1, stdout: '', stderr: 'not authorized' })
+  });
+  assert.equal(failed.mode, 'failed-action-group-route');
+  assert.equal(failed.error, 'not authorized');
+
+  assert.throws(() => alertActionGroupRoute({ rule: 'failed-spans', session: 'session-456', scheduledQuery: 'sqr', actionGroups: [actionGroupId], owners: ['agentops-oncall'] }), /requires --resource-group/);
+  assert.throws(() => alertActionGroupRoute({ rule: 'failed-spans', session: 'session-456', resourceGroup: 'rg-agentops-dev', actionGroups: [actionGroupId], owners: ['agentops-oncall'] }), /requires --scheduled-query/);
+  assert.throws(() => alertActionGroupRoute({ rule: 'failed-spans', session: 'session-456', resourceGroup: 'rg-agentops-dev', scheduledQuery: 'sqr', owners: ['agentops-oncall'] }), /requires at least one --action-group/);
+  assert.throws(() => alertActionGroupRoute({ rule: 'failed-spans', session: 'session-456', resourceGroup: 'rg-agentops-dev', scheduledQuery: 'sqr', actionGroups: [actionGroupId] }), /requires at least one --owner/);
 });
