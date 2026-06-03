@@ -76,6 +76,7 @@ function usage() {
     'alert export --rule <name> --session <conversation> --output <json> [--last <duration>]',
     'alert handoff --rule <name> --session <conversation> [--owner <name>] [--output <json>] [--last <duration>]',
     'alert route-plan --rule <name> --session <conversation> [--owner <name>] [--target <github-issue|azure-devops-work-item>] [--output <json>]',
+    'alert route-github --repo <owner/repo> --rule <name> --session <conversation> --owner <github-login> [--yes]',
     'incident timeline --artifact <json> [--artifact <json> ...] --output <json> [--incident <id>]',
     'lineage [--last <duration>]',
     'policy [--last <duration>]',
@@ -4911,6 +4912,81 @@ const {
   latestSessionAzureQuery
 });
 
+function alertGithubIssueRoute({ rule, session, last = '24h', owners = [], service = 'agentops', timezone = 'UTC', repo, yes = false, resourceGroup = null, spawnSync = childProcess.spawnSync } = {}) {
+  const normalizedRepo = String(repo || '').trim();
+  if (!normalizedRepo || !/^[^/\s]+\/[^/\s]+$/.test(normalizedRepo)) {
+    throw new Error('alert route-github requires --repo <owner/repo>');
+  }
+
+  const normalizedOwners = owners.map(owner => String(owner || '').trim()).filter(Boolean);
+  if (normalizedOwners.length === 0) throw new Error('alert route-github requires at least one --owner <github-login>');
+
+  const plan = alertRoutePlan({
+    rule,
+    session,
+    last,
+    owners: normalizedOwners,
+    service,
+    timezone,
+    targets: ['github-issue'],
+    resourceGroup
+  });
+  const destination = plan.destinations.find(item => item.target === 'github-issue');
+  const payload = destination.payload;
+  const args = [
+    'issue',
+    'create',
+    '--repo',
+    normalizedRepo,
+    '--title',
+    payload.title,
+    '--body',
+    payload.body
+  ];
+
+  for (const label of payload.labels) args.push('--label', label);
+  for (const owner of payload.assignees) args.push('--assignee', owner);
+
+  const route = {
+    schema_version: 'agentops.alert-github-route.v1',
+    mode: yes ? 'posted-github-issue' : 'dry-run-github-issue-route',
+    alert: plan.alert,
+    repo: normalizedRepo,
+    owner: normalizedOwners[0],
+    command: {
+      executable: 'gh',
+      args
+    },
+    payload,
+    guardrails: [
+      'Review the route-plan and handoff evidence before posting.',
+      'Keep prompts, responses, tool arguments, tool results, and file contents out of GitHub issues.',
+      'This command only creates a GitHub issue; it does not page, edit Azure resources, or enable alert rules.'
+    ]
+  };
+
+  if (!yes) return route;
+
+  const result = spawnSync('gh', args, {
+    encoding: 'utf8',
+    env: process.env
+  });
+  if (result.status !== 0) {
+    return {
+      ...route,
+      mode: 'failed-github-issue-route',
+      status: result.status,
+      error: String(result.stderr || result.stdout || 'gh issue create failed').trim()
+    };
+  }
+
+  return {
+    ...route,
+    status: result.status,
+    issue_url: String(result.stdout || '').trim()
+  };
+}
+
 const {
   copilotPrimitivesInventory
 } = createPrimitives({
@@ -8818,7 +8894,30 @@ async function main(argv) {
       process.stdout.write(JSON.stringify(plan, null, 2) + '\n');
       return;
     }
-    throw new Error('alert currently supports: alert recommend, alert tune-plan, alert policy, alert resources, alert history, alert detail, alert action-plan, alert export, alert handoff, alert route-plan');
+    if (subcommand === 'route-github') {
+      const rule = optionValue(alertArgs, ['--rule']);
+      const session = optionValue(alertArgs, ['--session', '--conversation']);
+      const owners = optionValues(alertArgs, '--owner');
+      const service = optionValue(alertArgs, ['--service']) || 'agentops';
+      const timezone = optionValue(alertArgs, ['--timezone', '--tz']) || 'UTC';
+      const resourceGroup = optionValue(alertArgs, ['--resource-group', '-g']) || configuredCloudValues().resourceGroup;
+      const repo = optionValue(alertArgs, ['--repo']);
+      const last = parseLastArg(alertArgs, '24h');
+      const yes = alertArgs.includes('--yes');
+      process.stdout.write(JSON.stringify(alertGithubIssueRoute({
+        rule,
+        session,
+        last,
+        owners,
+        service,
+        timezone,
+        repo,
+        yes,
+        resourceGroup
+      }), null, 2) + '\n');
+      return;
+    }
+    throw new Error('alert currently supports: alert recommend, alert tune-plan, alert policy, alert resources, alert history, alert detail, alert action-plan, alert export, alert handoff, alert route-plan, alert route-github');
   }
 
   if (command === 'incident') {
@@ -8890,6 +8989,7 @@ module.exports = {
   alertArtifact,
   alertIncidentTimeline,
   alertHandoff,
+  alertGithubIssueRoute,
   alertRoutePlan,
   askAgentOpsContext,
   attributionUsageQuery,

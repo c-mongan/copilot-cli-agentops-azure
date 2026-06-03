@@ -162,6 +162,7 @@ Implemented local MVP:
 - `agentops incident timeline` collects exported alert artifacts into a durable metadata-only incident review record.
 - `agentops alert handoff` bundles alert detail, tune-plan, policy, resource-state placeholder, and incident timeline evidence into one operator review packet.
 - `agentops alert route-plan` generates preview-only GitHub Issue and Azure DevOps Work Item payloads from safe handoff metadata.
+- `agentops alert route-github` dry-runs a guarded GitHub Issue route and only posts when `--yes`, `--repo`, and `--owner` are supplied.
 
 Remaining MVP:
 
