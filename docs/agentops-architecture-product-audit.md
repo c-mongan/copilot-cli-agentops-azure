@@ -390,6 +390,7 @@ What works well:
   - `AGENTOPS_PROFILE`
   - `AGENTOPS_EXPERIMENT`
   - `AGENTOPS_PACK_VERSION`
+- `agentops product audit` now includes a wrapper sync contract check that keeps the Bash and PowerShell `copilot-observe` scripts aligned on shared env defaults, safe resource attributes, and counted Copilot flags.
 
 Key implementation detail:
 
@@ -397,7 +398,7 @@ The wrapper does not create spans itself. It relies on Copilot CLI OTel output a
 
 Current gaps:
 
-- The Bash and PowerShell wrappers must stay in sync manually.
+- The Bash and PowerShell wrappers still have separate implementations; the shared contract catches drift, but it does not generate either script.
 - Flag parsing is hand-rolled. It covers many important Copilot flags, but future Copilot CLI changes can silently drift.
 - Metadata is mostly resource attributes, so depending on exporter behavior, every span may carry the same per-run attributes. That is fine for analysis but can increase cardinality and storage cost.
 - The CLI wrapper now writes durable metadata-only lifecycle rows to `.agentops/wrapper-events.jsonl`: `agentops.run.start`, `agentops.run.end`, `agentops.collector.start_failed`, and `agentops.wrapper.fallback_unobserved`.

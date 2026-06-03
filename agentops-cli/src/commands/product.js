@@ -5,6 +5,7 @@ const { hasFlag, optionValue } = require('../lib/args');
 const { dashboardVerify, validateDashboardLinks, validateDashboardUx, validateDashboards } = require('./dashboard');
 const { e2eBrowserCheck } = require('./e2e');
 const { repoRoot } = require('../lib/paths');
+const { validateWrapperContract } = require('../lib/copilot/wrapper-contract');
 const legacy = require('../legacy');
 
 const requiredVisualDashboards = [
@@ -86,6 +87,14 @@ function productAudit(options = {}) {
       'copilot/copilot-observe.ps1'
     ],
     []
+  ));
+
+  const wrapperContract = validateWrapperContract(repoRoot);
+  checks.push(check(
+    'copilot-wrapper-sync-contract',
+    wrapperContract.ok,
+    wrapperContract.files,
+    wrapperContract.missing
   ));
 
   checks.push(requiredFilesCheck('copilot-cli-surface', [

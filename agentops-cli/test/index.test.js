@@ -14,6 +14,7 @@ const { enrichCopilotSessionEvents } = require('../src/lib/copilot/session-enric
 const { parseCopilotSessionRows } = require('../src/lib/copilot/session-parser');
 const { summarizeCopilotRun } = require('../src/lib/copilot/run-summary');
 const { classifyToolName, summarizeAllowedTools } = require('../src/lib/copilot/tool-classifier');
+const { sharedTerms: wrapperSharedTerms, validateWrapperContract, wrapperFiles } = require('../src/lib/copilot/wrapper-contract');
 const privacy = require('../src/lib/privacy');
 const { validateAgentRun, validateMcpSpan } = require('../src/lib/schema/agent-run-schema');
 const { recommendationSchemaDocument, validateRecommendationRow } = require('../src/lib/schema/recommendation-schema');
@@ -3528,6 +3529,7 @@ test('product audit proves the local AgentOps control-room contract', () => {
     'agent-run-schema',
     'strict-privacy-pipeline',
     'privacy-defaults',
+    'copilot-wrapper-sync-contract',
     'copilot-cli-surface',
     'copilot-sdk-adapter',
     'mcp-observability-proxy',
@@ -4169,6 +4171,14 @@ test('copilot-observe percent-encodes resource attributes and forces content cap
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
+});
+
+test('copilot observe wrappers stay aligned on shared flag and attribute contract', () => {
+  const contract = validateWrapperContract(root);
+
+  assert.equal(contract.ok, true, contract.missing.join('\n'));
+  assert.deepEqual(contract.files, wrapperFiles);
+  assert.ok(wrapperSharedTerms.length >= 70);
 });
 
 test('pre-tool policy emits valid deny decisions for camelCase and snake_case inputs', () => {
