@@ -72,6 +72,7 @@ function usage() {
     'mcp [--last <duration>]',
     'benchmark list',
     'benchmark fixture-pack <fixture-dir> --id <id> [--fixture <path>] [--title <title>] [--output <file>] [--sign-key-id <id> --sign-private-key <pem>]',
+    'benchmark judge-provider [--json]',
     'benchmark run <suite> --variant <name> --repeat <n> [--hypothesis <id>] [--dry-run]',
     'benchmark approve <run-id> --by <name> [--ticket <id>] [--output <json>]',
     'benchmark artifacts <run-id> [--task <task-id>] [--include-content]',
@@ -1009,12 +1010,24 @@ function agentopsWorkflows() {
         `${cli} benchmark list`,
         `${cli} benchmark fixture-pack benchmarks/starter/fixtures/tiny-repo --id tiny-repo-sealed --fixture fixtures/tiny-repo --output benchmarks/starter/fixture-packs/tiny-repo.json`,
         `${cli} benchmark fixture-pack benchmarks/starter/fixtures/tiny-repo --id tiny-repo-sealed --fixture fixtures/tiny-repo --sign-key-id eval-fixtures-v1 --sign-private-key keys/eval-fixtures-v1.pem --output benchmarks/starter/fixture-packs/tiny-repo.json`,
+        `${cli} benchmark judge-provider`,
         `${cli} benchmark run starter --variant baseline --repeat 1 --hypothesis safer-tool-policy --dry-run`,
         `${cli} benchmark run starter --variant baseline --repeat 1 --hypothesis safer-tool-policy`,
         `${cli} benchmark approve <run-id> --by alice@example.com --ticket CHG-123 --output approvals/<run-id>.json`,
         `${cli} benchmark artifacts <run-id> --task create-note --include-content`,
         `${cli} benchmark report <run-id>`,
         `${cli} benchmark compare <baseline-run-id> <variant-run-id> --azure --last 24h`
+      ]
+    },
+    {
+      name: 'judge-provider',
+      skill: 'agentops-benchmark-gate',
+      description: 'Wire a hosted LLM judge CLI into benchmark semantic checks without storing prompts or secrets.',
+      prompt: 'Use agentops-benchmark-gate to configure a hosted llm-judge provider for my benchmark suite.',
+      commands: [
+        `${cli} benchmark judge-provider`,
+        `${cli} benchmark judge-provider --json`,
+        'AGENTOPS_JUDGE_ENDPOINT=https://judge.example.com AGENTOPS_JUDGE_TOKEN=... benchmark-judges/hosted-judge.sh notes/hello.txt note-quality'
       ]
     },
     {
@@ -5310,6 +5323,94 @@ function parseBenchmarkFixturePackArgs(args) {
   return options;
 }
 
+function benchmarkJudgeProviderGuide() {
+  return {
+    purpose: 'Configure llm-judge semantic checks through a local hosted-judge wrapper command.',
+    secretHandling: [
+      'Keep judge endpoint and token in environment variables or your CI secret store.',
+      'Do not commit judge tokens, prompts, model responses, or rubric text containing private data.',
+      'The benchmark runner stores the judge score and detail, not the judge request payload.'
+    ],
+    wrapperScript: {
+      path: 'benchmark-judges/hosted-judge.sh',
+      env: ['AGENTOPS_JUDGE_ENDPOINT', 'AGENTOPS_JUDGE_TOKEN'],
+      example: [
+        '#!/usr/bin/env bash',
+        'set -euo pipefail',
+        'file="${1:?file required}"',
+        'check_id="${2:?check id required}"',
+        'curl -fsS "$AGENTOPS_JUDGE_ENDPOINT" \\',
+        '  -H "Authorization: Bearer $AGENTOPS_JUDGE_TOKEN" \\',
+        '  -H "Content-Type: application/json" \\',
+        '  --data @<(node -e \'const fs=require("fs"); const [file,check]=process.argv.slice(1); process.stdout.write(JSON.stringify({check_id:check,file,content:fs.readFileSync(file,"utf8")}));\' "$file" "$check_id")'
+      ]
+    },
+    suiteSnippet: {
+      judgeProviders: {
+        hosted: {
+          command: 'benchmark-judges/hosted-judge.sh {file} {checkId}'
+        }
+      }
+    },
+    semanticCheckSnippet: {
+      id: 'answer-quality',
+      adapter: 'llm-judge',
+      provider: 'hosted',
+      file: 'notes/hello.txt',
+      minScore: 80
+    },
+    expectedJudgeOutput: {
+      score: 92,
+      detail: 'short reason for the score'
+    },
+    validation: [
+      'Run the wrapper directly against a local fixture file and confirm it prints JSON with score.',
+      'Run `agentops benchmark run <suite> --variant candidate --repeat 1 --dry-run` before executing.',
+      'Run `agentops benchmark report <run-id>` and inspect semanticChecks.averageScore.'
+    ]
+  };
+}
+
+function renderBenchmarkJudgeProviderGuide(guide = benchmarkJudgeProviderGuide()) {
+  const lines = [
+    'Benchmark hosted judge provider guide',
+    '',
+    guide.purpose,
+    '',
+    'Secret handling'
+  ];
+  for (const item of guide.secretHandling) lines.push(`- ${item}`);
+  lines.push(
+    '',
+    `Wrapper: ${guide.wrapperScript.path}`,
+    `Required env: ${guide.wrapperScript.env.join(', ')}`,
+    '',
+    'Wrapper example',
+    '```bash',
+    ...guide.wrapperScript.example,
+    '```',
+    '',
+    'suite.json snippet',
+    '```json',
+    JSON.stringify(guide.suiteSnippet, null, 2),
+    '```',
+    '',
+    'semanticChecks snippet',
+    '```json',
+    JSON.stringify(guide.semanticCheckSnippet, null, 2),
+    '```',
+    '',
+    'Expected judge output',
+    '```json',
+    JSON.stringify(guide.expectedJudgeOutput, null, 2),
+    '```',
+    '',
+    'Validation'
+  );
+  for (const item of guide.validation) lines.push(`- ${item}`);
+  return `${lines.join('\n')}\n`;
+}
+
 function benchmarkFixturePack(options = {}) {
   const cwd = options.cwd || process.cwd();
   const fixtureDir = path.resolve(cwd, options.fixtureDir);
@@ -7833,6 +7934,14 @@ async function main(argv) {
       return;
     }
 
+    if (subcommand === 'judge-provider') {
+      const guide = benchmarkJudgeProviderGuide();
+      process.stdout.write(benchmarkArgs.includes('--json')
+        ? JSON.stringify(guide, null, 2) + '\n'
+        : renderBenchmarkJudgeProviderGuide(guide));
+      return;
+    }
+
     if (subcommand === 'approve') {
       const options = parseBenchmarkApproveArgs(benchmarkArgs);
       process.stdout.write(JSON.stringify(benchmarkApproval(options), null, 2) + '\n');
@@ -7863,7 +7972,7 @@ async function main(argv) {
       return;
     }
 
-    throw new Error('benchmark requires list, fixture-pack, approve, artifacts, run, report, or compare');
+    throw new Error('benchmark requires list, fixture-pack, judge-provider, approve, artifacts, run, report, or compare');
   }
 
   if (command === 'link') {
@@ -7966,6 +8075,7 @@ module.exports = {
   benchmarkApproval,
   benchmarkArtifactReview,
   benchmarkFixturePack,
+  benchmarkJudgeProviderGuide,
   benchmarkReport,
   benchmarkRunBaseDir,
   benchmarkRunPlan,
@@ -8042,6 +8152,7 @@ module.exports = {
   renderSmoke,
   renderAgentsInstall,
   renderAgentsUninstall,
+  renderBenchmarkJudgeProviderGuide,
   renderPluginInstall,
   renderPluginUninstall,
   renderSkillsInstall,
