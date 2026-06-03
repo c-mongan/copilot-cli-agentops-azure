@@ -3,6 +3,7 @@ const path = require('node:path');
 
 const collector = require('../lib/collector-manager');
 const { optionValue, withoutFlags } = require('../lib/args');
+const { appendWrapperEvent, createWrapperEnvelope } = require('../lib/copilot/wrapper-envelope');
 const { resolveCopilotBinary } = require('../lib/copilot-resolver');
 const { copilotDir } = require('../lib/paths');
 
@@ -16,6 +17,8 @@ async function copilotCommand(args = []) {
   const privacy = optionValue(args, '--privacy', process.env.AGENTOPS_PRIVACY_MODE || 'strict');
   const unsafeNoCollector = args.includes('--unsafe-no-collector') || process.env.AGENTOPS_ALLOW_NO_COLLECTOR === '1';
   const observedArgs = removeAgentOpsCopilotFlags(args);
+  const envelope = createWrapperEnvelope();
+  let fallbackUnobserved = false;
 
   if (helpOnly) {
     const resolved = resolveCopilotBinary();
@@ -31,7 +34,17 @@ async function copilotCommand(args = []) {
     const started = await collector.start({ mode, privacy, unsafeNoCollector });
     if (!started.ok) {
       if (process.env.AGENTOPS_ALLOW_UNOBSERVED_FALLBACK === '1') {
+        fallbackUnobserved = true;
+        const eventFile = appendWrapperEvent({
+          RunId: envelope.runId,
+          SessionId: envelope.sessionId,
+          Surface: 'cli',
+          PrivacyMode: privacy,
+          CollectorMode: mode,
+          Reason: started.error || 'collector start failed'
+        });
         process.stderr.write(`WARNING: AgentOps collector unavailable; running unobserved because AGENTOPS_ALLOW_UNOBSERVED_FALLBACK=1. ${started.error || ''}\n`);
+        process.stderr.write(`AgentOps wrapper fallback event: ${eventFile}\n`);
       } else {
         throw new Error(`AgentOps collector unavailable: ${started.error || 'unknown error'}`);
       }
@@ -50,7 +63,10 @@ async function copilotCommand(args = []) {
     ...process.env,
     COPILOT_CLI_BIN: resolved.path,
     AGENTOPS_PRIVACY_MODE: privacy,
-    AGENTOPS_COLLECTOR_MODE: mode
+    AGENTOPS_COLLECTOR_MODE: mode,
+    AGENTOPS_WRAPPER_RUN_ID: envelope.runId,
+    AGENTOPS_WRAPPER_SESSION_ID: envelope.sessionId,
+    AGENTOPS_WRAPPER_FALLBACK_UNOBSERVED: fallbackUnobserved ? 'true' : 'false'
   };
   const result = childProcess.spawnSync(observeScript, observedArgs, { stdio: 'inherit', env });
   if (result.error) throw result.error;

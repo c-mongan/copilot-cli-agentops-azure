@@ -26,6 +26,9 @@ repo_hash="$(printf '%s' "$repo_url" | shasum -a 256 | awk '{print $1}')"
 branch="$(git branch --show-current 2>/dev/null || echo unknown)"
 commit="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
 agentops_version="${AGENTOPS_PACK_VERSION:-0.1.0}"
+wrapper_run_id="${AGENTOPS_WRAPPER_RUN_ID:-}"
+wrapper_session_id="${AGENTOPS_WRAPPER_SESSION_ID:-}"
+wrapper_fallback_unobserved="$(printf '%s' "${AGENTOPS_WRAPPER_FALLBACK_UNOBSERVED:-false}" | tr '[:upper:]' '[:lower:]')"
 profile="${AGENTOPS_PROFILE:-safe-default}"
 experiment="${AGENTOPS_EXPERIMENT:-baseline}"
 cli_mode="interactive"
@@ -403,7 +406,13 @@ while [[ $# -gt 0 ]]; do
 	shift
 done
 
-agentops_resource_attributes="service.namespace=copilot-agentops,service.name=github-copilot-cli,agent.framework=github-copilot,agent.runtime=github-copilot-cli,agentops.profile=$(sanitize_attr_value "${profile}"),agentops.experiment=$(sanitize_attr_value "${experiment}"),agentops.pack.version=$(sanitize_attr_value "${agentops_version}"),agentops.repo.hash=${repo_hash},git.branch=$(sanitize_attr_value "${branch}"),git.commit=$(sanitize_attr_value "${commit}"),agentops.cli.mode=$(sanitize_attr_value "${cli_mode}"),agentops.cli.remote=$(sanitize_attr_value "${cli_remote}"),agentops.cli.output_format=$(sanitize_attr_value "${cli_output_format}"),agentops.cli.allow_all=${allow_all},agentops.cli.allow_all_tools=${allow_all_tools},agentops.cli.allow_all_paths=${allow_all_paths},agentops.cli.allow_all_urls=${allow_all_urls},agentops.cli.acp=${acp_enabled},agentops.cli.cwd_changed=${cwd_changed},agentops.cli.session_id_provided=${session_id_provided},agentops.cli.share=${share_enabled},agentops.cli.share_gist=${share_gist_enabled},agentops.cli.allow_tool.count=${allow_tool_count},agentops.cli.allow_url.count=${allow_url_count},agentops.cli.deny_tool.count=${deny_tool_count},agentops.cli.deny_url.count=${deny_url_count},agentops.cli.available_tools.count=${available_tool_count},agentops.cli.excluded_tools.count=${excluded_tool_count},agentops.cli.secret_env_vars.count=${secret_env_count},agentops.cli.attachment.count=${attachment_count},agentops.cli.plugin_dir.count=${plugin_dir_count},agentops.cli.additional_mcp_config.count=${additional_mcp_config_count},agentops.cli.disabled_mcp_server.count=${disabled_mcp_server_count},agentops.cli.github_mcp_tool.count=${github_mcp_tool_count},agentops.cli.github_mcp_toolset.count=${github_mcp_toolset_count}"
+agentops_resource_attributes="service.namespace=copilot-agentops,service.name=github-copilot-cli,agent.framework=github-copilot,agent.runtime=github-copilot-cli,agentops.profile=$(sanitize_attr_value "${profile}"),agentops.experiment=$(sanitize_attr_value "${experiment}"),agentops.pack.version=$(sanitize_attr_value "${agentops_version}"),agentops.repo.hash=${repo_hash},git.branch=$(sanitize_attr_value "${branch}"),git.commit=$(sanitize_attr_value "${commit}"),agentops.wrapper.fallback_unobserved=${wrapper_fallback_unobserved},agentops.cli.mode=$(sanitize_attr_value "${cli_mode}"),agentops.cli.remote=$(sanitize_attr_value "${cli_remote}"),agentops.cli.output_format=$(sanitize_attr_value "${cli_output_format}"),agentops.cli.allow_all=${allow_all},agentops.cli.allow_all_tools=${allow_all_tools},agentops.cli.allow_all_paths=${allow_all_paths},agentops.cli.allow_all_urls=${allow_all_urls},agentops.cli.acp=${acp_enabled},agentops.cli.cwd_changed=${cwd_changed},agentops.cli.session_id_provided=${session_id_provided},agentops.cli.share=${share_enabled},agentops.cli.share_gist=${share_gist_enabled},agentops.cli.allow_tool.count=${allow_tool_count},agentops.cli.allow_url.count=${allow_url_count},agentops.cli.deny_tool.count=${deny_tool_count},agentops.cli.deny_url.count=${deny_url_count},agentops.cli.available_tools.count=${available_tool_count},agentops.cli.excluded_tools.count=${excluded_tool_count},agentops.cli.secret_env_vars.count=${secret_env_count},agentops.cli.attachment.count=${attachment_count},agentops.cli.plugin_dir.count=${plugin_dir_count},agentops.cli.additional_mcp_config.count=${additional_mcp_config_count},agentops.cli.disabled_mcp_server.count=${disabled_mcp_server_count},agentops.cli.github_mcp_tool.count=${github_mcp_tool_count},agentops.cli.github_mcp_toolset.count=${github_mcp_toolset_count}"
+if [[ -n "${wrapper_run_id}" ]]; then
+	agentops_resource_attributes="${agentops_resource_attributes},agentops.wrapper.run_id=$(sanitize_attr_value "${wrapper_run_id}")"
+fi
+if [[ -n "${wrapper_session_id}" ]]; then
+	agentops_resource_attributes="${agentops_resource_attributes},agentops.wrapper.session_id=$(sanitize_attr_value "${wrapper_session_id}")"
+fi
 if [[ -n "${AGENTOPS_E2E_ID:-}" ]]; then
 	agentops_resource_attributes="${agentops_resource_attributes},agentops.e2e.id=$(sanitize_attr_value "${AGENTOPS_E2E_ID}")"
 fi

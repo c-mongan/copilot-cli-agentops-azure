@@ -126,7 +126,7 @@ copilot-agentops --help
 
 The shim checks whether the Azure Monitor collector is already running. If it is not, it retrieves the Application Insights connection string at runtime, starts the collector, and then launches Copilot CLI through `copilot-observe` with content capture disabled.
 
-If the Azure Monitor collector cannot start because the configured Azure resources are missing or unavailable, the shim fails closed unless `AGENTOPS_ALLOW_UNOBSERVED_FALLBACK=1` is set.
+If the Azure Monitor collector cannot start because the configured Azure resources are missing or unavailable, the shim fails closed unless `AGENTOPS_ALLOW_UNOBSERVED_FALLBACK=1` is set. When that unsafe fallback is explicitly allowed, AgentOps writes a metadata-only `agentops.wrapper.fallback_unobserved` event to `.agentops/wrapper-events.jsonl`.
 
 The wrapper preserves user-supplied OpenTelemetry settings where possible. It sets safe defaults for `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_SERVICE_NAME`, `COPILOT_OTEL_SOURCE_NAME`, and `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT`, then prepends AgentOps metadata to existing `OTEL_RESOURCE_ATTRIBUTES` instead of replacing them.
 
