@@ -2275,6 +2275,45 @@ test('init workflow installs skills in dry-run mode and returns first-run next s
   }
 });
 
+test('init --full dry run requests every first-run stage from the CLI parser', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-init-full-'));
+  const configPath = path.join(tempDir, 'config.json');
+  try {
+    const result = spawnSync(process.execPath, [
+      path.join(__dirname, '..', 'src', 'index.js'),
+      'init',
+      '--dry-run',
+      '--full',
+      '--no-skills',
+      '--json'
+    ], {
+      cwd: path.join(__dirname, '..', '..'),
+      env: {
+        ...process.env,
+        AGENTOPS_CONFIG_PATH: configPath
+      },
+      encoding: 'utf8'
+    });
+    assert.equal(result.status, 0, result.stderr);
+    const parsed = JSON.parse(result.stdout);
+
+    assert.equal(parsed.cloud_provision.requested, true);
+    assert.equal(parsed.dashboard_import.requested, true);
+    assert.equal(parsed.real_smoke.requested, true);
+    assert.equal(parsed.triage_latest.requested, true);
+    assert.equal(parsed.cloud_provision.dry_run, true);
+    assert.equal(parsed.dashboard_import.dry_run, true);
+    assert.equal(parsed.real_smoke.dry_run, true);
+    assert.equal(parsed.triage_latest.dry_run, true);
+    assert.equal(parsed.next.includes('agentops init --provision-cloud'), false);
+    assert.equal(parsed.next.includes('node agentops-cli/src/index.js validate-azure --import-dashboards --last 24h'), false);
+    assert.equal(parsed.next.includes('node agentops-cli/src/index.js smoke --real-copilot --wait 2m --poll 10s'), false);
+    assert.equal(parsed.next.includes('node agentops-cli/src/index.js triage latest --out .agentops/triage/latest --json'), false);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
 test('init triage-latest dry run plans explicit latest triage stage', () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-init-triage-latest-dry-'));
   try {
