@@ -3869,6 +3869,39 @@ test('benchmark anti-cheat signals block unsafe promotion', () => {
   assert.equal(result.signals[0].signal, 'forbidden_files_changed');
 });
 
+test('benchmark anti-cheat flags external answer source tools for review', () => {
+  const report = benchmarkReport('bench-external-source', [{
+    runId: 'bench-external-source',
+    suite: 'starter',
+    variant: 'candidate',
+    taskId: 'create-note',
+    success: true,
+    checksPassed: 2,
+    checksFailed: 0,
+    filesChanged: 1,
+    forbiddenFilesChanged: 0,
+    policyBlocks: 0,
+    contentCaptureDetected: false,
+    tools: ['http_fetch_url', 'read_file'],
+    inputTokens: 100,
+    outputTokens: 50,
+    cost: 0.01
+  }]);
+
+  assert.equal(report.antiCheat.status, 'review');
+  assert.deepEqual(report.antiCheat.signals.find(signal => signal.signal === 'external_answer_source_tools'), {
+    severity: 'review',
+    signal: 'external_answer_source_tools',
+    count: 1,
+    evidence: [{
+      taskId: 'create-note',
+      sources: [{ tool: 'http_fetch_url', risk: 'network' }]
+    }],
+    action: 'review whether benchmark instructions allowed network or browser-sourced answers'
+  });
+  assert.deepEqual(report.tasks[0].externalAnswerSources, [{ tool: 'http_fetch_url', risk: 'network' }]);
+});
+
 test('ask context builds a safe telemetry-investigator prompt for a known session', () => {
   const context = askAgentOpsContext({ sessionId: 'conv-ask', last: '2h' });
   const output = renderAskContext(context);
