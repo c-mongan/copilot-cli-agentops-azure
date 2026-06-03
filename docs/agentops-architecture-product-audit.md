@@ -434,16 +434,15 @@ Both local and Azure Monitor collector configs now hash `code.filepath`. The rem
 
 Current gaps:
 
-- The collector image is now pinned by default through `AGENTOPS_OTELCOL_IMAGE`, but the chosen pin still needs an intentional release cadence.
+- The collector image is pinned by default and checked by `doctor`, but the chosen pin still needs an intentional release cadence.
 - Collector health now has a local health endpoint and a Data Quality dashboard panel, but exporter queue/drop/backpressure metrics are still thin.
 - `validate-collector` checks OTLP reachability plus the health endpoint; Azure export is proven by `agentops smoke --wait ...`.
-- `doctor` checks the local collector YAML for localhost endpoints but does not validate `collector/otelcol.azuremonitor.yaml`.
+- `doctor` checks local collector localhost endpoints, Azure Monitor compose localhost bindings, pinned image defaults, and Azure Monitor privacy/exporter config essentials.
 - Privacy filters are a denylist. A future Copilot field could carry sensitive content under a new key and pass through.
 
 Product recommendation:
 
 - Keep collector image pins fresh through releases.
-- Validate Azure collector config in `doctor`.
 - Expand collector health telemetry beyond smoke/log signals into exporter queue/drop/backpressure metrics.
 - Add a stricter allowlist mode for exported attributes, or at least a field-catalog content detector that blocks known sensitive key families.
 
@@ -1234,7 +1233,6 @@ Required work:
 
 ### P0 - Make The Current Pack Reliable
 
-- Add `doctor` checks for Azure collector config parity and pinned collector image.
 - Make `agentops validate-azure` optionally import missing dashboards after explicit confirmation.
 - Make `agentops smoke` optionally launch a real Copilot smoke prompt and deep-link to the resulting latest run.
 - Keep real Copilot OTel fixture snapshot contract tests in CI as Copilot fields evolve.
@@ -1285,9 +1283,9 @@ If I had to choose only five next tasks:
 
 1. Add dashboard import remediation to `agentops validate-azure`.
 2. Add a real Copilot smoke-run mode that prints the exact latest-run URL.
-3. Add Azure collector config parity and pinned collector image checks to `agentops doctor`.
-4. Build a polished session-first dashboard landing page with recommendation and ask-AgentOps context.
-5. Expand benchmark/eval support with hidden checks, permission profiles, and artifact diffing.
+3. Build a polished session-first dashboard landing page with recommendation and ask-AgentOps context.
+4. Expand benchmark/eval support with hidden checks, permission profiles, and artifact diffing.
+5. Add Azure RBAC automation and validation for multi-team rollout.
 
 ## Bottom Line
 

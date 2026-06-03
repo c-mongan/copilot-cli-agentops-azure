@@ -3799,6 +3799,15 @@ test('doctor cloud checks reuse Grafana validation results', async () => {
   assert.ok(summary.cloud.next[0].includes('agentops dashboard import --yes'));
 });
 
+test('doctor checks Azure collector config parity and pinned image defaults', async () => {
+  const summary = await doctorSummary({ localOnly: true, mode: 'none' });
+  const byName = Object.fromEntries(summary.checks.map(check => [check.name, check]));
+
+  assert.equal(byName['collector-image-pinned'].ok, true);
+  assert.equal(byName['collector-azure-localhost-bindings'].ok, true);
+  assert.equal(byName['collector-azure-config-privacy-parity'].ok, true);
+});
+
 test('installed shim status reports expected paths', () => {
   const status = installedShimStatus(path.join(root, 'tmp-bin'));
   assert.match(status.shadow_path, /copilot/);
