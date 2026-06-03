@@ -1,0 +1,8 @@
+{
+  "hook_event_name": "Stop",
+  "session_id": "hook-session-stop",
+  "timestamp": "2026-06-03T12:00:00.000Z",
+  "cwd": "/workspace/repo",
+  "transcript_path": "/tmp/copilot/transcript.jsonl",
+  "stop_reason": "end_turn"
+}

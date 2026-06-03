@@ -1,0 +1,9 @@
+{
+  "sessionId": "hook-session-notify",
+  "timestamp": 1780492800000,
+  "cwd": "/workspace/repo",
+  "hook_event_name": "Notification",
+  "message": "Permission needed for a shell command",
+  "title": "Permission needed",
+  "notification_type": "permission_required"
+}

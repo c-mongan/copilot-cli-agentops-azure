@@ -4361,6 +4361,54 @@ test('sidecar hook emits metadata-only durable event rows', () => {
   assert.doesNotMatch(JSON.stringify(event), /do not export/);
 });
 
+test('Copilot hook payload fixtures stay compatible with bundled hook scripts', () => {
+  const fixtureDir = path.join(root, 'tests', 'fixtures', 'copilot-hooks');
+  const preTool = path.join(root, 'plugin', 'scripts', 'pre-tool-policy.js');
+  const postToolFailure = path.join(root, 'plugin', 'scripts', 'post-tool-failure-hints.js');
+  const stopGate = path.join(root, 'plugin', 'scripts', 'agent-stop-quality-gate.js');
+  const sidecar = path.join(root, 'plugin', 'scripts', 'emit-sidecar-event.js');
+  const eventFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-hook-compat-')), 'sidecar-events.jsonl');
+  const fixture = name => fs.readFileSync(path.join(fixtureDir, name), 'utf8');
+
+  for (const name of ['preToolUse.camel.json', 'preToolUse.vscode.json']) {
+    const result = spawnSync(process.execPath, [preTool], {
+      input: fixture(name),
+      encoding: 'utf8'
+    });
+    assert.equal(result.status, 0, result.stderr);
+    const decision = JSON.parse(result.stdout);
+    assert.equal(decision.permissionDecision, 'deny');
+  }
+
+  const failure = spawnSync(process.execPath, [postToolFailure], {
+    input: fixture('postToolUseFailure.camel.json'),
+    encoding: 'utf8'
+  });
+  assert.equal(failure.status, 2, failure.stderr);
+  assert.match(failure.stdout, /Recovery hint/);
+
+  const stop = spawnSync(process.execPath, [stopGate], {
+    input: fixture('stop.vscode.json'),
+    encoding: 'utf8'
+  });
+  assert.equal(stop.status, 0, stop.stderr);
+
+  const notification = spawnSync(process.execPath, [sidecar], {
+    input: fixture('notification.camel.json'),
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      AGENTOPS_SIDECAR_EVENTS_PATH: eventFile
+    }
+  });
+  assert.equal(notification.status, 0, notification.stderr);
+  const event = JSON.parse(fs.readFileSync(eventFile, 'utf8').trim());
+  assert.equal(event['agentops.hook.type'], 'Notification');
+  assert.equal(event['agentops.hook.reason_category'], 'permission_required');
+  assert.equal(event['gen_ai.conversation.id'], 'hook-session-notify');
+  assert.doesNotMatch(JSON.stringify(event), /Permission needed/);
+});
+
 test('status renders beginner-first privacy and setup checks from fixtures', () => {
   const summary = agentopsStatusSummary({
     checks: [
