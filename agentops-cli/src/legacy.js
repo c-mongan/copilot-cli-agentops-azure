@@ -73,6 +73,7 @@ function usage() {
     'benchmark list',
     'benchmark fixture-pack <fixture-dir> --id <id> [--fixture <path>] [--title <title>] [--output <file>] [--sign-key-id <id> --sign-private-key <pem>]',
     'benchmark run <suite> --variant <name> --repeat <n> [--hypothesis <id>] [--dry-run]',
+    'benchmark approve <run-id> --by <name> [--ticket <id>] [--output <json>]',
     'benchmark report <run-id> [--azure] [--last <duration>] [--approval-file <json>]',
     'benchmark compare <before-run-id> <after-run-id> [--azure] [--last <duration>] [--approval-file <json>]'
   ];
@@ -1009,6 +1010,7 @@ function agentopsWorkflows() {
         `${cli} benchmark fixture-pack benchmarks/starter/fixtures/tiny-repo --id tiny-repo-sealed --fixture fixtures/tiny-repo --sign-key-id eval-fixtures-v1 --sign-private-key keys/eval-fixtures-v1.pem --output benchmarks/starter/fixture-packs/tiny-repo.json`,
         `${cli} benchmark run starter --variant baseline --repeat 1 --hypothesis safer-tool-policy --dry-run`,
         `${cli} benchmark run starter --variant baseline --repeat 1 --hypothesis safer-tool-policy`,
+        `${cli} benchmark approve <run-id> --by alice@example.com --ticket CHG-123 --output approvals/<run-id>.json`,
         `${cli} benchmark report <run-id>`,
         `${cli} benchmark compare <baseline-run-id> <variant-run-id> --azure --last 24h`
       ]
@@ -5776,6 +5778,52 @@ function parseBenchmarkCompareArgs(args) {
   return options;
 }
 
+function parseBenchmarkApproveArgs(args) {
+  const runId = args[0];
+  if (!runId) throw new Error('benchmark approve requires a run id');
+
+  const options = {
+    runId,
+    approvedBy: [],
+    status: 'approved'
+  };
+
+  for (let index = 1; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === '--by') {
+      if (!args[index + 1]) throw new Error('--by requires a name');
+      options.approvedBy.push(args[index + 1]);
+      index += 1;
+    } else if (arg === '--ticket') {
+      if (!args[index + 1]) throw new Error('--ticket requires a value');
+      options.ticket = args[index + 1];
+      index += 1;
+    } else if (arg === '--status') {
+      if (!args[index + 1]) throw new Error('--status requires approved, pending, or rejected');
+      options.status = args[index + 1];
+      index += 1;
+    } else if (arg === '--approved-at') {
+      if (!args[index + 1]) throw new Error('--approved-at requires an ISO timestamp');
+      options.approvedAt = args[index + 1];
+      index += 1;
+    } else if (arg === '--output') {
+      if (!args[index + 1]) throw new Error('--output requires a path');
+      options.output = args[index + 1];
+      index += 1;
+    } else {
+      throw new Error(`Unknown benchmark approve option: ${arg}`);
+    }
+  }
+
+  if (!['approved', 'pending', 'rejected'].includes(options.status)) {
+    throw new Error('--status must be approved, pending, or rejected');
+  }
+  if (options.status === 'approved' && options.approvedBy.length === 0) {
+    throw new Error('benchmark approve requires at least one --by approver');
+  }
+  return options;
+}
+
 function makeBenchmarkRunId(now = new Date()) {
   const stamp = now.toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
   return `bench-${stamp}-${crypto.randomBytes(4).toString('hex')}`;
@@ -6890,9 +6938,13 @@ function validateBenchmarkPromotionApproval(approval, source = 'approval') {
   if (approval.ticket !== undefined && typeof approval.ticket !== 'string') {
     throw new Error(`Invalid benchmark promotion approval ${source}: ticket must be a string`);
   }
+  if (approval.runId !== undefined && (typeof approval.runId !== 'string' || approval.runId.trim() === '')) {
+    throw new Error(`Invalid benchmark promotion approval ${source}: runId must be a non-empty string`);
+  }
 
   return {
     status,
+    ...(approval.runId !== undefined ? { runId: approval.runId } : {}),
     approvedBy,
     approvedAt: approval.approvedAt || null,
     ticket: approval.ticket || null,
@@ -6906,6 +6958,35 @@ function benchmarkPromotionApprovalFromOptions(options = {}) {
   }
   if (!options.approvalFile) return null;
   return validateBenchmarkPromotionApproval(readJson(path.resolve(options.approvalFile)), options.approvalFile);
+}
+
+function benchmarkApproval(options = {}) {
+  if (typeof options.runId !== 'string' || options.runId.trim() === '') {
+    throw new Error('benchmark approve requires a run id');
+  }
+  const status = options.status || 'approved';
+  const approvedAt = options.approvedAt || (status === 'approved' ? (options.now || new Date()).toISOString() : undefined);
+  const approval = validateBenchmarkPromotionApproval({
+    runId: options.runId,
+    status,
+    approvedBy: options.approvedBy || [],
+    approvedAt,
+    ticket: options.ticket || undefined
+  }, 'benchmark approve');
+
+  if (approval.status === 'approved' && approval.approvedBy.length === 0) {
+    throw new Error('benchmark approve requires at least one --by approver');
+  }
+
+  if (options.output) {
+    const outputPath = path.resolve(options.cwd || process.cwd(), options.output);
+    fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+    const { source, ...approvalFile } = approval;
+    fs.writeFileSync(outputPath, `${JSON.stringify(approvalFile, null, 2)}\n`);
+    return { ...approval, output: outputPath };
+  }
+
+  return approval;
 }
 
 function defaultBenchmarkSummaryDir() {
@@ -6945,6 +7026,9 @@ function benchmarkReport(runId, summaries = null, options = {}) {
   let runSummaries = (summaries || loadBenchmarkSummaries(runId)).filter(summary => summary.runId === runId);
   let azureTelemetry = null;
   const promotionApproval = benchmarkPromotionApprovalFromOptions(options);
+  if (promotionApproval?.runId && promotionApproval.runId !== runId) {
+    throw new Error(`benchmark approval file is for run ${promotionApproval.runId}, not ${runId}`);
+  }
 
   if (runSummaries.length === 0) {
     if (options.azure) azureTelemetry = benchmarkAzureTelemetry(runId, options);
@@ -7513,6 +7597,12 @@ async function main(argv) {
       return;
     }
 
+    if (subcommand === 'approve') {
+      const options = parseBenchmarkApproveArgs(benchmarkArgs);
+      process.stdout.write(JSON.stringify(benchmarkApproval(options), null, 2) + '\n');
+      return;
+    }
+
     if (subcommand === 'run') {
       const options = parseBenchmarkRunArgs(benchmarkArgs);
       process.stdout.write(JSON.stringify(runBenchmarkSuite(options.suite, options), null, 2) + '\n');
@@ -7531,7 +7621,7 @@ async function main(argv) {
       return;
     }
 
-    throw new Error('benchmark requires list, fixture-pack, run, report, or compare');
+    throw new Error('benchmark requires list, fixture-pack, approve, run, report, or compare');
   }
 
   if (command === 'link') {
@@ -7631,6 +7721,7 @@ module.exports = {
   benchmarkCheatSignals,
   benchmarkAzureTelemetry,
   benchmarkAzureTelemetryQuery,
+  benchmarkApproval,
   benchmarkFixturePack,
   benchmarkReport,
   benchmarkRunBaseDir,
@@ -7678,6 +7769,7 @@ module.exports = {
   otlpCustomEventPayload,
   otlpLiveReplaySmokeTracePayload,
   parseBenchmarkCompareArgs,
+  parseBenchmarkApproveArgs,
   parseBenchmarkFixturePackArgs,
   parseBenchmarkReportArgs,
   parseBenchmarkRunArgs,
