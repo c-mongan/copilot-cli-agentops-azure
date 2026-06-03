@@ -819,13 +819,13 @@ Current anti-cheat limitations:
 
 - The starter task uses `--allow-all`, which is acceptable for an isolated tiny fixture but should not be the default posture for serious evals.
 - Permission profiles enforce broad-flag validation and read-only workspace immutability for benchmark fixture copies, and task tool policies can reject observed risky tool telemetry. They do not yet enforce OS-level sandboxing.
-- Hidden check packs exist as separate masked command packs, and fixture seals can reject checksum drift, but full sealed fixture pack distribution is still missing.
+- Hidden check packs exist as separate masked command packs, fixture seals can reject checksum drift, and the Evals & Quality dashboard surfaces metadata-only hidden pack review. Full sealed fixture pack distribution is still missing.
 - There is no network isolation; network tool policies are report-time rejection signals, not egress prevention.
 - Read-only benchmark profiles now block any workspace file change in the copied fixture.
 - Semantic evaluator adapters exist for deterministic file-content and regex checks, but there is no LLM or rubric-judge scoring yet.
 - Candidate promotion gates can require approval evidence from an approval file, and the Evals & Quality dashboard now surfaces metadata-only approval review status. There is still no interactive team approval workflow yet.
 - There is no defense against an agent changing the test commands if the eval harness files are available to it.
-- The Evals & Quality dashboard now includes metadata-only artifact diff counts and per-file artifact path review for benchmark recommendations, but there is no unified file-content diff viewer yet.
+- The Evals & Quality dashboard now includes metadata-only artifact diff counts, per-file artifact path review, and hidden check pack review for benchmark recommendations, but there is no unified file-content diff viewer yet.
 - There is no "agent used external answer source" detector.
 - There is no "agent optimized for benchmark but harmed real-world telemetry" comparison beyond the report heuristics.
 

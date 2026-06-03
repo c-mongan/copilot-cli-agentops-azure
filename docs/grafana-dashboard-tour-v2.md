@@ -134,6 +134,8 @@ The **Benchmark artifact diff review** panel shows benchmark gate recommendation
 
 The **Benchmark artifact files** panel expands the same benchmark evidence into task ID, change type, and artifact path rows. Use it to see which expected artifacts changed without exposing file contents.
 
+The **Benchmark hidden check packs** panel shows hidden check pass/fail counts plus masked pack IDs, titles, task IDs, and command counts. It confirms hidden checks were attached without revealing hidden command text.
+
 The **Benchmark promotion approvals** panel shows promotion approval status, required/observed approval counts, approved-at time, ticket, and evidence source so teams can see whether a candidate is missing approval evidence before promotion.
 
 Use `agentops triage latest --runs <AgentOpsRunSummary_CL.jsonl> --events <AgentOpsEvents_CL.jsonl> --tools <AgentOpsToolCalls_CL.jsonl> --evals <AgentOpsEval_CL.jsonl> --insights <AgentOpsInsights_CL.jsonl>` to package links, evidence counts, a safe investigator prompt, and one recommendation.
