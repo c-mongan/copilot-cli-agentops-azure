@@ -1062,6 +1062,7 @@ Missing world-class behavior:
 - The dashboard now gives the agent explicit session context, Run Replay URL, starter KQL, and copyable `agentops ask-context` commands, but it still does not launch a hosted assistant directly.
 - Recommendations are now present in Run Replay as first-class artifacts with copyable follow-up commands, but the dashboard still does not execute or persist the action workflow for the user.
 - Saved investigations now surface on the Home dashboard from metadata-only `AgentOpsSavedViews_CL` exports, but there is still no shared hosted saved-view write store.
+- Saved-view exports can now include session-matched config-change annotation counts and change-target refs from `--events`, so saved investigations keep the nearby skill/hook/MCP/model change context.
 
 Target experience:
 
@@ -1149,6 +1150,7 @@ Implemented first slice:
 - `agentops annotation config-change` now emits metadata-only `agentops.config.changed` events for skill, hook, MCP, model, deployment, and benchmark changes, with an Insights dashboard panel for change/regression correlation.
 - `agentops recommend --events` now attaches matching config-change annotations to regression recommendations and persists them as metadata-only `ChangeAnnotations` plus concrete `ChangeTargetRefs`.
 - `agentops alert handoff --events` now attaches matching config-change annotations plus a session-scoped annotation KQL query to alert operator handoffs and route previews.
+- `agentops saved-view add|export --events` now attaches matching config-change annotations to saved investigations and surfaces annotation counts/refs on the Home dashboard.
 - `agentops init --import-dashboards` now runs the dashboard import remediation stage explicitly during the init flow, then continues toward smoke/open next steps.
 - `agentops init --run-smoke` now runs the real-Copilot smoke/open-link stage explicitly during the init flow and reports follow-up commands when it fails.
 - `agentops init --triage-latest` now packages the latest run into the AgentOps triage evidence bundle explicitly during the init flow and reports latest/open follow-up commands when it fails.
@@ -1211,7 +1213,7 @@ Required work:
 - Persist recommendations.
 - Link recommendations to files and benchmark runs.
 - Track before/after telemetry.
-- Expand annotation use into saved views.
+- Use annotation-linked recommendations, alert handoffs, and saved views in the hosted workflow once shared storage exists.
 
 ### 4. Robust Eval Center
 

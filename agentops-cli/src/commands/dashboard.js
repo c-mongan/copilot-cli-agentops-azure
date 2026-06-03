@@ -235,6 +235,7 @@ function validateDashboardFilters() {
 const v2KqlSmokePanels = [
   { uid: 'agentops-v2-home', panel: 'Session Health', requireRows: true },
   { uid: 'agentops-v2-home', panel: 'Recommended next actions', requireRows: true },
+  { uid: 'agentops-v2-home', panel: 'Saved investigations', requireRows: false },
   { uid: 'agentops-v2-runs-explorer', panel: 'Runs', requireRows: true },
   { uid: 'agentops-v2-run-replay', panel: 'Run summary', requireRows: true },
   { uid: 'agentops-v2-run-replay', panel: 'Agent, skill, and MCP lineage', requireRows: true },
@@ -378,7 +379,7 @@ function validateDashboardUx() {
     if (!homeText.includes(snippet)) errors.push(`home action strip missing ${snippet}`);
   }
   const savedViewsQuery = queryFromPanel(panelByTitle(home, 'Saved investigations'));
-  for (const field of ['AgentOpsSavedViews_CL', 'SavedViewId', 'Name', 'QueryHash', 'OpenSavedView', 'OpenReplay']) {
+  for (const field of ['AgentOpsSavedViews_CL', 'SavedViewId', 'Name', 'QueryHash', 'ChangeAnnotationCount', 'ChangeTargetRefs', 'OpenSavedView', 'OpenReplay']) {
     if (!savedViewsQuery.includes(field)) errors.push(`saved investigations panel missing ${field}`);
   }
   const sessionHealthQuery = queryFromPanel(panelByTitle(home, 'Session Health'));

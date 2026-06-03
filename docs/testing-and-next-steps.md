@@ -247,7 +247,7 @@ Save repeat investigations locally:
 node agentops-cli/src/index.js saved-view add latest-risk --session <conversation-id> --tag risk
 node agentops-cli/src/index.js saved-view list
 node agentops-cli/src/index.js saved-view open latest-risk
-node agentops-cli/src/index.js saved-view export --out .agentops/saved-views/latest
+node agentops-cli/src/index.js saved-view export --events .agentops/demo/latest/AgentOpsEvents_CL.jsonl --out .agentops/saved-views/latest
 ```
 
 Saved views are stored outside the repo in `~/.agentops/views.json` unless `AGENTOPS_VIEWS_PATH` is set.
