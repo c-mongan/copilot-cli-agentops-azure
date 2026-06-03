@@ -16,6 +16,7 @@ const { summarizeCopilotRun } = require('../src/lib/copilot/run-summary');
 const { classifyToolName, summarizeAllowedTools } = require('../src/lib/copilot/tool-classifier');
 const privacy = require('../src/lib/privacy');
 const { validateAgentRun, validateMcpSpan } = require('../src/lib/schema/agent-run-schema');
+const { recommendationSchemaDocument, validateRecommendationRow } = require('../src/lib/schema/recommendation-schema');
 const { normalizeGenAiAttributes } = require('../src/lib/otel/genai-normalizer');
 const { normalizeMcpAttributes } = require('../src/lib/otel/mcp-normalizer');
 const { buildAskContext, hasV2AskArgs } = require('../src/commands/ask-context');
@@ -1487,6 +1488,10 @@ test('V2 recommend carries benchmark gate and change-target metadata', () => {
     assert.equal(row.BenchmarkApprovalTicket, 'APPROVAL-123');
     assert.equal(row.BenchmarkApprovalSource, 'approval.json');
     assert.ok(row.ChangeTargetRefs.includes('tests_or_benchmark_suite'));
+    assert.equal(validateRecommendationRow(row).ok, true);
+    assert.equal(recommendationSchemaDocument().table, 'AgentOpsRecommendations_CL');
+    assert.equal(validateRecommendationRow({ ...row, Severity: 'urgent' }).ok, false);
+    assert.match(validateRecommendationRow({ ...row, ToolArguments: '{"secret":"nope"}' }).errors.join('\n'), /raw content field: ToolArguments/);
     assert.doesNotMatch(JSON.stringify(row), /prompt|source code|tool args/i);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });

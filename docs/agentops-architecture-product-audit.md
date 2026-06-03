@@ -563,6 +563,7 @@ What works well:
   - validation
   - rollback condition
 - It includes saved views, links, primitive inventory, and benchmark compare.
+- Recommendation artifacts now have an internal JSON schema and validator before `AgentOpsRecommendations_CL` rows are written.
 - Tests are broad for the CLI.
 
 Current gaps:
@@ -584,7 +585,6 @@ Product recommendation:
   - same agent causing high context pressure
   - same MCP server correlated with failures
   - same policy false-positive pattern
-- Add an internal JSON schema for recommendation outputs.
 
 ### Grafana UI Plane
 
