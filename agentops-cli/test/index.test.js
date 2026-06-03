@@ -4600,6 +4600,10 @@ test('benchmark dry run plans fixture copy, Copilot args, labels, checks, and ti
   assert.deepEqual(plan.runs[0].toolPolicy, {
     blockedRisks: ['browser-control', 'destructive', 'network', 'secret-access']
   });
+  assert.deepEqual(plan.runs[0].toolPolicyEnforcement, {
+    blockedRisks: ['browser-control', 'destructive', 'network', 'secret-access'],
+    blockedAllowedTools: []
+  });
   assert.deepEqual(plan.runs[0].promotionGates, {
     minPassRatePct: 100,
     minAverageScore: 90,
@@ -4698,6 +4702,10 @@ test('benchmark run executes Copilot in an isolated fixture copy and writes a su
     assert.equal(result.summaries.length, 1);
     assert.equal(result.summaries[0].success, true);
     assert.equal(result.summaries[0].permissionProfile, 'allow-all-isolated');
+    assert.deepEqual(result.summaries[0].toolPolicyEnforcement, {
+      blockedRisks: ['browser-control', 'destructive', 'network', 'secret-access'],
+      blockedAllowedTools: []
+    });
     assert.deepEqual(result.summaries[0].promotionGates, {
       minPassRatePct: 100,
       minAverageScore: 90,
@@ -4743,6 +4751,10 @@ test('benchmark run executes Copilot in an isolated fixture copy and writes a su
     assert.deepEqual(result.report.hiddenChecks, { passed: 1, failed: 0 });
     assert.equal(result.report.tasks[0].artifactDiff.totalChanged, 2);
     assert.equal(result.report.tasks[0].permissionProfile, 'allow-all-isolated');
+    assert.deepEqual(result.report.tasks[0].toolPolicyEnforcement, {
+      blockedRisks: ['browser-control', 'destructive', 'network', 'secret-access'],
+      blockedAllowedTools: []
+    });
     assert.equal(result.report.tasks[0].hiddenChecksPassed, 1);
     assert.equal(result.report.tasks[0].hiddenChecksFailed, 0);
     assert.deepEqual(result.report.tasks[0].hiddenCheckPacks.map(pack => ({
@@ -4766,6 +4778,77 @@ test('benchmark run executes Copilot in an isolated fixture copy and writes a su
     assert.match(copilotCall.options.env.OTEL_RESOURCE_ATTRIBUTES, /agentops\.benchmark\.task_id=create-note/);
     assert.match(copilotCall.options.env.OTEL_RESOURCE_ATTRIBUTES, /agentops\.benchmark\.permission_profile=allow-all-isolated/);
     assert.deepEqual(copilotCall.args.slice(-2), ['-p', 'Create notes/hello.txt containing the text hello agentops.']);
+  } finally {
+    fs.rmSync(path.join(benchmarkRunBaseDir, runId), { recursive: true, force: true });
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('benchmark tool policy blocks forbidden allowed tools before Copilot runs', () => {
+  const runId = `bench-tool-policy-pre-${Date.now()}`;
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-bench-tool-policy-pre-'));
+  const suiteDir = path.join(tempDir, 'benchmarks', 'tool-policy-suite');
+  const fixtureDir = path.join(suiteDir, 'fixtures', 'tiny-repo');
+  const tasksDir = path.join(suiteDir, 'tasks');
+  let copilotCalled = false;
+
+  try {
+    fs.mkdirSync(fixtureDir, { recursive: true });
+    fs.mkdirSync(tasksDir, { recursive: true });
+    fs.writeFileSync(path.join(suiteDir, 'suite.json'), `${JSON.stringify({ id: 'tool-policy-suite', title: 'Tool policy suite' })}\n`);
+    fs.writeFileSync(path.join(fixtureDir, 'README.md'), '# Tool policy fixture\n');
+    fs.writeFileSync(path.join(tasksDir, 'network.json'), `${JSON.stringify({
+      id: 'network-task',
+      title: 'Network task',
+      fixture: 'fixtures/tiny-repo',
+      prompt: 'Do nothing.',
+      copilotArgs: ['--allow-tool=http_fetch_url'],
+      permissionProfile: 'least-privilege',
+      toolPolicy: {
+        blockedRisks: ['network']
+      },
+      successCommands: [],
+      expectedFiles: [],
+      forbiddenFiles: [],
+      timeoutSec: 10,
+      tags: []
+    })}\n`);
+
+    const dryRun = benchmarkRunPlan('tool-policy-suite', {
+      benchmarksDir: path.join(tempDir, 'benchmarks'),
+      variant: 'candidate',
+      dryRun: true,
+      runId
+    });
+    assert.deepEqual(dryRun.runs[0].toolPolicyEnforcement, {
+      blockedRisks: ['network'],
+      blockedAllowedTools: [{ name: 'http_fetch_url', risk: 'network' }]
+    });
+
+    const result = runBenchmarkSuite('tool-policy-suite', {
+      benchmarksDir: path.join(tempDir, 'benchmarks'),
+      variant: 'candidate',
+      repeat: 1,
+      runId,
+      summariesDir: path.join(tempDir, 'summaries'),
+      spawnSync: (command) => {
+        if (command === 'copilot') copilotCalled = true;
+        return { status: 0, stdout: '', stderr: '' };
+      }
+    });
+
+    assert.equal(copilotCalled, false);
+    assert.equal(result.summaries[0].success, false);
+    assert.equal(result.summaries[0].errorCategory, 'policy_violation');
+    assert.equal(result.summaries[0].policyBlocks, 1);
+    assert.deepEqual(result.summaries[0].toolPolicyEnforcement.blockedAllowedTools, [{ name: 'http_fetch_url', risk: 'network' }]);
+    assert.deepEqual(result.summaries[0].checks, [{
+      name: 'tool policy: blocked allowed tool http_fetch_url',
+      ok: false,
+      detail: 'risk network is blocked before Copilot execution'
+    }]);
+    assert.equal(result.report.tasks[0].toolPolicyEnforcement.blockedAllowedTools[0].risk, 'network');
+    assert.equal(result.report.recommendation.action, 'reject');
   } finally {
     fs.rmSync(path.join(benchmarkRunBaseDir, runId), { recursive: true, force: true });
     fs.rmSync(tempDir, { recursive: true, force: true });

@@ -13,7 +13,7 @@ const { createRecommendations } = require('./recommendations');
 const { createSavedViews } = require('./saved-views');
 const { createTelemetry } = require('./telemetry');
 const { repoRoot } = require('./lib/paths');
-const { classifyToolName } = require('./lib/copilot/tool-classifier');
+const { classifyToolName, extractAllowedTools } = require('./lib/copilot/tool-classifier');
 
 const root = repoRoot;
 
@@ -5285,6 +5285,22 @@ function validateBenchmarkToolPolicy(policy, source = 'task') {
   return blockedRisks.length > 0 ? { blockedRisks } : null;
 }
 
+function benchmarkAllowedToolPolicyViolations(args = [], toolPolicy = null) {
+  const blockedRisks = new Set(toolPolicy?.blockedRisks || []);
+  if (blockedRisks.size === 0) return [];
+
+  const seen = new Set();
+  return extractAllowedTools(args)
+    .filter(tool => blockedRisks.has(tool.risk))
+    .filter(tool => {
+      const key = `${tool.name}:${tool.risk}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((left, right) => left.risk.localeCompare(right.risk) || left.name.localeCompare(right.name));
+}
+
 function validateBenchmarkTask(task, suiteDir, source = 'task') {
   const errors = [];
   const stringFields = ['id', 'title', 'fixture', 'prompt'];
@@ -5336,6 +5352,10 @@ function validateBenchmarkTask(task, suiteDir, source = 'task') {
   const fixtureSeal = validateBenchmarkFixtureSeal(task.fixtureSeal, fixturePath, source);
   const fixtureSealPack = loadBenchmarkFixtureSealPack(task, suiteDir, fixturePath, source);
   const toolPolicy = validateBenchmarkToolPolicy(task.toolPolicy, source);
+  const toolPolicyEnforcement = {
+    blockedRisks: toolPolicy?.blockedRisks || [],
+    blockedAllowedTools: benchmarkAllowedToolPolicyViolations(task.copilotArgs, toolPolicy)
+  };
 
   return {
     ...task,
@@ -5347,6 +5367,7 @@ function validateBenchmarkTask(task, suiteDir, source = 'task') {
     fixtureSeal,
     fixtureSealPack,
     toolPolicy,
+    toolPolicyEnforcement,
     permissionProfile,
     fixturePath,
     source
@@ -5557,6 +5578,7 @@ function benchmarkRunPlan(suiteId, options = {}) {
           ...(hypothesis ? { 'agentops.hypothesis.id': hypothesis } : {})
         },
         promotionGates: suite.promotionGates,
+        toolPolicyEnforcement: task.toolPolicyEnforcement,
         successChecks: {
           commands: task.successCommands,
           fixtureSeal: task.fixtureSeal ? {
@@ -5816,6 +5838,60 @@ function executeBenchmarkRun(plan, run, options = {}) {
   fs.mkdirSync(run.copilotHome, { recursive: true });
 
   const beforeSnapshot = relativeFileSnapshot(workspace);
+  const preRunPolicyViolations = run.toolPolicyEnforcement?.blockedAllowedTools || [];
+  if (preRunPolicyViolations.length > 0) {
+    const now = new Date().toISOString();
+    fs.writeFileSync(path.join(runRoot, 'stdout.txt'), '');
+    fs.writeFileSync(path.join(runRoot, 'stderr.txt'), '');
+    const checkResults = preRunPolicyViolations.map(tool => ({
+      name: `tool policy: blocked allowed tool ${tool.name}`,
+      ok: false,
+      detail: `risk ${tool.risk} is blocked before Copilot execution`
+    }));
+    return {
+      runId: plan.runId,
+      suite: plan.suite,
+      variant: plan.variant,
+      hypothesis: plan.hypothesis,
+      taskId: run.taskId,
+      taskTitle: run.taskTitle,
+      permissionProfile: run.permissionProfile,
+      toolPolicy: run.toolPolicy || null,
+      toolPolicyEnforcement: run.toolPolicyEnforcement || null,
+      promotionGates: run.promotionGates || null,
+      repeat: run.repeat,
+      startedAt: now,
+      endedAt: now,
+      durationMs: 0,
+      success: false,
+      checksPassed: 0,
+      checksFailed: checkResults.length,
+      fixtureSealPack: run.successChecks.fixtureSealPack || null,
+      hiddenCheckPacks: run.successChecks.hiddenCheckPacks || [],
+      hiddenChecksPassed: 0,
+      hiddenChecksFailed: 0,
+      semanticScore: null,
+      semanticChecks: [],
+      filesChanged: 0,
+      changedFiles: [],
+      artifactDiff: { added: [], modified: [], deleted: [], totalChanged: 0 },
+      forbiddenFilesChanged: 0,
+      forbiddenFilesPresent: [],
+      toolFailures: 0,
+      policyBlocks: checkResults.length,
+      contentCaptureDetected: process.env.OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT === 'true',
+      inputTokens: 0,
+      outputTokens: 0,
+      aiu: 0,
+      cost: 0,
+      errorCategory: 'policy_violation',
+      checks: checkResults,
+      workspace,
+      stdoutPath: path.join(runRoot, 'stdout.txt'),
+      stderrPath: path.join(runRoot, 'stderr.txt')
+    };
+  }
+
   const env = {
     ...process.env,
     ...run.environment,
@@ -5918,6 +5994,7 @@ function executeBenchmarkRun(plan, run, options = {}) {
     taskTitle: run.taskTitle,
     permissionProfile: run.permissionProfile,
     toolPolicy: run.toolPolicy || null,
+    toolPolicyEnforcement: run.toolPolicyEnforcement || null,
     promotionGates: run.promotionGates || null,
     repeat: run.repeat,
     startedAt: startedAt.toISOString(),
@@ -6625,6 +6702,7 @@ function benchmarkReport(runId, summaries = null, options = {}) {
       hypothesis: summary.hypothesis || null,
       permissionProfile: summary.permissionProfile || null,
       toolPolicy: summary.toolPolicy || null,
+      toolPolicyEnforcement: summary.toolPolicyEnforcement || null,
       success: Boolean(summary.success),
       score: summary.score,
       fixtureSealPack: summary.fixtureSealPack || null,
