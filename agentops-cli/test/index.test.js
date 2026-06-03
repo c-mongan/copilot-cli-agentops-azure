@@ -20,7 +20,7 @@ const { normalizeGenAiAttributes } = require('../src/lib/otel/genai-normalizer')
 const { normalizeMcpAttributes } = require('../src/lib/otel/mcp-normalizer');
 const { buildAskContext, hasV2AskArgs } = require('../src/commands/ask-context');
 const { buildContentStatus, renderOptInGuide } = require('../src/commands/content');
-const { removeAgentOpsCopilotFlags } = require('../src/commands/copilot');
+const { removeAgentOpsCopilotFlags, wrapperReplayUrl } = require('../src/commands/copilot');
 const { buildCopilotSessionEnrichment } = require('../src/commands/copilot-session');
 const { dashboardImportPlan, dashboardKqlCheck, dashboardVerify, runDashboardImport, validateDashboardContentGuardrails, validateDashboardFilters, validateDashboardLinks, validateDashboardUx, validateDashboards } = require('../src/commands/dashboard');
 const { doctorSummary } = require('../src/commands/doctor');
@@ -1652,6 +1652,15 @@ test('copilot command strips AgentOps-only flags before invoking Copilot', () =>
     removeAgentOpsCopilotFlags(['--collector-mode', 'none', '--privacy=strict', '--unsafe-no-collector', '-p', 'hello']),
     ['-p', 'hello']
   );
+});
+
+test('copilot command builds a run-scoped AgentOps replay link', () => {
+  const url = wrapperReplayUrl(
+    { runId: 'wrapper run,=id', sessionId: 'wrapper session' },
+    { v2_replay_url: 'https://grafana.example/d/agentops-v2-run-replay?var-session_id=old' }
+  );
+
+  assert.equal(url, 'https://grafana.example/d/agentops-v2-run-replay?var-run_id=wrapper+run%2C%3Did&var-session_id=wrapper+session');
 });
 
 test('Copilot run metadata hashes prompt and command without storing raw text', () => {

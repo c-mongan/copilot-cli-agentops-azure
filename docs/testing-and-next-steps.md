@@ -129,6 +129,8 @@ The shim checks whether the Azure Monitor collector is already running. If it is
 
 If the Azure Monitor collector cannot start because the configured Azure resources are missing or unavailable, the shim fails closed unless `AGENTOPS_ALLOW_UNOBSERVED_FALLBACK=1` is set. The CLI wrapper writes metadata-only lifecycle rows to `.agentops/wrapper-events.jsonl`, including `agentops.run.start`, `agentops.run.end`, `agentops.collector.start_failed`, and `agentops.wrapper.fallback_unobserved`.
 
+After a successful wrapped run, `agentops copilot` prints an `AgentOps Run Replay` link scoped to the wrapper run and session IDs. Set `AGENTOPS_PRINT_RUN_LINK=false` to suppress the link.
+
 The wrapper preserves user-supplied OpenTelemetry settings where possible. It sets safe defaults for `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_SERVICE_NAME`, `COPILOT_OTEL_SOURCE_NAME`, and `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT`, then prepends AgentOps metadata to existing `OTEL_RESOURCE_ATTRIBUTES` instead of replacing them.
 
 ## Native Copilot OTel Without The Wrapper
