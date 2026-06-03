@@ -64,7 +64,7 @@ const { checkInstallSmoke } = require('../../scripts/check-install-smoke');
 const { checkReleaseDistribution } = require('../../scripts/check-release-distribution');
 const { checkSdkPublish, isWildcardRange } = require('../../scripts/check-sdk-publish');
 const { shouldCopy } = require('../../scripts/prepare-cli-package-assets');
-const { buildActionerReview, buildSharedStoreWrite, sharedStoreWrite } = require('../../actioner');
+const { buildActionerReview, buildSharedStoreEditor, buildSharedStoreWrite, sharedStoreEditor, sharedStoreWrite } = require('../../actioner');
 
 const {
   agentopsAttributionSmoke,
@@ -8756,6 +8756,22 @@ test('shared store write API accepts only metadata-only recommendation and saved
   assert.equal(rejectedContext.bindings.sharedBlob, undefined);
   assert.equal(rejectedContext.res.body.row, null);
   assert.ok(rejectedContext.res.body.errors.some(error => error.includes('privacy scan')));
+});
+
+test('shared store editor renders browser-native metadata-only write form', async () => {
+  const html = buildSharedStoreEditor({ basePath: '/api/shared-store' });
+  assert.match(html, /AgentOps Shared Store Editor/);
+  assert.match(html, /AgentOpsRecommendations_CL/);
+  assert.match(html, /AgentOpsSavedViews_CL/);
+  assert.match(html, /Save metadata artifact/);
+  assert.match(html, /fetch\(apiBase \+ '\/'/);
+  assert.doesNotMatch(html, /SECRET_FAKE_TEST_VALUE|raw transcript|tool_args|gen_ai\.input\.messages/);
+
+  const context = {};
+  await sharedStoreEditor(context, {});
+  assert.equal(context.res.status, 200);
+  assert.equal(context.res.headers['Content-Type'], 'text/html; charset=utf-8');
+  assert.match(context.res.body, /metadata-only recommendation or saved investigation row/);
 });
 
 test('alert history exposes metadata-only fired-alert query', () => {

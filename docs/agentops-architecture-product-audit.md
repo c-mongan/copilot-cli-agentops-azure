@@ -1061,8 +1061,8 @@ This is strong for technical users.
 Missing world-class behavior:
 
 - The dashboard now gives the agent explicit session context, Run Replay URL, starter KQL, and copyable `agentops ask-context` commands, but it still does not launch a hosted assistant directly.
-- Recommendations are now present in Run Replay as first-class artifacts with copyable follow-up commands, a local metadata-only recommendation store, an opt-in shared Blob upload plan, and a hosted metadata-only write API for team review artifacts, but the dashboard still does not execute the action workflow for the user.
-- Saved investigations now surface on the Home dashboard from metadata-only `AgentOpsSavedViews_CL` exports, with an opt-in shared Blob store and hosted metadata-only write API, but there is still no browser-native saved-view editor.
+- Recommendations are now present in Run Replay as first-class artifacts with copyable follow-up commands, a local metadata-only recommendation store, an opt-in shared Blob upload plan, a hosted metadata-only write API, and a hosted browser editor for team review artifacts, but the dashboard still does not execute the action workflow for the user.
+- Saved investigations now surface on the Home dashboard from metadata-only `AgentOpsSavedViews_CL` exports, with an opt-in shared Blob store, hosted metadata-only write API, and browser-native saved-view editor.
 - Saved-view exports can now include session-matched config-change annotation counts and change-target refs from `--events`, so saved investigations keep the nearby skill/hook/MCP/model change context.
 
 Target experience:
@@ -1153,6 +1153,7 @@ Implemented first slice:
 - `agentops recommend --save` now persists metadata-only recommendation rows to a local durable store, with `agentops recommend list|export` for later review or ingestion.
 - `agentops azure-ingest upload-plan` now validates metadata-only saved-view/recommendation exports and prints Entra-backed Azure Blob upload commands for the optional shared store.
 - `actioner/SharedStoreWrite` now accepts hosted metadata-only recommendation and saved-view row writes into the shared Blob store through managed identity.
+- `actioner/SharedStoreEditor` now renders a hosted browser form for metadata-only recommendation and saved-investigation rows that submits to the same validated write API.
 - `agentops alert handoff --events` now attaches matching config-change annotations plus a session-scoped annotation KQL query to alert operator handoffs and route previews.
 - `agentops saved-view add|export --events` now attaches matching config-change annotations to saved investigations and surfaces annotation counts/refs on the Home dashboard.
 - `agentops init --import-dashboards` now runs the dashboard import remediation stage explicitly during the init flow, then continues toward smoke/open next steps.

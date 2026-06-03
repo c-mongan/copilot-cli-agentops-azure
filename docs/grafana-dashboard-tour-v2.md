@@ -14,7 +14,7 @@ It shows:
 - recommended next actions from insight rows;
 - expensive runs;
 - GitHub outcome summary;
-- shared saved investigations exported from `agentops saved-view export`.
+- shared saved investigations exported from `agentops saved-view export` or created in the hosted `/api/shared-store/editor` page.
 
 Click a `RunId` to open Run Replay. Click a model, repo hash, tool, skill, or sub-agent to keep drilling with the same time range.
 

@@ -4,6 +4,7 @@ The actioner is an opt-in Azure Functions package for metadata-only AgentOps wor
 
 - `AlertActioner`: turns an Azure Monitor alert payload into a metadata-only review packet with run links, alert history KQL, action-plan evidence, and an optional preview-only GitHub route plan.
 - `SharedStoreWrite`: accepts one metadata-only recommendation or saved-view row and writes it to the shared Blob artifact store.
+- `SharedStoreEditor`: renders a small browser form for creating metadata-only recommendation or saved-investigation rows through `SharedStoreWrite`.
 
 Local handler contract:
 
@@ -28,8 +29,11 @@ Deploy with both `deployActioner=true` and `deploySharedStore=true` to let the F
 HTTP route:
 
 ```text
+GET  /api/shared-store/editor
 POST /api/shared-store/{table}/{id}
 ```
+
+Open `/api/shared-store/editor` in a browser to create a recommendation or saved investigation without leaving the hosted AgentOps workflow. The editor submits JSON to the same write API and receives the same privacy validation response.
 
 Allowed `table` values:
 
