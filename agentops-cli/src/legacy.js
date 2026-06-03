@@ -47,7 +47,7 @@ function usage() {
     'compat-check [--last <duration>]',
     'validate-collector [endpoint]',
     'validate-azure [--last <duration>] [--production] [--remediation-plan] [--json]',
-    'init [--dry-run] [--provision-cloud] [--import-dashboards] [--force-skills] [--json]',
+    'init [--dry-run] [--provision-cloud] [--import-dashboards] [--run-smoke] [--force-skills] [--json]',
     'smoke [--dry-run] [--endpoint <url>] [--id <smoke-id>] [--last <duration>] [--wait <duration>] [--poll <duration>] [--open-browser] [--no-verify] [--json]',
     'attribution-smoke [--dry-run] [--endpoint <url>] [--id <smoke-id>] [--last <duration>] [--wait <duration>] [--poll <duration>] [--no-verify] [--json]',
     'live-replay-smoke [--dry-run] [--endpoint <url>] [--id <smoke-id>] [--last <duration>] [--wait <duration>] [--poll <duration>] [--no-verify] [--json]',
@@ -1973,6 +1973,7 @@ function parseInitArgs(args) {
     importDashboards: args.includes('--import-dashboards'),
     noSkills: args.includes('--no-skills') || args.includes('--no-plugin'),
     provisionCloud: args.includes('--provision-cloud'),
+    runSmoke: args.includes('--run-smoke'),
     copilotHome: optionValue(args, ['--copilot-home', '--home'])
   };
 }
@@ -2086,6 +2087,62 @@ function runInitDashboardImport(options = {}) {
   };
 }
 
+function runInitRealSmoke(options = {}) {
+  const args = ['smoke', '--real-copilot', '--wait', '2m', '--poll', '10s', '--open-browser', '--json'];
+  const command = 'agentops smoke --real-copilot --wait 2m --poll 10s --open-browser --json';
+  if (!options.runSmoke) {
+    return {
+      requested: false,
+      dry_run: Boolean(options.dryRun),
+      ok: null,
+      command
+    };
+  }
+
+  if (options.dryRun) {
+    return {
+      requested: true,
+      dry_run: true,
+      ok: true,
+      command,
+      status: null,
+      next: []
+    };
+  }
+
+  const spawnSync = options.spawnSync || childProcess.spawnSync;
+  const result = spawnSync(process.execPath, [path.join(__dirname, 'index.js'), ...args], {
+    cwd: options.cwd || process.cwd(),
+    env: { ...process.env, ...(options.env || {}) },
+    encoding: 'utf8',
+    timeout: durationToMs(options.smokeTimeoutMs ?? options.timeout, 180000),
+    maxBuffer: 20 * 1024 * 1024
+  });
+  const status = result.status === null || result.status === undefined ? 1 : result.status;
+  let smoke = null;
+  try {
+    smoke = result.stdout ? JSON.parse(result.stdout) : null;
+  } catch {
+    smoke = null;
+  }
+
+  const ok = status === 0 && !result.error && smoke?.ok !== false;
+  return {
+    requested: true,
+    dry_run: false,
+    ok,
+    command,
+    status,
+    stdout: result.stdout || '',
+    stderr: result.stderr || '',
+    error: result.error?.message || null,
+    smoke,
+    next: ok
+      ? ['node agentops-cli/src/index.js open latest --last 2h']
+      : [command, 'node agentops-cli/src/index.js latest --last 2h', 'node agentops-cli/src/index.js open latest --last 2h']
+  };
+}
+
 function agentopsInit(options = {}) {
   const checks = doctor({ localOnly: true });
   const status = agentopsStatusSummary({ checks });
@@ -2118,6 +2175,7 @@ function agentopsInit(options = {}) {
         command: 'agentops init --provision-cloud'
       };
   const dashboardImport = runInitDashboardImport(options);
+  const realSmoke = runInitRealSmoke(options);
   const next = [];
 
   if (!shim.agentops_cli_installed) {
@@ -2146,19 +2204,26 @@ function agentopsInit(options = {}) {
     next.push('node agentops-cli/src/index.js validate-azure --import-dashboards --last 24h');
   }
   next.push('node agentops-cli/src/index.js collector smoke --privacy strict --poison --json');
-  next.push('node agentops-cli/src/index.js smoke --real-copilot --wait 2m --poll 10s');
-  next.push('node agentops-cli/src/index.js latest --last 2h');
-  next.push('node agentops-cli/src/index.js open latest --last 2h');
+  if (realSmoke.requested && realSmoke.ok !== true) {
+    for (const command of realSmoke.next || []) next.push(command);
+  } else if (!realSmoke.requested) {
+    next.push('node agentops-cli/src/index.js smoke --real-copilot --wait 2m --poll 10s');
+    next.push('node agentops-cli/src/index.js latest --last 2h');
+    next.push('node agentops-cli/src/index.js open latest --last 2h');
+  } else {
+    next.push('node agentops-cli/src/index.js open latest --last 2h');
+  }
   next.push('node agentops-cli/src/index.js triage latest --out .agentops/triage/latest --json');
   next.push('node agentops-cli/src/index.js plugin uninstall');
 
   return {
-    ok: status.ok && Boolean(shim.agentops_cli_installed) && Boolean(shim.copilot_agentops_installed) && workspaceConfigured && grafanaConfigured && (!dashboardImport.requested || dashboardImport.ok === true),
+    ok: status.ok && Boolean(shim.agentops_cli_installed) && Boolean(shim.copilot_agentops_installed) && workspaceConfigured && grafanaConfigured && (!dashboardImport.requested || dashboardImport.ok === true) && (!realSmoke.requested || realSmoke.ok === true),
     mode: options.dryRun ? 'dry-run' : 'local-init',
     local_status: status,
     azd,
     cloud_provision: cloudProvision,
     dashboard_import: dashboardImport,
+    real_smoke: realSmoke,
     skills,
     agents,
     shim,
@@ -2205,6 +2270,13 @@ function renderInit(result) {
     if (!result.dashboard_import.ok && result.dashboard_import.next?.length) {
       lines.push('Dashboard import next:');
       for (const command of result.dashboard_import.next) lines.push(`- ${command}`);
+    }
+  }
+  if (result.real_smoke?.requested) {
+    lines.push(`Real smoke: ${result.real_smoke.ok ? 'ready' : 'needs review'} (${result.real_smoke.command}).`);
+    if (!result.real_smoke.ok && result.real_smoke.next?.length) {
+      lines.push('Real smoke next:');
+      for (const command of result.real_smoke.next) lines.push(`- ${command}`);
     }
   }
 

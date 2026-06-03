@@ -1143,6 +1143,7 @@ Implemented first slice:
 - `agentops validate-azure --import-dashboards` for explicit remediation when validation finds missing Grafana dashboards.
 - `agentops init --dry-run` now points to the same core first-run loop instead of older experimental smoke/context commands.
 - `agentops init --import-dashboards` now runs the dashboard import remediation stage explicitly during the init flow, then continues toward smoke/open next steps.
+- `agentops init --run-smoke` now runs the real-Copilot smoke/open-link stage explicitly during the init flow and reports follow-up commands when it fails.
 - `agentops init` is now a core command, so users do not need to know about `agentops experimental`.
 - `agentops init --dry-run` now detects azd AgentOps outputs and recommends `agentops configure import-azd` before manual workspace/Grafana binding.
 - `agentops init --provision-cloud` is the explicit guided cloud deploy/bind path: it runs `azd provision` and imports azd outputs into AgentOps config.
@@ -1252,7 +1253,7 @@ Required work:
 
 ### P1 - Make It Native To Copilot
 
-- Continue expanding `agentops init` beyond local readiness/skill install into a complete cloud bind, dashboard import, first smoke, and open-link flow.
+- Continue expanding `agentops init` beyond local readiness/skill install into a complete cloud bind, dashboard import, first smoke, open-link, and triage flow.
 - Make skill install and shadow install part of one guided flow.
 - Wire the "latest run" context bundle command into the Copilot skill path.
 - Add a Copilot skill that calls the right CLI commands and returns session URL plus one recommendation.
