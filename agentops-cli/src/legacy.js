@@ -76,8 +76,8 @@ function usage() {
     'benchmark run <suite> --variant <name> --repeat <n> [--hypothesis <id>] [--dry-run]',
     'benchmark approve <run-id> --by <name> [--ticket <id>] [--output <json>]',
     'benchmark artifacts <run-id> [--task <task-id>] [--include-content]',
-    'benchmark report <run-id> [--azure] [--last <duration>] [--approval-file <json>]',
-    'benchmark compare <before-run-id> <after-run-id> [--azure] [--last <duration>] [--approval-file <json>]'
+    'benchmark report <run-id> [--azure] [--last <duration>] [--approval-file <json>] [--verify-external-review]',
+    'benchmark compare <before-run-id> <after-run-id> [--azure] [--last <duration>] [--approval-file <json>] [--verify-external-review]'
   ];
   return `agentops <command>\n\nCommands:\n  ${commands.join('\n  ')}\n`;
 }
@@ -5947,13 +5947,16 @@ function parseBenchmarkReportArgs(args) {
   const options = {
     runId,
     azure: false,
-    last: '24h'
+    last: '24h',
+    verifyExternalReview: false
   };
 
   for (let index = 1; index < args.length; index += 1) {
     const arg = args[index];
     if (arg === '--azure') {
       options.azure = true;
+    } else if (arg === '--verify-external-review') {
+      options.verifyExternalReview = true;
     } else if (arg === '--approval-file') {
       if (!args[index + 1]) throw new Error('--approval-file requires a path');
       options.approvalFile = args[index + 1];
@@ -5980,13 +5983,16 @@ function parseBenchmarkCompareArgs(args) {
     beforeRunId,
     afterRunId,
     azure: false,
-    last: '24h'
+    last: '24h',
+    verifyExternalReview: false
   };
 
   for (let index = 2; index < args.length; index += 1) {
     const arg = args[index];
     if (arg === '--azure') {
       options.azure = true;
+    } else if (arg === '--verify-external-review') {
+      options.verifyExternalReview = true;
     } else if (arg === '--approval-file') {
       if (!args[index + 1]) throw new Error('--approval-file requires a path');
       options.approvalFile = args[index + 1];
@@ -7155,7 +7161,8 @@ function benchmarkPromotionGateFailures(report) {
 
   if (gates.requiredExternalReview === true) {
     const externalReview = report.promotionApproval?.externalReview || null;
-    if (externalReview?.status !== 'approved') {
+    const verified = externalReview?.verification === undefined || externalReview.verification.ok === true;
+    if (externalReview?.status !== 'approved' || !verified) {
       failures.push({
         gate: 'requiredExternalReview',
         expected: true,
@@ -7316,6 +7323,110 @@ function validateBenchmarkExternalReview(review, source = 'approval') {
   };
 }
 
+function parseGitHubExternalReviewTarget(review) {
+  const url = review.url || '';
+  const urlMatch = url.match(/^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)(?:[/?#].*)?$/i);
+  if (urlMatch) {
+    return {
+      repo: `${urlMatch[1]}/${urlMatch[2]}`,
+      pr: urlMatch[3]
+    };
+  }
+
+  const id = review.id || '';
+  const repoIdMatch = id.match(/^([^/\s]+\/[^#\s]+)#(\d+)$/);
+  if (repoIdMatch) {
+    return {
+      repo: repoIdMatch[1],
+      pr: repoIdMatch[2]
+    };
+  }
+
+  return null;
+}
+
+function verifyGitHubExternalReview(review, options = {}) {
+  const target = parseGitHubExternalReviewTarget(review);
+  if (!target) {
+    return {
+      provider: 'github',
+      ok: false,
+      status: 'pending',
+      error: 'GitHub review verification requires a pull request URL or owner/repo#number id'
+    };
+  }
+
+  const spawnSync = options.spawnSync || childProcess.spawnSync;
+  const result = spawnSync('gh', [
+    'pr',
+    'view',
+    target.pr,
+    '--repo',
+    target.repo,
+    '--json',
+    'reviewDecision,state,mergedAt,url,number'
+  ], {
+    encoding: 'utf8'
+  });
+
+  if (result.status !== 0) {
+    return {
+      provider: 'github',
+      ok: false,
+      status: 'pending',
+      repo: target.repo,
+      number: Number(target.pr),
+      error: (result.stderr || result.stdout || 'gh pr view failed').trim()
+    };
+  }
+
+  let payload = {};
+  try {
+    payload = JSON.parse(result.stdout || '{}');
+  } catch (error) {
+    return {
+      provider: 'github',
+      ok: false,
+      status: 'pending',
+      repo: target.repo,
+      number: Number(target.pr),
+      error: `gh pr view returned invalid JSON: ${error.message}`
+    };
+  }
+
+  const reviewDecision = String(payload.reviewDecision || '').toUpperCase();
+  const state = String(payload.state || '').toUpperCase();
+  const merged = Boolean(payload.mergedAt) || state === 'MERGED';
+  const ok = reviewDecision === 'APPROVED' || merged;
+  const status = ok ? 'approved' : (reviewDecision === 'CHANGES_REQUESTED' || state === 'CLOSED' ? 'rejected' : 'pending');
+
+  return {
+    provider: 'github',
+    ok,
+    status,
+    repo: target.repo,
+    number: Number(payload.number || target.pr),
+    url: payload.url || review.url || null,
+    reviewDecision: reviewDecision || null,
+    state: state || null,
+    merged
+  };
+}
+
+function verifyBenchmarkExternalReview(review, options = {}) {
+  if (!review) return null;
+  const system = String(review.system || '').toLowerCase();
+  if (system !== 'github') {
+    return {
+      provider: system || 'unknown',
+      ok: false,
+      status: 'pending',
+      error: 'external review verification currently supports GitHub pull requests only'
+    };
+  }
+  return verifyGitHubExternalReview(review, options);
+}
+
 function validateBenchmarkPromotionApproval(approval, source = 'approval') {
   if (approval === undefined || approval === null) return null;
   if (!isPlainObject(approval)) {
@@ -7358,11 +7469,25 @@ function validateBenchmarkPromotionApproval(approval, source = 'approval') {
 }
 
 function benchmarkPromotionApprovalFromOptions(options = {}) {
+  const verifyApproval = approval => {
+    if (!approval || !options.verifyExternalReview) return approval;
+    const verification = verifyBenchmarkExternalReview(approval.externalReview, options);
+    if (!verification) return approval;
+    return {
+      ...approval,
+      externalReview: {
+        ...approval.externalReview,
+        status: verification.status || approval.externalReview.status,
+        verification
+      }
+    };
+  };
+
   if (options.promotionApproval !== undefined) {
-    return validateBenchmarkPromotionApproval(options.promotionApproval, 'options.promotionApproval');
+    return verifyApproval(validateBenchmarkPromotionApproval(options.promotionApproval, 'options.promotionApproval'));
   }
   if (!options.approvalFile) return null;
-  return validateBenchmarkPromotionApproval(readJson(path.resolve(options.approvalFile)), options.approvalFile);
+  return verifyApproval(validateBenchmarkPromotionApproval(readJson(path.resolve(options.approvalFile)), options.approvalFile));
 }
 
 function benchmarkApproval(options = {}) {

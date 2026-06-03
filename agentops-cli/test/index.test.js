@@ -6117,6 +6117,95 @@ test('benchmark report requires approved external review evidence', () => {
     id: 'PR-123',
     url: 'https://github.com/example/repo/pull/123'
   });
+
+  const verifiedReviewReport = benchmarkReport('pass-run', summaries, {
+    verifyExternalReview: true,
+    promotionApproval: {
+      approvedBy: ['sre-team'],
+      approvedAt: '2026-06-03T04:00:00Z',
+      externalReview: {
+        system: 'github',
+        id: 'example/repo#123',
+        status: 'approved'
+      }
+    },
+    spawnSync: (command, args) => {
+      assert.equal(command, 'gh');
+      assert.deepEqual(args.slice(0, 6), ['pr', 'view', '123', '--repo', 'example/repo', '--json']);
+      return {
+        status: 0,
+        stdout: JSON.stringify({
+          reviewDecision: 'APPROVED',
+          state: 'OPEN',
+          mergedAt: null,
+          url: 'https://github.com/example/repo/pull/123',
+          number: 123
+        }),
+        stderr: ''
+      };
+    }
+  });
+
+  assert.deepEqual(verifiedReviewReport.promotionGateFailures, []);
+  assert.equal(verifiedReviewReport.promotion.decision, 'promote');
+  assert.deepEqual(verifiedReviewReport.promotion.approval.externalReview.verification, {
+    provider: 'github',
+    ok: true,
+    status: 'approved',
+    repo: 'example/repo',
+    number: 123,
+    url: 'https://github.com/example/repo/pull/123',
+    reviewDecision: 'APPROVED',
+    state: 'OPEN',
+    merged: false
+  });
+
+  const unapprovedReviewReport = benchmarkReport('pass-run', summaries, {
+    verifyExternalReview: true,
+    promotionApproval: {
+      approvedBy: ['sre-team'],
+      approvedAt: '2026-06-03T04:00:00Z',
+      externalReview: {
+        system: 'github',
+        url: 'https://github.com/example/repo/pull/123',
+        status: 'approved'
+      }
+    },
+    spawnSync: () => ({
+      status: 0,
+      stdout: JSON.stringify({
+        reviewDecision: 'REVIEW_REQUIRED',
+        state: 'OPEN',
+        mergedAt: null,
+        url: 'https://github.com/example/repo/pull/123',
+        number: 123
+      }),
+      stderr: ''
+    })
+  });
+
+  assert.deepEqual(unapprovedReviewReport.promotionGateFailures, [{
+    gate: 'requiredExternalReview',
+    expected: true,
+    actual: {
+      status: 'pending',
+      system: 'github',
+      url: 'https://github.com/example/repo/pull/123',
+      verification: {
+        provider: 'github',
+        ok: false,
+        status: 'pending',
+        repo: 'example/repo',
+        number: 123,
+        url: 'https://github.com/example/repo/pull/123',
+        reviewDecision: 'REVIEW_REQUIRED',
+        state: 'OPEN',
+        merged: false
+      }
+    },
+    ok: false
+  }]);
+  assert.equal(unapprovedReviewReport.promotion.decision, 'reject');
 });
 
 test('benchmark approve writes run-scoped promotion approval evidence', () => {
@@ -6381,13 +6470,21 @@ test('benchmark report args support optional Azure lookback', () => {
     runId: 'pass-run',
     azure: true,
     last: '2h',
+    verifyExternalReview: false,
     approvalFile: 'approval.json'
   });
-  assert.deepEqual(parseBenchmarkCompareArgs(['before-run', 'after-run', '--azure', '--last', '12h', '--approval-file', 'approval.json']), {
+  assert.deepEqual(parseBenchmarkReportArgs(['pass-run', '--verify-external-review']), {
+    runId: 'pass-run',
+    azure: false,
+    last: '24h',
+    verifyExternalReview: true
+  });
+  assert.deepEqual(parseBenchmarkCompareArgs(['before-run', 'after-run', '--azure', '--last', '12h', '--approval-file', 'approval.json', '--verify-external-review']), {
     beforeRunId: 'before-run',
     afterRunId: 'after-run',
     azure: true,
     last: '12h',
+    verifyExternalReview: true,
     approvalFile: 'approval.json'
   });
   assert.throws(() => parseBenchmarkReportArgs(['pass-run', '--azure', '--last', 'forever']), /duration/);
