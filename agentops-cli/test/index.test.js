@@ -75,6 +75,7 @@ const {
   attributionUsageQuery,
   benchmarkCheatSignals,
   benchmarkAzureTelemetryQuery,
+  benchmarkFixturePack,
   benchmarkReport,
   benchmarkRunBaseDir,
   benchmarkRunPlan,
@@ -115,6 +116,7 @@ const {
   otlpCustomEventPayload,
   otelCompatibilityQuery,
   parseBenchmarkCompareArgs,
+  parseBenchmarkFixturePackArgs,
   parseBenchmarkReportArgs,
   parseBenchmarkRunArgs,
   parseConfigureArgs,
@@ -4261,6 +4263,72 @@ test('benchmark schema validation accepts sealed fixture packs', () => {
   assert.equal(validated.fixtureSealPack.algorithm, 'sha256');
   assert.equal(validated.fixtureSealPack.fixture, 'fixtures/tiny-repo');
   assert.deepEqual(Object.keys(validated.fixtureSealPack.files), ['README.md']);
+});
+
+test('benchmark fixture-pack command generates reusable seal manifests', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-bench-pack-generate-'));
+  const suiteDir = path.join(tempDir, 'suite');
+  const fixtureDir = path.join(suiteDir, 'fixtures', 'tiny-repo');
+  const output = path.join(suiteDir, 'fixture-packs', 'tiny-repo.json');
+
+  try {
+    fs.mkdirSync(fixtureDir, { recursive: true });
+    fs.mkdirSync(path.join(fixtureDir, 'docs'), { recursive: true });
+    fs.writeFileSync(path.join(fixtureDir, 'README.md'), '# Fixture\r\n');
+    fs.writeFileSync(path.join(fixtureDir, 'docs', 'note.txt'), 'hello\n');
+
+    assert.deepEqual(parseBenchmarkFixturePackArgs([
+      'fixtures/tiny-repo',
+      '--id',
+      'tiny-repo-sealed',
+      '--fixture',
+      'fixtures/tiny-repo',
+      '--title',
+      'Tiny repo sealed fixture pack',
+      '--output',
+      'fixture-packs/tiny-repo.json'
+    ]), {
+      fixtureDir: 'fixtures/tiny-repo',
+      id: 'tiny-repo-sealed',
+      fixture: 'fixtures/tiny-repo',
+      title: 'Tiny repo sealed fixture pack',
+      output: 'fixture-packs/tiny-repo.json'
+    });
+
+    const pack = benchmarkFixturePack({
+      cwd: suiteDir,
+      fixtureDir: 'fixtures/tiny-repo',
+      id: 'tiny-repo-sealed',
+      fixture: 'fixtures/tiny-repo',
+      title: 'Tiny repo sealed fixture pack',
+      output: 'fixture-packs/tiny-repo.json'
+    });
+
+    assert.equal(pack.id, 'tiny-repo-sealed');
+    assert.equal(pack.fixture, 'fixtures/tiny-repo');
+    assert.equal(pack.algorithm, 'sha256');
+    assert.equal(pack.files['README.md'], crypto.createHash('sha256').update('# Fixture\n').digest('hex'));
+    assert.equal(pack.files['docs/note.txt'], crypto.createHash('sha256').update('hello\n').digest('hex'));
+    assert.equal(pack.output, output);
+    assert.equal(fs.existsSync(output), true);
+
+    const task = {
+      id: 'sealed-fixture-pack',
+      title: 'Sealed fixture pack',
+      fixture: 'fixtures/tiny-repo',
+      prompt: 'Do nothing.',
+      copilotArgs: [],
+      fixtureSealPack: 'fixture-packs/tiny-repo.json',
+      successCommands: [],
+      expectedFiles: [],
+      forbiddenFiles: [],
+      timeoutSec: 10,
+      tags: []
+    };
+    assert.equal(validateBenchmarkTask(task, suiteDir, 'test-task').fixtureSealPack.id, 'tiny-repo-sealed');
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
 });
 
 test('benchmark schema validation rejects tampered sealed fixtures', () => {

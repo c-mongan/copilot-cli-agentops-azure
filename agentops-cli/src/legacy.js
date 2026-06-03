@@ -71,6 +71,7 @@ function usage() {
     'policy [--last <duration>]',
     'mcp [--last <duration>]',
     'benchmark list',
+    'benchmark fixture-pack <fixture-dir> --id <id> [--fixture <path>] [--title <title>] [--output <file>]',
     'benchmark run <suite> --variant <name> --repeat <n> [--hypothesis <id>] [--dry-run]',
     'benchmark report <run-id> [--azure] [--last <duration>] [--approval-file <json>]',
     'benchmark compare <before-run-id> <after-run-id> [--azure] [--last <duration>] [--approval-file <json>]'
@@ -1004,6 +1005,7 @@ function agentopsWorkflows() {
       prompt: 'Use agentops-benchmark-gate to compare my baseline and candidate benchmark runs.',
       commands: [
         `${cli} benchmark list`,
+        `${cli} benchmark fixture-pack benchmarks/starter/fixtures/tiny-repo --id tiny-repo-sealed --fixture fixtures/tiny-repo --output benchmarks/starter/fixture-packs/tiny-repo.json`,
         `${cli} benchmark run starter --variant baseline --repeat 1 --hypothesis safer-tool-policy --dry-run`,
         `${cli} benchmark run starter --variant baseline --repeat 1 --hypothesis safer-tool-policy`,
         `${cli} benchmark report <run-id>`,
@@ -4987,6 +4989,11 @@ function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, 'utf8'));
 }
 
+function displaySourcePath(filePath) {
+  const relative = path.relative(root, filePath).replace(/\\/g, '/');
+  return relative.startsWith('../') ? filePath.replace(/\\/g, '/') : relative;
+}
+
 function isStringArray(value) {
   return Array.isArray(value) && value.every(item => typeof item === 'string');
 }
@@ -5057,6 +5064,89 @@ function loadBenchmarkHiddenPacks(task, suiteDir, source = 'task') {
 
 function hashBenchmarkFixtureSealFile(filePath) {
   return hashText(fs.readFileSync(filePath, 'utf8').replace(/\r\n/g, '\n'));
+}
+
+function benchmarkFixtureFiles(fixtureDir) {
+  const files = [];
+  const walk = dir => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(fullPath);
+      } else if (entry.isFile()) {
+        files.push(normalizeBenchmarkRelativePath(path.relative(fixtureDir, fullPath)));
+      }
+    }
+  };
+  walk(fixtureDir);
+  return files.sort();
+}
+
+function parseBenchmarkFixturePackArgs(args) {
+  const fixtureDir = args[0];
+  if (!fixtureDir) throw new Error('benchmark fixture-pack requires a fixture directory');
+
+  const options = { fixtureDir };
+  for (let index = 1; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === '--id') {
+      if (!args[index + 1]) throw new Error('--id requires a value');
+      options.id = args[index + 1];
+      index += 1;
+    } else if (arg === '--title') {
+      if (!args[index + 1]) throw new Error('--title requires a value');
+      options.title = args[index + 1];
+      index += 1;
+    } else if (arg === '--fixture') {
+      if (!args[index + 1]) throw new Error('--fixture requires a suite-relative fixture path');
+      options.fixture = args[index + 1];
+      index += 1;
+    } else if (arg === '--output') {
+      if (!args[index + 1]) throw new Error('--output requires a path');
+      options.output = args[index + 1];
+      index += 1;
+    } else {
+      throw new Error(`Unknown benchmark fixture-pack option: ${arg}`);
+    }
+  }
+
+  if (typeof options.id !== 'string' || options.id.trim() === '') {
+    throw new Error('benchmark fixture-pack requires --id <id>');
+  }
+  return options;
+}
+
+function benchmarkFixturePack(options = {}) {
+  const cwd = options.cwd || process.cwd();
+  const fixtureDir = path.resolve(cwd, options.fixtureDir);
+  if (!fs.existsSync(fixtureDir) || !fs.statSync(fixtureDir).isDirectory()) {
+    throw new Error(`benchmark fixture-pack fixture directory does not exist: ${options.fixtureDir}`);
+  }
+
+  const files = {};
+  for (const file of benchmarkFixtureFiles(fixtureDir)) {
+    files[file] = hashBenchmarkFixtureSealFile(path.join(fixtureDir, file));
+  }
+
+  if (Object.keys(files).length === 0) {
+    throw new Error(`benchmark fixture-pack fixture directory has no files: ${options.fixtureDir}`);
+  }
+
+  const pack = {
+    id: options.id,
+    ...(typeof options.title === 'string' && options.title.trim() !== '' ? { title: options.title } : {}),
+    fixture: normalizeBenchmarkRelativePath(options.fixture || path.relative(cwd, fixtureDir) || '.'),
+    algorithm: 'sha256',
+    files
+  };
+
+  if (options.output) {
+    const outputPath = path.resolve(cwd, options.output);
+    fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+    fs.writeFileSync(outputPath, `${JSON.stringify(pack, null, 2)}\n`);
+    return { ...pack, output: outputPath };
+  }
+  return pack;
 }
 
 function validateBenchmarkFixtureSeal(seal, fixturePath, source = 'task') {
@@ -5136,7 +5226,7 @@ function loadBenchmarkFixtureSealPack(task, suiteDir, fixturePath, source = 'tas
     throw new Error(`Invalid benchmark task ${source}: fixture seal pack does not exist: ${packPath}`);
   }
 
-  const fixtureSealPack = validateBenchmarkFixtureSealPack(readJson(fullPath), fixturePath, normalizeBenchmarkRelativePath(path.relative(root, fullPath)));
+  const fixtureSealPack = validateBenchmarkFixtureSealPack(readJson(fullPath), fixturePath, displaySourcePath(fullPath));
   if (fixtureSealPack.fixture !== normalizeBenchmarkRelativePath(task.fixture)) {
     throw new Error(`Invalid benchmark task ${source}: fixtureSealPack fixture must match task fixture`);
   }
@@ -7198,6 +7288,12 @@ async function main(argv) {
       return;
     }
 
+    if (subcommand === 'fixture-pack') {
+      const options = parseBenchmarkFixturePackArgs(benchmarkArgs);
+      process.stdout.write(JSON.stringify(benchmarkFixturePack(options), null, 2) + '\n');
+      return;
+    }
+
     if (subcommand === 'run') {
       const options = parseBenchmarkRunArgs(benchmarkArgs);
       process.stdout.write(JSON.stringify(runBenchmarkSuite(options.suite, options), null, 2) + '\n');
@@ -7216,7 +7312,7 @@ async function main(argv) {
       return;
     }
 
-    throw new Error('benchmark requires list, run, report, or compare');
+    throw new Error('benchmark requires list, fixture-pack, run, report, or compare');
   }
 
   if (command === 'link') {
@@ -7316,6 +7412,7 @@ module.exports = {
   benchmarkCheatSignals,
   benchmarkAzureTelemetry,
   benchmarkAzureTelemetryQuery,
+  benchmarkFixturePack,
   benchmarkReport,
   benchmarkRunBaseDir,
   benchmarkRunPlan,
@@ -7362,6 +7459,7 @@ module.exports = {
   otlpCustomEventPayload,
   otlpLiveReplaySmokeTracePayload,
   parseBenchmarkCompareArgs,
+  parseBenchmarkFixturePackArgs,
   parseBenchmarkReportArgs,
   parseBenchmarkRunArgs,
   parseConfigureArgs,
