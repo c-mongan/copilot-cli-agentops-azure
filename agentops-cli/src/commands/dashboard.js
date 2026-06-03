@@ -358,6 +358,13 @@ function validateDashboardUx() {
   for (const title of ['Runs', 'Success rate', 'Failed runs', 'Policy blocks', 'Privacy drops', 'Estimated cost', 'Input tokens', 'Output tokens', 'p95 duration', 'Tests ran %', 'PRs opened', 'Collector health']) {
     if (!homeTitles.has(title)) errors.push(`home missing top-strip panel ${title}`);
   }
+  const homeText = (home?.body.panels || [])
+    .filter(panel => panel.type === 'text')
+    .map(panel => `${panel.title}\n${panel.options?.content || ''}`)
+    .join('\n');
+  for (const snippet of ['Open latest run', 'agentops open latest --last 2h --json', 'Get recommendation', 'agentops recommend latest --last 2h', 'Ask AgentOps', 'agentops ask-context latest --last 2h --json']) {
+    if (!homeText.includes(snippet)) errors.push(`home action strip missing ${snippet}`);
+  }
 
   const runs = byUid.get('agentops-v2-runs-explorer');
   const runsQuery = queryFromPanel(panelByTitle(runs, 'Runs'));
@@ -418,6 +425,7 @@ function validateDashboardUx() {
     dashboards: dashboards.length,
     contracts: {
       home_top_strip: 12,
+      home_action_strip: true,
       run_replay_panels: 9,
       ask_agentops_context: true,
       runs_actions: 3,

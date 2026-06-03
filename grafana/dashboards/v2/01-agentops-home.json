@@ -125,6 +125,51 @@
       }
     },
     {
+      "id": 18,
+      "title": "Open latest run",
+      "type": "text",
+      "gridPos": {
+        "h": 3,
+        "w": 8,
+        "x": 0,
+        "y": 3
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "### Open latest run\nStart with the newest session, then drill into Run Replay.\n\n`agentops open latest --last 2h --json`\n\n[Run Replay](/d/agentops-v2-run-replay?${__url_time_range})"
+      }
+    },
+    {
+      "id": 19,
+      "title": "Get recommendation",
+      "type": "text",
+      "gridPos": {
+        "h": 3,
+        "w": 8,
+        "x": 8,
+        "y": 3
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "### Get recommendation\nGenerate one evidence-backed next action for the current run set.\n\n`agentops recommend latest --last 2h`\n\n[Insights](/d/agentops-v2-insights-regressions?${__url_time_range})"
+      }
+    },
+    {
+      "id": 20,
+      "title": "Ask AgentOps",
+      "type": "text",
+      "gridPos": {
+        "h": 3,
+        "w": 8,
+        "x": 16,
+        "y": 3
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "### Ask AgentOps\nBuild a metadata-only context bundle for investigation.\n\n`agentops ask-context latest --last 2h --json`\n\n[Run Replay](/d/agentops-v2-run-replay?${__url_time_range})"
+      }
+    },
+    {
       "id": 2,
       "title": "Runs",
       "type": "stat",
@@ -136,7 +181,7 @@
         "h": 4,
         "w": 4,
         "x": 0,
-        "y": 3
+        "y": 6
       },
       "fieldConfig": {
         "defaults": {
@@ -199,7 +244,7 @@
         "h": 4,
         "w": 4,
         "x": 4,
-        "y": 3
+        "y": 6
       },
       "fieldConfig": {
         "defaults": {
@@ -262,7 +307,7 @@
         "h": 4,
         "w": 4,
         "x": 8,
-        "y": 3
+        "y": 6
       },
       "fieldConfig": {
         "defaults": {
@@ -325,7 +370,7 @@
         "h": 4,
         "w": 4,
         "x": 12,
-        "y": 3
+        "y": 6
       },
       "fieldConfig": {
         "defaults": {
@@ -388,7 +433,7 @@
         "h": 4,
         "w": 4,
         "x": 16,
-        "y": 3
+        "y": 6
       },
       "fieldConfig": {
         "defaults": {
@@ -451,7 +496,7 @@
         "h": 4,
         "w": 4,
         "x": 20,
-        "y": 3
+        "y": 6
       },
       "fieldConfig": {
         "defaults": {
@@ -514,7 +559,7 @@
         "h": 4,
         "w": 4,
         "x": 0,
-        "y": 7
+        "y": 10
       },
       "fieldConfig": {
         "defaults": {
@@ -577,7 +622,7 @@
         "h": 4,
         "w": 4,
         "x": 4,
-        "y": 7
+        "y": 10
       },
       "fieldConfig": {
         "defaults": {
@@ -640,7 +685,7 @@
         "h": 4,
         "w": 4,
         "x": 8,
-        "y": 7
+        "y": 10
       },
       "fieldConfig": {
         "defaults": {
@@ -703,7 +748,7 @@
         "h": 4,
         "w": 4,
         "x": 12,
-        "y": 7
+        "y": 10
       },
       "fieldConfig": {
         "defaults": {
@@ -766,7 +811,7 @@
         "h": 4,
         "w": 4,
         "x": 16,
-        "y": 7
+        "y": 10
       },
       "fieldConfig": {
         "defaults": {
@@ -829,7 +874,7 @@
         "h": 4,
         "w": 4,
         "x": 20,
-        "y": 7
+        "y": 10
       },
       "fieldConfig": {
         "defaults": {
@@ -892,7 +937,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 11
+        "y": 14
       },
       "fieldConfig": {
         "defaults": {
@@ -1323,7 +1368,7 @@
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 11
+        "y": 14
       },
       "fieldConfig": {
         "defaults": {
@@ -1754,7 +1799,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 20
+        "y": 23
       },
       "fieldConfig": {
         "defaults": {
@@ -2185,7 +2230,7 @@
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 20
+        "y": 23
       },
       "fieldConfig": {
         "defaults": {

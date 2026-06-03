@@ -1233,9 +1233,8 @@ Required work:
 
 ### P0 - Make The Current Pack Reliable
 
-- Make `agentops validate-azure` optionally import missing dashboards after explicit confirmation.
-- Make `agentops smoke` optionally launch a real Copilot smoke prompt and deep-link to the resulting latest run.
 - Keep real Copilot OTel fixture snapshot contract tests in CI as Copilot fields evolve.
+- Keep `agentops validate-azure --import-dashboards` and `agentops smoke --real-copilot` covered as first-run contracts evolve.
 
 ### P1 - Make It Native To Copilot
 
@@ -1281,11 +1280,11 @@ Required work:
 
 If I had to choose only five next tasks:
 
-1. Add dashboard import remediation to `agentops validate-azure`.
-2. Add a real Copilot smoke-run mode that prints the exact latest-run URL.
-3. Build a polished session-first dashboard landing page with recommendation and ask-AgentOps context.
-4. Expand benchmark/eval support with hidden checks, permission profiles, and artifact diffing.
-5. Add Azure RBAC automation and validation for multi-team rollout.
+1. Continue polishing the session-first dashboard landing page around latest-run triage and recommendation flow.
+2. Expand benchmark/eval support with hidden checks, permission profiles, and artifact diffing.
+3. Add Azure RBAC automation and validation for multi-team rollout.
+4. Expand `agentops init` into a single cloud bind, dashboard import, smoke, and open-link flow.
+5. Add run comparison views for before/after model, prompt, and workflow changes.
 
 ## Bottom Line
 

@@ -3240,6 +3240,7 @@ test('V2 dashboard ux-check protects the Datadog-style operator flow', () => {
   const result = validateDashboardUx();
   assert.equal(result.ok, true, result.errors.join('\n'));
   assert.equal(result.dashboards, 10);
+  assert.equal(result.contracts.home_action_strip, true);
   assert.deepEqual(result.contracts.transcript_first_columns, ['Status', 'SafetyNote', 'OpenTranscript', 'ContentRows']);
   assert.equal(result.contracts.code_outcome_timing, true);
   assert.equal(result.contracts.empty_state_dashboards, 10);
