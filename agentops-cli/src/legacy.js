@@ -2205,6 +2205,31 @@ function runInitLatestTriage(options = {}) {
   };
 }
 
+function buildInitSummary(result) {
+  const stages = [
+    ['cloud_provision', result.cloud_provision],
+    ['dashboard_import', result.dashboard_import],
+    ['real_smoke', result.real_smoke],
+    ['triage_latest', result.triage_latest]
+  ]
+    .filter(([, stage]) => stage?.requested)
+    .map(([name, stage]) => ({
+      name,
+      status: stage.ok === true ? 'ready' : 'needs_review',
+      command: stage.command
+    }));
+  const nextAction = result.next?.[0] || 'node agentops-cli/src/index.js open latest --last 2h';
+  const ready = result.ok === true;
+  return {
+    status: ready ? 'ready' : 'needs_action',
+    next_action: ready ? 'node agentops-cli/src/index.js open latest --last 2h' : nextAction,
+    detail: ready
+      ? 'AgentOps first-run path is ready; open the latest run or continue with normal Copilot work.'
+      : `Run next: ${nextAction}`,
+    stages
+  };
+}
+
 function agentopsInit(options = {}) {
   const checks = doctor({ localOnly: true });
   const status = agentopsStatusSummary({ checks });
@@ -2283,8 +2308,9 @@ function agentopsInit(options = {}) {
   }
   next.push('node agentops-cli/src/index.js plugin uninstall');
 
-  return {
-    ok: status.ok && Boolean(shim.agentops_cli_installed) && Boolean(shim.copilot_agentops_installed) && workspaceConfigured && grafanaConfigured && (!dashboardImport.requested || dashboardImport.ok === true) && (!realSmoke.requested || realSmoke.ok === true) && (!latestTriage.requested || latestTriage.ok === true),
+  const initOk = status.ok && Boolean(shim.agentops_cli_installed) && Boolean(shim.copilot_agentops_installed) && workspaceConfigured && grafanaConfigured && (!dashboardImport.requested || dashboardImport.ok === true) && (!realSmoke.requested || realSmoke.ok === true) && (!latestTriage.requested || latestTriage.ok === true);
+  const result = {
+    ok: initOk,
     mode: options.dryRun ? 'dry-run' : 'local-init',
     local_status: status,
     azd,
@@ -2304,6 +2330,8 @@ function agentopsInit(options = {}) {
     },
     next
   };
+  result.summary = buildInitSummary(result);
+  return result;
 }
 
 function renderInit(result) {
@@ -2360,6 +2388,13 @@ function renderInit(result) {
   }
   if (result.agents) {
     lines.push(`Agents: ${plural(result.agents.installed, 'new agent')}; ${plural(result.agents.updated.length, 'updated agent')}; skipped ${plural(result.agents.skipped.length, 'existing agent')}.`);
+  }
+
+  if (result.summary) {
+    const stages = result.summary.stages?.length
+      ? ` Stages: ${result.summary.stages.map(stage => `${stage.name}=${stage.status}`).join(', ')}.`
+      : '';
+    lines.push(`Summary: ${result.summary.status}. ${result.summary.detail}${stages}`);
   }
 
   lines.push('', 'Next commands:');

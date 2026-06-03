@@ -1143,6 +1143,7 @@ Implemented first slice:
 - `agentops validate-azure --import-dashboards` for explicit remediation when validation finds missing Grafana dashboards.
 - `agentops init --dry-run` now points to the same core first-run loop instead of older experimental smoke/context commands.
 - `agentops init --full` now runs the explicit cloud provision, dashboard import, smoke/open-link, and latest triage stages together.
+- `agentops init --full` now returns a compact summary with the single next action and requested stage statuses.
 - The bundled `agentops-setup` Copilot skill now uses `agentops init --full` and asks Copilot to report the Run Replay link plus one evidence-backed next action.
 - `agentops init --import-dashboards` now runs the dashboard import remediation stage explicitly during the init flow, then continues toward smoke/open next steps.
 - `agentops init --run-smoke` now runs the real-Copilot smoke/open-link stage explicitly during the init flow and reports follow-up commands when it fails.
