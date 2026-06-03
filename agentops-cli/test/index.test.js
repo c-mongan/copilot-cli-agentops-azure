@@ -2255,6 +2255,7 @@ test('init workflow installs skills in dry-run mode and returns first-run next s
     assert.equal(result.cloud_provision.requested, false);
     assert.equal(result.dashboard_import.requested, false);
     assert.equal(result.real_smoke.requested, false);
+    assert.equal(result.triage_latest.requested, false);
     assert.ok(result.next.includes('agentops init --provision-cloud'));
     assert.ok(result.next.includes('node agentops-cli/src/index.js validate-azure --import-dashboards --last 24h'));
     assert.ok(result.next.includes('node agentops-cli/src/index.js smoke --real-copilot --wait 2m --poll 10s'));
@@ -2269,6 +2270,84 @@ test('init workflow installs skills in dry-run mode and returns first-run next s
     assert.match(output, /azd environment:/);
     assert.match(output, /First value: run the real smoke/);
     assert.match(output, /agentops plugin uninstall/);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('init triage-latest dry run plans explicit latest triage stage', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-init-triage-latest-dry-'));
+  try {
+    const result = agentopsInit({
+      dryRun: true,
+      triageLatest: true,
+      noSkills: true,
+      env: {},
+      workspaceId: '',
+      grafanaBaseUrl: '',
+      installDir: path.join(tempDir, 'bin')
+    });
+    const output = renderInit(result);
+
+    assert.equal(result.triage_latest.requested, true);
+    assert.equal(result.triage_latest.dry_run, true);
+    assert.equal(result.triage_latest.ok, true);
+    assert.equal(result.next.includes('node agentops-cli/src/index.js triage latest --out .agentops/triage/latest --json'), false);
+    assert.match(output, /Latest triage: ready/);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('init triage-latest invokes the latest triage command when explicit', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-init-triage-latest-'));
+  const calls = [];
+  try {
+    const result = agentopsInit({
+      triageLatest: true,
+      noSkills: true,
+      env: {},
+      workspaceId: 'workspace-123',
+      grafanaBaseUrl: 'https://grafana.example',
+      installDir: path.join(tempDir, 'bin'),
+      spawnSync: (command, args) => {
+        calls.push([command, args]);
+        return { status: 0, stdout: JSON.stringify({ ok: true, out: '.agentops/triage/latest' }), stderr: '' };
+      }
+    });
+
+    assert.equal(result.triage_latest.requested, true);
+    assert.equal(result.triage_latest.ok, true);
+    const triageCall = calls.find(([, args]) => args.includes('triage'));
+    assert.ok(triageCall);
+    assert.ok(triageCall[1].includes('latest'));
+    assert.ok(triageCall[1].includes('--out'));
+    assert.ok(triageCall[1].includes('.agentops/triage/latest'));
+    assert.equal(result.next.includes('node agentops-cli/src/index.js triage latest --out .agentops/triage/latest --json'), false);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('init triage-latest reports failed triage next steps', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-init-triage-latest-fail-'));
+  try {
+    const result = agentopsInit({
+      triageLatest: true,
+      noSkills: true,
+      env: {},
+      workspaceId: 'workspace-123',
+      grafanaBaseUrl: 'https://grafana.example',
+      installDir: path.join(tempDir, 'bin'),
+      spawnSync: () => ({ status: 1, stdout: JSON.stringify({ ok: false }), stderr: 'triage failed' })
+    });
+    const output = renderInit(result);
+
+    assert.equal(result.triage_latest.ok, false);
+    assert.ok(result.next.includes('agentops triage latest --out .agentops/triage/latest --json'));
+    assert.ok(result.next.includes('node agentops-cli/src/index.js latest --last 2h'));
+    assert.match(output, /Latest triage: needs review/);
+    assert.match(output, /Latest triage next:/);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
