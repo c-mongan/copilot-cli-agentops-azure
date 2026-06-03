@@ -15,11 +15,13 @@ const requiredProcessors = [
 const requiredFixtures = ['content-poison.json', 'mcp-poison.json'];
 const requiredOwaspFixtures = [
   'broad-tool-permissions.json',
+  'mcp-dangerous-tool-classes.json',
   'mcp-prompt-injection.json',
   'prompt-injection.json',
   'runaway-tool-loop.json',
   'secret-tool-result.json'
 ];
+const requiredMcpAbuseRisks = ['network', 'shell', 'destructive', 'secret-access'];
 const strictConfigs = ['otelcol.azuremonitor.strict.yaml', 'otelcol.binary.strict.yaml', 'otelcol.local.strict.yaml'];
 
 function validateProcessorFragment({ file, body }) {
@@ -60,6 +62,12 @@ function validatePoisonFixture({ file, fullPath }) {
     content_signal: contentSignal,
     error: null
   };
+}
+
+function mcpAbuseRisksFromFixture(fixture) {
+  return new Set((Array.isArray(fixture?.['agentops.mcp.abuse_tools']) ? fixture['agentops.mcp.abuse_tools'] : [])
+    .map(tool => String(tool?.risk || '').trim())
+    .filter(Boolean));
 }
 
 function validateCollectorArtifacts(options = {}) {
@@ -131,6 +139,12 @@ function validateOwaspFixtures(options = {}) {
     const result = validatePoisonFixture({ file, fullPath });
     if (result.error) errors.push(result.error);
     if (!result.ok && !result.error) errors.push(`${file}: strict sanitizer did not drop all abuse fixture content`);
+    if (file === 'mcp-dangerous-tool-classes.json' && !result.error) {
+      const fixture = JSON.parse(fs.readFileSync(fullPath, 'utf8'));
+      const risks = mcpAbuseRisksFromFixture(fixture);
+      const missingRisks = requiredMcpAbuseRisks.filter(risk => !risks.has(risk));
+      if (missingRisks.length > 0) errors.push(`${file}: missing MCP abuse risk classes: ${missingRisks.join(', ')}`);
+    }
     results.push({
       file: result.file,
       ok: result.ok,
@@ -148,6 +162,7 @@ function validateOwaspFixtures(options = {}) {
 
 module.exports = {
   requiredFixtures,
+  requiredMcpAbuseRisks,
   requiredOwaspFixtures,
   requiredProcessors,
   strictConfigs,

@@ -57,7 +57,7 @@ COPILOT_OTEL_CAPTURE_CONTENT=false
 | Misinformation / overreliance | Deterministic evals, code outcome checks, and explicit docs that dashboards are evidence aids, not security/compliance guarantees. | Keep evidence-disclaimer checks in `agentops security audit`. |
 | Model denial of service | Token/cost/latency dashboards exist, runaway loop fixtures exist, production `validate-azure` checks for an Azure budget, and alert recommendations include runaway tool-loop thresholds. | Add threshold drift checks after more live traffic. |
 | Unbounded consumption | Cost, token, and p95 panels exist. Production `validate-azure` checks for an Azure Consumption budget, and alert recommendations include cost-spike threshold evidence. | Add threshold drift checks after more live traffic. |
-| Agent/tool misuse | MCP risk classifier and dashboard filters exist. | Add an MCP abuse fixture covering network, shell, destructive, and secret-access tool classes. |
+| Agent/tool misuse | MCP risk classifier, dashboard filters, and an OWASP abuse fixture cover network, shell, destructive, and secret-access tool classes. | Add live policy-deny evidence once production traffic is available. |
 
 ## Production Readiness Gaps
 
@@ -123,6 +123,7 @@ Add fixture families:
 - tool result contains secret-like text;
 - model output requests shell execution;
 - broad permission mode plus sensitive tool attempt;
+- MCP fixture covering network, shell, destructive, and secret-access tool classes;
 - excessive loop/token spike.
 
 ### P2: Add security scan command group
