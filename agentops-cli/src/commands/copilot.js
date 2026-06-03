@@ -2,6 +2,7 @@ const childProcess = require('node:child_process');
 const path = require('node:path');
 
 const collector = require('../lib/collector-manager');
+const legacy = require('../legacy');
 const { optionValue, withoutFlags } = require('../lib/args');
 const { appendWrapperEvent, createWrapperEnvelope } = require('../lib/copilot/wrapper-envelope');
 const { resolveCopilotBinary } = require('../lib/copilot-resolver');
@@ -9,6 +10,16 @@ const { copilotDir } = require('../lib/paths');
 
 function removeAgentOpsCopilotFlags(args) {
   return withoutFlags(args, ['--collector-mode', '--privacy', '--unsafe-no-collector']);
+}
+
+function wrapperReplayUrl(envelope = createWrapperEnvelope(), links = legacy.openLinksSummary()) {
+  const base = String(links.v2_replay_url || '').split('?')[0];
+  if (!base) return '';
+  const params = new URLSearchParams({
+    'var-run_id': envelope.runId || '__all',
+    'var-session_id': envelope.sessionId || '__all'
+  });
+  return `${base}?${params.toString()}`;
 }
 
 async function copilotCommand(args = []) {
@@ -92,9 +103,13 @@ async function copilotCommand(args = []) {
   });
   if (result.error) throw result.error;
   process.exitCode = result.status === null ? 1 : result.status;
+  if (process.exitCode === 0 && process.env.AGENTOPS_PRINT_RUN_LINK !== 'false') {
+    process.stderr.write(`AgentOps Run Replay: ${wrapperReplayUrl(envelope)}\n`);
+  }
 }
 
 module.exports = {
   copilotCommand,
-  removeAgentOpsCopilotFlags
+  removeAgentOpsCopilotFlags,
+  wrapperReplayUrl
 };

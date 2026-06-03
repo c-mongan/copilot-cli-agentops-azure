@@ -1046,13 +1046,13 @@ Current experience:
 - If shadow shim is first on PATH, plain `copilot` is observed.
 - If collector is missing, wrapper tries to start it.
 - If collector fails to start, Copilot still runs without observation.
+- Successful wrapped runs print an optional `AgentOps Run Replay` link scoped to the wrapper run/session IDs.
 - The user can query latest run with CLI or ask installed skills.
 
 This is close to native.
 
 Missing native feel:
 
-- A successful run should print or expose a small optional AgentOps link.
 - There should be a `copilot` skill prompt that can find the latest run without needing users to remember CLI commands.
 - The UI should open directly to the latest run after smoke.
 
