@@ -4092,7 +4092,7 @@ test('dashboard verify combines static UX and optional live KQL gates', () => {
   });
   assert.equal(live.ok, true, live.errors.join('\n'));
   assert.equal(live.live, true);
-  assert.equal(live.summary.kql_checks, 29);
+  assert.equal(live.summary.kql_checks, 30);
 });
 
 test('V2 dashboard links preserve drilldown contracts', () => {
@@ -4133,6 +4133,9 @@ test('V2 dashboard links preserve drilldown contracts', () => {
   assert.match(JSON.stringify(evalsDashboard), /Eval scorecard by repo, model, and task/);
   assert.match(JSON.stringify(evalsDashboard), /ScorecardStatus/);
   assert.match(JSON.stringify(evalsDashboard), /Eval regression follow-up/);
+  assert.match(JSON.stringify(evalsDashboard), /Before\/after run comparison/);
+  assert.match(JSON.stringify(evalsDashboard), /ComparisonStatus/);
+  assert.match(JSON.stringify(evalsDashboard), /EvalDelta/);
   assert.match(JSON.stringify(evalsDashboard), /Benchmark artifact diff review/);
   assert.match(JSON.stringify(evalsDashboard), /Benchmark artifact files/);
   assert.match(JSON.stringify(evalsDashboard), /Benchmark artifact content diffs/);
@@ -4215,7 +4218,7 @@ test('dashboard kql-check renders representative V2 panel queries', () => {
   });
 
   assert.equal(result.ok, true, result.errors.join('\n'));
-  assert.equal(result.checks.length, 29);
+  assert.equal(result.checks.length, 30);
   assert.ok(queries.every(item => item.options.workspaceId === 'workspace-123'));
   assert.ok(queries.every(item => item.query.includes('ago(24h)')));
   assert.ok(queries.every(item => !item.query.includes('$__timeFrom')));
@@ -4233,6 +4236,9 @@ test('dashboard kql-check renders representative V2 panel queries', () => {
   assert.ok(queries.some(item => item.query.includes('PatternRuns')));
   assert.ok(queries.some(item => item.query.includes('PatternDimension')));
   assert.ok(queries.some(item => item.query.includes('ScorecardStatus')));
+  assert.ok(queries.some(item => item.query.includes('ComparisonStatus')));
+  assert.ok(queries.some(item => item.query.includes('BeforeRunId')));
+  assert.ok(queries.some(item => item.query.includes('AfterRunId')));
   assert.ok(queries.some(item => item.query.includes('Eval regression queue') || item.query.includes("Source='insight'")));
   assert.ok(queries.some(item => item.query.includes('AgentOpsRecommendations_CL')));
   assert.ok(queries.some(item => item.query.includes('RecommendationId')));

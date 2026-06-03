@@ -136,6 +136,8 @@ The **Eval scorecard by repo, model, and task** panel groups eval rows into scor
 
 The **Eval regression follow-up** panel shows poor/review eval recommendations and regression actions with Run Replay and pattern drilldowns.
 
+The **Before/after run comparison** panel compares each run with the previous run in the same repo, model, and task slice. It highlights eval, cost, token, tool-failure, and risk deltas so before/after changes can be reviewed without opening every run.
+
 The **Benchmark artifact diff review** panel shows benchmark gate recommendations with added, modified, deleted, and total changed artifact counts so reviewers can spot unexpected fixture output changes before promotion. It stays metadata-only and does not show file contents.
 
 The **Benchmark artifact files** panel expands the same benchmark evidence into task ID, change type, and artifact path rows. Use it to see which expected artifacts changed without exposing file contents.

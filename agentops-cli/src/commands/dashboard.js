@@ -251,6 +251,7 @@ const v2KqlSmokePanels = [
   { uid: 'agentops-v2-evals-quality', panel: 'Low-score runs', requireRows: true },
   { uid: 'agentops-v2-evals-quality', panel: 'Eval scorecard by repo, model, and task', requireRows: true },
   { uid: 'agentops-v2-evals-quality', panel: 'Eval regression follow-up', requireRows: false },
+  { uid: 'agentops-v2-evals-quality', panel: 'Before/after run comparison', requireRows: false },
   { uid: 'agentops-v2-evals-quality', panel: 'Benchmark artifact diff review', requireRows: false },
   { uid: 'agentops-v2-evals-quality', panel: 'Benchmark artifact files', requireRows: false },
   { uid: 'agentops-v2-evals-quality', panel: 'Benchmark hidden check packs', requireRows: false },
@@ -433,6 +434,7 @@ function validateDashboardUx() {
   const evalsTitles = new Set((evals?.body.panels || []).map(panel => panel.title));
   if (!evalsTitles.has('Eval scorecard by repo, model, and task')) errors.push('evals dashboard missing Eval scorecard by repo, model, and task panel');
   if (!evalsTitles.has('Eval regression follow-up')) errors.push('evals dashboard missing Eval regression follow-up panel');
+  if (!evalsTitles.has('Before/after run comparison')) errors.push('evals dashboard missing Before/after run comparison panel');
   if (!evalsTitles.has('Benchmark artifact diff review')) errors.push('evals dashboard missing Benchmark artifact diff review panel');
   if (!evalsTitles.has('Benchmark artifact files')) errors.push('evals dashboard missing Benchmark artifact files panel');
   if (!evalsTitles.has('Benchmark artifact content diffs')) errors.push('evals dashboard missing Benchmark artifact content diffs panel');
@@ -447,6 +449,10 @@ function validateDashboardUx() {
   const evalFollowUpQuery = queryFromPanel(panelByTitle(evals, 'Eval regression follow-up'));
   for (const field of ['EvalBucket', 'ObservedPattern', 'NextAction', 'ChangeTargetRefs', 'OpenReplay', 'OpenPattern']) {
     if (!evalFollowUpQuery.includes(field)) errors.push(`eval regression follow-up missing ${field}`);
+  }
+  const runComparisonQuery = queryFromPanel(panelByTitle(evals, 'Before/after run comparison'));
+  for (const field of ['BeforeRunId', 'AfterRunId', 'ComparisonStatus', 'EvalDelta', 'CostDelta', 'TokenDelta', 'ToolFailureDelta', 'RiskDelta', 'OpenReplay']) {
+    if (!runComparisonQuery.includes(field)) errors.push(`before/after run comparison missing ${field}`);
   }
   const artifactDiffQuery = queryFromPanel(panelByTitle(evals, 'Benchmark artifact diff review'));
   for (const field of ['BenchmarkRunId', 'BenchmarkArtifactAdded', 'BenchmarkArtifactModified', 'BenchmarkArtifactDeleted', 'BenchmarkArtifactTotalChanged', 'ReviewAction', 'ChangeTargetRefs']) {
