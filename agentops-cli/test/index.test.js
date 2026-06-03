@@ -69,6 +69,7 @@ const {
   agentopsLiveReplaySmoke,
   agentopsStatusSummary,
   agentopsWorkflows,
+  alertAzureDevOpsWorkItemRoute,
   alertGithubIssueRoute,
   alertActionPlan,
   alertArtifact,
@@ -7872,4 +7873,67 @@ test('alert github route requires review gates before posting', () => {
 
   assert.throws(() => alertGithubIssueRoute({ rule: 'failed-spans', session: 'session-456', repo: 'c-mongan/azure-agentops-observability' }), /requires at least one --owner/);
   assert.throws(() => alertGithubIssueRoute({ rule: 'failed-spans', session: 'session-456', owners: ['agentops-oncall'], repo: 'bad repo' }), /requires --repo/);
+});
+
+test('alert azure devops route requires review gates before posting', () => {
+  const dryRun = alertAzureDevOpsWorkItemRoute({
+    rule: 'failed-spans',
+    session: 'session-123',
+    last: '6h',
+    owners: ['agentops-oncall@example.com'],
+    service: 'copilot-agentops',
+    org: 'https://dev.azure.com/contoso',
+    project: 'AgentOps'
+  });
+
+  assert.equal(dryRun.schema_version, 'agentops.alert-azure-devops-route.v1');
+  assert.equal(dryRun.mode, 'dry-run-azure-devops-work-item-route');
+  assert.equal(dryRun.command.executable, 'az');
+  assert.deepEqual(dryRun.command.args.slice(0, 4), ['boards', 'work-item', 'create', '--org']);
+  assert.ok(dryRun.command.args.includes('--project'));
+  assert.ok(dryRun.command.args.includes('--title'));
+  assert.ok(dryRun.command.args.includes('--description'));
+  assert.ok(dryRun.command.args.includes('--fields'));
+  assert.ok(dryRun.command.args.includes('System.AssignedTo=agentops-oncall@example.com'));
+  assert.match(JSON.stringify(dryRun.payload), /AgentOps;/);
+  assert.match(JSON.stringify(dryRun.payload), /Do not include prompts/);
+  assert.ok(dryRun.guardrails.some(item => item.includes('Review the route-plan')));
+  assert.doesNotMatch(JSON.stringify(dryRun), /SECRET_FAKE_TEST_VALUE|raw transcript/);
+
+  let invoked = null;
+  const posted = alertAzureDevOpsWorkItemRoute({
+    rule: 'failed-spans',
+    session: 'session-456',
+    owners: ['agentops-oncall@example.com'],
+    org: 'https://dev.azure.com/contoso',
+    project: 'AgentOps',
+    yes: true,
+    spawnSync: (command, args, options) => {
+      invoked = { command, args, options };
+      return { status: 0, stdout: '{"id":123,"url":"https://dev.azure.com/contoso/_apis/wit/workItems/123"}', stderr: '' };
+    }
+  });
+
+  assert.equal(posted.mode, 'posted-azure-devops-work-item');
+  assert.equal(posted.work_item_id, 123);
+  assert.equal(posted.work_item_url, 'https://dev.azure.com/contoso/_apis/wit/workItems/123');
+  assert.equal(invoked.command, 'az');
+  assert.equal(invoked.args[0], 'boards');
+  assert.equal(invoked.options.encoding, 'utf8');
+
+  const failed = alertAzureDevOpsWorkItemRoute({
+    rule: 'failed-spans',
+    session: 'session-456',
+    owners: ['agentops-oncall@example.com'],
+    org: 'https://dev.azure.com/contoso',
+    project: 'AgentOps',
+    yes: true,
+    spawnSync: () => ({ status: 1, stdout: '', stderr: 'not logged in' })
+  });
+  assert.equal(failed.mode, 'failed-azure-devops-work-item-route');
+  assert.equal(failed.error, 'not logged in');
+
+  assert.throws(() => alertAzureDevOpsWorkItemRoute({ rule: 'failed-spans', session: 'session-456', project: 'AgentOps', owners: ['agentops-oncall@example.com'] }), /requires --org/);
+  assert.throws(() => alertAzureDevOpsWorkItemRoute({ rule: 'failed-spans', session: 'session-456', org: 'https://dev.azure.com/contoso', owners: ['agentops-oncall@example.com'] }), /requires --project/);
+  assert.throws(() => alertAzureDevOpsWorkItemRoute({ rule: 'failed-spans', session: 'session-456', org: 'https://dev.azure.com/contoso', project: 'AgentOps' }), /requires at least one --owner/);
 });
