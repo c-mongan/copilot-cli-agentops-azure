@@ -75,6 +75,7 @@ const {
   attributionUsageQuery,
   benchmarkCheatSignals,
   benchmarkAzureTelemetryQuery,
+  benchmarkApproval,
   benchmarkFixturePack,
   benchmarkReport,
   benchmarkRunBaseDir,
@@ -115,6 +116,7 @@ const {
   otlpLiveReplaySmokeTracePayload,
   otlpCustomEventPayload,
   otelCompatibilityQuery,
+  parseBenchmarkApproveArgs,
   parseBenchmarkCompareArgs,
   parseBenchmarkFixturePackArgs,
   parseBenchmarkReportArgs,
@@ -5723,6 +5725,78 @@ test('benchmark report promotes candidates with required approval evidence', () 
     ticket: 'APPROVAL-123',
     source: 'options.promotionApproval'
   });
+});
+
+test('benchmark approve writes run-scoped promotion approval evidence', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-bench-approval-'));
+  const output = path.join(tempDir, 'approval.json');
+
+  try {
+    assert.deepEqual(parseBenchmarkApproveArgs([
+      'pass-run',
+      '--by',
+      'bob@example.com',
+      '--by',
+      'alice@example.com',
+      '--ticket',
+      'CHG-123',
+      '--output',
+      output
+    ]), {
+      runId: 'pass-run',
+      approvedBy: ['bob@example.com', 'alice@example.com'],
+      status: 'approved',
+      ticket: 'CHG-123',
+      output
+    });
+
+    const approval = benchmarkApproval({
+      runId: 'pass-run',
+      approvedBy: ['bob@example.com', 'alice@example.com', 'alice@example.com'],
+      ticket: 'CHG-123',
+      output,
+      now: new Date('2026-06-03T08:00:00.000Z')
+    });
+
+    assert.deepEqual(approval, {
+      status: 'approved',
+      runId: 'pass-run',
+      approvedBy: ['alice@example.com', 'bob@example.com'],
+      approvedAt: '2026-06-03T08:00:00.000Z',
+      ticket: 'CHG-123',
+      source: 'benchmark approve',
+      output
+    });
+    assert.deepEqual(JSON.parse(fs.readFileSync(output, 'utf8')), {
+      status: 'approved',
+      runId: 'pass-run',
+      approvedBy: ['alice@example.com', 'bob@example.com'],
+      approvedAt: '2026-06-03T08:00:00.000Z',
+      ticket: 'CHG-123'
+    });
+
+    const summaries = loadBenchmarkSummaries('pass-run', { summariesDir: benchmarkSummariesDir })
+      .map(summary => ({
+        ...summary,
+        promotionGates: {
+          requiredApprovals: 2
+        }
+      }));
+    const report = benchmarkReport('pass-run', summaries, { approvalFile: output });
+    assert.deepEqual(report.promotionGateFailures, []);
+    assert.equal(report.promotion.decision, 'promote');
+
+    fs.writeFileSync(output, `${JSON.stringify({
+      status: 'approved',
+      runId: 'other-run',
+      approvedBy: ['alice@example.com'],
+      approvedAt: '2026-06-03T08:00:00.000Z'
+    })}\n`);
+    assert.throws(() => benchmarkReport('pass-run', summaries, { approvalFile: output }), /approval file is for run other-run/);
+    assert.throws(() => parseBenchmarkApproveArgs(['pass-run']), /requires at least one --by approver/);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
 });
 
 test('benchmark report enriches stored summaries with Azure telemetry', () => {
