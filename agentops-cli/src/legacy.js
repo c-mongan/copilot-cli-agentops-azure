@@ -5444,12 +5444,41 @@ function validateBenchmarkPromotionGates(gates, source = 'suite') {
   return Object.keys(normalized).length > 0 ? normalized : null;
 }
 
-function validateBenchmarkSemanticChecks(checks, source = 'task') {
+function validateBenchmarkJudgeProviders(providers, source = 'suite') {
+  if (providers === undefined) return new Map();
+  if (!isPlainObject(providers)) {
+    throw new Error(`Invalid benchmark ${source}: judgeProviders must be an object`);
+  }
+
+  return new Map(Object.entries(providers).map(([id, provider]) => {
+    const errors = [];
+    if (id.trim() === '') errors.push('id must be a non-empty string');
+    if (!isPlainObject(provider)) {
+      throw new Error(`Invalid benchmark ${source}: judgeProviders.${id} must be an object`);
+    }
+    if (typeof provider.command !== 'string' || provider.command.trim() === '') {
+      errors.push('command must be a non-empty string');
+    }
+    if (errors.length > 0) {
+      throw new Error(`Invalid benchmark ${source}: judgeProviders.${id} ${errors.join('; ')}`);
+    }
+    return [id, { id, command: provider.command }];
+  }));
+}
+
+function benchmarkJudgeProviderCommand(provider, check) {
+  return provider.command
+    .replaceAll('{file}', check.file)
+    .replaceAll('{checkId}', check.id);
+}
+
+function validateBenchmarkSemanticChecks(checks, source = 'task', options = {}) {
   if (checks === undefined) return [];
   if (!Array.isArray(checks)) {
     throw new Error(`Invalid benchmark task ${source}: semanticChecks must be an array`);
   }
 
+  const judgeProviders = options.judgeProviders || new Map();
   return checks.map((check, index) => {
     const errors = [];
     if (!isPlainObject(check)) {
@@ -5508,8 +5537,13 @@ function validateBenchmarkSemanticChecks(checks, source = 'task') {
       }
     }
     if (check.adapter === 'llm-judge') {
-      if (typeof check.command !== 'string' || check.command.trim() === '') {
-        errors.push('command must be a non-empty string');
+      const hasCommand = typeof check.command === 'string' && check.command.trim() !== '';
+      const hasProvider = typeof check.provider === 'string' && check.provider.trim() !== '';
+      if (!hasCommand && !hasProvider) {
+        errors.push('command or provider must be a non-empty string');
+      }
+      if (hasProvider && !judgeProviders.has(check.provider)) {
+        errors.push(`provider must reference a configured judge provider: ${check.provider}`);
       }
       if (check.minScore !== undefined) {
         const minScore = Number(check.minScore);
@@ -5540,7 +5574,10 @@ function validateBenchmarkSemanticChecks(checks, source = 'task') {
       });
     }
     if (check.adapter === 'llm-judge') {
-      normalized.command = check.command;
+      if (typeof check.provider === 'string' && check.provider.trim() !== '') normalized.provider = check.provider;
+      normalized.command = typeof check.command === 'string' && check.command.trim() !== ''
+        ? check.command
+        : benchmarkJudgeProviderCommand(judgeProviders.get(check.provider), check);
       normalized.minScore = check.minScore === undefined ? 100 : Number(check.minScore);
     }
     return normalized;
@@ -5630,7 +5667,7 @@ function validateBenchmarkTask(task, suiteDir, source = 'task', options = {}) {
 
   const hiddenCheckPacks = loadBenchmarkHiddenPacks(task, suiteDir, source);
   const hiddenPackCommands = hiddenCheckPacks.flatMap(pack => pack.commands);
-  const semanticChecks = validateBenchmarkSemanticChecks(task.semanticChecks, source);
+  const semanticChecks = validateBenchmarkSemanticChecks(task.semanticChecks, source, options);
   const fixtureSeal = validateBenchmarkFixtureSeal(task.fixtureSeal, fixturePath, source);
   const fixtureSealPack = loadBenchmarkFixtureSealPack(task, suiteDir, fixturePath, source, options);
   const toolPolicy = validateBenchmarkToolPolicy(task.toolPolicy, source);
@@ -5667,6 +5704,7 @@ function loadBenchmarkSuites(baseDir = benchmarksDir) {
       const metadata = fs.existsSync(suitePath) ? readJson(suitePath) : {};
       const fixtureTrustRoots = validateBenchmarkFixtureTrustRoots(metadata.fixtureTrustRoots, path.relative(root, suitePath));
       const fixtureTrustRevocations = validateBenchmarkFixtureTrustRevocations(metadata.fixtureTrustRevocations, path.relative(root, suitePath));
+      const judgeProviders = validateBenchmarkJudgeProviders(metadata.judgeProviders, path.relative(root, suitePath));
       const tasksDir = path.join(suiteDir, 'tasks');
       const taskFiles = fs.existsSync(tasksDir)
         ? fs.readdirSync(tasksDir).filter(file => file.endsWith('.json')).sort()
@@ -5674,7 +5712,7 @@ function loadBenchmarkSuites(baseDir = benchmarksDir) {
       const promotionGates = validateBenchmarkPromotionGates(metadata.promotionGates, path.relative(root, suitePath));
       const tasks = taskFiles.map(file => {
         const taskPath = path.join(tasksDir, file);
-        return validateBenchmarkTask(readJson(taskPath), suiteDir, path.relative(root, taskPath), { fixtureTrustRoots, fixtureTrustRevocations });
+        return validateBenchmarkTask(readJson(taskPath), suiteDir, path.relative(root, taskPath), { fixtureTrustRoots, fixtureTrustRevocations, judgeProviders });
       });
 
       return {
@@ -5684,6 +5722,7 @@ function loadBenchmarkSuites(baseDir = benchmarksDir) {
         path: path.relative(root, suiteDir),
         fixtureTrustRoots: fixtureTrustRoots.map(rootEntry => ({ keyId: rootEntry.keyId })),
         fixtureTrustRevocations,
+        judgeProviders: [...judgeProviders.values()].map(provider => ({ id: provider.id })),
         promotionGates,
         tasks
       };

@@ -4730,7 +4730,15 @@ test('benchmark schema validation rejects invalid semantic checks', () => {
     adapter: 'llm-judge',
     file: 'README.md'
   }];
-  assert.throws(() => validateBenchmarkTask(task, suiteDir, 'test-task'), /command must be a non-empty string/);
+  assert.throws(() => validateBenchmarkTask(task, suiteDir, 'test-task'), /command or provider must be a non-empty string/);
+
+  task.semanticChecks = [{
+    id: 'unknown-provider',
+    adapter: 'llm-judge',
+    file: 'README.md',
+    provider: 'hosted'
+  }];
+  assert.throws(() => validateBenchmarkTask(task, suiteDir, 'test-task'), /provider must reference a configured judge provider/);
 });
 
 test('benchmark schema validation rejects invalid tool policies', () => {
@@ -5586,7 +5594,7 @@ test('benchmark semantic rubric checks score partial matches', () => {
   }
 });
 
-test('benchmark semantic checks support LLM judge command scoring', () => {
+test('benchmark semantic checks support configured LLM judge providers', () => {
   const runId = `bench-semantic-judge-${Date.now()}`;
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-bench-semantic-judge-'));
   const suiteDir = path.join(tempDir, 'benchmarks', 'semantic-judge-suite');
@@ -5596,7 +5604,15 @@ test('benchmark semantic checks support LLM judge command scoring', () => {
   try {
     fs.mkdirSync(fixtureDir, { recursive: true });
     fs.mkdirSync(tasksDir, { recursive: true });
-    fs.writeFileSync(path.join(suiteDir, 'suite.json'), `${JSON.stringify({ id: 'semantic-judge-suite', title: 'Semantic judge suite' })}\n`);
+    fs.writeFileSync(path.join(suiteDir, 'suite.json'), `${JSON.stringify({
+      id: 'semantic-judge-suite',
+      title: 'Semantic judge suite',
+      judgeProviders: {
+        hosted: {
+          command: 'agentops-judge {file} --check {checkId}'
+        }
+      }
+    })}\n`);
     fs.writeFileSync(path.join(fixtureDir, 'README.md'), '# Semantic fixture\n');
     fs.writeFileSync(path.join(tasksDir, 'write-note.json'), `${JSON.stringify({
       id: 'write-note',
@@ -5610,7 +5626,7 @@ test('benchmark semantic checks support LLM judge command scoring', () => {
         id: 'note-quality',
         adapter: 'llm-judge',
         file: 'notes/hello.txt',
-        command: 'agentops-judge notes/hello.txt',
+        provider: 'hosted',
         minScore: 80
       }],
       expectedFiles: ['notes/hello.txt'],
@@ -5619,6 +5635,7 @@ test('benchmark semantic checks support LLM judge command scoring', () => {
       tags: []
     })}\n`);
 
+    let judgeCommand = null;
     const result = runBenchmarkSuite('semantic-judge-suite', {
       benchmarksDir: path.join(tempDir, 'benchmarks'),
       variant: 'candidate',
@@ -5632,6 +5649,7 @@ test('benchmark semantic checks support LLM judge command scoring', () => {
           return { status: 0, stdout: 'created note', stderr: '' };
         }
         if (command === 'sh' || command.toLowerCase().endsWith('cmd.exe')) {
+          judgeCommand = args.at(-1);
           return { status: 0, stdout: '{"score":92,"detail":"strong answer"}', stderr: '' };
         }
         return { status: 0, stdout: '', stderr: '' };
@@ -5639,6 +5657,7 @@ test('benchmark semantic checks support LLM judge command scoring', () => {
     });
 
     assert.equal(result.summaries[0].success, true);
+    assert.equal(judgeCommand, 'agentops-judge notes/hello.txt --check note-quality');
     assert.deepEqual(result.summaries[0].semanticChecks, [{
       id: 'note-quality',
       adapter: 'llm-judge',
