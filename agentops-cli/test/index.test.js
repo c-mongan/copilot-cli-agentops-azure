@@ -76,6 +76,7 @@ const {
   benchmarkCheatSignals,
   benchmarkAzureTelemetryQuery,
   benchmarkApproval,
+  benchmarkArtifactReview,
   benchmarkFixturePack,
   benchmarkReport,
   benchmarkRunBaseDir,
@@ -117,6 +118,7 @@ const {
   otlpCustomEventPayload,
   otelCompatibilityQuery,
   parseBenchmarkApproveArgs,
+  parseBenchmarkArtifactsArgs,
   parseBenchmarkCompareArgs,
   parseBenchmarkFixturePackArgs,
   parseBenchmarkReportArgs,
@@ -5009,6 +5011,70 @@ test('benchmark run executes Copilot in an isolated fixture copy and writes a su
     assert.match(copilotCall.options.env.OTEL_RESOURCE_ATTRIBUTES, /agentops\.benchmark\.task_id=create-note/);
     assert.match(copilotCall.options.env.OTEL_RESOURCE_ATTRIBUTES, /agentops\.benchmark\.permission_profile=allow-all-isolated/);
     assert.deepEqual(copilotCall.args.slice(-2), ['-p', 'Create notes/hello.txt containing the text hello agentops.']);
+  } finally {
+    fs.rmSync(path.join(benchmarkRunBaseDir, runId), { recursive: true, force: true });
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('benchmark artifacts reviews changed file content explicitly', () => {
+  const runId = `bench-artifacts-${Date.now()}`;
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-bench-artifacts-'));
+
+  try {
+    assert.deepEqual(parseBenchmarkArtifactsArgs([
+      runId,
+      '--task',
+      'create-note',
+      '--repeat',
+      '1',
+      '--include-content'
+    ]), {
+      runId,
+      includeContent: true,
+      taskId: 'create-note',
+      repeat: 1
+    });
+
+    const result = runBenchmarkSuite('starter', {
+      variant: 'candidate',
+      repeat: 1,
+      runId,
+      summariesDir: path.join(tempDir, 'summaries'),
+      spawnSync: (command, args, options = {}) => {
+        if (command === 'copilot') {
+          fs.mkdirSync(path.join(options.cwd, 'notes'), { recursive: true });
+          fs.writeFileSync(path.join(options.cwd, 'notes', 'hello.txt'), 'hello agentops\n');
+          fs.writeFileSync(path.join(options.cwd, 'README.md'), '# Tiny Benchmark Fixture\n\nUpdated during benchmark.\n');
+          return { status: 0, stdout: 'created note', stderr: '' };
+        }
+        return { status: 0, stdout: '', stderr: '' };
+      }
+    });
+
+    const metadataOnly = benchmarkArtifactReview(runId, result.summaries, { taskId: 'create-note' });
+    assert.equal(metadataOnly.includeContent, false);
+    assert.equal(metadataOnly.tasks[0].files.some(file => file.diff), false);
+    assert.deepEqual(metadataOnly.tasks[0].files.map(file => `${file.status}:${file.file}`), [
+      'added:notes/hello.txt',
+      'modified:README.md'
+    ]);
+
+    const review = benchmarkArtifactReview(runId, result.summaries, {
+      taskId: 'create-note',
+      includeContent: true
+    });
+    const readme = review.tasks[0].files.find(file => file.file === 'README.md');
+    const note = review.tasks[0].files.find(file => file.file === 'notes/hello.txt');
+    assert.equal(readme.status, 'modified');
+    assert.equal(readme.beforeExists, true);
+    assert.equal(readme.afterExists, true);
+    assert.match(readme.diff.join('\n'), /-This fixture is intentionally small and safe/);
+    assert.match(readme.diff.join('\n'), /\+Updated during benchmark/);
+    assert.equal(note.status, 'added');
+    assert.equal(note.beforeExists, false);
+    assert.equal(note.afterExists, true);
+    assert.match(note.diff.join('\n'), /\+hello agentops/);
   } finally {
     fs.rmSync(path.join(benchmarkRunBaseDir, runId), { recursive: true, force: true });
     fs.rmSync(tempDir, { recursive: true, force: true });
