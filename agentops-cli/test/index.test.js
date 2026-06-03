@@ -2266,6 +2266,8 @@ test('init workflow installs skills in dry-run mode and returns first-run next s
     assert.equal(result.dashboard_import.requested, false);
     assert.equal(result.real_smoke.requested, false);
     assert.equal(result.triage_latest.requested, false);
+    assert.equal(result.summary.status, 'needs_action');
+    assert.equal(result.summary.next_action, './install-agentops.sh');
     assert.ok(result.next.includes('agentops init --provision-cloud'));
     assert.ok(result.next.includes('node agentops-cli/src/index.js validate-azure --import-dashboards --last 24h'));
     assert.ok(result.next.includes('node agentops-cli/src/index.js smoke --real-copilot --wait 2m --poll 10s'));
@@ -2278,6 +2280,7 @@ test('init workflow installs skills in dry-run mode and returns first-run next s
     assert.match(output, /Skills:/);
     assert.match(output, /Cloud config: workspace=missing, grafana=missing/);
     assert.match(output, /azd environment:/);
+    assert.match(output, /Summary: needs_action\. Run next: \.\/install-agentops\.sh/);
     assert.match(output, /First value: run the real smoke/);
     assert.match(output, /agentops plugin uninstall/);
   } finally {
@@ -2311,6 +2314,9 @@ test('init --full dry run requests every first-run stage from the CLI parser', (
     assert.equal(parsed.dashboard_import.requested, true);
     assert.equal(parsed.real_smoke.requested, true);
     assert.equal(parsed.triage_latest.requested, true);
+    assert.equal(parsed.summary.status, 'needs_action');
+    assert.equal(parsed.summary.stages.length, 4);
+    assert.ok(parsed.summary.stages.every(stage => stage.status === 'ready'));
     assert.equal(parsed.cloud_provision.dry_run, true);
     assert.equal(parsed.dashboard_import.dry_run, true);
     assert.equal(parsed.real_smoke.dry_run, true);
@@ -2341,6 +2347,7 @@ test('init triage-latest dry run plans explicit latest triage stage', () => {
     assert.equal(result.triage_latest.requested, true);
     assert.equal(result.triage_latest.dry_run, true);
     assert.equal(result.triage_latest.ok, true);
+    assert.deepEqual(result.summary.stages.map(stage => stage.name), ['triage_latest']);
     assert.equal(result.next.includes('node agentops-cli/src/index.js triage latest --out .agentops/triage/latest --json'), false);
     assert.match(output, /Latest triage: ready/);
   } finally {
