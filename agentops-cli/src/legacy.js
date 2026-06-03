@@ -68,6 +68,7 @@ function usage() {
     'permission-friction [--last <duration>]',
     'alert recommend [--last <duration>]',
     'alert tune-plan [--last <duration>] [--rule <name>] [--owner <name>]',
+    'alert threshold-simulate --rule <name> --threshold <number> --owner <name> [--last <duration>]',
     'alert threshold-patch --rule <name> --threshold <number> --owner <name> [--last <duration>]',
     'alert policy [--owner <name>] [--service <name>] [--timezone <tz>]',
     'alert resources [--resource-group <name>]',
@@ -5090,6 +5091,118 @@ function unifiedThresholdDiff({ lines, lineIndex, before, after, filePath }) {
   ].join('\n');
 }
 
+function alertThresholdSimulationQuery({ rule, currentThreshold, proposedThreshold, last }) {
+  const selectedRule = JSON.stringify(rule);
+  if (rule === 'content-capture') {
+    return `let lookback = ${last};
+let selected_rule = ${selectedRule};
+let current_threshold = ${currentThreshold};
+let proposed_threshold = ${proposedThreshold};
+let windows =
+union isfuzzy=true AppDependencies, AppTraces
+| where TimeGenerated > ago(lookback)
+| where tostring(Properties) has_any ("gen_ai.input.messages", "gen_ai.output.messages", "gen_ai.prompt", "gen_ai.completion", "github.copilot.message")
+| summarize TriggerValue=count() by TimeGenerated=bin(TimeGenerated, 1h)
+| extend Conversation="content-capture-window";
+windows
+| summarize
+    observed_windows=count(),
+    current_alert_windows=countif(TriggerValue > current_threshold),
+    proposed_alert_windows=countif(TriggerValue > proposed_threshold),
+    max_trigger=max(TriggerValue),
+    affected_sessions=dcount(Conversation)
+| extend Rule=selected_rule, CurrentThreshold=current_threshold, ProposedThreshold=proposed_threshold`;
+  }
+
+  const triggerExpression = rule === 'high-aiu'
+    ? 'AIU'
+    : 'todouble(Failures + ToolFailures)';
+  return `let lookback = ${last};
+let selected_rule = ${selectedRule};
+let current_threshold = ${currentThreshold};
+let proposed_threshold = ${proposedThreshold};
+let hourly =
+AppDependencies
+| where TimeGenerated > ago(lookback)
+| where ${baseFilter}
+| extend conversation=${sessionKey},
+    operation=tostring(Properties["gen_ai.operation.name"]),
+    tool=tostring(Properties["gen_ai.tool.name"]),
+    error=tostring(Properties["error.type"]),
+    AIU=todouble(Properties["github.copilot.aiu"])
+| summarize
+    Failures=countif(Success == false or tostring(Success) =~ "false" or isnotempty(error)),
+    ToolFailures=countif((operation == "execute_tool" or isnotempty(tool)) and (Success == false or tostring(Success) =~ "false" or isnotempty(error))),
+    AIU=sum(AIU)
+  by Conversation=conversation, TimeGenerated=bin(TimeGenerated, 1h)
+| extend TriggerValue=${triggerExpression};
+hourly
+| summarize
+    observed_windows=count(),
+    current_alert_windows=countif(TriggerValue > current_threshold),
+    proposed_alert_windows=countif(TriggerValue > proposed_threshold),
+    max_trigger=max(TriggerValue),
+    p95_trigger=percentile(TriggerValue, 95),
+    affected_sessions=dcount(Conversation)
+| extend Rule=selected_rule, CurrentThreshold=current_threshold, ProposedThreshold=proposed_threshold`;
+}
+
+function alertThresholdSimulation({ rule, threshold, owner, last = '14d' } = {}) {
+  const normalizedRule = String(rule || '').trim();
+  const target = alertThresholdPatchResources[normalizedRule];
+  if (!target) {
+    throw new Error(`alert threshold-simulate requires --rule ${Object.keys(alertThresholdPatchResources).join('|')}`);
+  }
+
+  const normalizedOwner = String(owner || '').trim();
+  if (!normalizedOwner) throw new Error('alert threshold-simulate requires --owner <name>');
+
+  const proposedThreshold = normalizeThresholdValue(threshold);
+  if (target.fixed_threshold !== undefined && proposedThreshold !== String(target.fixed_threshold)) {
+    throw new Error(`alert threshold-simulate keeps ${normalizedRule} threshold at ${target.fixed_threshold}`);
+  }
+
+  const lookback = validateKqlDuration(last);
+  const current = target.current_threshold;
+  const proposed = Number(proposedThreshold);
+
+  return {
+    schema_version: 'agentops.alert-threshold-simulation.v1',
+    mode: 'preview-only-threshold-simulation',
+    rule: normalizedRule,
+    owner: normalizedOwner,
+    last: lookback,
+    bicep_resource: target.bicep_resource,
+    current_threshold: current,
+    proposed_threshold: proposed,
+    expected_effect: proposed > current
+      ? 'fewer-or-equal-alert-windows'
+      : proposed < current
+        ? 'more-or-equal-alert-windows'
+        : 'same-threshold',
+    evidence: {
+      simulation_query: alertThresholdSimulationQuery({
+        rule: normalizedRule,
+        currentThreshold: current,
+        proposedThreshold: proposed,
+        last: lookback
+      }),
+      threshold_recommendation_query: alertRecommendationQuery(lookback),
+      fired_alert_history: alertHistoryQuery(normalizedRule, lookback)
+    },
+    guardrails: [
+      'Preview-only: this command does not edit files, Azure resources, alert rules, or action groups.',
+      'Run the simulation query and review current_alert_windows versus proposed_alert_windows before applying a threshold patch.',
+      'Keep content-capture threshold at 0; investigate any content-like telemetry before routing alerts.'
+    ],
+    next: [
+      'Run the simulation query in Azure Logs.',
+      'If proposed_alert_windows is acceptable, run alert threshold-patch to generate the Bicep diff.',
+      'Apply threshold changes only in a reviewed PR, then run validate-azure before enabling alerts.'
+    ]
+  };
+}
+
 function alertThresholdPatch({ rule, threshold, owner, last = '14d', bicepPath = path.join(root, 'infra/bicep/alerts.bicep') } = {}) {
   const normalizedRule = String(rule || '').trim();
   const target = alertThresholdPatchResources[normalizedRule];
@@ -9223,6 +9336,14 @@ async function main(argv) {
       process.stdout.write(JSON.stringify(plan, null, 2) + '\n');
       return;
     }
+    if (subcommand === 'threshold-simulate') {
+      const last = parseLastArg(alertArgs, '14d');
+      const rule = optionValue(alertArgs, ['--rule']);
+      const threshold = optionValue(alertArgs, ['--threshold']);
+      const owner = optionValue(alertArgs, ['--owner']);
+      process.stdout.write(JSON.stringify(alertThresholdSimulation({ rule, threshold, owner, last }), null, 2) + '\n');
+      return;
+    }
     if (subcommand === 'threshold-patch') {
       const last = parseLastArg(alertArgs, '14d');
       const rule = optionValue(alertArgs, ['--rule']);
@@ -9435,7 +9556,7 @@ async function main(argv) {
       }), null, 2) + '\n');
       return;
     }
-    throw new Error('alert currently supports: alert recommend, alert tune-plan, alert threshold-patch, alert policy, alert resources, alert history, alert detail, alert open, alert action-plan, alert export, alert handoff, alert route-plan, alert route-github, alert route-azure-devops, alert action-group-plan, alert route-action-group');
+    throw new Error('alert currently supports: alert recommend, alert tune-plan, alert threshold-simulate, alert threshold-patch, alert policy, alert resources, alert history, alert detail, alert open, alert action-plan, alert export, alert handoff, alert route-plan, alert route-github, alert route-azure-devops, alert action-group-plan, alert route-action-group');
   }
 
   if (command === 'incident') {
@@ -9498,6 +9619,7 @@ module.exports = {
   alertRecommendationQuery,
   alertRecommendations,
   alertTunePlan,
+  alertThresholdSimulation,
   alertThresholdPatch,
   alertResourceState,
   alertPolicy,

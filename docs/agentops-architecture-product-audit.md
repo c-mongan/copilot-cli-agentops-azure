@@ -885,6 +885,7 @@ What works well:
 - `agentops alert action-plan` generates deterministic GitHub issue or Azure DevOps work-item payload metadata with KQL, session links, and guardrails.
 - `agentops alert export` writes durable metadata-only alert artifacts for later incident review.
 - `agentops alert tune-plan` generates proposal-only threshold-change metadata with Bicep patch targets, validation queries, and fired-alert history evidence.
+- `agentops alert threshold-simulate` generates preview-only KQL for comparing current and proposed alert-window counts before applying a threshold diff.
 - `agentops alert threshold-patch` generates a preview-only Bicep threshold diff for direct rules after an owner supplies an approved numeric threshold.
 - `agentops alert policy` generates local ownership, dedupe/noise, quiet-hours placeholder, and manual-escalation metadata.
 - `agentops alert resources` reports current Azure scheduled-query enabled/disabled state and action-group routing without mutating Azure.
