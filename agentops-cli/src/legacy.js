@@ -77,6 +77,7 @@ function usage() {
     'alert handoff --rule <name> --session <conversation> [--owner <name>] [--output <json>] [--last <duration>]',
     'alert route-plan --rule <name> --session <conversation> [--owner <name>] [--target <github-issue|azure-devops-work-item>] [--output <json>]',
     'alert route-github --repo <owner/repo> --rule <name> --session <conversation> --owner <github-login> [--yes]',
+    'alert route-azure-devops --org <url> --project <name> --rule <name> --session <conversation> --owner <user> [--yes]',
     'incident timeline --artifact <json> [--artifact <json> ...] --output <json> [--incident <id>]',
     'lineage [--last <duration>]',
     'policy [--last <duration>]',
@@ -4987,6 +4988,110 @@ function alertGithubIssueRoute({ rule, session, last = '24h', owners = [], servi
   };
 }
 
+function fieldValue(patch, fieldPath) {
+  const field = patch.find(item => item.path === fieldPath);
+  return field ? field.value : null;
+}
+
+function alertAzureDevOpsWorkItemRoute({ rule, session, last = '24h', owners = [], service = 'agentops', timezone = 'UTC', org, project, workItemType = 'Issue', yes = false, resourceGroup = null, spawnSync = childProcess.spawnSync } = {}) {
+  const normalizedOrg = String(org || '').trim();
+  if (!normalizedOrg) throw new Error('alert route-azure-devops requires --org <url>');
+
+  const normalizedProject = String(project || '').trim();
+  if (!normalizedProject) throw new Error('alert route-azure-devops requires --project <name>');
+
+  const normalizedOwners = owners.map(owner => String(owner || '').trim()).filter(Boolean);
+  if (normalizedOwners.length === 0) throw new Error('alert route-azure-devops requires at least one --owner <user>');
+
+  const normalizedType = String(workItemType || '').trim() || 'Issue';
+  const plan = alertRoutePlan({
+    rule,
+    session,
+    last,
+    owners: normalizedOwners,
+    service,
+    timezone,
+    targets: ['azure-devops-work-item'],
+    resourceGroup
+  });
+  const destination = plan.destinations.find(item => item.target === 'azure-devops-work-item');
+  const payload = destination.payload;
+  const title = fieldValue(payload, '/fields/System.Title');
+  const description = fieldValue(payload, '/fields/System.Description');
+  const tags = fieldValue(payload, '/fields/System.Tags');
+  const fields = [
+    `System.AssignedTo=${normalizedOwners[0]}`
+  ];
+  if (tags) fields.push(`System.Tags=${tags}`);
+
+  const args = [
+    'boards',
+    'work-item',
+    'create',
+    '--org',
+    normalizedOrg,
+    '--project',
+    normalizedProject,
+    '--type',
+    normalizedType,
+    '--title',
+    title,
+    '--description',
+    description,
+    '--fields',
+    ...fields
+  ];
+
+  const route = {
+    schema_version: 'agentops.alert-azure-devops-route.v1',
+    mode: yes ? 'posted-azure-devops-work-item' : 'dry-run-azure-devops-work-item-route',
+    alert: plan.alert,
+    org: normalizedOrg,
+    project: normalizedProject,
+    owner: normalizedOwners[0],
+    work_item_type: normalizedType,
+    command: {
+      executable: 'az',
+      args
+    },
+    payload,
+    guardrails: [
+      'Review the route-plan and handoff evidence before posting.',
+      'Keep prompts, responses, tool arguments, tool results, and file contents out of Azure DevOps work items.',
+      'This command only creates an Azure DevOps work item; it does not page, edit Azure resources, or enable alert rules.'
+    ]
+  };
+
+  if (!yes) return route;
+
+  const result = spawnSync('az', args, {
+    encoding: 'utf8',
+    env: process.env
+  });
+  if (result.status !== 0) {
+    return {
+      ...route,
+      mode: 'failed-azure-devops-work-item-route',
+      status: result.status,
+      error: String(result.stderr || result.stdout || 'az boards work-item create failed').trim()
+    };
+  }
+
+  let parsed = null;
+  try {
+    parsed = JSON.parse(String(result.stdout || '{}'));
+  } catch {
+    parsed = null;
+  }
+
+  return {
+    ...route,
+    status: result.status,
+    work_item_id: parsed && parsed.id ? parsed.id : null,
+    work_item_url: parsed && parsed.url ? parsed.url : String(result.stdout || '').trim()
+  };
+}
+
 const {
   copilotPrimitivesInventory
 } = createPrimitives({
@@ -8917,7 +9022,34 @@ async function main(argv) {
       }), null, 2) + '\n');
       return;
     }
-    throw new Error('alert currently supports: alert recommend, alert tune-plan, alert policy, alert resources, alert history, alert detail, alert action-plan, alert export, alert handoff, alert route-plan, alert route-github');
+    if (subcommand === 'route-azure-devops') {
+      const rule = optionValue(alertArgs, ['--rule']);
+      const session = optionValue(alertArgs, ['--session', '--conversation']);
+      const owners = optionValues(alertArgs, '--owner');
+      const service = optionValue(alertArgs, ['--service']) || 'agentops';
+      const timezone = optionValue(alertArgs, ['--timezone', '--tz']) || 'UTC';
+      const resourceGroup = optionValue(alertArgs, ['--resource-group', '-g']) || configuredCloudValues().resourceGroup;
+      const org = optionValue(alertArgs, ['--org', '--organization']);
+      const project = optionValue(alertArgs, ['--project']);
+      const workItemType = optionValue(alertArgs, ['--type', '--work-item-type']) || 'Issue';
+      const last = parseLastArg(alertArgs, '24h');
+      const yes = alertArgs.includes('--yes');
+      process.stdout.write(JSON.stringify(alertAzureDevOpsWorkItemRoute({
+        rule,
+        session,
+        last,
+        owners,
+        service,
+        timezone,
+        org,
+        project,
+        workItemType,
+        yes,
+        resourceGroup
+      }), null, 2) + '\n');
+      return;
+    }
+    throw new Error('alert currently supports: alert recommend, alert tune-plan, alert policy, alert resources, alert history, alert detail, alert action-plan, alert export, alert handoff, alert route-plan, alert route-github, alert route-azure-devops');
   }
 
   if (command === 'incident') {
@@ -8988,6 +9120,7 @@ module.exports = {
   alertActionPlan,
   alertArtifact,
   alertIncidentTimeline,
+  alertAzureDevOpsWorkItemRoute,
   alertHandoff,
   alertGithubIssueRoute,
   alertRoutePlan,
