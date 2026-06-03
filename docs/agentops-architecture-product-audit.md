@@ -879,14 +879,15 @@ What works well:
 - Content-capture alert is strict at threshold 0.
 - Failure and high-AIU alerts exist as infrastructure.
 - No action groups are attached by default.
+- `agentops alert action-plan` generates deterministic GitHub issue or Azure DevOps work-item payload metadata with KQL, session links, and guardrails.
 
 Current gaps:
 
-- No alert action routing is implemented.
+- Alert action routing is still manual; the CLI now creates a safe plan but does not post notifications or create issues/work items.
 - No alert history product surface beyond dashboard/query support.
 - No on-call/noise policy.
 - No automatic threshold tuning loop.
-- No "open run from alert" flow beyond constructing KQL/dashboard links.
+- No first-class "open run from alert" UI beyond constructed KQL/dashboard links.
 
 Product recommendation:
 
