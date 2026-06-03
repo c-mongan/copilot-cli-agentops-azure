@@ -33,7 +33,7 @@ const { browserProfileOptionsFromArgs, checkReportHtml, e2eAuthProfile, grafanaA
 const { hasV2Args } = require('../src/commands/explain');
 const { openV2FromFiles, renderOpenV2 } = require('../src/commands/open');
 const { productAudit, productAuditWithVisual, renderProductAudit, validateVisualEvidence, visualAuditRecoveryCommands } = require('../src/commands/product');
-const { benchmarkEvidenceFromReport, changeAnnotationsForRun, firstPositional: firstRecommendPositional, normalizeChangeAnnotation, recommendFromFiles, recommendationRow, renderRecommendationV2, writeRecommendation } = require('../src/commands/recommend');
+const { benchmarkEvidenceFromReport, changeAnnotationsForRun, exportRecommendationStore, firstPositional: firstRecommendPositional, normalizeChangeAnnotation, recommendFromFiles, recommendationRow, recommendationStoreCommand, renderRecommendationV2, saveRecommendation, writeRecommendation } = require('../src/commands/recommend');
 const { demoOptionsFromArgs, demoVerifyCommand } = require('../src/commands/demo');
 const { buildTriage, renderTriage, writeTriage } = require('../src/commands/triage');
 const { buildAzureIngestPlan } = require('../src/lib/azure/v2-ingest-plan');
@@ -1334,6 +1334,62 @@ test('V2 recommend falls back to recurring pattern evidence', () => {
     assert.equal(rows[0].PatternRuns, 4);
     assert.ok(!JSON.stringify(rows[0]).includes('Demo prompt'));
     assert.ok(Array.isArray(rows[0].DashboardTitles));
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('V2 recommend persists local recommendation store and exports table rows', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-recommend-store-'));
+  try {
+    const storePath = path.join(tempDir, 'recommendations.json');
+    const exportDir = path.join(tempDir, 'export');
+    const recommendation = {
+      ok: true,
+      action: 'investigate_tool',
+      severity: 'high',
+      run_id: 'run-store',
+      session_id: 'session-store',
+      trace_id: 'trace-store',
+      observed_pattern: 'A tool failure repeated for this run.',
+      next_action: 'Open Tools & MCP Risk and validate the tool policy.',
+      evidence: {
+        dashboards: [{ title: 'Run Replay', url: 'https://graf.example/d/agentops-v2-run-replay?var-run_id=run-store' }],
+        eval: null,
+        pattern: null,
+        benchmark: null,
+        change_annotations: [{
+          time_generated: '2026-06-03T12:00:00Z',
+          component: 'skill',
+          target: 'agentops-latest-run',
+          change_type: 'updated',
+          change_id: 'change-store',
+          version: 'v2',
+          run_id: 'run-store',
+          session_id: 'session-store',
+          trace_id: 'trace-store',
+          event_name: 'agentops.config.changed'
+        }],
+        file_refs: ['skill:agentops-latest-run']
+      },
+      validation: ['agentops dashboard kql-check --last 24h --json'],
+      rollback_condition: 'Rollback if failures rise.'
+    };
+
+    const saved = saveRecommendation(recommendation, storePath, '2026-06-03T12:00:01Z');
+    const listed = recommendationStoreCommand(['list', '--store', storePath]);
+    const exported = exportRecommendationStore({ storePath, outDir: exportDir });
+    const exportedRows = fs.readFileSync(exported.file, 'utf8').trim().split(/\r?\n/).map(line => JSON.parse(line));
+
+    assert.equal(saved.count, 1);
+    assert.equal(listed.recommendations.length, 1);
+    assert.equal(listed.recommendations[0].RunId, 'run-store');
+    assert.deepEqual(listed.recommendations[0].ChangeTargetRefs, ['skill:agentops-latest-run']);
+    assert.equal(exported.rows_written, 1);
+    assert.equal(exportedRows[0].RecommendationId, saved.saved.RecommendationId);
+    assert.equal(exportedRows[0].ChangeAnnotations[0].change_id, 'change-store');
+    assert.equal(recommendationStoreCommand(['export', '--store', storePath, '--out', exportDir]).export.rows_written, 1);
+    assert.doesNotMatch(JSON.stringify(exportedRows), /prompt|response|tool args|source code/i);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }

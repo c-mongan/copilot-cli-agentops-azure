@@ -123,7 +123,8 @@ Core commands:
   explain latest|<run-id> [--runs <jsonl>] [--evals <jsonl>] [--insights <jsonl>] [--json]
   insights [generate|patterns] [--runs <jsonl>] [--insights <jsonl>] [--tools <jsonl>] [--privacy <jsonl>] [--github <jsonl>] [--out <dir>] [--json]
   init [--dry-run] [--full] [--provision-cloud] [--import-dashboards] [--run-smoke] [--triage-latest] [--force-skills] [--no-skills] [--json]
-  recommend latest|<run-id> [--runs <jsonl>] [--events <jsonl>] [--evals <jsonl>] [--insights <jsonl>] [--benchmark-run <id>] [--benchmark-report <json>] [--out <dir>] [--json]
+  recommend latest|<run-id> [--runs <jsonl>] [--events <jsonl>] [--evals <jsonl>] [--insights <jsonl>] [--benchmark-run <id>] [--benchmark-report <json>] [--out <dir>] [--save] [--store <json>] [--json]
+  recommend list|export [--store <json>] [--out <dir>]
   triage latest|<run-id> [--runs <jsonl>] [--events <jsonl>] [--tools <jsonl>] [--privacy <jsonl>] [--github <jsonl>] [--evals <jsonl>] [--insights <jsonl>] [--benchmark-run <id>] [--out <dir>] [--json]
   alert handoff --rule <name> --session <conversation> [--owner <name>] [--events <jsonl>] [--output <json>] [--last <duration>]
   mcp-proxy --server-name <name> [--out <jsonl>] -- <server command> [args...]
@@ -184,7 +185,7 @@ async function main(argv) {
   if (command === 'insights') return insightsCommand(args);
   if (command === 'mcp-proxy') return mcpProxyCommand(args);
   if (command === 'recommend') {
-    if (args.includes('--runs')) return recommendCommand(args);
+    if (args.includes('--runs') || args[0] === 'list' || args[0] === 'export') return recommendCommand(args);
     return legacy.main([command, ...args]);
   }
   if (command === 'run-summary') return runSummaryCommand(args);

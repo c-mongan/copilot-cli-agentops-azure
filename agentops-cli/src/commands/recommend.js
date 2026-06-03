@@ -1,5 +1,6 @@
 const crypto = require('node:crypto');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 
 const legacy = require('../legacy');
@@ -581,6 +582,81 @@ function writeRecommendation(recommendation, outDir) {
   return { out_dir: absoluteDir, file, manifest, row };
 }
 
+function defaultRecommendationStorePath() {
+  return process.env.AGENTOPS_RECOMMENDATIONS_PATH || path.join(os.homedir(), '.agentops', 'recommendations.json');
+}
+
+function readRecommendationStore(filePath = defaultRecommendationStorePath()) {
+  if (!fs.existsSync(filePath)) return { recommendations: [] };
+  const payload = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  return {
+    recommendations: Array.isArray(payload.recommendations) ? payload.recommendations : []
+  };
+}
+
+function writeRecommendationStore(payload, filePath = defaultRecommendationStorePath()) {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, `${JSON.stringify(payload, null, 2)}\n`);
+}
+
+function saveRecommendation(recommendation, filePath = defaultRecommendationStorePath(), timeGenerated = new Date().toISOString()) {
+  const row = recommendationRow(recommendation, timeGenerated);
+  const validation = validateRecommendationRow(row);
+  if (!validation.ok) throw new Error(`recommendation row failed schema validation: ${validation.errors.join('; ')}`);
+  const payload = readRecommendationStore(filePath);
+  const next = payload.recommendations
+    .filter(item => item.RecommendationId !== row.RecommendationId)
+    .concat(row)
+    .sort((left, right) => String(right.TimeGenerated || '').localeCompare(String(left.TimeGenerated || '')));
+  writeRecommendationStore({ recommendations: next }, filePath);
+  return { path: filePath, saved: row, count: next.length };
+}
+
+function exportRecommendationStore({ storePath = defaultRecommendationStorePath(), outDir } = {}) {
+  const payload = readRecommendationStore(storePath);
+  const absoluteDir = path.resolve(outDir || path.join(path.dirname(storePath), 'recommendations-export'));
+  fs.mkdirSync(absoluteDir, { recursive: true });
+  const rows = payload.recommendations;
+  const file = path.join(absoluteDir, 'AgentOpsRecommendations_CL.jsonl');
+  fs.writeFileSync(file, `${rows.map(row => JSON.stringify(row)).join('\n')}${rows.length ? '\n' : ''}`);
+  const manifest = path.join(absoluteDir, 'recommendations-manifest.json');
+  fs.writeFileSync(manifest, `${JSON.stringify({
+    generated_at: new Date().toISOString(),
+    table: 'AgentOpsRecommendations_CL',
+    file,
+    rows_written: rows.length,
+    privacy: 'metadata-only; no prompts, responses, tool arguments, tool results, source code, or file contents'
+  }, null, 2)}\n`);
+  return { out_dir: absoluteDir, file, manifest, rows_written: rows.length, rows };
+}
+
+function recommendationStoreCommand(args = []) {
+  const subcommand = args[0];
+  const storePath = optionValue(args, '--store') || defaultRecommendationStorePath();
+  if (subcommand === 'list') {
+    const payload = readRecommendationStore(storePath);
+    return {
+      path: storePath,
+      recommendations: payload.recommendations.map(row => ({
+        RecommendationId: row.RecommendationId,
+        TimeGenerated: row.TimeGenerated,
+        Severity: row.Severity,
+        Action: row.Action,
+        RunId: row.RunId,
+        NextAction: row.NextAction,
+        ChangeTargetRefs: row.ChangeTargetRefs || []
+      }))
+    };
+  }
+  if (subcommand === 'export') {
+    return {
+      path: storePath,
+      export: exportRecommendationStore({ storePath, outDir: optionValue(args, '--out') })
+    };
+  }
+  throw new Error('recommend requires latest|<run-id>, list, or export');
+}
+
 function renderRecommendationV2(recommendation) {
   const lines = ['AgentOps recommendation', ''];
   lines.push(`Action: ${recommendation.action}`);
@@ -618,6 +694,11 @@ function renderRecommendationV2(recommendation) {
 }
 
 function recommendCommand(args = []) {
+  if (args[0] === 'list' || args[0] === 'export') {
+    process.stdout.write(`${JSON.stringify(recommendationStoreCommand(args), null, 2)}\n`);
+    return;
+  }
+
   const runId = firstPositional(args);
   const runsFile = optionValue(args, '--runs');
   if (!runsFile) throw new Error('recommend requires --runs <AgentOpsRunSummary_CL.jsonl> for V2 recommendations');
@@ -633,10 +714,19 @@ function recommendCommand(args = []) {
   });
   const outDir = optionValue(args, '--out');
   const written = outDir ? writeRecommendation(recommendation, outDir) : null;
+  const saved = hasFlag(args, '--save')
+    ? saveRecommendation(recommendation, optionValue(args, '--store') || defaultRecommendationStorePath())
+    : null;
   if (written) recommendation.artifact = {
     table: 'AgentOpsRecommendations_CL',
     file: written.file,
     manifest: written.manifest,
+    privacy: 'metadata-only'
+  };
+  if (saved) recommendation.saved = {
+    store: saved.path,
+    recommendation_id: saved.saved.RecommendationId,
+    count: saved.count,
     privacy: 'metadata-only'
   };
 
@@ -645,6 +735,7 @@ function recommendCommand(args = []) {
   } else {
     process.stdout.write(renderRecommendationV2(recommendation));
     if (written) process.stdout.write(`Artifact: ${written.file}\n`);
+    if (saved) process.stdout.write(`Saved: ${saved.path}\n`);
   }
 }
 
@@ -655,12 +746,15 @@ module.exports = {
   normalizeChangeAnnotation,
   dashboardUrl,
   benchmarkEvidenceFromReport,
+  exportRecommendationStore,
   firstPositional,
   fileRefsForRecommendation,
   recommendCommand,
   recommendFromFiles,
+  recommendationStoreCommand,
   recommendationRow,
   renderRecommendationV2,
+  saveRecommendation,
   matchingPatternInsight,
   writeRecommendation,
   topInsightForRun
