@@ -5810,6 +5810,7 @@ function validateBenchmarkTask(task, suiteDir, source = 'task', options = {}) {
   const semanticChecks = validateBenchmarkSemanticChecks(task.semanticChecks, source, options);
   const fixtureSeal = validateBenchmarkFixtureSeal(task.fixtureSeal, fixturePath, source);
   const fixtureSealPack = loadBenchmarkFixtureSealPack(task, suiteDir, fixturePath, source, options);
+  const commandFileSeal = validateBenchmarkFixtureSeal(task.commandFileSeal, fixturePath, source);
   const toolPolicy = validateBenchmarkToolPolicy(task.toolPolicy, source);
   const toolPolicyEnforcement = {
     blockedRisks: toolPolicy?.blockedRisks || [],
@@ -5825,6 +5826,7 @@ function validateBenchmarkTask(task, suiteDir, source = 'task', options = {}) {
     semanticChecks,
     fixtureSeal,
     fixtureSealPack,
+    commandFileSeal,
     toolPolicy,
     toolPolicyEnforcement,
     permissionProfile,
@@ -6142,6 +6144,12 @@ function benchmarkRunPlan(suiteId, options = {}) {
             ...(task.fixtureSealPack.signature ? { signature: task.fixtureSealPack.signature } : {}),
             source: task.fixtureSealPack.source
           } : null,
+          commandFileSeal: task.commandFileSeal ? {
+            algorithm: task.commandFileSeal.algorithm,
+            fileCount: Object.keys(task.commandFileSeal.files).length,
+            files: Object.keys(task.commandFileSeal.files).sort()
+          } : null,
+          ...(options.includeHiddenChecks ? { commandFileSealDefinition: task.commandFileSeal } : {}),
           hiddenCommandCount: task.hiddenSuccessCommands.length + task.hiddenPackCommands.length,
           hiddenCheckPacks: task.hiddenCheckPacks.map(pack => ({
             id: pack.id,
@@ -6230,7 +6238,7 @@ function relativeFileSnapshot(dir) {
   if (!fs.existsSync(dir)) return snapshot;
 
   for (const file of walk(dir, item => fs.statSync(item).isFile())) {
-    snapshot.set(path.relative(dir, file), hashText(fs.readFileSync(file)));
+    snapshot.set(normalizeBenchmarkRelativePath(path.relative(dir, file)), hashText(fs.readFileSync(file)));
   }
 
   return snapshot;
@@ -6312,6 +6320,21 @@ function benchmarkPermissionPolicyChecks(run, changedFiles) {
     ok: changedFiles.length === 0,
     detail: changedFiles.length === 0 ? null : `${changedFiles.length} workspace file(s) changed`
   }];
+}
+
+function benchmarkCommandFileSealChecks(seal, afterSnapshot) {
+  if (!seal) return [];
+
+  return Object.entries(seal.files).map(([file, expectedHash]) => {
+    const normalized = normalizeBenchmarkRelativePath(file);
+    const actualHash = afterSnapshot.get(normalized);
+    const ok = actualHash === expectedHash;
+    return {
+      name: `command file seal unchanged: ${normalized}`,
+      ok,
+      detail: ok ? null : (actualHash === undefined ? 'sealed command file missing' : 'sealed command file changed')
+    };
+  });
 }
 
 function parseBenchmarkLlmJudgeResult(check, result) {
@@ -6472,6 +6495,7 @@ function executeBenchmarkRun(plan, run, options = {}) {
       checksPassed: 0,
       checksFailed: checkResults.length,
       fixtureSealPack: run.successChecks.fixtureSealPack || null,
+      commandFileSeal: run.successChecks.commandFileSeal || null,
       hiddenCheckPacks: run.successChecks.hiddenCheckPacks || [],
       hiddenChecksPassed: 0,
       hiddenChecksFailed: 0,
@@ -6579,6 +6603,7 @@ function executeBenchmarkRun(plan, run, options = {}) {
     });
   }
 
+  checkResults.push(...benchmarkCommandFileSealChecks(run.successChecks.commandFileSealDefinition, afterSnapshot));
   checkResults.push(...benchmarkPermissionPolicyChecks(run, changedFiles));
   const policyBlocks = checkResults.filter(check => check.name.startsWith('permission policy:') && !check.ok).length;
   const checksPassed = checkResults.filter(check => check.ok).length;
@@ -6609,6 +6634,7 @@ function executeBenchmarkRun(plan, run, options = {}) {
     checksPassed,
     checksFailed,
     fixtureSealPack: run.successChecks.fixtureSealPack || null,
+    commandFileSeal: run.successChecks.commandFileSeal || null,
     hiddenCheckPacks: run.successChecks.hiddenCheckPacks || [],
     hiddenChecksPassed,
     hiddenChecksFailed,
@@ -7436,6 +7462,7 @@ function benchmarkReport(runId, summaries = null, options = {}) {
       success: Boolean(summary.success),
       score: summary.score,
       fixtureSealPack: summary.fixtureSealPack || null,
+      commandFileSeal: summary.commandFileSeal || null,
       hiddenChecksPassed: numberValue(summary.hiddenChecksPassed),
       hiddenChecksFailed: numberValue(summary.hiddenChecksFailed),
       hiddenCheckPacks: summary.hiddenCheckPacks || [],

@@ -5311,6 +5311,90 @@ test('benchmark read-only permission profile blocks workspace changes', () => {
   }
 });
 
+test('benchmark command file seal rejects tampered check harness', () => {
+  const runId = `bench-command-seal-${Date.now()}`;
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-bench-command-seal-'));
+  const suiteDir = path.join(tempDir, 'benchmarks', 'command-seal-suite');
+  const fixtureDir = path.join(suiteDir, 'fixtures', 'tiny-repo');
+  const tasksDir = path.join(suiteDir, 'tasks');
+  const checkScript = 'const fs = require("node:fs"); process.exit(fs.existsSync("notes/hello.txt") ? 0 : 1);\n';
+  const checkScriptHash = crypto.createHash('sha256').update(checkScript).digest('hex');
+
+  try {
+    fs.mkdirSync(fixtureDir, { recursive: true });
+    fs.mkdirSync(tasksDir, { recursive: true });
+    fs.writeFileSync(path.join(suiteDir, 'suite.json'), `${JSON.stringify({ id: 'command-seal-suite', title: 'Command seal suite' })}\n`);
+    fs.writeFileSync(path.join(fixtureDir, 'README.md'), '# Command seal fixture\n');
+    fs.writeFileSync(path.join(fixtureDir, 'check.js'), checkScript);
+    fs.writeFileSync(path.join(tasksDir, 'create-note.json'), `${JSON.stringify({
+      id: 'create-note',
+      title: 'Create note',
+      fixture: 'fixtures/tiny-repo',
+      prompt: 'Create notes/hello.txt.',
+      copilotArgs: [],
+      permissionProfile: 'least-privilege',
+      successCommands: ['node check.js'],
+      commandFileSeal: {
+        algorithm: 'sha256',
+        files: {
+          'check.js': checkScriptHash
+        }
+      },
+      expectedFiles: ['notes/hello.txt'],
+      forbiddenFiles: [],
+      timeoutSec: 10,
+      tags: []
+    })}\n`);
+
+    const plan = benchmarkRunPlan('command-seal-suite', {
+      benchmarksDir: path.join(tempDir, 'benchmarks'),
+      variant: 'candidate',
+      dryRun: true,
+      runId
+    });
+    assert.deepEqual(plan.runs[0].successChecks.commandFileSeal, {
+      algorithm: 'sha256',
+      fileCount: 1,
+      files: ['check.js']
+    });
+
+    const result = runBenchmarkSuite('command-seal-suite', {
+      benchmarksDir: path.join(tempDir, 'benchmarks'),
+      variant: 'candidate',
+      repeat: 1,
+      runId,
+      summariesDir: path.join(tempDir, 'summaries'),
+      spawnSync: (command, args, options = {}) => {
+        if (command === 'copilot') {
+          fs.mkdirSync(path.join(options.cwd, 'notes'), { recursive: true });
+          fs.writeFileSync(path.join(options.cwd, 'notes', 'hello.txt'), 'hello agentops\n');
+          fs.writeFileSync(path.join(options.cwd, 'check.js'), 'process.exit(0);\n');
+          return { status: 0, stdout: 'created note', stderr: '' };
+        }
+        return { status: 0, stdout: '', stderr: '' };
+      }
+    });
+
+    assert.equal(result.summaries[0].success, false);
+    assert.deepEqual(result.summaries[0].commandFileSeal, {
+      algorithm: 'sha256',
+      fileCount: 1,
+      files: ['check.js']
+    });
+    assert.deepEqual(result.summaries[0].checks.find(check => check.name === 'command file seal unchanged: check.js'), {
+      name: 'command file seal unchanged: check.js',
+      ok: false,
+      detail: 'sealed command file changed'
+    });
+    assert.equal(result.report.tasks[0].success, false);
+    assert.equal(result.report.tasks[0].commandFileSeal.fileCount, 1);
+    assert.equal(result.report.recommendation.action, 'reject');
+  } finally {
+    fs.rmSync(path.join(benchmarkRunBaseDir, runId), { recursive: true, force: true });
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
 test('benchmark run rejects forbidden files created by Copilot', () => {
   const runId = `bench-safety-${Date.now()}`;
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-bench-test-'));
