@@ -292,7 +292,7 @@ agentops experimental attribution-smoke --wait 5m --poll 15s
 agentops open
 agentops experimental link session <conversation>
 agentops experimental link trace <operationId>
-agentops experimental ask-context latest --last 24h
+agentops ask-context latest --last 24h
 agentops experimental fields --last 7d
 agentops experimental context --last 7d
 agentops experimental token-rollup-audit --last 14d

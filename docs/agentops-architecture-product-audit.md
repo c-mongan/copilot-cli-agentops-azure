@@ -1145,6 +1145,7 @@ Implemented first slice:
 - `agentops init --full` now runs the explicit cloud provision, dashboard import, smoke/open-link, and latest triage stages together.
 - `agentops init --full` now returns a compact summary with the single next action and requested stage statuses.
 - The bundled `agentops-setup` Copilot skill now uses `agentops init --full` and asks Copilot to report the Run Replay link plus one evidence-backed next action.
+- The latest-run workflow and bundled skill now prefer `agentops ask-context latest` as the metadata-only Copilot investigation bundle before explain/recommend commands.
 - `agentops init --import-dashboards` now runs the dashboard import remediation stage explicitly during the init flow, then continues toward smoke/open next steps.
 - `agentops init --run-smoke` now runs the real-Copilot smoke/open-link stage explicitly during the init flow and reports follow-up commands when it fails.
 - `agentops init --triage-latest` now packages the latest run into the AgentOps triage evidence bundle explicitly during the init flow and reports latest/open follow-up commands when it fails.
