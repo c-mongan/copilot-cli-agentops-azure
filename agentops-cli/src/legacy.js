@@ -5044,6 +5044,46 @@ function loadBenchmarkHiddenPacks(task, suiteDir, source = 'task') {
   });
 }
 
+function hashBenchmarkFixtureSealFile(filePath) {
+  return hashText(fs.readFileSync(filePath, 'utf8').replace(/\r\n/g, '\n'));
+}
+
+function validateBenchmarkFixtureSeal(seal, fixturePath, source = 'task') {
+  if (seal === undefined) return null;
+  if (!isPlainObject(seal)) {
+    throw new Error(`Invalid benchmark task ${source}: fixtureSeal must be an object`);
+  }
+
+  const algorithm = seal.algorithm || 'sha256';
+  if (algorithm !== 'sha256') {
+    throw new Error(`Invalid benchmark task ${source}: fixtureSeal algorithm must be sha256`);
+  }
+  if (!isPlainObject(seal.files) || Object.keys(seal.files).length === 0) {
+    throw new Error(`Invalid benchmark task ${source}: fixtureSeal files must be a non-empty object`);
+  }
+
+  const files = {};
+  for (const [file, expectedHash] of Object.entries(seal.files)) {
+    if (typeof expectedHash !== 'string' || !/^[a-f0-9]{64}$/i.test(expectedHash)) {
+      throw new Error(`Invalid benchmark task ${source}: fixtureSeal hash for ${file} must be a sha256 hex string`);
+    }
+    const filePath = safeBenchmarkPath(fixturePath, file);
+    if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
+      throw new Error(`Invalid benchmark task ${source}: sealed fixture file does not exist: ${file}`);
+    }
+    const actualHash = hashBenchmarkFixtureSealFile(filePath);
+    if (actualHash !== expectedHash.toLowerCase()) {
+      throw new Error(`Invalid benchmark task ${source}: sealed fixture file changed: ${file}`);
+    }
+    files[normalizeBenchmarkRelativePath(file)] = expectedHash.toLowerCase();
+  }
+
+  return {
+    algorithm,
+    files
+  };
+}
+
 function validateBenchmarkSemanticChecks(checks, source = 'task') {
   if (checks === undefined) return [];
   if (!Array.isArray(checks)) {
@@ -5122,6 +5162,7 @@ function validateBenchmarkTask(task, suiteDir, source = 'task') {
   const hiddenCheckPacks = loadBenchmarkHiddenPacks(task, suiteDir, source);
   const hiddenPackCommands = hiddenCheckPacks.flatMap(pack => pack.commands);
   const semanticChecks = validateBenchmarkSemanticChecks(task.semanticChecks, source);
+  const fixtureSeal = validateBenchmarkFixtureSeal(task.fixtureSeal, fixturePath, source);
 
   return {
     ...task,
@@ -5130,6 +5171,7 @@ function validateBenchmarkTask(task, suiteDir, source = 'task') {
     hiddenCheckPackRefs: task.hiddenCheckPacks || [],
     hiddenPackCommands,
     semanticChecks,
+    fixtureSeal,
     permissionProfile,
     fixturePath,
     source
@@ -5327,6 +5369,11 @@ function benchmarkRunPlan(suiteId, options = {}) {
         },
         successChecks: {
           commands: task.successCommands,
+          fixtureSeal: task.fixtureSeal ? {
+            algorithm: task.fixtureSeal.algorithm,
+            fileCount: Object.keys(task.fixtureSeal.files).length,
+            files: Object.keys(task.fixtureSeal.files).sort()
+          } : null,
           hiddenCommandCount: task.hiddenSuccessCommands.length + task.hiddenPackCommands.length,
           hiddenCheckPacks: task.hiddenCheckPacks.map(pack => ({
             id: pack.id,
