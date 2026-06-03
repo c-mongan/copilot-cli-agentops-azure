@@ -181,6 +181,54 @@ union
     };
   }
 
+  function alertPolicy({ owners = [], service = 'agentops', timezone = 'UTC' } = {}) {
+    const normalizedOwners = owners.map(owner => String(owner || '').trim()).filter(Boolean);
+    const rules = alertRules();
+    return {
+      schema_version: 'agentops.alert-policy.v1',
+      workspace_id: workspaceId,
+      mode: 'metadata-only-policy',
+      service,
+      timezone,
+      ownership: {
+        state: normalizedOwners.length > 0 ? 'assigned' : 'needs-owner',
+        owners: normalizedOwners,
+        fallback: null
+      },
+      noise_policy: {
+        dedupe_key: ['rule', 'session'],
+        suppress_duplicates_for: 'PT30M',
+        max_review_items_per_rule_per_day: 10,
+        quiet_hours: {
+          enabled: false,
+          start: null,
+          end: null,
+          timezone
+        }
+      },
+      escalation: {
+        page: false,
+        create_ticket: false,
+        allowed_targets: ['github-issue', 'azure-devops-work-item'],
+        requires_manual_review: true
+      },
+      rule_defaults: rules.map(rule => ({
+        rule: rule.name,
+        severity: rule.name === 'content-capture' ? 'critical' : 'review',
+        owner_required: true,
+        action_group_required_before_enablement: true
+      })),
+      guardrails: [
+        'Do not page owners or create tickets automatically from this policy.',
+        'Review metadata-only KQL, dashboard links, and exported artifacts before assigning work.',
+        'Keep prompts, responses, tool arguments, tool results, and file contents out of incident notes.'
+      ],
+      next: normalizedOwners.length > 0
+        ? ['Review alert resources and incident timelines before enabling notification routes.']
+        : ['Assign at least one owner before enabling alert action groups.']
+    };
+  }
+
   function alertHistoryQuery(rule, last = '24h', options = {}) {
     const lookback = validateKqlDuration(last);
     const matchedRule = requireAlertRule(rule, 'history');
@@ -433,6 +481,7 @@ ${selectedSession}
     alertRecommendationQuery,
     alertRecommendations,
     alertResourceState,
+    alertPolicy,
     alertHistoryQuery,
     alertHistory,
     alertDetail,
