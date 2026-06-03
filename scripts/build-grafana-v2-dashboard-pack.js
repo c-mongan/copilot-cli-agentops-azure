@@ -432,6 +432,10 @@ function recommendationsNormalize() {
     "| extend BenchmarkPassRatePct=todouble(column_ifexists('BenchmarkPassRatePct', real(null)))",
     "| extend BenchmarkAverageScore=todouble(column_ifexists('BenchmarkAverageScore', real(null)))",
     "| extend BenchmarkSafetyViolationCount=tolong(column_ifexists('BenchmarkSafetyViolationCount', long(null)))",
+    "| extend BenchmarkArtifactAdded=tolong(column_ifexists('BenchmarkArtifactAdded', long(null)))",
+    "| extend BenchmarkArtifactModified=tolong(column_ifexists('BenchmarkArtifactModified', long(null)))",
+    "| extend BenchmarkArtifactDeleted=tolong(column_ifexists('BenchmarkArtifactDeleted', long(null)))",
+    "| extend BenchmarkArtifactTotalChanged=tolong(column_ifexists('BenchmarkArtifactTotalChanged', long(null)))",
     "| extend ChangeTargetRefs=column_ifexists('ChangeTargetRefs', dynamic([]))"
   ].join(' ');
 }
@@ -570,7 +574,7 @@ function compatRecommendations() {
     `(${compatInsights()})`,
     insightsNormalize(),
     "| extend Action=case(InsightType startswith 'recurring-', 'triage_recurring_pattern', InsightType has 'test', 'run_validation', InsightType has 'tool', 'investigate_tool', InsightType has 'collector', 'check_collector', InsightType has_any ('policy', 'privacy'), 'review_policy', InsightType has_any ('cost', 'context'), 'reduce_context_or_cost', InsightType has 'ci', 'fix_ci', InsightType has_any ('eval', 'instruction', 'config'), 'compare_regression', 'investigate')",
-    "| project TimeGenerated, RecommendationId=coalesce(tostring(column_ifexists('RecommendationId', '')), tostring(column_ifexists('InsightId', ''))), RunId, SessionId='', TraceId, Action, Severity, ObservedPattern=Summary, NextAction=SuggestedNextStep, PatternId, PatternKey, PatternRuns, PatternDimension, EvalOverall=real(null), EvalBucket='', BenchmarkRunId='', BenchmarkDecision='', BenchmarkPassRatePct=real(null), BenchmarkAverageScore=real(null), BenchmarkSafetyViolationCount=long(null), ChangeTargetRefs=dynamic([]), DashboardTitles=dynamic(['Run Replay', 'Insights & Regressions']), DashboardCount=2, Validation=dynamic(['agentops dashboard kql-check --last 24h --json']), RollbackCondition='Rollback the agent, skill, MCP, model, or instruction change if eval score drops, failures rise, privacy drops appear unexpectedly, or CI worsens.'"
+    "| project TimeGenerated, RecommendationId=coalesce(tostring(column_ifexists('RecommendationId', '')), tostring(column_ifexists('InsightId', ''))), RunId, SessionId='', TraceId, Action, Severity, ObservedPattern=Summary, NextAction=SuggestedNextStep, PatternId, PatternKey, PatternRuns, PatternDimension, EvalOverall=real(null), EvalBucket='', BenchmarkRunId='', BenchmarkDecision='', BenchmarkPassRatePct=real(null), BenchmarkAverageScore=real(null), BenchmarkSafetyViolationCount=long(null), BenchmarkArtifactAdded=long(null), BenchmarkArtifactModified=long(null), BenchmarkArtifactDeleted=long(null), BenchmarkArtifactTotalChanged=long(null), ChangeTargetRefs=dynamic([]), DashboardTitles=dynamic(['Run Replay', 'Insights & Regressions']), DashboardCount=2, Validation=dynamic(['agentops dashboard kql-check --last 24h --json']), RollbackCondition='Rollback the agent, skill, MCP, model, or instruction change if eval score drops, failures rise, privacy drops appear unexpectedly, or CI worsens.'"
   ].join(' ');
 }
 
@@ -599,22 +603,25 @@ const q = {
 const dashboards = {
   '01-agentops-home.json': dashboard('agentops-v2-home', 'AgentOps Home', [
     textPanel(1, 'What happened?', 0, 0, 24, 3, `## AgentOps Home\nCopilot AgentOps control room for Azure. ${emptyState}`),
-    statPanel(2, 'Runs', 0, 3, `${q.runSummary} | summarize value=count() by bin(TimeGenerated, $__interval)`),
-    statPanel(3, 'Success rate', 4, 3, `${q.runSummary} | summarize value=100.0 * countif(OutcomeStatus == 'success') / count() by bin(TimeGenerated, $__interval)`, 'percent', 'green'),
-    statPanel(4, 'Failed runs', 8, 3, `${q.runSummary} | summarize value=countif(OutcomeStatus != 'success') by bin(TimeGenerated, $__interval)`, 'short', 'red'),
-    statPanel(5, 'Privacy drops', 12, 3, `${q.privacy} | summarize value=sum(DroppedCount) by bin(TimeGenerated, $__interval)`, 'short', 'yellow'),
-    statPanel(6, 'Estimated cost', 16, 3, `${q.runSummary} | summarize value=sum(EstimatedCostUsd) by bin(TimeGenerated, $__interval)`, 'currencyUSD', 'yellow'),
-    statPanel(7, 'Collector health', 20, 3, `${q.health} | summarize value=countif(Status == 'healthy') by bin(TimeGenerated, $__interval)`, 'short', 'green'),
-    statPanel(8, 'Policy blocks', 0, 7, `${q.events} | where EventType == 'policy' | summarize value=countif(Status == 'denied' or Status == 'blocked') by bin(TimeGenerated, $__interval)`, 'short', 'red'),
-    statPanel(9, 'Input tokens', 4, 7, `${q.runSummary} | summarize value=sum(InputTokens) by bin(TimeGenerated, $__interval)`),
-    statPanel(14, 'Output tokens', 8, 7, `${q.runSummary} | summarize value=sum(OutputTokens) by bin(TimeGenerated, $__interval)`),
-    statPanel(15, 'p95 duration', 12, 7, `${q.runSummary} | summarize value=percentile(DurationMs, 95) by bin(TimeGenerated, $__interval)`, 'ms', 'yellow'),
-    statPanel(16, 'Tests ran %', 16, 7, `${q.runSummary} | summarize value=100.0 * countif(TestsRan == true) / count() by bin(TimeGenerated, $__interval)`, 'percent', 'green'),
-    statPanel(17, 'PRs opened', 20, 7, `${q.runSummary} | summarize value=countif(PrOpened == true) by bin(TimeGenerated, $__interval)`, 'short', 'green'),
-    tablePanel(10, 'Recent failed runs', 0, 11, 12, 9, `${q.runSummary} | where OutcomeStatus != 'success' | project TimeGenerated, RunId, SessionId, TraceId, Surface, RepoHash, TaskType, AgentName, SkillName, SubAgentName, ModelActual, OutcomeStatus, OutcomeReason, DurationMs, EstimatedCostUsd, RiskScore | order by TimeGenerated desc | take 50`),
-    tablePanel(11, 'Recommended next actions', 12, 11, 12, 9, `${q.recommendations} | extend OpenReplay='Replay', OpenPattern=iff(isnotempty(PatternKey), 'Pattern', '') | project TimeGenerated, Severity, Action, ObservedPattern, NextAction, RunId, TraceId, PatternKey, PatternRuns, BenchmarkRunId, BenchmarkDecision, ChangeTargetRefs, DashboardCount, OpenReplay, OpenPattern | order by TimeGenerated desc | take 50`),
-    tablePanel(12, 'Most expensive runs', 0, 20, 12, 9, `${q.runSummary} | project TimeGenerated, RunId, RepoHash, TaskType, ModelActual, OutcomeStatus, EstimatedCostUsd, InputTokens, OutputTokens | order by EstimatedCostUsd desc | take 50`),
-    tablePanel(13, 'GitHub outcomes summary', 12, 20, 12, 9, `${q.github} | project TimeGenerated, RunId, RepoHash, PrOpened, PrMerged, PrReverted, CiStatus, TimeToPrMinutes, TimeToMergeMinutes, ReviewCommentCount, FilesChangedCount | order by TimeGenerated desc | take 50`)
+    textPanel(18, 'Open latest run', 0, 3, 8, 3, "### Open latest run\nStart with the newest session, then drill into Run Replay.\n\n`agentops open latest --last 2h --json`\n\n[Run Replay](/d/agentops-v2-run-replay?${__url_time_range})"),
+    textPanel(19, 'Get recommendation', 8, 3, 8, 3, "### Get recommendation\nGenerate one evidence-backed next action for the current run set.\n\n`agentops recommend latest --last 2h`\n\n[Insights](/d/agentops-v2-insights-regressions?${__url_time_range})"),
+    textPanel(20, 'Ask AgentOps', 16, 3, 8, 3, "### Ask AgentOps\nBuild a metadata-only context bundle for investigation.\n\n`agentops ask-context latest --last 2h --json`\n\n[Run Replay](/d/agentops-v2-run-replay?${__url_time_range})"),
+    statPanel(2, 'Runs', 0, 6, `${q.runSummary} | summarize value=count() by bin(TimeGenerated, $__interval)`),
+    statPanel(3, 'Success rate', 4, 6, `${q.runSummary} | summarize value=100.0 * countif(OutcomeStatus == 'success') / count() by bin(TimeGenerated, $__interval)`, 'percent', 'green'),
+    statPanel(4, 'Failed runs', 8, 6, `${q.runSummary} | summarize value=countif(OutcomeStatus != 'success') by bin(TimeGenerated, $__interval)`, 'short', 'red'),
+    statPanel(5, 'Privacy drops', 12, 6, `${q.privacy} | summarize value=sum(DroppedCount) by bin(TimeGenerated, $__interval)`, 'short', 'yellow'),
+    statPanel(6, 'Estimated cost', 16, 6, `${q.runSummary} | summarize value=sum(EstimatedCostUsd) by bin(TimeGenerated, $__interval)`, 'currencyUSD', 'yellow'),
+    statPanel(7, 'Collector health', 20, 6, `${q.health} | summarize value=countif(Status == 'healthy') by bin(TimeGenerated, $__interval)`, 'short', 'green'),
+    statPanel(8, 'Policy blocks', 0, 10, `${q.events} | where EventType == 'policy' | summarize value=countif(Status == 'denied' or Status == 'blocked') by bin(TimeGenerated, $__interval)`, 'short', 'red'),
+    statPanel(9, 'Input tokens', 4, 10, `${q.runSummary} | summarize value=sum(InputTokens) by bin(TimeGenerated, $__interval)`),
+    statPanel(14, 'Output tokens', 8, 10, `${q.runSummary} | summarize value=sum(OutputTokens) by bin(TimeGenerated, $__interval)`),
+    statPanel(15, 'p95 duration', 12, 10, `${q.runSummary} | summarize value=percentile(DurationMs, 95) by bin(TimeGenerated, $__interval)`, 'ms', 'yellow'),
+    statPanel(16, 'Tests ran %', 16, 10, `${q.runSummary} | summarize value=100.0 * countif(TestsRan == true) / count() by bin(TimeGenerated, $__interval)`, 'percent', 'green'),
+    statPanel(17, 'PRs opened', 20, 10, `${q.runSummary} | summarize value=countif(PrOpened == true) by bin(TimeGenerated, $__interval)`, 'short', 'green'),
+    tablePanel(10, 'Recent failed runs', 0, 14, 12, 9, `${q.runSummary} | where OutcomeStatus != 'success' | project TimeGenerated, RunId, SessionId, TraceId, Surface, RepoHash, TaskType, AgentName, SkillName, SubAgentName, ModelActual, OutcomeStatus, OutcomeReason, DurationMs, EstimatedCostUsd, RiskScore | order by TimeGenerated desc | take 50`),
+    tablePanel(11, 'Recommended next actions', 12, 14, 12, 9, `${q.recommendations} | extend OpenReplay='Replay', OpenPattern=iff(isnotempty(PatternKey), 'Pattern', '') | project TimeGenerated, Severity, Action, ObservedPattern, NextAction, RunId, TraceId, PatternKey, PatternRuns, BenchmarkRunId, BenchmarkDecision, ChangeTargetRefs, DashboardCount, OpenReplay, OpenPattern | order by TimeGenerated desc | take 50`),
+    tablePanel(12, 'Most expensive runs', 0, 23, 12, 9, `${q.runSummary} | project TimeGenerated, RunId, RepoHash, TaskType, ModelActual, OutcomeStatus, EstimatedCostUsd, InputTokens, OutputTokens | order by EstimatedCostUsd desc | take 50`),
+    tablePanel(13, 'GitHub outcomes summary', 12, 23, 12, 9, `${q.github} | project TimeGenerated, RunId, RepoHash, PrOpened, PrMerged, PrReverted, CiStatus, TimeToPrMinutes, TimeToMergeMinutes, ReviewCommentCount, FilesChangedCount | order by TimeGenerated desc | take 50`)
   ]),
 
   '02-runs-explorer.json': dashboard('agentops-v2-runs-explorer', 'Runs Explorer', [
@@ -675,7 +682,8 @@ const dashboards = {
     textPanel(1, 'Quality over time', 0, 0, 24, 2, `## Evals & Quality\nDeterministic quality scoring for test discipline, tool efficiency, security, reliability, and code outcome. ${emptyState}`),
     tablePanel(10, 'Low-score runs', 0, 2, 24, 10, `${q.evals} | project TimeGenerated, RunId, RepoHash, ModelActual, TaskType, EvalOverall, TestDiscipline, ToolEfficiency, Security, Reliability, CodeOutcome, EvalReason | order by EvalOverall asc, TimeGenerated desc | take 100`),
     timeseriesPanel(20, 'Eval trend', 0, 12, 12, 8, `${q.evals} | summarize EvalOverall=avg(EvalOverall), TestDiscipline=avg(TestDiscipline), Security=avg(Security), Reliability=avg(Reliability) by TimeGenerated=bin(TimeGenerated, $__interval) | order by TimeGenerated asc`),
-    tablePanel(21, 'Eval score by model and task', 12, 12, 12, 8, `${q.evals} | summarize Runs=count(), AvgEval=avg(EvalOverall), AvgSecurity=avg(Security), AvgTestDiscipline=avg(TestDiscipline) by ModelActual, TaskType, RepoHash | order by AvgEval asc`)
+    tablePanel(21, 'Eval score by model and task', 12, 12, 12, 8, `${q.evals} | summarize Runs=count(), AvgEval=avg(EvalOverall), AvgSecurity=avg(Security), AvgTestDiscipline=avg(TestDiscipline) by ModelActual, TaskType, RepoHash | order by AvgEval asc`),
+    tablePanel(22, 'Benchmark artifact diff review', 0, 20, 24, 8, `${q.recommendations} | where isnotempty(BenchmarkRunId) or BenchmarkArtifactTotalChanged > 0 | extend ReviewAction=case(BenchmarkArtifactTotalChanged > 0, 'Review artifact diff', isnotempty(BenchmarkRunId), 'Benchmark has no artifact changes', 'No benchmark evidence') | project TimeGenerated, RecommendationId, Severity, Action, RunId, BenchmarkRunId, BenchmarkDecision, BenchmarkPassRatePct, BenchmarkAverageScore, BenchmarkArtifactAdded, BenchmarkArtifactModified, BenchmarkArtifactDeleted, BenchmarkArtifactTotalChanged, ChangeTargetRefs, ReviewAction, NextAction | order by TimeGenerated desc | take 100`)
   ]),
 
   '09-insights-regressions.json': dashboard('agentops-v2-insights-regressions', 'Insights & Regressions', [
@@ -684,7 +692,7 @@ const dashboards = {
     tablePanel(11, 'Recurring patterns', 0, 12, 24, 8, `${q.insights} | where isnotempty(PatternId) or InsightType startswith 'recurring-' | extend OpenPattern='Pattern', OpenReplay='Replay' | project TimeGenerated, InsightType, Severity, PatternRuns, PatternDimension, PatternKey, Summary, SuggestedNextStep, OpenPattern, OpenReplay, RunId, RepoHash, ModelActual, ToolName, CurrentValue | order by PatternRuns desc, TimeGenerated desc | take 100`),
     timeseriesPanel(20, 'Insight volume', 0, 20, 12, 8, `${q.insights} | summarize Insights=count() by TimeGenerated=bin(TimeGenerated, $__interval), Severity | order by TimeGenerated asc`),
     tablePanel(21, 'Regression evidence', 12, 20, 12, 8, `${q.insights} | where InsightType has 'regression' or InsightType has 'anomaly' | project TimeGenerated, InsightType, Severity, RepoHash, ModelActual, ToolName, BaselineValue, CurrentValue, ConfigHash, Summary | order by TimeGenerated desc | take 100`),
-    tablePanel(22, 'Recommendation artifacts', 0, 28, 24, 8, `${q.recommendations} | extend OpenReplay='Replay', OpenPattern=iff(isnotempty(PatternKey), 'Pattern', '') | project TimeGenerated, RecommendationId, Severity, Action, ObservedPattern, NextAction, RunId, TraceId, PatternKey, PatternRuns, PatternDimension, EvalOverall, EvalBucket, BenchmarkRunId, BenchmarkDecision, BenchmarkPassRatePct, BenchmarkAverageScore, BenchmarkSafetyViolationCount, ChangeTargetRefs, DashboardCount, OpenReplay, OpenPattern | order by TimeGenerated desc | take 200`)
+    tablePanel(22, 'Recommendation artifacts', 0, 28, 24, 8, `${q.recommendations} | extend OpenReplay='Replay', OpenPattern=iff(isnotempty(PatternKey), 'Pattern', '') | project TimeGenerated, RecommendationId, Severity, Action, ObservedPattern, NextAction, RunId, TraceId, PatternKey, PatternRuns, PatternDimension, EvalOverall, EvalBucket, BenchmarkRunId, BenchmarkDecision, BenchmarkPassRatePct, BenchmarkAverageScore, BenchmarkSafetyViolationCount, BenchmarkArtifactAdded, BenchmarkArtifactModified, BenchmarkArtifactDeleted, BenchmarkArtifactTotalChanged, ChangeTargetRefs, DashboardCount, OpenReplay, OpenPattern | order by TimeGenerated desc | take 200`)
   ]),
 
   '10-collector-health.json': dashboard('agentops-v2-collector-health', 'Collector Health', [
