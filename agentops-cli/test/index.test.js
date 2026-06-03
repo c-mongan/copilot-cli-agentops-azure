@@ -79,6 +79,7 @@ const {
   alertPolicy,
   alertRecommendationQuery,
   alertRecommendations,
+  alertRoutePlan,
   alertResourceState,
   alertTunePlan,
   askAgentOpsContext,
@@ -7779,4 +7780,39 @@ test('alert handoff bundles operator evidence without actioning', () => {
   assert.ok(handoff.guardrails.some(item => item.includes('Do not page')));
   assert.ok(handoff.operator_steps.some(item => item.includes('Review the session link')));
   assert.doesNotMatch(JSON.stringify(handoff), /SECRET_FAKE_TEST_VALUE|raw transcript/);
+});
+
+test('alert route plan previews destination payloads without posting', () => {
+  const plan = alertRoutePlan({
+    rule: 'content-capture',
+    session: 'session-123',
+    last: '6h',
+    owners: ['agentops-oncall'],
+    service: 'copilot-agentops',
+    timezone: 'Europe/Dublin',
+    targets: ['github-issue'],
+    createdAt: '2026-06-03T12:00:00.000Z'
+  });
+
+  assert.equal(plan.schema_version, 'agentops.alert-route-plan.v1');
+  assert.equal(plan.mode, 'preview-only-routing-plan');
+  assert.equal(plan.alert.rule, 'content-capture');
+  assert.equal(plan.alert.severity, 'critical');
+  assert.equal(plan.ownership.state, 'assigned');
+  assert.equal(plan.destinations.length, 1);
+  assert.equal(plan.destinations[0].target, 'github-issue');
+  assert.equal(plan.destinations[0].operation, 'preview-only');
+  assert.match(plan.destinations[0].payload.title, /content-capture/);
+  assert.deepEqual(plan.destinations[0].payload.assignees, ['agentops-oncall']);
+  assert.ok(plan.destinations[0].payload.labels.includes('critical'));
+  assert.match(plan.destinations[0].payload.body, /Do not include prompts/);
+  assert.match(plan.evidence.history_query, /Conversation == "session-123"/);
+  assert.equal(plan.evidence.handoff_schema, 'agentops.alert-handoff.v1');
+  assert.ok(plan.guardrails.some(item => item.includes('Do not post')));
+  assert.doesNotMatch(JSON.stringify(plan), /SECRET_FAKE_TEST_VALUE|raw transcript/);
+
+  const allDestinations = alertRoutePlan({ rule: 'failed-spans', session: 'session-456' });
+  assert.equal(allDestinations.destinations.length, 2);
+  assert.ok(allDestinations.destinations.some(destination => destination.target === 'azure-devops-work-item'));
+  assert.throws(() => alertRoutePlan({ rule: 'failed-spans', session: 'session-456', targets: ['pager'] }), /target must be one of/);
 });

@@ -75,6 +75,7 @@ function usage() {
     'alert action-plan --rule <name> --session <conversation> [--last <duration>]',
     'alert export --rule <name> --session <conversation> --output <json> [--last <duration>]',
     'alert handoff --rule <name> --session <conversation> [--owner <name>] [--output <json>] [--last <duration>]',
+    'alert route-plan --rule <name> --session <conversation> [--owner <name>] [--target <github-issue|azure-devops-work-item>] [--output <json>]',
     'incident timeline --artifact <json> [--artifact <json> ...] --output <json> [--incident <id>]',
     'lineage [--last <duration>]',
     'policy [--last <duration>]',
@@ -4891,7 +4892,8 @@ const {
   alertActionPlan,
   alertArtifact,
   alertIncidentTimeline,
-  alertHandoff
+  alertHandoff,
+  alertRoutePlan
 } = createAlerts({
   workspaceId,
   baseFilter,
@@ -8795,7 +8797,28 @@ async function main(argv) {
       process.stdout.write(JSON.stringify(handoff, null, 2) + '\n');
       return;
     }
-    throw new Error('alert currently supports: alert recommend, alert tune-plan, alert policy, alert resources, alert history, alert detail, alert action-plan, alert export, alert handoff');
+    if (subcommand === 'route-plan') {
+      const rule = optionValue(alertArgs, ['--rule']);
+      const session = optionValue(alertArgs, ['--session', '--conversation']);
+      const owners = optionValues(alertArgs, '--owner');
+      const targets = optionValues(alertArgs, '--target');
+      const service = optionValue(alertArgs, ['--service']) || 'agentops';
+      const timezone = optionValue(alertArgs, ['--timezone', '--tz']) || 'UTC';
+      const resourceGroup = optionValue(alertArgs, ['--resource-group', '-g']) || configuredCloudValues().resourceGroup;
+      const output = optionValue(alertArgs, ['--output', '--out']);
+      const last = parseLastArg(alertArgs, '24h');
+      const plan = alertRoutePlan({ rule, session, last, owners, service, timezone, targets, resourceGroup });
+      if (output) {
+        const outputPath = path.resolve(process.cwd(), output);
+        fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+        fs.writeFileSync(outputPath, `${JSON.stringify(plan, null, 2)}\n`);
+        process.stdout.write(JSON.stringify({ output: outputPath, plan }, null, 2) + '\n');
+        return;
+      }
+      process.stdout.write(JSON.stringify(plan, null, 2) + '\n');
+      return;
+    }
+    throw new Error('alert currently supports: alert recommend, alert tune-plan, alert policy, alert resources, alert history, alert detail, alert action-plan, alert export, alert handoff, alert route-plan');
   }
 
   if (command === 'incident') {
@@ -8867,6 +8890,7 @@ module.exports = {
   alertArtifact,
   alertIncidentTimeline,
   alertHandoff,
+  alertRoutePlan,
   askAgentOpsContext,
   attributionUsageQuery,
   benchmarkCheatSignals,
