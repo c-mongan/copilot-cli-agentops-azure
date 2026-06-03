@@ -812,7 +812,7 @@ What works well:
   - cost
   - AIU
   - models/tools/conversations
-- It rejects safety violations, content capture, forbidden file changes, severe quality regressions, and configured promotion gate misses in reports and comparisons.
+- It rejects safety violations, content capture, forbidden file changes, severe quality regressions, missing approval evidence, and configured promotion gate misses in reports and comparisons.
 - It can reject observed risky tool telemetry through per-task tool policies, for example network, secret-access, browser-control, or destructive tool categories.
 
 Current anti-cheat limitations:
@@ -823,7 +823,7 @@ Current anti-cheat limitations:
 - There is no network isolation; network tool policies are report-time rejection signals, not egress prevention.
 - Read-only benchmark profiles now block any workspace file change in the copied fixture.
 - Semantic evaluator adapters exist for deterministic file-content checks, but there is no LLM or rubric-judge scoring yet.
-- Candidate promotion gates exist for benchmark reports, but there is no team approval workflow yet.
+- Candidate promotion gates can require approval evidence from an approval file, but there is no UI-backed team approval workflow yet.
 - There is no defense against an agent changing the test commands if the eval harness files are available to it.
 - There is no artifact diff viewer in the UI; artifact diffs are currently CLI/report metadata only.
 - There is no "agent used external answer source" detector.
@@ -1276,7 +1276,7 @@ Required work:
 - Add richer semantic evaluator adapters.
 - Expand enforced permission profiles to network and tool sandboxing.
 - Add artifact diff UI review.
-- Add team approval workflow for candidate promotion gates.
+- Add UI-backed team approval workflow for candidate promotion gates.
 - Add dashboards for eval scorecards and regressions.
 
 ### P4 - Productize For Teams
