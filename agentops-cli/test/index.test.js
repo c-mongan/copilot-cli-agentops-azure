@@ -4327,6 +4327,40 @@ test('agent stop quality gate stays quiet for clean validated metadata', () => {
   assert.equal(result.stdout, '');
 });
 
+test('sidecar hook emits metadata-only durable event rows', () => {
+  const hook = path.join(root, 'plugin', 'scripts', 'emit-sidecar-event.js');
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-sidecar-hook-'));
+  const eventFile = path.join(tempDir, 'sidecar-events.jsonl');
+  const result = spawnSync(process.execPath, [hook], {
+    input: JSON.stringify({
+      hookType: 'notification',
+      decision: 'warn',
+      reasonCategory: 'missing-validation',
+      durationMs: 12,
+      sessionId: 'session-hook-1',
+      prompt: 'do not export this',
+      toolArgs: { command: 'do not export this either' }
+    }),
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      AGENTOPS_SIDECAR_EVENTS_PATH: eventFile
+    }
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  const stdout = JSON.parse(result.stdout);
+  const event = JSON.parse(fs.readFileSync(eventFile, 'utf8').trim());
+  assert.equal(stdout.event_file, eventFile);
+  assert.equal(event.EventName, 'agentops.hook.notification');
+  assert.equal(event['agentops.hook.decision'], 'warn');
+  assert.equal(event['agentops.hook.reason_category'], 'missing-validation');
+  assert.equal(event['agentops.hook.duration_ms'], 12);
+  assert.equal(event['gen_ai.conversation.id'], 'session-hook-1');
+  assert.equal(event['content.capture.enabled'], false);
+  assert.doesNotMatch(JSON.stringify(event), /do not export/);
+});
+
 test('status renders beginner-first privacy and setup checks from fixtures', () => {
   const summary = agentopsStatusSummary({
     checks: [
