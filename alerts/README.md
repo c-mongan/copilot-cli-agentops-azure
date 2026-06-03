@@ -67,3 +67,5 @@ The same evidence is available in the generated `agentops-alert-tuning` Grafana 
 ```bash
 node scripts/build-grafana-dashboard-pack.js
 ```
+
+The dashboard includes a Suggested threshold impact table that compares current and proposed alert-window counts before any threshold patch is generated.

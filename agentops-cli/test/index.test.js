@@ -3404,13 +3404,20 @@ test('Alert Tuning dashboard surfaces fired alert candidates', () => {
   const dashboard = JSON.parse(fs.readFileSync(path.join(root, 'grafana', 'agentops-alert-tuning.json'), 'utf8'));
   const panels = Object.fromEntries(dashboard.panels.map(panel => [panel.title, panel]));
   const recommendationsQuery = panels['Threshold recommendations'].targets[0].azureLogAnalytics.query;
+  const impactPanel = panels['Suggested threshold impact'];
+  const impactQuery = impactPanel.targets[0].azureLogAnalytics.query;
   const historyPanel = panels['Fired alert candidates'];
   const historyQuery = historyPanel.targets[0].azureLogAnalytics.query;
   const overrides = JSON.stringify(historyPanel.fieldConfig.overrides);
 
   assert.ok(historyPanel);
+  assert.ok(impactPanel);
   assert.match(recommendationsQuery, /cost-spike/);
   assert.match(recommendationsQuery, /runaway-tool-loop/);
+  assert.match(impactQuery, /CurrentAlertWindows/);
+  assert.match(impactQuery, /ProposedAlertWindows/);
+  assert.match(impactQuery, /WindowDelta/);
+  assert.match(impactQuery, /agentops alert threshold-simulate/);
   assert.match(historyQuery, /alert_history/);
   assert.match(historyQuery, /TriggerValue/);
   assert.match(historyQuery, /content-capture/);
