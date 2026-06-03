@@ -4467,6 +4467,57 @@ test('benchmark fixture-pack signatures can require suite trust roots', () => {
       title: 'Trusted suite',
       fixtureTrustRoots: [{
         keyId: 'eval-fixtures-v1',
+        publicKey: trustedPublicKey,
+        notBefore: '2020-01-01T00:00:00.000Z',
+        notAfter: '2999-01-01T00:00:00.000Z'
+      }]
+    })}\n`);
+    const activeSuite = loadBenchmarkSuites(path.join(tempDir, 'benchmarks'))[0];
+    assert.deepEqual(activeSuite.fixtureTrustRoots, [{
+      keyId: 'eval-fixtures-v1',
+      notBefore: '2020-01-01T00:00:00.000Z',
+      notAfter: '2999-01-01T00:00:00.000Z'
+    }]);
+
+    fs.writeFileSync(path.join(suiteDir, 'suite.json'), `${JSON.stringify({
+      id: 'trusted-suite',
+      title: 'Trusted suite',
+      fixtureTrustRoots: [{
+        keyId: 'eval-fixtures-v1',
+        publicKey: trustedPublicKey,
+        notAfter: '2000-01-01T00:00:00.000Z'
+      }]
+    })}\n`);
+    assert.throws(() => loadBenchmarkSuites(path.join(tempDir, 'benchmarks')), /signature keyId trust root expired/);
+
+    fs.writeFileSync(path.join(suiteDir, 'suite.json'), `${JSON.stringify({
+      id: 'trusted-suite',
+      title: 'Trusted suite',
+      fixtureTrustRoots: [{
+        keyId: 'eval-fixtures-v1',
+        publicKey: trustedPublicKey,
+        notBefore: '2999-01-01T00:00:00.000Z'
+      }]
+    })}\n`);
+    assert.throws(() => loadBenchmarkSuites(path.join(tempDir, 'benchmarks')), /signature keyId is not active yet/);
+
+    fs.writeFileSync(path.join(suiteDir, 'suite.json'), `${JSON.stringify({
+      id: 'trusted-suite',
+      title: 'Trusted suite',
+      fixtureTrustRoots: [{
+        keyId: 'eval-fixtures-v1',
+        publicKey: trustedPublicKey,
+        notBefore: '2030-01-01T00:00:00.000Z',
+        notAfter: '2029-01-01T00:00:00.000Z'
+      }]
+    })}\n`);
+    assert.throws(() => loadBenchmarkSuites(path.join(tempDir, 'benchmarks')), /notAfter must be after notBefore/);
+
+    fs.writeFileSync(path.join(suiteDir, 'suite.json'), `${JSON.stringify({
+      id: 'trusted-suite',
+      title: 'Trusted suite',
+      fixtureTrustRoots: [{
+        keyId: 'eval-fixtures-v1',
         publicKey: trustedPublicKey
       }],
       fixtureTrustRevocations: [{
