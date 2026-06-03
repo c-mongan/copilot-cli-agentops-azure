@@ -15,6 +15,7 @@ const requiredProcessors = [
 const requiredFixtures = ['content-poison.json', 'mcp-poison.json'];
 const requiredOwaspFixtures = [
   'broad-tool-permissions.json',
+  'injected-tool-instructions.json',
   'mcp-dangerous-tool-classes.json',
   'mcp-prompt-injection.json',
   'prompt-injection.json',

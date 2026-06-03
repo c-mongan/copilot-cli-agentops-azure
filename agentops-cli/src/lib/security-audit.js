@@ -72,6 +72,8 @@ const postureControls = [
     status: 'covered',
     summary: 'Prompt-like content is dropped in strict mode and prompt-injection abuse fixtures must sanitize before export.',
     evidence: [
+      evidenceItem('collector/tests/owasp-abuse-fixtures/injected-tool-instructions.json', 'injected tool instruction fixture'),
+      evidenceItem('collector/tests/owasp-abuse-fixtures/mcp-prompt-injection.json', 'MCP prompt injection fixture'),
       evidenceItem('collector/tests/owasp-abuse-fixtures/prompt-injection.json', 'prompt injection abuse fixture'),
       evidenceItem('collector/processors/content-signal.yaml', 'content-signal processor'),
       evidenceItem('agentops-cli/src/lib/privacy.js', 'strict sanitizer')

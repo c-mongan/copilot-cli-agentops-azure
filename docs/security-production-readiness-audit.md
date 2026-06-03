@@ -48,7 +48,7 @@ COPILOT_OTEL_CAPTURE_CONTENT=false
 
 | OWASP risk area | Current coverage | Gap to close |
 | --- | --- | --- |
-| Prompt injection | Captures metadata and policy signals without exporting raw prompt text. | Add explicit red-team fixtures for injected tool instructions and MCP prompt-injection attempts. |
+| Prompt injection | Captures metadata and policy signals without exporting raw prompt text; OWASP fixtures cover direct prompt injection, injected tool-result instructions, and MCP prompt-injection attempts. | Keep fixture validation in CI before stable releases. |
 | Sensitive information disclosure | Strict collector allowlist, content-signal drops, poison smoke, dashboard content guardrails, and documented retention/RBAC requirements for optional content capture workspaces. | Keep content-capture operational guardrails in `agentops security audit`. |
 | Supply chain | No direct npm deps, committed npm lockfiles, dependency audit command, collector binary checksum tests, CLI/SDK publish-readiness checks, release artifact SHA256 checks, clean-prefix install smoke checks, and Homebrew formula readiness checks exist. | Keep package, install smoke, formula, and release distribution checks in CI before stable releases. |
 | Excessive agency | Tool allow/deny counts, broad-permission flags, MCP risk dashboards, and pre-tool policy tests for broad tools plus content capture. | Add live policy-deny evidence once production traffic is available. |
@@ -119,6 +119,7 @@ Status: fixed in this branch.
 Add fixture families:
 
 - prompt injection asks agent to reveal secrets;
+- tool result contains injected instructions;
 - MCP tool returns hidden instructions;
 - tool result contains secret-like text;
 - model output requests shell execution;
