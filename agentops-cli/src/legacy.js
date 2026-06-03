@@ -5283,6 +5283,42 @@ function safeBenchmarkPath(baseDir, relativePath) {
   return path.resolve(baseDir, normalized);
 }
 
+function normalizeBenchmarkRelativePath(relativePath) {
+  if (path.isAbsolute(relativePath)) throw new Error(`Benchmark path must be relative: ${relativePath}`);
+  const normalized = path.normalize(relativePath).replace(/\\/g, '/');
+  if (normalized === '..' || normalized.startsWith('../')) {
+    throw new Error(`Benchmark path cannot leave the workspace: ${relativePath}`);
+  }
+  return normalized;
+}
+
+function benchmarkPathGlobRegExp(pattern) {
+  const normalized = normalizeBenchmarkRelativePath(pattern);
+  const source = normalized.replace(/[.+^${}()|[\]\\]/g, '\\$&')
+    .replace(/\*\*/g, '\u0000')
+    .replace(/\*/g, '[^/]*')
+    .replace(/\?/g, '[^/]')
+    .replace(/\u0000/g, '.*');
+  return new RegExp(`^${source}$`);
+}
+
+function benchmarkPathPatternMatches(pattern, relativePath) {
+  const normalizedPattern = normalizeBenchmarkRelativePath(pattern);
+  const normalizedPath = normalizeBenchmarkRelativePath(relativePath);
+  if (!/[*?]/.test(normalizedPattern)) return normalizedPattern === normalizedPath;
+  return benchmarkPathGlobRegExp(normalizedPattern).test(normalizedPath);
+}
+
+function benchmarkForbiddenMatches(forbiddenPatterns, files) {
+  const matches = new Set();
+  for (const file of files) {
+    if (forbiddenPatterns.some(pattern => benchmarkPathPatternMatches(pattern, file))) {
+      matches.add(normalizeBenchmarkRelativePath(file));
+    }
+  }
+  return [...matches].sort();
+}
+
 function relativeFileSnapshot(dir) {
   const snapshot = new Map();
   if (!fs.existsSync(dir)) return snapshot;
@@ -5449,21 +5485,22 @@ function executeBenchmarkRun(plan, run, options = {}) {
     });
   }
 
-  for (const file of run.successChecks.forbiddenFiles) {
-    checkResults.push({
-      name: `forbidden file absent: ${file}`,
-      ok: !fs.existsSync(safeBenchmarkPath(workspace, file)),
-      detail: null
-    });
-  }
-
   const afterSnapshot = relativeFileSnapshot(workspace);
   const changedFiles = changedRelativeFiles(beforeSnapshot, afterSnapshot);
   const artifactDiff = relativeFileDiff(beforeSnapshot, afterSnapshot);
+  const forbiddenFilesPresent = benchmarkForbiddenMatches(run.successChecks.forbiddenFiles, afterSnapshot.keys());
+  const forbiddenFilesChanged = benchmarkForbiddenMatches(run.successChecks.forbiddenFiles, changedFiles).length;
+
+  for (const file of run.successChecks.forbiddenFiles) {
+    const matches = benchmarkForbiddenMatches([file], afterSnapshot.keys());
+    checkResults.push({
+      name: `forbidden file absent: ${file}`,
+      ok: matches.length === 0,
+      detail: matches.length === 0 ? null : `matched: ${matches.join(', ')}`
+    });
+  }
+
   checkResults.push(...benchmarkPermissionPolicyChecks(run, changedFiles));
-  const forbiddenFilesChanged = run.successChecks.forbiddenFiles
-    .filter(file => beforeSnapshot.get(path.normalize(file)) !== afterSnapshot.get(path.normalize(file)))
-    .length;
   const policyBlocks = checkResults.filter(check => check.name.startsWith('permission policy:') && !check.ok).length;
   const checksPassed = checkResults.filter(check => check.ok).length;
   const checksFailed = checkResults.length - checksPassed;
@@ -5492,6 +5529,7 @@ function executeBenchmarkRun(plan, run, options = {}) {
     changedFiles,
     artifactDiff,
     forbiddenFilesChanged,
+    forbiddenFilesPresent,
     toolFailures: 0,
     policyBlocks,
     contentCaptureDetected: process.env.OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT === 'true',

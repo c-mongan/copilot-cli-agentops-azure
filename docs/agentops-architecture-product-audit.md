@@ -792,7 +792,7 @@ What works well:
   - success commands
   - hidden success commands with masked command text
   - expected files
-  - forbidden files
+  - forbidden files and forbidden path globs
   - timeout
 - It records artifact diffs in run summaries and reports:
   - added files
@@ -838,7 +838,6 @@ Build a real Eval Center:
 - Anti-cheat controls:
   - immutable test harness
   - hidden assertions
-  - forbidden path globbing
   - network/process restrictions where possible
   - content-capture detector
   - policy bypass detector
