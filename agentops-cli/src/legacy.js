@@ -72,6 +72,7 @@ function usage() {
     'alert resources [--resource-group <name>]',
     'alert history --rule <name> [--last <duration>]',
     'alert detail --rule <name> --session <conversation> [--last <duration>]',
+    'alert open --rule <name> --session <conversation> [--last <duration>]',
     'alert action-plan --rule <name> --session <conversation> [--last <duration>]',
     'alert export --rule <name> --session <conversation> --output <json> [--last <duration>]',
     'alert handoff --rule <name> --session <conversation> [--owner <name>] [--output <json>] [--last <duration>]',
@@ -176,6 +177,13 @@ const savedViewsPath = process.env.AGENTOPS_VIEWS_PATH || path.join(os.homedir()
 
 function encodeGrafanaValue(value) {
   return encodeURIComponent(value);
+}
+
+function grafanaUrlWithVars(baseUrl, vars = {}) {
+  const entries = Object.entries(vars).filter(([, value]) => value !== undefined && value !== null && value !== '');
+  if (entries.length === 0) return baseUrl;
+  const separator = baseUrl.includes('?') ? '&' : '?';
+  return `${baseUrl}${separator}${entries.map(([key, value]) => `${encodeURIComponent(key)}=${encodeGrafanaValue(String(value))}`).join('&')}`;
 }
 
 function sessionQuery(conversation, last = '24h') {
@@ -4995,6 +5003,47 @@ function fieldValue(patch, fieldPath) {
   return field ? field.value : null;
 }
 
+function alertOpenRun({ rule, session, last = '24h' } = {}) {
+  const detail = alertDetail({ rule, session, last });
+  const sessionId = detail.session;
+  const runVars = {
+    'var-run_id': '__all',
+    'var-session_id': sessionId,
+    'var-trace_id': '__all'
+  };
+
+  return {
+    schema_version: 'agentops.alert-open-run.v1',
+    mode: 'metadata-only-alert-run-links',
+    alert: {
+      rule: detail.rule,
+      session: sessionId,
+      last: detail.last
+    },
+    links: {
+      session_detail: detail.session_link.grafana_url,
+      run_replay: grafanaUrlWithVars(v2ReplayGrafanaDashboardUrl, runVars),
+      runs_explorer: grafanaUrlWithVars(v2RunsGrafanaDashboardUrl, { 'var-session_id': sessionId }),
+      content_viewer: grafanaUrlWithVars(`${v2ReplayGrafanaDashboardUrl}?viewPanel=26`, runVars),
+      azure_portal_logs: detail.session_link.azure_portal_url
+    },
+    queries: {
+      alert_history: detail.history_query,
+      session: detail.session_link.query
+    },
+    commands: {
+      replay: `agentops replay ${sessionId} --last ${detail.last}`,
+      action_plan: detail.action_plan_command,
+      handoff: `agentops alert handoff --rule ${detail.rule} --session ${sessionId} --last ${detail.last}`
+    },
+    guardrails: [
+      'Open links only after reviewing metadata-only alert context.',
+      'The content viewer link is explicit opt-in and does not grant permission to collect prompt or response content.',
+      'Keep prompts, responses, tool arguments, tool results, and file contents out of follow-up tickets.'
+    ]
+  };
+}
+
 function alertAzureDevOpsWorkItemRoute({ rule, session, last = '24h', owners = [], service = 'agentops', timezone = 'UTC', org, project, workItemType = 'Issue', yes = false, resourceGroup = null, spawnSync = childProcess.spawnSync } = {}) {
   const normalizedOrg = String(org || '').trim();
   if (!normalizedOrg) throw new Error('alert route-azure-devops requires --org <url>');
@@ -9108,6 +9157,13 @@ async function main(argv) {
       process.stdout.write(JSON.stringify(alertDetail({ rule, session, last }), null, 2) + '\n');
       return;
     }
+    if (subcommand === 'open') {
+      const rule = optionValue(alertArgs, ['--rule']);
+      const session = optionValue(alertArgs, ['--session', '--conversation']);
+      const last = parseLastArg(alertArgs, '24h');
+      process.stdout.write(JSON.stringify(alertOpenRun({ rule, session, last }), null, 2) + '\n');
+      return;
+    }
     if (subcommand === 'export') {
       const rule = optionValue(alertArgs, ['--rule']);
       const session = optionValue(alertArgs, ['--session', '--conversation']);
@@ -9258,7 +9314,7 @@ async function main(argv) {
       }), null, 2) + '\n');
       return;
     }
-    throw new Error('alert currently supports: alert recommend, alert tune-plan, alert policy, alert resources, alert history, alert detail, alert action-plan, alert export, alert handoff, alert route-plan, alert route-github, alert route-azure-devops, alert action-group-plan, alert route-action-group');
+    throw new Error('alert currently supports: alert recommend, alert tune-plan, alert policy, alert resources, alert history, alert detail, alert open, alert action-plan, alert export, alert handoff, alert route-plan, alert route-github, alert route-azure-devops, alert action-group-plan, alert route-action-group');
   }
 
   if (command === 'incident') {
@@ -9326,6 +9382,7 @@ module.exports = {
   alertHistoryQuery,
   alertHistory,
   alertDetail,
+  alertOpenRun,
   alertActionPlan,
   alertArtifact,
   alertActionGroupPlan,

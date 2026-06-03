@@ -155,7 +155,7 @@ Alert history should be part of the product, not just notifications. AgentOps al
 Implemented local MVP:
 
 - Alert Tuning dashboard now includes threshold recommendations and fired-alert candidate review.
-- `agentops alert history`, `agentops alert detail`, `agentops alert action-plan`, and `agentops alert export` generate metadata-only review/action/artifact JSON.
+- `agentops alert history`, `agentops alert detail`, `agentops alert open`, `agentops alert action-plan`, and `agentops alert export` generate metadata-only review/link/action/artifact JSON.
 - `agentops alert tune-plan` generates proposal-only threshold-change metadata with Bicep patch targets and validation queries.
 - `agentops alert policy` generates local ownership, dedupe/noise, quiet-hours placeholder, and manual-escalation metadata.
 - `agentops alert resources` reports current Azure scheduled-query enabled/disabled state and action-group routing without mutating Azure.
