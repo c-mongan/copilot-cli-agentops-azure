@@ -4476,6 +4476,14 @@ test('benchmark schema validation rejects invalid semantic checks', () => {
 
   task.semanticChecks = [{ id: 'bad-regex', adapter: 'file-regex', file: 'README.md', pattern: '[' }];
   assert.throws(() => validateBenchmarkTask(task, suiteDir, 'test-task'), /pattern must be a valid regular expression/);
+
+  task.semanticChecks = [{
+    id: 'bad-rubric',
+    adapter: 'file-rubric',
+    file: 'README.md',
+    criteria: [{ id: 'ambiguous', contains: 'hello', pattern: 'hello' }]
+  }];
+  assert.throws(() => validateBenchmarkTask(task, suiteDir, 'test-task'), /must define exactly one of contains or pattern/);
 });
 
 test('benchmark schema validation rejects invalid tool policies', () => {
@@ -5037,6 +5045,147 @@ test('benchmark semantic checks support regex file assertions', () => {
     }]);
     assert.equal(result.report.semanticChecks.averageScore, 100);
     assert.equal(result.report.recommendation.action, 'keep');
+  } finally {
+    fs.rmSync(path.join(benchmarkRunBaseDir, runId), { recursive: true, force: true });
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('benchmark semantic checks support rubric file assertions', () => {
+  const runId = `bench-semantic-rubric-${Date.now()}`;
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-bench-semantic-rubric-'));
+  const suiteDir = path.join(tempDir, 'benchmarks', 'semantic-rubric-suite');
+  const fixtureDir = path.join(suiteDir, 'fixtures', 'tiny-repo');
+  const tasksDir = path.join(suiteDir, 'tasks');
+
+  try {
+    fs.mkdirSync(fixtureDir, { recursive: true });
+    fs.mkdirSync(tasksDir, { recursive: true });
+    fs.writeFileSync(path.join(suiteDir, 'suite.json'), `${JSON.stringify({ id: 'semantic-rubric-suite', title: 'Semantic rubric suite' })}\n`);
+    fs.writeFileSync(path.join(fixtureDir, 'README.md'), '# Semantic fixture\n');
+    fs.writeFileSync(path.join(tasksDir, 'write-note.json'), `${JSON.stringify({
+      id: 'write-note',
+      title: 'Write note',
+      fixture: 'fixtures/tiny-repo',
+      prompt: 'Create notes/hello.txt.',
+      copilotArgs: [],
+      permissionProfile: 'least-privilege',
+      successCommands: [],
+      semanticChecks: [{
+        id: 'note-rubric',
+        adapter: 'file-rubric',
+        file: 'notes/hello.txt',
+        minScore: 80,
+        criteria: [
+          { id: 'mentions-agentops', contains: 'agentops' },
+          { id: 'starts-with-hello', pattern: '^hello\\b' }
+        ]
+      }],
+      expectedFiles: ['notes/hello.txt'],
+      forbiddenFiles: [],
+      timeoutSec: 10,
+      tags: []
+    })}\n`);
+
+    const result = runBenchmarkSuite('semantic-rubric-suite', {
+      benchmarksDir: path.join(tempDir, 'benchmarks'),
+      variant: 'candidate',
+      repeat: 1,
+      runId,
+      summariesDir: path.join(tempDir, 'summaries'),
+      spawnSync: (command, args, options = {}) => {
+        if (command === 'copilot') {
+          fs.mkdirSync(path.join(options.cwd, 'notes'), { recursive: true });
+          fs.writeFileSync(path.join(options.cwd, 'notes', 'hello.txt'), 'hello agentops\n');
+          return { status: 0, stdout: 'created note', stderr: '' };
+        }
+        return { status: 0, stdout: '', stderr: '' };
+      }
+    });
+
+    assert.equal(result.summaries[0].success, true);
+    assert.equal(result.summaries[0].semanticScore, 100);
+    assert.deepEqual(result.summaries[0].semanticChecks, [{
+      id: 'note-rubric',
+      adapter: 'file-rubric',
+      file: 'notes/hello.txt',
+      ok: true,
+      score: 100,
+      detail: null,
+      criteria: [
+        { id: 'mentions-agentops', ok: true },
+        { id: 'starts-with-hello', ok: true }
+      ]
+    }]);
+    assert.equal(result.report.semanticChecks.averageScore, 100);
+    assert.equal(result.report.recommendation.action, 'keep');
+  } finally {
+    fs.rmSync(path.join(benchmarkRunBaseDir, runId), { recursive: true, force: true });
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('benchmark semantic rubric checks score partial matches', () => {
+  const runId = `bench-semantic-rubric-partial-${Date.now()}`;
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-bench-semantic-rubric-partial-'));
+  const suiteDir = path.join(tempDir, 'benchmarks', 'semantic-rubric-partial-suite');
+  const fixtureDir = path.join(suiteDir, 'fixtures', 'tiny-repo');
+  const tasksDir = path.join(suiteDir, 'tasks');
+
+  try {
+    fs.mkdirSync(fixtureDir, { recursive: true });
+    fs.mkdirSync(tasksDir, { recursive: true });
+    fs.writeFileSync(path.join(suiteDir, 'suite.json'), `${JSON.stringify({ id: 'semantic-rubric-partial-suite', title: 'Semantic rubric partial suite' })}\n`);
+    fs.writeFileSync(path.join(fixtureDir, 'README.md'), '# Semantic fixture\n');
+    fs.writeFileSync(path.join(tasksDir, 'write-note.json'), `${JSON.stringify({
+      id: 'write-note',
+      title: 'Write note',
+      fixture: 'fixtures/tiny-repo',
+      prompt: 'Create notes/hello.txt.',
+      copilotArgs: [],
+      permissionProfile: 'least-privilege',
+      successCommands: [],
+      semanticChecks: [{
+        id: 'note-rubric',
+        adapter: 'file-rubric',
+        file: 'notes/hello.txt',
+        minScore: 80,
+        criteria: [
+          { id: 'mentions-agentops', contains: 'agentops' },
+          { id: 'starts-with-hello', pattern: '^hello\\b' }
+        ]
+      }],
+      expectedFiles: ['notes/hello.txt'],
+      forbiddenFiles: [],
+      timeoutSec: 10,
+      tags: []
+    })}\n`);
+
+    const result = runBenchmarkSuite('semantic-rubric-partial-suite', {
+      benchmarksDir: path.join(tempDir, 'benchmarks'),
+      variant: 'candidate',
+      repeat: 1,
+      runId,
+      summariesDir: path.join(tempDir, 'summaries'),
+      spawnSync: (command, args, options = {}) => {
+        if (command === 'copilot') {
+          fs.mkdirSync(path.join(options.cwd, 'notes'), { recursive: true });
+          fs.writeFileSync(path.join(options.cwd, 'notes', 'hello.txt'), 'agentops\n');
+          return { status: 0, stdout: 'created note', stderr: '' };
+        }
+        return { status: 0, stdout: '', stderr: '' };
+      }
+    });
+
+    assert.equal(result.summaries[0].success, false);
+    assert.equal(result.summaries[0].semanticScore, 50);
+    assert.deepEqual(result.summaries[0].semanticChecks[0].criteria, [
+      { id: 'mentions-agentops', ok: true },
+      { id: 'starts-with-hello', ok: false }
+    ]);
+    assert.equal(result.summaries[0].semanticChecks[0].detail, 'rubric criteria passed: 1/2');
+    assert.equal(result.report.semanticChecks.averageScore, 50);
+    assert.equal(result.report.recommendation.action, 'reject');
   } finally {
     fs.rmSync(path.join(benchmarkRunBaseDir, runId), { recursive: true, force: true });
     fs.rmSync(tempDir, { recursive: true, force: true });

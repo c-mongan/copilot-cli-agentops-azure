@@ -4996,7 +4996,7 @@ function isPlainObject(value) {
 }
 
 const benchmarkPermissionProfiles = new Set(['allow-all-isolated', 'least-privilege', 'read-only']);
-const benchmarkSemanticAdapters = new Set(['file-contains', 'file-regex']);
+const benchmarkSemanticAdapters = new Set(['file-contains', 'file-regex', 'file-rubric']);
 const benchmarkToolRisks = new Set([
   'read-only',
   'write-file',
@@ -5207,6 +5207,39 @@ function validateBenchmarkSemanticChecks(checks, source = 'task') {
         }
       }
     }
+    if (check.adapter === 'file-rubric') {
+      if (!Array.isArray(check.criteria) || check.criteria.length === 0) {
+        errors.push('criteria must be a non-empty array');
+      } else {
+        for (const [criteriaIndex, criterion] of check.criteria.entries()) {
+          if (!isPlainObject(criterion)) {
+            errors.push(`criteria[${criteriaIndex}] must be an object`);
+            continue;
+          }
+          if (typeof criterion.id !== 'string' || criterion.id.trim() === '') {
+            errors.push(`criteria[${criteriaIndex}].id must be a non-empty string`);
+          }
+          const hasContains = typeof criterion.contains === 'string' && criterion.contains.trim() !== '';
+          const hasPattern = typeof criterion.pattern === 'string' && criterion.pattern.trim() !== '';
+          if (hasContains === hasPattern) {
+            errors.push(`criteria[${criteriaIndex}] must define exactly one of contains or pattern`);
+          }
+          if (hasPattern) {
+            try {
+              new RegExp(criterion.pattern);
+            } catch {
+              errors.push(`criteria[${criteriaIndex}].pattern must be a valid regular expression`);
+            }
+          }
+        }
+      }
+      if (check.minScore !== undefined) {
+        const minScore = Number(check.minScore);
+        if (!Number.isFinite(minScore) || minScore < 0 || minScore > 100) {
+          errors.push('minScore must be between 0 and 100');
+        }
+      }
+    }
     if (errors.length > 0) {
       throw new Error(`Invalid benchmark task ${source}: semanticChecks[${index}] ${errors.join('; ')}`);
     }
@@ -5218,6 +5251,16 @@ function validateBenchmarkSemanticChecks(checks, source = 'task') {
     };
     if (check.adapter === 'file-contains') normalized.contains = check.contains;
     if (check.adapter === 'file-regex') normalized.pattern = check.pattern;
+    if (check.adapter === 'file-rubric') {
+      normalized.minScore = check.minScore === undefined ? 100 : Number(check.minScore);
+      normalized.criteria = check.criteria.map(criterion => {
+        const normalizedCriterion = { id: criterion.id };
+        if (typeof criterion.title === 'string' && criterion.title.trim() !== '') normalizedCriterion.title = criterion.title;
+        if (criterion.contains !== undefined) normalizedCriterion.contains = criterion.contains;
+        if (criterion.pattern !== undefined) normalizedCriterion.pattern = criterion.pattern;
+        return normalizedCriterion;
+      });
+    }
     return normalized;
   });
 }
@@ -5716,6 +5759,30 @@ function runBenchmarkSemanticChecks(checks = [], workspace) {
     const filePath = safeBenchmarkPath(workspace, check.file);
     const exists = fs.existsSync(filePath) && fs.statSync(filePath).isFile();
     const text = exists ? fs.readFileSync(filePath, 'utf8') : '';
+    if (check.adapter === 'file-rubric') {
+      const criteria = check.criteria || [];
+      const criteriaResults = criteria.map(criterion => {
+        const ok = criterion.pattern !== undefined
+          ? exists && new RegExp(criterion.pattern, 'm').test(text)
+          : exists && text.includes(criterion.contains);
+        return {
+          id: criterion.id,
+          ok
+        };
+      });
+      const passed = criteriaResults.filter(criterion => criterion.ok).length;
+      const score = criteria.length > 0 ? roundNumber((passed / criteria.length) * 100) : 0;
+      const ok = score >= numberValue(check.minScore);
+      return {
+        id: check.id,
+        adapter: check.adapter,
+        file: check.file,
+        ok,
+        score,
+        detail: ok ? null : `rubric criteria passed: ${passed}/${criteria.length}`,
+        criteria: criteriaResults
+      };
+    }
     const ok = check.adapter === 'file-regex'
       ? exists && new RegExp(check.pattern, 'm').test(text)
       : exists && text.includes(check.contains);
