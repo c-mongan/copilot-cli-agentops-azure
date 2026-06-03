@@ -1277,7 +1277,7 @@ Required work:
 - Expand enforced permission profiles to OS-level network and tool sandboxing.
 - Add Grafana-native artifact content diff UI review for approved benchmark artifacts.
 - Add live external team workflow API integrations for candidate promotion gates.
-- Add dashboards for eval scorecards and regressions.
+- Expand eval scorecard and regression dashboards as production usage reveals more review slices.
 
 ### P4 - Productize For Teams
 

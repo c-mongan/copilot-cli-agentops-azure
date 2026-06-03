@@ -3621,7 +3621,7 @@ test('dashboard verify combines static UX and optional live KQL gates', () => {
   });
   assert.equal(live.ok, true, live.errors.join('\n'));
   assert.equal(live.live, true);
-  assert.equal(live.summary.kql_checks, 25);
+  assert.equal(live.summary.kql_checks, 28);
 });
 
 test('V2 dashboard links preserve drilldown contracts', () => {
@@ -3655,6 +3655,9 @@ test('V2 dashboard links preserve drilldown contracts', () => {
   assert.match(JSON.stringify(runsDashboard), /PrNumberHash/);
   const insightsDashboard = JSON.parse(fs.readFileSync(path.join(root, 'grafana', 'dashboards', 'v2', '09-insights-regressions.json'), 'utf8'));
   const evalsDashboard = JSON.parse(fs.readFileSync(path.join(root, 'grafana', 'dashboards', 'v2', '08-evals-quality.json'), 'utf8'));
+  assert.match(JSON.stringify(evalsDashboard), /Eval scorecard by repo, model, and task/);
+  assert.match(JSON.stringify(evalsDashboard), /ScorecardStatus/);
+  assert.match(JSON.stringify(evalsDashboard), /Eval regression follow-up/);
   assert.match(JSON.stringify(evalsDashboard), /Benchmark artifact diff review/);
   assert.match(JSON.stringify(evalsDashboard), /Benchmark artifact files/);
   assert.match(JSON.stringify(evalsDashboard), /Benchmark hidden check packs/);
@@ -3670,6 +3673,7 @@ test('V2 dashboard links preserve drilldown contracts', () => {
   assert.match(JSON.stringify(evalsDashboard), /BenchmarkApprovalStatus/);
   assert.match(JSON.stringify(evalsDashboard), /ApprovalAction/);
   assert.match(JSON.stringify(insightsDashboard), /OpenPattern/);
+  assert.match(JSON.stringify(insightsDashboard), /Eval regression queue/);
   assert.match(JSON.stringify(insightsDashboard), /Recommendation artifacts/);
   assert.match(JSON.stringify(insightsDashboard), /var-pattern_key/);
 });
@@ -3733,7 +3737,7 @@ test('dashboard kql-check renders representative V2 panel queries', () => {
   });
 
   assert.equal(result.ok, true, result.errors.join('\n'));
-  assert.equal(result.checks.length, 25);
+  assert.equal(result.checks.length, 28);
   assert.ok(queries.every(item => item.options.workspaceId === 'workspace-123'));
   assert.ok(queries.every(item => item.query.includes('ago(24h)')));
   assert.ok(queries.every(item => !item.query.includes('$__timeFrom')));
@@ -3750,6 +3754,8 @@ test('dashboard kql-check renders representative V2 panel queries', () => {
   assert.ok(queries.some(item => item.query.includes('SuggestedNextStep')));
   assert.ok(queries.some(item => item.query.includes('PatternRuns')));
   assert.ok(queries.some(item => item.query.includes('PatternDimension')));
+  assert.ok(queries.some(item => item.query.includes('ScorecardStatus')));
+  assert.ok(queries.some(item => item.query.includes('Eval regression queue') || item.query.includes("Source='insight'")));
   assert.ok(queries.some(item => item.query.includes('AgentOpsRecommendations_CL')));
   assert.ok(queries.some(item => item.query.includes('RecommendationId')));
   assert.ok(queries.some(item => item.query.includes('BadOutcomeRuns')));
@@ -3769,7 +3775,7 @@ test('dashboard kql-check can require live rows', () => {
   });
 
   assert.equal(result.ok, false);
-  assert.equal(result.errors.length, 16);
+  assert.equal(result.errors.length, 17);
   assert.match(result.errors[0], /query returned no rows/);
   assert.equal(result.checks.find(check => check.panel === 'Prompt and response viewer (explicit opt-in)').ok, true);
 });
