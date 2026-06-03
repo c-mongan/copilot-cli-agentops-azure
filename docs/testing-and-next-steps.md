@@ -268,7 +268,10 @@ Keep deployed scheduled query rules disabled until thresholds are tuned. Use the
 
 ```bash
 node agentops-cli/src/index.js alert recommend --last 14d
+node agentops-cli/src/index.js alert resources --resource-group "${AZURE_RESOURCE_GROUP:-rg-agentops-dev}"
 ```
+
+`alert resources` is read-only and summarizes current scheduled-query rule enabled/disabled state plus attached action groups.
 
 ## Read-Only MCP Investigation Smoke Test
 

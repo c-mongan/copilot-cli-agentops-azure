@@ -67,6 +67,7 @@ function usage() {
     'attribution [--last <duration>]',
     'permission-friction [--last <duration>]',
     'alert recommend [--last <duration>]',
+    'alert resources [--resource-group <name>]',
     'alert history --rule <name> [--last <duration>]',
     'alert detail --rule <name> --session <conversation> [--last <duration>]',
     'alert action-plan --rule <name> --session <conversation> [--last <duration>]',
@@ -4878,6 +4879,7 @@ function latestSummaryFromArgs(args, fallbackLast = '7d') {
 const {
   alertRecommendationQuery,
   alertRecommendations,
+  alertResourceState,
   alertHistoryQuery,
   alertHistory,
   alertDetail,
@@ -8691,6 +8693,26 @@ async function main(argv) {
       process.stdout.write(JSON.stringify(alertRecommendations(last), null, 2) + '\n');
       return;
     }
+    if (subcommand === 'resources') {
+      const cloud = configuredCloudValues();
+      const resourceGroup = optionValue(alertArgs, ['--resource-group', '-g']) || cloud.resourceGroup;
+      if (!resourceGroup) throw new Error('alert resources requires --resource-group <name> or AGENTOPS_AZURE_RESOURCE_GROUP');
+      if (!azAvailable()) {
+        process.stdout.write(JSON.stringify(alertResourceState({
+          resourceGroup,
+          error: 'Azure CLI was not found on PATH.'
+        }), null, 2) + '\n');
+        return;
+      }
+      const alertResult = runAz(['monitor', 'scheduled-query', 'list', '--resource-group', resourceGroup, '-o', 'json']);
+      const resources = alertResult.status === 0 ? agentOpsScheduledQueryRules(parseJsonOutput(alertResult)) : [];
+      process.stdout.write(JSON.stringify(alertResourceState({
+        resourceGroup,
+        resources,
+        error: alertResult.status === 0 ? null : azErrorDetail(alertResult, 'could not list scheduled query rules')
+      }), null, 2) + '\n');
+      return;
+    }
     if (subcommand === 'action-plan') {
       const rule = optionValue(alertArgs, ['--rule']);
       const session = optionValue(alertArgs, ['--session', '--conversation']);
@@ -8724,7 +8746,7 @@ async function main(argv) {
       process.stdout.write(JSON.stringify({ output: outputPath, artifact }, null, 2) + '\n');
       return;
     }
-    throw new Error('alert currently supports: alert recommend, alert history, alert detail, alert action-plan, alert export');
+    throw new Error('alert currently supports: alert recommend, alert resources, alert history, alert detail, alert action-plan, alert export');
   }
 
   if (command === 'incident') {
@@ -8786,6 +8808,7 @@ module.exports = {
   agentopsWorkflows,
   alertRecommendationQuery,
   alertRecommendations,
+  alertResourceState,
   alertHistoryQuery,
   alertHistory,
   alertDetail,

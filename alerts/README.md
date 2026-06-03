@@ -23,7 +23,10 @@ Use the proposal-only threshold recommender before changing `infra/bicep/alerts.
 
 ```bash
 node agentops-cli/src/index.js alert recommend --last 14d
+node agentops-cli/src/index.js alert resources --resource-group "${AZURE_RESOURCE_GROUP:-rg-agentops-dev}"
 ```
+
+`alert resources` lists current AgentOps scheduled-query rules, whether each rule is enabled, and whether action groups are attached. It is read-only.
 
 Review metadata-only alert history before opening an incident:
 

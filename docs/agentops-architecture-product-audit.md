@@ -883,6 +883,7 @@ What works well:
 - The Alert Tuning dashboard includes metadata-only fired-alert candidates with session drilldowns.
 - `agentops alert action-plan` generates deterministic GitHub issue or Azure DevOps work-item payload metadata with KQL, session links, and guardrails.
 - `agentops alert export` writes durable metadata-only alert artifacts for later incident review.
+- `agentops alert resources` reports current Azure scheduled-query enabled/disabled state and action-group routing without mutating Azure.
 - `agentops incident timeline` collects exported alert artifacts into a durable metadata-only incident review record.
 
 Current gaps:
