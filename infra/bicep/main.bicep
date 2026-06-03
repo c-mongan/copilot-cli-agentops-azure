@@ -97,6 +97,8 @@ var tags = {
 }
 var compactBaseName = replace(baseName, '-', '')
 var compactEnvironmentName = replace(environmentName, '-', '')
+var actionerAppName = take('func-${baseName}-actioner-${environmentName}', 60)
+var sharedStoreName = take('stagops${compactEnvironmentName}${uniqueString(resourceGroup().id)}', 24)
 var defaultLogRetentionDays = deploymentProfile == 'enterprise' ? 90 : 30
 var effectiveLogRetentionDays = logRetentionDays == 0 ? defaultLogRetentionDays : logRetentionDays
 var defaultDailyIngestionCapGb = deploymentProfile == 'enterprise' ? 5 : deploymentProfile == 'team' ? 2 : 1
@@ -160,9 +162,12 @@ module actioner 'actioner-function.bicep' = if (deployActioner) {
   name: 'actioner-function'
   params: {
     location: location
-    appName: take('func-${baseName}-actioner-${environmentName}', 60)
+    appName: actionerAppName
     storageName: take('stagentops${environmentName}${uniqueString(resourceGroup().id)}', 24)
     appInsightsConnectionString: appInsights.outputs.connectionString
+    sharedStoreBlobServiceUri: deploySharedStore ? sharedStore!.outputs.blobEndpoint : ''
+    sharedStoreContainerName: deploySharedStore ? sharedStore!.outputs.containerName : 'agentops-shared'
+    sharedStorePrefix: 'agentops-shared'
     tags: tags
   }
 }
@@ -171,9 +176,23 @@ module sharedStore 'shared-store.bicep' = if (deploySharedStore) {
   name: 'shared-store'
   params: {
     location: location
-    storageName: take('stagops${compactEnvironmentName}${uniqueString(resourceGroup().id)}', 24)
+    storageName: sharedStoreName
     publicNetworkAccess: sharedStorePublicNetworkAccess
     tags: tags
+  }
+}
+
+resource sharedStoreAccount 'Microsoft.Storage/storageAccounts@2023-01-01' existing = if (deployActioner && deploySharedStore) {
+  name: sharedStoreName
+}
+
+resource sharedStoreBlobWriterRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (deployActioner && deploySharedStore) {
+  name: guid(resourceGroup().id, 'agentops-shared-store-blob-writer', actionerAppName, sharedStoreName)
+  scope: sharedStoreAccount
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')
+    principalId: actioner!.outputs.principalId
+    principalType: 'ServicePrincipal'
   }
 }
 

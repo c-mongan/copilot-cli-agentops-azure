@@ -1,0 +1,26 @@
+{
+  "scriptFile": "../index.js",
+  "entryPoint": "sharedStoreWrite",
+  "bindings": [
+    {
+      "authLevel": "function",
+      "type": "httpTrigger",
+      "direction": "in",
+      "name": "req",
+      "route": "shared-store/{table}/{id}",
+      "methods": ["post"]
+    },
+    {
+      "type": "blob",
+      "direction": "out",
+      "name": "sharedBlob",
+      "path": "%AGENTOPS_SHARED_STORE_CONTAINER%/%AGENTOPS_SHARED_STORE_PREFIX%/{table}/{id}.json",
+      "connection": "AgentOpsSharedStorage"
+    },
+    {
+      "type": "http",
+      "direction": "out",
+      "name": "res"
+    }
+  ]
+}

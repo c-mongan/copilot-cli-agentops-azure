@@ -1061,8 +1061,8 @@ This is strong for technical users.
 Missing world-class behavior:
 
 - The dashboard now gives the agent explicit session context, Run Replay URL, starter KQL, and copyable `agentops ask-context` commands, but it still does not launch a hosted assistant directly.
-- Recommendations are now present in Run Replay as first-class artifacts with copyable follow-up commands, a local metadata-only recommendation store, and an opt-in shared Blob upload plan for team review artifacts, but the dashboard still does not execute the action workflow for the user.
-- Saved investigations now surface on the Home dashboard from metadata-only `AgentOpsSavedViews_CL` exports, with an opt-in shared Blob store for metadata-only exports, but there is still no hosted interactive saved-view write API.
+- Recommendations are now present in Run Replay as first-class artifacts with copyable follow-up commands, a local metadata-only recommendation store, an opt-in shared Blob upload plan, and a hosted metadata-only write API for team review artifacts, but the dashboard still does not execute the action workflow for the user.
+- Saved investigations now surface on the Home dashboard from metadata-only `AgentOpsSavedViews_CL` exports, with an opt-in shared Blob store and hosted metadata-only write API, but there is still no browser-native saved-view editor.
 - Saved-view exports can now include session-matched config-change annotation counts and change-target refs from `--events`, so saved investigations keep the nearby skill/hook/MCP/model change context.
 
 Target experience:
@@ -1152,6 +1152,7 @@ Implemented first slice:
 - `agentops recommend --events` now attaches matching config-change annotations to regression recommendations and persists them as metadata-only `ChangeAnnotations` plus concrete `ChangeTargetRefs`.
 - `agentops recommend --save` now persists metadata-only recommendation rows to a local durable store, with `agentops recommend list|export` for later review or ingestion.
 - `agentops azure-ingest upload-plan` now validates metadata-only saved-view/recommendation exports and prints Entra-backed Azure Blob upload commands for the optional shared store.
+- `actioner/SharedStoreWrite` now accepts hosted metadata-only recommendation and saved-view row writes into the shared Blob store through managed identity.
 - `agentops alert handoff --events` now attaches matching config-change annotations plus a session-scoped annotation KQL query to alert operator handoffs and route previews.
 - `agentops saved-view add|export --events` now attaches matching config-change annotations to saved investigations and surfaces annotation counts/refs on the Home dashboard.
 - `agentops init --import-dashboards` now runs the dashboard import remediation stage explicitly during the init flow, then continues toward smoke/open next steps.
@@ -1213,7 +1214,7 @@ Every suggested agent/skill/hook/MCP change has telemetry evidence, predicted me
 
 Required work:
 
-- Add hosted interactive recommendation and saved-view write APIs beyond the shared metadata-only Blob artifact store.
+- Add browser-native recommendation and saved-view editor workflows on top of the hosted metadata-only write API.
 - Link recommendations to files and benchmark runs.
 - Track before/after telemetry.
 - Use annotation-linked recommendations, alert handoffs, and saved views in the hosted workflow once shared storage exists.
@@ -1301,7 +1302,7 @@ Required work:
 - Add multi-workspace/team config.
 - Add Azure RBAC automation and validation.
 - Add enterprise network/security modes.
-- Add hosted saved-view/recommendation write APIs beyond shared Blob artifact storage.
+- Add browser-native saved-view/recommendation editor workflows on top of shared Blob artifact storage.
 - Expand alert actioner deployment/runbook coverage for team destinations.
 
 ## Highest-Impact Fixes

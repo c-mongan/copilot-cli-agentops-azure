@@ -64,7 +64,7 @@ const { checkInstallSmoke } = require('../../scripts/check-install-smoke');
 const { checkReleaseDistribution } = require('../../scripts/check-release-distribution');
 const { checkSdkPublish, isWildcardRange } = require('../../scripts/check-sdk-publish');
 const { shouldCopy } = require('../../scripts/prepare-cli-package-assets');
-const { buildActionerReview } = require('../../actioner');
+const { buildActionerReview, buildSharedStoreWrite, sharedStoreWrite } = require('../../actioner');
 
 const {
   agentopsAttributionSmoke,
@@ -8676,6 +8676,86 @@ test('actioner builds metadata-only review packet from Azure alert payload', () 
   assert.equal(incomplete.status, 'needs-review');
   assert.ok(incomplete.errors.some(error => error.includes('unknown or missing alert rule')));
   assert.ok(incomplete.errors.some(error => error.includes('missing alert session')));
+});
+
+test('shared store write API accepts only metadata-only recommendation and saved-view rows', async () => {
+  const recommendationRow = {
+    TimeGenerated: '2026-06-03T12:00:00.000Z',
+    RecommendationId: 'rec-123',
+    Action: 'reduce_context',
+    Severity: 'medium',
+    ObservedPattern: 'context pressure',
+    NextAction: 'Open Run Replay',
+    DashboardTitles: ['Run Replay'],
+    DashboardCount: 1,
+    Validation: ['Run benchmark'],
+    RollbackCondition: 'Revert if eval drops'
+  };
+  const packet = buildSharedStoreWrite({
+    table: 'AgentOpsRecommendations_CL',
+    row: recommendationRow,
+    owner: 'agentops-oncall'
+  }, {
+    id: 'rec-route-123',
+    prefix: 'team-a',
+    writtenAt: '2026-06-03T12:01:00.000Z'
+  });
+
+  assert.equal(packet.schema_version, 'agentops.shared-store-write.v1');
+  assert.equal(packet.status, 'ready');
+  assert.equal(packet.table, 'AgentOpsRecommendations_CL');
+  assert.equal(packet.id, 'rec-route-123');
+  assert.equal(packet.blob.path, 'team-a/AgentOpsRecommendations_CL/rec-route-123.json');
+  assert.match(packet.blob.content, /agentops.shared-store-blob.v1/);
+  assert.match(packet.blob.content, /rec-123/);
+  assert.doesNotMatch(JSON.stringify(packet), /SECRET_FAKE_TEST_VALUE|raw transcript|tool_args/);
+
+  const context = { bindings: {} };
+  await sharedStoreWrite(context, {
+    params: {
+      table: 'AgentOpsSavedViews_CL',
+      id: 'view-route-123'
+    },
+    body: {
+      row: {
+        TimeGenerated: '2026-06-03T12:02:00.000Z',
+        SavedViewId: 'view-123',
+        Name: 'latest-risk',
+        Url: 'https://grafana.example/d/agentops-session-detail',
+        QueryHash: 'query_123'
+      },
+      owner: 'agentops-oncall'
+    }
+  });
+
+  assert.equal(context.res.status, 201);
+  assert.equal(context.res.body.status, 'ready');
+  assert.equal(context.res.body.blob_path, 'agentops-shared/AgentOpsSavedViews_CL/view-route-123.json');
+  assert.match(context.bindings.sharedBlob, /latest-risk/);
+
+  const rejectedContext = { bindings: {} };
+  await sharedStoreWrite(rejectedContext, {
+    params: {
+      table: 'AgentOpsSavedViews_CL',
+      id: 'bad-view'
+    },
+    body: {
+      row: {
+        TimeGenerated: '2026-06-03T12:02:00.000Z',
+        SavedViewId: 'view-bad',
+        Name: 'leaky',
+        Url: 'https://grafana.example/d/agentops-session-detail',
+        QueryHash: 'query_bad',
+        Notes: 'raw transcript SECRET_FAKE_TEST_VALUE'
+      }
+    }
+  });
+
+  assert.equal(rejectedContext.res.status, 400);
+  assert.equal(rejectedContext.res.body.status, 'rejected');
+  assert.equal(rejectedContext.bindings.sharedBlob, undefined);
+  assert.equal(rejectedContext.res.body.row, null);
+  assert.ok(rejectedContext.res.body.errors.some(error => error.includes('privacy scan')));
 });
 
 test('alert history exposes metadata-only fired-alert query', () => {
