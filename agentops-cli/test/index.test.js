@@ -6207,6 +6207,88 @@ test('benchmark report requires approved external review evidence', () => {
   }]);
   assert.equal(unapprovedReviewReport.promotion.decision, 'reject');
 
+  const approvedAzureDevOpsReviewReport = benchmarkReport('pass-run', summaries, {
+    verifyExternalReview: true,
+    promotionApproval: {
+      approvedBy: ['sre-team'],
+      approvedAt: '2026-06-03T04:00:00Z',
+      externalReview: {
+        system: 'azure-devops',
+        url: 'https://dev.azure.com/example-org/example-project/_git/example-repo/pullrequest/123',
+        status: 'approved'
+      }
+    },
+    spawnSync: (command, args) => {
+      assert.equal(command, 'az');
+      assert.deepEqual(args.slice(0, 10), [
+        'repos',
+        'pr',
+        'show',
+        '--id',
+        '123',
+        '--organization',
+        'https://dev.azure.com/example-org',
+        '--project',
+        'example-project',
+        '--repository'
+      ]);
+      assert.equal(args[10], 'example-repo');
+      return {
+        status: 0,
+        stdout: JSON.stringify({
+          pullRequestId: 123,
+          status: 'active',
+          url: 'https://dev.azure.com/example-org/example-project/_git/example-repo/pullrequest/123',
+          reviewers: [{ vote: 10 }]
+        }),
+        stderr: ''
+      };
+    }
+  });
+
+  assert.deepEqual(approvedAzureDevOpsReviewReport.promotionGateFailures, []);
+  assert.equal(approvedAzureDevOpsReviewReport.promotion.decision, 'promote');
+  assert.deepEqual(approvedAzureDevOpsReviewReport.promotion.approval.externalReview.verification, {
+    provider: 'azure-devops',
+    ok: true,
+    status: 'approved',
+    organizationUrl: 'https://dev.azure.com/example-org',
+    project: 'example-project',
+    repository: 'example-repo',
+    number: 123,
+    url: 'https://dev.azure.com/example-org/example-project/_git/example-repo/pullrequest/123',
+    pullRequestStatus: 'active',
+    approvals: 1,
+    rejections: 0
+  });
+
+  const rejectedAzureDevOpsReviewReport = benchmarkReport('pass-run', summaries, {
+    verifyExternalReview: true,
+    promotionApproval: {
+      approvedBy: ['sre-team'],
+      approvedAt: '2026-06-03T04:00:00Z',
+      externalReview: {
+        system: 'azdo',
+        id: 'example-org/example-project/example-repo#123',
+        status: 'approved'
+      }
+    },
+    spawnSync: () => ({
+      status: 0,
+      stdout: JSON.stringify({
+        pullRequestId: 123,
+        status: 'active',
+        reviewers: [{ vote: -10 }]
+      }),
+      stderr: ''
+    })
+  });
+
+  assert.equal(rejectedAzureDevOpsReviewReport.promotion.decision, 'reject');
+  assert.equal(rejectedAzureDevOpsReviewReport.promotionGateFailures[0].gate, 'requiredExternalReview');
+  assert.equal(rejectedAzureDevOpsReviewReport.promotionGateFailures[0].actual.verification.provider, 'azure-devops');
+  assert.equal(rejectedAzureDevOpsReviewReport.promotionGateFailures[0].actual.verification.status, 'rejected');
+
   const approvedJiraReviewReport = benchmarkReport('pass-run', summaries, {
     verifyExternalReview: true,
     promotionApproval: {
