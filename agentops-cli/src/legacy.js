@@ -5552,13 +5552,21 @@ function validateBenchmarkPromotionGates(gates, source = 'suite') {
     'maxTotalTokens',
     'maxCost',
     'requiredApprovals',
-    'requiredApprovers'
+    'requiredApprovers',
+    'requiredExternalReview'
   ]);
   const normalized = {};
 
   for (const [field, value] of Object.entries(gates)) {
     if (!allowedFields.has(field)) {
       throw new Error(`Invalid benchmark ${source}: unknown promotion gate: ${field}`);
+    }
+    if (field === 'requiredExternalReview') {
+      if (typeof value !== 'boolean') {
+        throw new Error(`Invalid benchmark ${source}: promotion gate requiredExternalReview must be a boolean`);
+      }
+      normalized[field] = value;
+      continue;
     }
     if (field === 'requiredApprovers') {
       if (!isStringArray(value)) {
@@ -6020,6 +6028,26 @@ function parseBenchmarkApproveArgs(args) {
       if (!args[index + 1]) throw new Error('--status requires approved, pending, or rejected');
       options.status = args[index + 1];
       index += 1;
+    } else if (arg === '--review-system') {
+      if (!args[index + 1]) throw new Error('--review-system requires a value');
+      options.externalReview = options.externalReview || {};
+      options.externalReview.system = args[index + 1];
+      index += 1;
+    } else if (arg === '--review-id') {
+      if (!args[index + 1]) throw new Error('--review-id requires a value');
+      options.externalReview = options.externalReview || {};
+      options.externalReview.id = args[index + 1];
+      index += 1;
+    } else if (arg === '--review-url') {
+      if (!args[index + 1]) throw new Error('--review-url requires a value');
+      options.externalReview = options.externalReview || {};
+      options.externalReview.url = args[index + 1];
+      index += 1;
+    } else if (arg === '--review-status') {
+      if (!args[index + 1]) throw new Error('--review-status requires approved, pending, or rejected');
+      options.externalReview = options.externalReview || {};
+      options.externalReview.status = args[index + 1];
+      index += 1;
     } else if (arg === '--approved-at') {
       if (!args[index + 1]) throw new Error('--approved-at requires an ISO timestamp');
       options.approvedAt = args[index + 1];
@@ -6035,6 +6063,9 @@ function parseBenchmarkApproveArgs(args) {
 
   if (!['approved', 'pending', 'rejected'].includes(options.status)) {
     throw new Error('--status must be approved, pending, or rejected');
+  }
+  if (options.externalReview?.status !== undefined && !['approved', 'pending', 'rejected'].includes(options.externalReview.status)) {
+    throw new Error('--review-status must be approved, pending, or rejected');
   }
   if (options.status === 'approved' && options.approvedBy.length === 0) {
     throw new Error('benchmark approve requires at least one --by approver');
@@ -7064,6 +7095,8 @@ function benchmarkPromotionGates(scoredSummaries) {
     for (const [field, value] of Object.entries(gate)) {
       if (field === 'requiredApprovers') {
         merged[field] = [...new Set([...(merged[field] || []), ...value])].sort();
+      } else if (field === 'requiredExternalReview') {
+        merged[field] = merged[field] === true || value === true;
       } else if (field.startsWith('min')) {
         merged[field] = Math.max(numberValue(merged[field], 0), numberValue(value));
       } else if (merged[field] === undefined) {
@@ -7115,6 +7148,18 @@ function benchmarkPromotionGateFailures(report) {
         expected: gates.requiredApprovers,
         actual: approvedBy,
         missing: missingApprovers,
+        ok: false
+      });
+    }
+  }
+
+  if (gates.requiredExternalReview === true) {
+    const externalReview = report.promotionApproval?.externalReview || null;
+    if (externalReview?.status !== 'approved') {
+      failures.push({
+        gate: 'requiredExternalReview',
+        expected: true,
+        actual: externalReview,
         ok: false
       });
     }
@@ -7241,6 +7286,36 @@ function benchmarkRecommendation(report) {
   };
 }
 
+function validateBenchmarkExternalReview(review, source = 'approval') {
+  if (review === undefined || review === null) return null;
+  if (!isPlainObject(review)) {
+    throw new Error(`Invalid benchmark promotion approval ${source}: externalReview must be an object`);
+  }
+
+  const normalized = {};
+  for (const field of ['system', 'id', 'url']) {
+    if (review[field] === undefined) continue;
+    if (typeof review[field] !== 'string' || review[field].trim() === '') {
+      throw new Error(`Invalid benchmark promotion approval ${source}: externalReview.${field} must be a non-empty string`);
+    }
+    normalized[field] = review[field].trim();
+  }
+
+  if (Object.keys(normalized).length === 0) {
+    throw new Error(`Invalid benchmark promotion approval ${source}: externalReview must include system, id, or url`);
+  }
+
+  const status = review.status || 'approved';
+  if (!['approved', 'pending', 'rejected'].includes(status)) {
+    throw new Error(`Invalid benchmark promotion approval ${source}: externalReview.status must be approved, pending, or rejected`);
+  }
+
+  return {
+    status,
+    ...normalized
+  };
+}
+
 function validateBenchmarkPromotionApproval(approval, source = 'approval') {
   if (approval === undefined || approval === null) return null;
   if (!isPlainObject(approval)) {
@@ -7269,12 +7344,15 @@ function validateBenchmarkPromotionApproval(approval, source = 'approval') {
     throw new Error(`Invalid benchmark promotion approval ${source}: runId must be a non-empty string`);
   }
 
+  const externalReview = validateBenchmarkExternalReview(approval.externalReview, source);
+
   return {
     status,
     ...(approval.runId !== undefined ? { runId: approval.runId } : {}),
     approvedBy,
     approvedAt: approval.approvedAt || null,
     ticket: approval.ticket || null,
+    ...(externalReview ? { externalReview } : {}),
     source
   };
 }
@@ -7298,7 +7376,8 @@ function benchmarkApproval(options = {}) {
     status,
     approvedBy: options.approvedBy || [],
     approvedAt,
-    ticket: options.ticket || undefined
+    ticket: options.ticket || undefined,
+    externalReview: options.externalReview
   }, 'benchmark approve');
 
   if (approval.status === 'approved' && approval.approvedBy.length === 0) {
