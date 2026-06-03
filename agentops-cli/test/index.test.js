@@ -4191,6 +4191,7 @@ test('benchmark run executes Copilot in an isolated fixture copy and writes a su
           copilotCall = { args, options };
           fs.mkdirSync(path.join(options.cwd, 'notes'), { recursive: true });
           fs.writeFileSync(path.join(options.cwd, 'notes', 'hello.txt'), 'hello agentops\n');
+          fs.writeFileSync(path.join(options.cwd, 'README.md'), '# Tiny Benchmark Fixture\n\nUpdated during benchmark.\n');
           return { status: 0, stdout: 'created note', stderr: '' };
         }
         return { status: 0, stdout: '', stderr: '' };
@@ -4201,7 +4202,12 @@ test('benchmark run executes Copilot in an isolated fixture copy and writes a su
     assert.equal(result.wouldExecuteCopilot, true);
     assert.equal(result.summaries.length, 1);
     assert.equal(result.summaries[0].success, true);
-    assert.deepEqual(result.summaries[0].changedFiles.map(file => file.replaceAll(path.sep, '/')), ['notes/hello.txt']);
+    assert.deepEqual(result.summaries[0].changedFiles.map(file => file.replaceAll(path.sep, '/')), ['README.md', 'notes/hello.txt']);
+    assert.deepEqual(result.summaries[0].artifactDiff.added.map(file => file.replaceAll(path.sep, '/')), ['notes/hello.txt']);
+    assert.deepEqual(result.summaries[0].artifactDiff.modified.map(file => file.replaceAll(path.sep, '/')), ['README.md']);
+    assert.deepEqual(result.summaries[0].artifactDiff.deleted, []);
+    assert.deepEqual(result.report.artifactDiff, { added: 1, modified: 1, deleted: 0, totalChanged: 2 });
+    assert.equal(result.report.tasks[0].artifactDiff.totalChanged, 2);
     assert.equal(result.report.recommendation.action, 'keep');
     assert.equal(result.report.promotion.decision, 'promote');
     assert.equal(fs.existsSync(result.summariesPath), true);
