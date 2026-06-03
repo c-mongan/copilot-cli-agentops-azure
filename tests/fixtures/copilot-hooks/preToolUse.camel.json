@@ -1,0 +1,7 @@
+{
+  "sessionId": "hook-session-camel",
+  "timestamp": 1780492800000,
+  "cwd": "/workspace/repo",
+  "toolName": "bash",
+  "toolArgs": "{\"command\":\"az keyvault secret show --vault-name demo --name token\"}"
+}

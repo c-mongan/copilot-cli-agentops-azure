@@ -1,0 +1,10 @@
+{
+  "sessionId": "hook-session-failure",
+  "timestamp": 1780492800000,
+  "cwd": "/workspace/repo",
+  "toolName": "bash",
+  "toolArgs": {
+    "command": "npm test"
+  },
+  "error": "npm: command not found"
+}

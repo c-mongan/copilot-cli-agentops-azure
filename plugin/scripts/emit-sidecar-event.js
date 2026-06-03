@@ -37,9 +37,9 @@ function appendSidecarEvent(event) {
 
 function buildEvent(input = {}, startedAt = Date.now()) {
   const metadata = input.metadata || input.meta || {};
-  const hookType = safeText(input.type || input.hookType || input.hook_type || metadata.hookType, 'notification');
+  const hookType = safeText(input.type || input.hookType || input.hook_type || input.hook_event_name || metadata.hookType, 'notification');
   const decision = safeText(input.decision || input.permissionDecision || metadata.decision, 'observed');
-  const reasonCategory = safeText(input.reasonCategory || input.reason_category || metadata.reasonCategory, '');
+  const reasonCategory = safeText(input.reasonCategory || input.reason_category || input.notification_type || metadata.reasonCategory, '');
   const durationMs = safeNumber(input.durationMs || input.duration_ms || metadata.durationMs, Date.now() - startedAt);
   const sessionId = safeText(
     input.sessionId ||
