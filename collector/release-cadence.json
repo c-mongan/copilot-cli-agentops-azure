@@ -1,0 +1,15 @@
+{
+  "collector": "otelcol-contrib",
+  "image": "otel/opentelemetry-collector-contrib",
+  "version": "0.151.0",
+  "cadence": "quarterly",
+  "reviewed_at": "2026-06-03",
+  "review_after": "2026-09-03",
+  "release_notes": "https://github.com/open-telemetry/opentelemetry-collector-releases/releases",
+  "upgrade_gate": [
+    "agentops collector install-binary --version <version> --force",
+    "agentops collector validate --mode binary --privacy strict --json",
+    "agentops collector smoke --privacy strict --poison --json",
+    "npm --prefix agentops-cli test"
+  ]
+}
