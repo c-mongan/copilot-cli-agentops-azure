@@ -134,6 +134,7 @@ function productAudit(options = {}) {
     'agentops-cli/src/commands/insights.js',
     'agentops-cli/src/commands/recommend.js',
     'agentops-cli/src/commands/triage.js',
+    'agentops-cli/src/lib/schema/recommendation-schema.js',
     'agentops-cli/src/lib/evals/test-discipline.js',
     'agentops-cli/src/lib/evals/tool-efficiency.js',
     'agentops-cli/src/lib/evals/security.js',

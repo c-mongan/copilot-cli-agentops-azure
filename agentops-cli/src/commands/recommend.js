@@ -5,6 +5,7 @@ const path = require('node:path');
 const legacy = require('../legacy');
 const { hasFlag, optionValue } = require('../lib/args');
 const { latestByTime } = require('../lib/explain/v2-explain');
+const { validateRecommendationRow } = require('../lib/schema/recommendation-schema');
 
 const severityRank = {
   critical: 4,
@@ -472,6 +473,8 @@ function writeRecommendation(recommendation, outDir) {
   const absoluteDir = path.resolve(outDir);
   fs.mkdirSync(absoluteDir, { recursive: true });
   const row = recommendationRow(recommendation);
+  const validation = validateRecommendationRow(row);
+  if (!validation.ok) throw new Error(`recommendation row failed schema validation: ${validation.errors.join('; ')}`);
   const file = path.join(absoluteDir, 'AgentOpsRecommendations_CL.jsonl');
   fs.appendFileSync(file, `${JSON.stringify(row)}\n`);
   const manifest = path.join(absoluteDir, 'recommendation-manifest.json');
