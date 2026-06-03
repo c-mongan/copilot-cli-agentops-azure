@@ -5165,7 +5165,27 @@ function validateBenchmarkFixtureTrustRoots(trustRoots, source = 'suite') {
   });
 }
 
-function validateBenchmarkFixtureSealPackSignature(pack, source = 'fixture seal pack', trustRoots = []) {
+function validateBenchmarkFixtureTrustRevocations(revocations, source = 'suite') {
+  if (revocations === undefined) return [];
+  if (!Array.isArray(revocations)) {
+    throw new Error(`Invalid benchmark ${source}: fixtureTrustRevocations must be an array`);
+  }
+
+  const seen = new Set();
+  return revocations.map((revocation, index) => {
+    const keyId = typeof revocation === 'string' ? revocation : revocation && revocation.keyId;
+    if (typeof keyId !== 'string' || keyId.trim() === '') {
+      throw new Error(`Invalid benchmark ${source}: fixtureTrustRevocations[${index}] keyId must be a non-empty string`);
+    }
+    if (seen.has(keyId)) {
+      throw new Error(`Invalid benchmark ${source}: duplicate fixtureTrustRevocations keyId: ${keyId}`);
+    }
+    seen.add(keyId);
+    return { keyId };
+  });
+}
+
+function validateBenchmarkFixtureSealPackSignature(pack, source = 'fixture seal pack', trustRoots = [], trustRevocations = []) {
   if (pack.signature === undefined && trustRoots.length > 0) {
     throw new Error(`Invalid benchmark fixture seal pack ${source}: signature required by fixture trust roots`);
   }
@@ -5197,6 +5217,10 @@ function validateBenchmarkFixtureSealPackSignature(pack, source = 'fixture seal 
   }
   if (!verified) {
     throw new Error(`Invalid benchmark fixture seal pack ${source}: signature verification failed`);
+  }
+
+  if (trustRevocations.some(revocation => revocation.keyId === signature.keyId)) {
+    throw new Error(`Invalid benchmark fixture seal pack ${source}: signature keyId is revoked`);
   }
 
   if (trustRoots.length > 0) {
@@ -5342,7 +5366,12 @@ function validateBenchmarkFixtureSealPack(pack, fixturePath, source = 'fixture s
     throw new Error(`Invalid benchmark fixture seal pack ${source}: ${errors.join('; ')}`);
   }
 
-  const signature = validateBenchmarkFixtureSealPackSignature(pack, source, options.fixtureTrustRoots || []);
+  const signature = validateBenchmarkFixtureSealPackSignature(
+    pack,
+    source,
+    options.fixtureTrustRoots || [],
+    options.fixtureTrustRevocations || []
+  );
   const fixtureSeal = validateBenchmarkFixtureSeal({
     algorithm: pack.algorithm,
     files: pack.files
@@ -5637,6 +5666,7 @@ function loadBenchmarkSuites(baseDir = benchmarksDir) {
       const suitePath = path.join(suiteDir, 'suite.json');
       const metadata = fs.existsSync(suitePath) ? readJson(suitePath) : {};
       const fixtureTrustRoots = validateBenchmarkFixtureTrustRoots(metadata.fixtureTrustRoots, path.relative(root, suitePath));
+      const fixtureTrustRevocations = validateBenchmarkFixtureTrustRevocations(metadata.fixtureTrustRevocations, path.relative(root, suitePath));
       const tasksDir = path.join(suiteDir, 'tasks');
       const taskFiles = fs.existsSync(tasksDir)
         ? fs.readdirSync(tasksDir).filter(file => file.endsWith('.json')).sort()
@@ -5644,7 +5674,7 @@ function loadBenchmarkSuites(baseDir = benchmarksDir) {
       const promotionGates = validateBenchmarkPromotionGates(metadata.promotionGates, path.relative(root, suitePath));
       const tasks = taskFiles.map(file => {
         const taskPath = path.join(tasksDir, file);
-        return validateBenchmarkTask(readJson(taskPath), suiteDir, path.relative(root, taskPath), { fixtureTrustRoots });
+        return validateBenchmarkTask(readJson(taskPath), suiteDir, path.relative(root, taskPath), { fixtureTrustRoots, fixtureTrustRevocations });
       });
 
       return {
@@ -5653,6 +5683,7 @@ function loadBenchmarkSuites(baseDir = benchmarksDir) {
         description: metadata.description || '',
         path: path.relative(root, suiteDir),
         fixtureTrustRoots: fixtureTrustRoots.map(rootEntry => ({ keyId: rootEntry.keyId })),
+        fixtureTrustRevocations,
         promotionGates,
         tasks
       };
