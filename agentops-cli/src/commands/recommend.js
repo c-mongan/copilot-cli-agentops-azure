@@ -150,6 +150,10 @@ function fileRefsForRecommendation(action, insight = {}, run = {}) {
 function benchmarkEvidenceFromReport(report = null) {
   if (!report || typeof report !== 'object') return null;
   const artifactDiff = report.artifactDiff || {};
+  const approval = report.promotion?.approval || report.promotionApproval || {};
+  const approvalSource = approval.source
+    ? String(approval.source).split(/[\\/]/).filter(Boolean).pop() || String(approval.source)
+    : '';
   return {
     run_id: report.runId || '',
     decision: report.ok === false ? 'missing' : (report.promotion?.decision || report.recommendation?.action || ''),
@@ -164,6 +168,14 @@ function benchmarkEvidenceFromReport(report = null) {
       modified: artifactDiff.modified ?? null,
       deleted: artifactDiff.deleted ?? null,
       total_changed: artifactDiff.totalChanged ?? null
+    },
+    approval: {
+      status: approval.status || '',
+      approved_count: approval.status === 'approved' ? (approval.approvedBy || []).length : 0,
+      required_count: report.promotion?.gates?.requiredApprovals ?? report.promotionGates?.requiredApprovals ?? null,
+      approved_at: approval.approvedAt || '',
+      ticket: approval.ticket || '',
+      source: approvalSource
     },
     validation: report.promotion?.validation || report.message || '',
     rollback: report.promotion?.rollback || (report.ok === false ? 'run or attach benchmark evidence before promotion' : '')
@@ -307,6 +319,12 @@ function recommendationRow(recommendation, timeGenerated = new Date().toISOStrin
     BenchmarkArtifactModified: benchmark.artifact_diff?.modified ?? null,
     BenchmarkArtifactDeleted: benchmark.artifact_diff?.deleted ?? null,
     BenchmarkArtifactTotalChanged: benchmark.artifact_diff?.total_changed ?? null,
+    BenchmarkApprovalStatus: benchmark.approval?.status || '',
+    BenchmarkApprovalCount: benchmark.approval?.approved_count ?? null,
+    BenchmarkRequiredApprovals: benchmark.approval?.required_count ?? null,
+    BenchmarkApprovalApprovedAt: benchmark.approval?.approved_at || '',
+    BenchmarkApprovalTicket: benchmark.approval?.ticket || '',
+    BenchmarkApprovalSource: benchmark.approval?.source || '',
     ChangeTargetRefs: recommendation.evidence?.file_refs || [],
     DashboardTitles: dashboards.map(dashboard => dashboard.title),
     DashboardCount: dashboards.length,

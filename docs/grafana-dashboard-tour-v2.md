@@ -132,6 +132,8 @@ Low-score runs link back into Run Replay.
 
 The **Benchmark artifact diff review** panel shows benchmark gate recommendations with added, modified, deleted, and total changed artifact counts so reviewers can spot unexpected fixture output changes before promotion. It stays metadata-only and does not show file contents.
 
+The **Benchmark promotion approvals** panel shows promotion approval status, required/observed approval counts, approved-at time, ticket, and evidence source so teams can see whether a candidate is missing approval evidence before promotion.
+
 Use `agentops triage latest --runs <AgentOpsRunSummary_CL.jsonl> --events <AgentOpsEvents_CL.jsonl> --tools <AgentOpsToolCalls_CL.jsonl> --evals <AgentOpsEval_CL.jsonl> --insights <AgentOpsInsights_CL.jsonl>` to package links, evidence counts, a safe investigator prompt, and one recommendation.
 
 Use `agentops ask-context latest --runs <AgentOpsRunSummary_CL.jsonl> --events <AgentOpsEvents_CL.jsonl> --evals <AgentOpsEval_CL.jsonl> --insights <AgentOpsInsights_CL.jsonl>` when you only need the investigator prompt.
