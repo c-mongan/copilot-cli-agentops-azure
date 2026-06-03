@@ -962,6 +962,7 @@ function agentopsWorkflows() {
       prompt: 'Use agentops-setup to check my AgentOps install and tell me the next command to run.',
       commands: [
         `${cli} setup`,
+        `${cli} init --full`,
         `${cli} validate-enterprise`,
         'az login',
         'azd provision',
@@ -970,10 +971,10 @@ function agentopsWorkflows() {
         './setup-agentops.ps1',
         `${cli} configure show`,
         `${cli} configure import-azd`,
-        `${cli} experimental init`,
+        `${cli} init --dry-run`,
         `${cli} validate-azure`,
         `${cli} collector smoke --privacy strict --poison`,
-        `${cli} experimental smoke --wait 2m --poll 10s`,
+        `${cli} smoke --real-copilot --wait 2m --poll 10s --open-browser`,
         `${cli} plugin install`,
         `${cli} status`,
         `${cli} doctor --local-only`
@@ -3930,7 +3931,7 @@ function validateAzure(options = {}) {
 
   if (next.length === 0) {
     next.push('node agentops-cli/src/index.js collector smoke --privacy strict --poison');
-    next.push('node agentops-cli/src/index.js experimental smoke --wait 2m --poll 10s');
+    next.push('node agentops-cli/src/index.js smoke --real-copilot --wait 2m --poll 10s --open-browser');
     next.push('copilot -p "Reply with exactly: agentops smoke."');
     next.push('node agentops-cli/src/index.js latest --last 2h');
   }

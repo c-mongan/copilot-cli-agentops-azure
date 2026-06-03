@@ -8,7 +8,7 @@
 4. Run `node agentops-cli/src/index.js collector validate --mode auto --privacy strict`.
 5. Confirm `OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318`.
 6. Confirm `COPILOT_OTEL_ENABLED=true`.
-7. Run `node agentops-cli/src/index.js experimental smoke --wait 2m --poll 10s` to verify Azure ingestion.
+7. Run `node agentops-cli/src/index.js smoke --real-copilot --wait 2m --poll 10s --open-browser` to verify Azure ingestion and open the latest Run Replay link.
 
 ## Content Capture Detected
 
