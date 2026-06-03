@@ -67,6 +67,7 @@ function usage() {
     'attribution [--last <duration>]',
     'permission-friction [--last <duration>]',
     'alert recommend [--last <duration>]',
+    'alert tune-plan [--last <duration>] [--rule <name>] [--owner <name>]',
     'alert policy [--owner <name>] [--service <name>] [--timezone <tz>]',
     'alert resources [--resource-group <name>]',
     'alert history --rule <name> [--last <duration>]',
@@ -4880,6 +4881,7 @@ function latestSummaryFromArgs(args, fallbackLast = '7d') {
 const {
   alertRecommendationQuery,
   alertRecommendations,
+  alertTunePlan,
   alertResourceState,
   alertPolicy,
   alertHistoryQuery,
@@ -8695,6 +8697,22 @@ async function main(argv) {
       process.stdout.write(JSON.stringify(alertRecommendations(last), null, 2) + '\n');
       return;
     }
+    if (subcommand === 'tune-plan') {
+      const last = parseLastArg(alertArgs, '14d');
+      const rule = optionValue(alertArgs, ['--rule']);
+      const owner = optionValue(alertArgs, ['--owner']);
+      const output = optionValue(alertArgs, ['--output', '--out']);
+      const plan = alertTunePlan({ last, rule, owner });
+      if (output) {
+        const outputPath = path.resolve(process.cwd(), output);
+        fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+        fs.writeFileSync(outputPath, `${JSON.stringify(plan, null, 2)}\n`);
+        process.stdout.write(JSON.stringify({ output: outputPath, plan }, null, 2) + '\n');
+        return;
+      }
+      process.stdout.write(JSON.stringify(plan, null, 2) + '\n');
+      return;
+    }
     if (subcommand === 'policy') {
       const owners = optionValues(alertArgs, '--owner');
       const service = optionValue(alertArgs, ['--service']) || 'agentops';
@@ -8755,7 +8773,7 @@ async function main(argv) {
       process.stdout.write(JSON.stringify({ output: outputPath, artifact }, null, 2) + '\n');
       return;
     }
-    throw new Error('alert currently supports: alert recommend, alert policy, alert resources, alert history, alert detail, alert action-plan, alert export');
+    throw new Error('alert currently supports: alert recommend, alert tune-plan, alert policy, alert resources, alert history, alert detail, alert action-plan, alert export');
   }
 
   if (command === 'incident') {
@@ -8817,6 +8835,7 @@ module.exports = {
   agentopsWorkflows,
   alertRecommendationQuery,
   alertRecommendations,
+  alertTunePlan,
   alertResourceState,
   alertPolicy,
   alertHistoryQuery,

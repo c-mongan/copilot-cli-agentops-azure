@@ -23,10 +23,12 @@ Use the proposal-only threshold recommender before changing `infra/bicep/alerts.
 
 ```bash
 node agentops-cli/src/index.js alert recommend --last 14d
+node agentops-cli/src/index.js alert tune-plan --last 14d --owner agentops-oncall
 node agentops-cli/src/index.js alert policy --owner agentops-oncall --service copilot-agentops --timezone UTC
 node agentops-cli/src/index.js alert resources --resource-group "${AZURE_RESOURCE_GROUP:-rg-agentops-dev}"
 ```
 
+`alert tune-plan` turns recommendation and fired-alert history queries into a reviewable threshold-change plan. It does not edit Bicep, enable alerts, or attach action groups.
 `alert resources` lists current AgentOps scheduled-query rules, whether each rule is enabled, and whether action groups are attached. It is read-only.
 `alert policy` prints local metadata for owners, duplicate suppression, quiet-hours placeholders, and manual escalation guardrails. It does not page anyone or create tickets.
 

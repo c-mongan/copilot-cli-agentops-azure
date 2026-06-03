@@ -79,6 +79,7 @@ const {
   alertRecommendationQuery,
   alertRecommendations,
   alertResourceState,
+  alertTunePlan,
   askAgentOpsContext,
   attributionUsageQuery,
   benchmarkCheatSignals,
@@ -7568,6 +7569,26 @@ test('alert recommendations expose proposal-only threshold evidence', () => {
   assert.match(recommendations.evidence_query, /max_credits/);
   assert.match(recommendations.evidence_query, /max_tool_calls/);
   assert.match(alertRecommendationQuery('7d'), /p99_aiu/);
+});
+
+test('alert tune plan exposes reviewable threshold changes without mutating', () => {
+  const plan = alertTunePlan({ last: '21d', rule: 'runaway-tool-loop', owner: 'agentops-oncall' });
+
+  assert.equal(plan.schema_version, 'agentops.alert-tune-plan.v1');
+  assert.equal(plan.mode, 'proposal-only-threshold-plan');
+  assert.equal(plan.last, '21d');
+  assert.equal(plan.owner, 'agentops-oncall');
+  assert.equal(plan.threshold_changes.length, 1);
+  assert.equal(plan.threshold_changes[0].rule, 'runaway-tool-loop');
+  assert.equal(plan.threshold_changes[0].patch_target, 'infra/bicep/alerts.bicep');
+  assert.equal(plan.threshold_changes[0].decision, 'review');
+  assert.match(plan.evidence.threshold_recommendation_query, /let lookback = 21d;/);
+  assert.match(plan.evidence.fired_alert_history[0].query, /let selected_rule = "runaway-tool-loop";/);
+  assert.ok(plan.guardrails.some(item => item.includes('Do not enable alerts')));
+
+  const allRules = alertTunePlan({ last: '14d' });
+  assert.equal(allRules.threshold_changes.length, 5);
+  assert.ok(allRules.threshold_changes.some(change => change.rule === 'content-capture' && change.decision === 'keep-strict'));
 });
 
 test('alert resources summarize scheduled-query enabled state', () => {
