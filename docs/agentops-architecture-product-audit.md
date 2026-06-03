@@ -822,7 +822,7 @@ Current anti-cheat limitations:
 - Hidden check packs exist as separate masked command packs, and fixture seals can reject checksum drift, but full sealed fixture pack distribution is still missing.
 - There is no network isolation; network tool policies are report-time rejection signals, not egress prevention.
 - Read-only benchmark profiles now block any workspace file change in the copied fixture.
-- Semantic evaluator adapters exist for deterministic file-content checks, but there is no LLM or rubric-judge scoring yet.
+- Semantic evaluator adapters exist for deterministic file-content and regex checks, but there is no LLM or rubric-judge scoring yet.
 - Candidate promotion gates can require approval evidence from an approval file, but there is no UI-backed team approval workflow yet.
 - There is no defense against an agent changing the test commands if the eval harness files are available to it.
 - There is no artifact diff viewer in the UI; artifact diffs are currently CLI/report metadata only.
@@ -1273,7 +1273,7 @@ Required work:
 
 - Expand benchmark schemas.
 - Add full sealed fixture pack distribution.
-- Add richer semantic evaluator adapters.
+- Add LLM or rubric-judge semantic evaluator adapters.
 - Expand enforced permission profiles to network and tool sandboxing.
 - Add artifact diff UI review.
 - Add UI-backed team approval workflow for candidate promotion gates.
