@@ -4331,6 +4331,77 @@ test('benchmark fixture-pack command generates reusable seal manifests', () => {
   }
 });
 
+test('benchmark fixture-pack command signs and verifies reusable seal manifests', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-bench-pack-sign-'));
+  const suiteDir = path.join(tempDir, 'suite');
+  const fixtureDir = path.join(suiteDir, 'fixtures', 'tiny-repo');
+  const keyPath = path.join(suiteDir, 'keys', 'fixture-signing-key.pem');
+  const output = path.join(suiteDir, 'fixture-packs', 'tiny-repo.json');
+
+  try {
+    fs.mkdirSync(fixtureDir, { recursive: true });
+    fs.mkdirSync(path.dirname(keyPath), { recursive: true });
+    fs.writeFileSync(path.join(fixtureDir, 'README.md'), '# Fixture\n');
+    const { privateKey } = crypto.generateKeyPairSync('ed25519');
+    fs.writeFileSync(keyPath, privateKey.export({ type: 'pkcs8', format: 'pem' }));
+
+    assert.deepEqual(parseBenchmarkFixturePackArgs([
+      'fixtures/tiny-repo',
+      '--id',
+      'tiny-repo-sealed',
+      '--sign-key-id',
+      'eval-fixtures-v1',
+      '--sign-private-key',
+      'keys/fixture-signing-key.pem'
+    ]), {
+      fixtureDir: 'fixtures/tiny-repo',
+      id: 'tiny-repo-sealed',
+      signKeyId: 'eval-fixtures-v1',
+      signPrivateKey: 'keys/fixture-signing-key.pem'
+    });
+
+    const pack = benchmarkFixturePack({
+      cwd: suiteDir,
+      fixtureDir: 'fixtures/tiny-repo',
+      id: 'tiny-repo-sealed',
+      fixture: 'fixtures/tiny-repo',
+      signKeyId: 'eval-fixtures-v1',
+      signPrivateKey: 'keys/fixture-signing-key.pem',
+      output: 'fixture-packs/tiny-repo.json'
+    });
+
+    assert.equal(pack.signature.algorithm, 'ed25519');
+    assert.equal(pack.signature.keyId, 'eval-fixtures-v1');
+    assert.match(pack.signature.publicKey, /BEGIN PUBLIC KEY/);
+    assert.match(pack.signature.value, /^[A-Za-z0-9+/=]+$/);
+
+    const task = {
+      id: 'sealed-fixture-pack',
+      title: 'Sealed fixture pack',
+      fixture: 'fixtures/tiny-repo',
+      prompt: 'Do nothing.',
+      copilotArgs: [],
+      fixtureSealPack: 'fixture-packs/tiny-repo.json',
+      successCommands: [],
+      expectedFiles: [],
+      forbiddenFiles: [],
+      timeoutSec: 10,
+      tags: []
+    };
+    assert.deepEqual(validateBenchmarkTask(task, suiteDir, 'test-task').fixtureSealPack.signature, {
+      algorithm: 'ed25519',
+      keyId: 'eval-fixtures-v1'
+    });
+
+    const tampered = JSON.parse(fs.readFileSync(output, 'utf8'));
+    tampered.title = 'Tampered fixture pack';
+    fs.writeFileSync(output, `${JSON.stringify(tampered, null, 2)}\n`);
+    assert.throws(() => validateBenchmarkTask(task, suiteDir, 'test-task'), /signature verification failed/);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
 test('benchmark schema validation rejects tampered sealed fixtures', () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-bench-seal-schema-'));
   const suiteDir = path.join(tempDir, 'suite');
