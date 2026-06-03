@@ -6206,6 +6206,96 @@ test('benchmark report requires approved external review evidence', () => {
     ok: false
   }]);
   assert.equal(unapprovedReviewReport.promotion.decision, 'reject');
+
+  const approvedJiraReviewReport = benchmarkReport('pass-run', summaries, {
+    verifyExternalReview: true,
+    promotionApproval: {
+      approvedBy: ['sre-team'],
+      approvedAt: '2026-06-03T04:00:00Z',
+      externalReview: {
+        system: 'jira',
+        id: 'CHANGE-123',
+        url: 'https://jira.example/browse/CHANGE-123',
+        status: 'approved'
+      }
+    },
+    fetchJson: url => {
+      assert.equal(url, 'https://jira.example/rest/api/3/issue/CHANGE-123?fields=status');
+      return {
+        key: 'CHANGE-123',
+        fields: {
+          status: {
+            name: 'Approved',
+            statusCategory: {
+              key: 'done',
+              name: 'Done'
+            }
+          }
+        }
+      };
+    }
+  });
+
+  assert.deepEqual(approvedJiraReviewReport.promotionGateFailures, []);
+  assert.equal(approvedJiraReviewReport.promotion.decision, 'promote');
+  assert.deepEqual(approvedJiraReviewReport.promotion.approval.externalReview.verification, {
+    provider: 'jira',
+    ok: true,
+    status: 'approved',
+    issueKey: 'CHANGE-123',
+    url: 'https://jira.example/browse/CHANGE-123',
+    issueStatus: 'Approved',
+    statusCategory: 'done'
+  });
+
+  const pendingJiraReviewReport = benchmarkReport('pass-run', summaries, {
+    verifyExternalReview: true,
+    promotionApproval: {
+      approvedBy: ['sre-team'],
+      approvedAt: '2026-06-03T04:00:00Z',
+      externalReview: {
+        system: 'jira',
+        url: 'https://jira.example/browse/CHANGE-123',
+        status: 'approved'
+      }
+    },
+    fetchJson: () => ({
+      key: 'CHANGE-123',
+      fields: {
+        status: {
+          name: 'In Review',
+          statusCategory: {
+            key: 'indeterminate',
+            name: 'In Progress'
+          }
+        }
+      }
+    })
+  });
+
+  assert.equal(pendingJiraReviewReport.promotion.decision, 'reject');
+  assert.equal(pendingJiraReviewReport.promotionGateFailures[0].gate, 'requiredExternalReview');
+  assert.equal(pendingJiraReviewReport.promotionGateFailures[0].actual.verification.provider, 'jira');
+  assert.equal(pendingJiraReviewReport.promotionGateFailures[0].actual.verification.status, 'pending');
+
+  const invalidJiraUrlReviewReport = benchmarkReport('pass-run', summaries, {
+    verifyExternalReview: true,
+    promotionApproval: {
+      approvedBy: ['sre-team'],
+      approvedAt: '2026-06-03T04:00:00Z',
+      externalReview: {
+        system: 'jira',
+        id: 'CHANGE-123',
+        url: 'not-a-url',
+        status: 'approved'
+      }
+    }
+  });
+
+  assert.equal(invalidJiraUrlReviewReport.promotion.decision, 'reject');
+  assert.equal(invalidJiraUrlReviewReport.promotionGateFailures[0].gate, 'requiredExternalReview');
+  assert.equal(invalidJiraUrlReviewReport.promotionGateFailures[0].actual.verification.provider, 'jira');
+  assert.equal(invalidJiraUrlReviewReport.promotionGateFailures[0].actual.verification.error, 'Jira review verification requires a Jira issue URL or JIRA_BASE_URL');
 });
 
 test('benchmark approve writes run-scoped promotion approval evidence', () => {

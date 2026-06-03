@@ -7413,18 +7413,139 @@ function verifyGitHubExternalReview(review, options = {}) {
   };
 }
 
+function parseJiraExternalReviewTarget(review) {
+  const id = review.id || '';
+  const idMatch = id.match(/[A-Z][A-Z0-9]+-\d+/);
+  if (idMatch) return { key: idMatch[0] };
+
+  const url = review.url || '';
+  const urlMatch = url.match(/\/(?:browse|issues?)\/([A-Z][A-Z0-9]+-\d+)(?:[/?#].*)?$/);
+  if (urlMatch) {
+    return {
+      key: urlMatch[1],
+      baseUrl: safeUrlOrigin(url)
+    };
+  }
+
+  return null;
+}
+
+function safeUrlOrigin(url) {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return null;
+  }
+}
+
+function jiraApprovedStatuses(options = {}) {
+  const configured = options.jiraApprovedStatuses || process.env.AGENTOPS_JIRA_APPROVED_STATUSES;
+  const statuses = configured
+    ? String(configured).split(',').map(status => status.trim().toLowerCase()).filter(Boolean)
+    : [];
+  return new Set(['approved', 'closed', 'done', 'resolved', ...statuses]);
+}
+
+function jiraApiBaseUrl(review, target) {
+  if (target.baseUrl) return target.baseUrl;
+  if (review.url) return safeUrlOrigin(review.url);
+  if (process.env.JIRA_BASE_URL) return process.env.JIRA_BASE_URL.replace(/\/+$/, '');
+  return null;
+}
+
+function fetchExternalReviewJson(url, options = {}) {
+  if (options.fetchJson) return options.fetchJson(url, options);
+
+  const headers = [];
+  if (process.env.JIRA_API_TOKEN && process.env.JIRA_EMAIL) {
+    const token = Buffer.from(`${process.env.JIRA_EMAIL}:${process.env.JIRA_API_TOKEN}`).toString('base64');
+    headers.push('Authorization', `Basic ${token}`);
+  } else if (process.env.JIRA_API_TOKEN) {
+    headers.push('Authorization', `Bearer ${process.env.JIRA_API_TOKEN}`);
+  }
+
+  const spawnSync = options.spawnSync || childProcess.spawnSync;
+  const args = ['-fsSL', '--max-time', '10'];
+  for (let index = 0; index < headers.length; index += 2) {
+    args.push('-H', `${headers[index]}: ${headers[index + 1]}`);
+  }
+  args.push(url);
+
+  const result = spawnSync('curl', args, { encoding: 'utf8' });
+  if (result.status !== 0) {
+    throw new Error((result.stderr || result.stdout || 'curl failed').trim());
+  }
+  return JSON.parse(result.stdout || '{}');
+}
+
+function verifyJiraExternalReview(review, options = {}) {
+  const target = parseJiraExternalReviewTarget(review);
+  if (!target) {
+    return {
+      provider: 'jira',
+      ok: false,
+      status: 'pending',
+      error: 'Jira review verification requires an issue key or Jira issue URL'
+    };
+  }
+
+  const baseUrl = jiraApiBaseUrl(review, target);
+  if (!baseUrl) {
+    return {
+      provider: 'jira',
+      ok: false,
+      status: 'pending',
+      issueKey: target.key,
+      error: 'Jira review verification requires a Jira issue URL or JIRA_BASE_URL'
+    };
+  }
+
+  const url = `${baseUrl.replace(/\/+$/, '')}/rest/api/3/issue/${encodeURIComponent(target.key)}?fields=status`;
+  let payload = {};
+  try {
+    payload = fetchExternalReviewJson(url, options);
+  } catch (error) {
+    return {
+      provider: 'jira',
+      ok: false,
+      status: 'pending',
+      issueKey: target.key,
+      url,
+      error: error.message
+    };
+  }
+
+  const issueStatus = payload.fields?.status || {};
+  const statusName = String(issueStatus.name || '').toLowerCase();
+  const categoryKey = String(issueStatus.statusCategory?.key || '').toLowerCase();
+  const categoryName = String(issueStatus.statusCategory?.name || '').toLowerCase();
+  const approved = categoryKey === 'done' || categoryName === 'done' || jiraApprovedStatuses(options).has(statusName);
+  const rejected = ['canceled', 'cancelled', 'declined', 'rejected'].some(value => statusName.includes(value));
+
+  return {
+    provider: 'jira',
+    ok: approved,
+    status: approved ? 'approved' : (rejected ? 'rejected' : 'pending'),
+    issueKey: payload.key || target.key,
+    url: review.url || `${baseUrl.replace(/\/+$/, '')}/browse/${encodeURIComponent(target.key)}`,
+    issueStatus: issueStatus.name || null,
+    statusCategory: issueStatus.statusCategory?.key || issueStatus.statusCategory?.name || null
+  };
+}
+
 function verifyBenchmarkExternalReview(review, options = {}) {
   if (!review) return null;
   const system = String(review.system || '').toLowerCase();
-  if (system !== 'github') {
+  if (system === 'github') return verifyGitHubExternalReview(review, options);
+  if (system === 'jira') return verifyJiraExternalReview(review, options);
+  {
     return {
       provider: system || 'unknown',
       ok: false,
       status: 'pending',
-      error: 'external review verification currently supports GitHub pull requests only'
+      error: 'external review verification currently supports GitHub pull requests and Jira issues only'
     };
   }
-  return verifyGitHubExternalReview(review, options);
 }
 
 function validateBenchmarkPromotionApproval(approval, source = 'approval') {
