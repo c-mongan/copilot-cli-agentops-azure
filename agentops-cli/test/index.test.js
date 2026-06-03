@@ -77,6 +77,7 @@ const {
   alertIncidentTimeline,
   alertRecommendationQuery,
   alertRecommendations,
+  alertResourceState,
   askAgentOpsContext,
   attributionUsageQuery,
   benchmarkCheatSignals,
@@ -7566,6 +7567,45 @@ test('alert recommendations expose proposal-only threshold evidence', () => {
   assert.match(recommendations.evidence_query, /max_credits/);
   assert.match(recommendations.evidence_query, /max_tool_calls/);
   assert.match(alertRecommendationQuery('7d'), /p99_aiu/);
+});
+
+test('alert resources summarize scheduled-query enabled state', () => {
+  const resources = alertResourceState({
+    resourceGroup: 'rg-agentops-dev',
+    resources: [
+      {
+        name: 'sqr-agentops-dev-failures',
+        properties: {
+          displayName: 'Copilot AgentOps failed spans',
+          enabled: 'false',
+          severity: 3,
+          evaluationFrequency: 'PT15M',
+          windowSize: 'PT1H',
+          actions: { actionGroups: [] }
+        }
+      },
+      {
+        name: 'sqr-agentops-dev-content-capture',
+        properties: {
+          displayName: 'Copilot AgentOps content capture detector',
+          enabled: true,
+          severity: 2,
+          actions: { actionGroups: ['/subscriptions/sub-123/resourceGroups/rg-agentops-dev/providers/microsoft.insights/actionGroups/ag-agentops'] }
+        }
+      }
+    ]
+  });
+
+  assert.equal(resources.mode, 'read-only-resource-state');
+  assert.equal(resources.resource_group, 'rg-agentops-dev');
+  assert.equal(resources.status, 'observed');
+  assert.equal(resources.summary.total, 2);
+  assert.equal(resources.summary.enabled, 1);
+  assert.equal(resources.summary.disabled, 1);
+  assert.equal(resources.summary.routed, 1);
+  assert.equal(resources.resources[0].enabled, false);
+  assert.equal(resources.resources[1].action_groups.length, 1);
+  assert.ok(resources.expected_bicep_resources.some(rule => rule.bicep_resource === 'contentCaptureAlert'));
 });
 
 test('alert action plan exposes deterministic notification payload without actioning', () => {

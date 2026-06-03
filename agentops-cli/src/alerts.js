@@ -4,6 +4,12 @@ function createAlerts({ workspaceId, baseFilter, sessionKey, validateKqlDuration
     return JSON.stringify(String(value));
   }
 
+  function boolish(value) {
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'string') return value.toLowerCase() === 'true';
+    return Boolean(value);
+  }
+
   function alertRules(last = '14d') {
     return [
       {
@@ -133,6 +139,45 @@ union
       mode: 'proposal-only',
       evidence_query: alertRecommendationQuery(lookback),
       rules: alertRules(lookback)
+    };
+  }
+
+  function alertResourceState({ resources = [], resourceGroup = null, error = null } = {}) {
+    const rules = alertRules();
+    const normalized = resources.map(resource => {
+      const properties = resource.properties || {};
+      const actions = properties.actions || {};
+      return {
+        name: resource.name || null,
+        display_name: properties.displayName || null,
+        enabled: boolish(properties.enabled),
+        severity: properties.severity ?? null,
+        action_groups: Array.isArray(actions.actionGroups) ? actions.actionGroups : [],
+        evaluation_frequency: properties.evaluationFrequency || null,
+        window_size: properties.windowSize || null
+      };
+    });
+
+    return {
+      workspace_id: workspaceId,
+      resource_group: resourceGroup,
+      mode: 'read-only-resource-state',
+      status: error ? 'unavailable' : 'observed',
+      error,
+      expected_bicep_resources: rules.map(rule => ({
+        rule: rule.name,
+        bicep_resource: rule.bicep_resource
+      })),
+      resources: normalized,
+      summary: {
+        total: normalized.length,
+        enabled: normalized.filter(resource => resource.enabled).length,
+        disabled: normalized.filter(resource => !resource.enabled).length,
+        routed: normalized.filter(resource => resource.action_groups.length > 0).length
+      },
+      next: error
+        ? ['Verify Azure CLI login, monitor extension, resource group, and scheduled-query rule read permissions.']
+        : ['Keep alerts disabled until thresholds are tuned and action groups are approved.']
     };
   }
 
@@ -387,6 +432,7 @@ ${selectedSession}
   return {
     alertRecommendationQuery,
     alertRecommendations,
+    alertResourceState,
     alertHistoryQuery,
     alertHistory,
     alertDetail,
