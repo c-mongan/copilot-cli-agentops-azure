@@ -477,7 +477,7 @@ Provisioned resources:
 - Azure Monitor workspace.
 - Azure Managed Grafana with system-assigned identity.
 - Key Vault.
-- Optional Function App actioner placeholder.
+- Optional Function App actioner for metadata-only alert review packets.
 - Optional disabled Azure Monitor scheduled query rules.
 
 What works well:
@@ -891,10 +891,11 @@ What works well:
 - `agentops alert route-azure-devops` can create an Azure DevOps Work Item only with explicit `--yes`, organization, project, and owner; without `--yes`, it prints the exact `az boards work-item create` command.
 - `agentops alert action-group-plan` previews Azure Monitor action group email/webhook receiver setup without mutating Azure.
 - `agentops alert route-action-group` can attach approved Azure Monitor action groups only with explicit `--yes`, resource group, scheduled-query rule, action group ID, and owner.
+- `actioner/index.js` implements a small Azure Functions HTTP handler that converts Azure Monitor common alert schema payloads into metadata-only alert review packets and preview-only route plans.
 
 Current gaps:
 
-- Alert action routing is partially manual; the CLI can now post GitHub Issues, Azure DevOps Work Items, preview email/webhook action group receivers, and attach Azure Monitor action groups behind explicit review gates, but Teams and paging destinations still depend on approved receiver setup outside the CLI.
+- Alert action routing is partially manual; the actioner and CLI can now produce metadata-only review packets, post GitHub Issues, post Azure DevOps Work Items, preview email/webhook action group receivers, and attach Azure Monitor action groups behind explicit review gates, but Teams and paging destinations still depend on approved receiver setup outside the CLI.
 - Alert history and timeline review now have a local metadata-only handoff bundle, route preview, guarded ticket creation, and guarded action-group attachment, but not yet broad paging automation.
 - Threshold changes now have preview-only Bicep diffs for direct rules, but there is no automatic threshold tuning loop.
 - Alert-to-run opening is now available as a CLI link artifact, but not yet a fully guided visual workflow.
@@ -902,7 +903,7 @@ Current gaps:
 Product recommendation:
 
 - Keep alert rules disabled until real history exists.
-- Implement actioner only for deterministic notifications/artifacts:
+- Keep actioner limited to deterministic notifications/artifacts:
   - create an issue/work item with KQL, session URL, and safe metadata
   - never auto-edit repo or resources
   - never call broad LLM tools without explicit approval
@@ -1300,7 +1301,7 @@ Required work:
 - Add Azure RBAC automation and validation.
 - Add enterprise network/security modes.
 - Add shared saved views/recommendations storage.
-- Add alert actioner implementation.
+- Expand alert actioner deployment/runbook coverage for team destinations.
 
 ## Highest-Impact Fixes
 
