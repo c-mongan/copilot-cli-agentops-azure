@@ -101,10 +101,12 @@ function productAudit(options = {}) {
     'agentops-cli/src/commands/copilot.js',
     'agentops-cli/src/lib/copilot/resolve-real-copilot.js',
     'agentops-cli/src/lib/copilot/run-metadata.js',
+    'agentops-cli/src/lib/copilot/flag-contract.js',
     'agentops-cli/src/lib/copilot/session-parser.js',
     'agentops-cli/src/lib/copilot/tool-classifier.js',
     'agentops-cli/src/lib/copilot/run-summary.js',
-    'docs/copilot-cli-instrumentation.md'
+    'docs/copilot-cli-instrumentation.md',
+    'docs/copilot-cli-flag-contract.md'
   ]));
 
   checks.push(requiredFilesCheck('copilot-sdk-adapter', [

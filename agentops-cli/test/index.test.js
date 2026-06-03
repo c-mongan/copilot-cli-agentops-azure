@@ -14,6 +14,7 @@ const { enrichCopilotSessionEvents } = require('../src/lib/copilot/session-enric
 const { parseCopilotSessionRows } = require('../src/lib/copilot/session-parser');
 const { summarizeCopilotRun } = require('../src/lib/copilot/run-summary');
 const { classifyToolName, summarizeAllowedTools } = require('../src/lib/copilot/tool-classifier');
+const { auditCopilotHelpFlags, parseCopilotHelpFlags, trackedFlags } = require('../src/lib/copilot/flag-contract');
 const { sharedTerms: wrapperSharedTerms, validateWrapperContract, wrapperFiles } = require('../src/lib/copilot/wrapper-contract');
 const privacy = require('../src/lib/privacy');
 const { validateAgentRun, validateMcpSpan } = require('../src/lib/schema/agent-run-schema');
@@ -4179,6 +4180,24 @@ test('copilot observe wrappers stay aligned on shared flag and attribute contrac
   assert.equal(contract.ok, true, contract.missing.join('\n'));
   assert.deepEqual(contract.files, wrapperFiles);
   assert.ok(wrapperSharedTerms.length >= 70);
+});
+
+test('Copilot flag contract audits help snapshots for unknown flags', () => {
+  const help = `
+Usage: copilot [options]
+  --model <model>                 choose model
+  --allow-tool <tool>             allow a tool
+  --additional-mcp-config <file>  add MCP config
+  -p, --prompt <text>             prompt text
+  --new-risky-flag <value>        newly introduced flag
+`;
+  const flags = parseCopilotHelpFlags(help);
+  const audit = auditCopilotHelpFlags(help);
+
+  assert.deepEqual(flags, ['--additional-mcp-config', '--allow-tool', '--model', '--new-risky-flag', '--prompt', '-p']);
+  assert.deepEqual(audit.unknown, ['--new-risky-flag']);
+  assert.equal(audit.ok, false);
+  assert.ok(trackedFlags.includes('--allow-all'));
 });
 
 test('pre-tool policy emits valid deny decisions for camelCase and snake_case inputs', () => {
