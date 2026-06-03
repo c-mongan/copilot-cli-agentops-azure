@@ -47,7 +47,7 @@ function usage() {
     'compat-check [--last <duration>]',
     'validate-collector [endpoint]',
     'validate-azure [--last <duration>] [--production] [--remediation-plan] [--json]',
-    'init [--dry-run] [--force-skills] [--json]',
+    'init [--dry-run] [--provision-cloud] [--import-dashboards] [--force-skills] [--json]',
     'smoke [--dry-run] [--endpoint <url>] [--id <smoke-id>] [--last <duration>] [--wait <duration>] [--poll <duration>] [--open-browser] [--no-verify] [--json]',
     'attribution-smoke [--dry-run] [--endpoint <url>] [--id <smoke-id>] [--last <duration>] [--wait <duration>] [--poll <duration>] [--no-verify] [--json]',
     'live-replay-smoke [--dry-run] [--endpoint <url>] [--id <smoke-id>] [--last <duration>] [--wait <duration>] [--poll <duration>] [--no-verify] [--json]',
@@ -1970,6 +1970,7 @@ function parseInitArgs(args) {
     dryRun: args.includes('--dry-run'),
     forceSkills: args.includes('--force-skills') || args.includes('--force'),
     json: args.includes('--json'),
+    importDashboards: args.includes('--import-dashboards'),
     noSkills: args.includes('--no-skills') || args.includes('--no-plugin'),
     provisionCloud: args.includes('--provision-cloud'),
     copilotHome: optionValue(args, ['--copilot-home', '--home'])
@@ -2042,6 +2043,49 @@ function runInitCloudProvision(options = {}) {
   };
 }
 
+function runInitDashboardImport(options = {}) {
+  const command = 'agentops validate-azure --import-dashboards --last 24h';
+  if (!options.importDashboards) {
+    return {
+      requested: false,
+      dry_run: Boolean(options.dryRun),
+      ok: null,
+      command
+    };
+  }
+
+  if (options.dryRun) {
+    return {
+      requested: true,
+      dry_run: true,
+      ok: true,
+      command,
+      validation: null,
+      next: []
+    };
+  }
+
+  const validate = options.validateAzure || validateAzure;
+  const validation = validate({
+    ...options,
+    last: '24h',
+    importDashboards: true,
+    production: false,
+    remediationPlan: false
+  });
+
+  return {
+    requested: true,
+    dry_run: false,
+    ok: validation.ok === true,
+    command,
+    validation,
+    next: validation.ok === true
+      ? ['node agentops-cli/src/index.js collector smoke --privacy strict --poison --json']
+      : (Array.isArray(validation.next) && validation.next.length ? validation.next : [command])
+  };
+}
+
 function agentopsInit(options = {}) {
   const checks = doctor({ localOnly: true });
   const status = agentopsStatusSummary({ checks });
@@ -2073,6 +2117,7 @@ function agentopsInit(options = {}) {
         ok: null,
         command: 'agentops init --provision-cloud'
       };
+  const dashboardImport = runInitDashboardImport(options);
   const next = [];
 
   if (!shim.agentops_cli_installed) {
@@ -2095,7 +2140,11 @@ function agentopsInit(options = {}) {
       }
     }
   }
-  next.push('node agentops-cli/src/index.js validate-azure --import-dashboards --last 24h');
+  if (dashboardImport.requested && dashboardImport.ok !== true) {
+    for (const command of dashboardImport.next || []) next.push(command);
+  } else if (!dashboardImport.requested) {
+    next.push('node agentops-cli/src/index.js validate-azure --import-dashboards --last 24h');
+  }
   next.push('node agentops-cli/src/index.js collector smoke --privacy strict --poison --json');
   next.push('node agentops-cli/src/index.js smoke --real-copilot --wait 2m --poll 10s');
   next.push('node agentops-cli/src/index.js latest --last 2h');
@@ -2104,11 +2153,12 @@ function agentopsInit(options = {}) {
   next.push('node agentops-cli/src/index.js plugin uninstall');
 
   return {
-    ok: status.ok && Boolean(shim.agentops_cli_installed) && Boolean(shim.copilot_agentops_installed) && workspaceConfigured && grafanaConfigured,
+    ok: status.ok && Boolean(shim.agentops_cli_installed) && Boolean(shim.copilot_agentops_installed) && workspaceConfigured && grafanaConfigured && (!dashboardImport.requested || dashboardImport.ok === true),
     mode: options.dryRun ? 'dry-run' : 'local-init',
     local_status: status,
     azd,
     cloud_provision: cloudProvision,
+    dashboard_import: dashboardImport,
     skills,
     agents,
     shim,
@@ -2148,6 +2198,13 @@ function renderInit(result) {
     if (!result.cloud_provision.ok && result.cloud_provision.next?.length) {
       lines.push('Cloud provision next:');
       for (const command of result.cloud_provision.next) lines.push(`- ${command}`);
+    }
+  }
+  if (result.dashboard_import?.requested) {
+    lines.push(`Dashboard import: ${result.dashboard_import.ok ? 'ready' : 'needs review'} (${result.dashboard_import.command}).`);
+    if (!result.dashboard_import.ok && result.dashboard_import.next?.length) {
+      lines.push('Dashboard import next:');
+      for (const command of result.dashboard_import.next) lines.push(`- ${command}`);
     }
   }
 

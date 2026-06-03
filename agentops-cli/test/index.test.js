@@ -2253,6 +2253,7 @@ test('init workflow installs skills in dry-run mode and returns first-run next s
     assert.equal(result.cloud.grafana_url_configured, false);
     assert.equal(result.azd.ok, false);
     assert.equal(result.cloud_provision.requested, false);
+    assert.equal(result.dashboard_import.requested, false);
     assert.ok(result.next.includes('agentops init --provision-cloud'));
     assert.ok(result.next.includes('node agentops-cli/src/index.js validate-azure --import-dashboards --last 24h'));
     assert.ok(result.next.includes('node agentops-cli/src/index.js smoke --real-copilot --wait 2m --poll 10s'));
@@ -2267,6 +2268,85 @@ test('init workflow installs skills in dry-run mode and returns first-run next s
     assert.match(output, /azd environment:/);
     assert.match(output, /First value: run the real smoke/);
     assert.match(output, /agentops plugin uninstall/);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('init import-dashboards dry run plans explicit dashboard remediation', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-init-import-dashboards-dry-'));
+  try {
+    const result = agentopsInit({
+      dryRun: true,
+      importDashboards: true,
+      noSkills: true,
+      env: {},
+      workspaceId: '',
+      grafanaBaseUrl: '',
+      installDir: path.join(tempDir, 'bin')
+    });
+    const output = renderInit(result);
+
+    assert.equal(result.dashboard_import.requested, true);
+    assert.equal(result.dashboard_import.dry_run, true);
+    assert.equal(result.dashboard_import.ok, true);
+    assert.equal(result.next.includes('node agentops-cli/src/index.js validate-azure --import-dashboards --last 24h'), false);
+    assert.match(output, /Dashboard import: ready/);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('init import-dashboards runs validate-azure remediation when explicit', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-init-import-dashboards-'));
+  const calls = [];
+  try {
+    const result = agentopsInit({
+      importDashboards: true,
+      noSkills: true,
+      env: {},
+      workspaceId: 'workspace-123',
+      grafanaBaseUrl: 'https://grafana.example',
+      installDir: path.join(tempDir, 'bin'),
+      validateAzure: options => {
+        calls.push(options);
+        return { ok: true, next: ['agentops validate-azure --last 24h'] };
+      }
+    });
+
+    assert.equal(result.dashboard_import.requested, true);
+    assert.equal(result.dashboard_import.ok, true);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].importDashboards, true);
+    assert.equal(calls[0].last, '24h');
+    assert.equal(result.next.includes('node agentops-cli/src/index.js validate-azure --import-dashboards --last 24h'), false);
+    assert.ok(result.next.includes('node agentops-cli/src/index.js collector smoke --privacy strict --poison --json'));
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('init import-dashboards reports failed remediation next steps', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-init-import-dashboards-fail-'));
+  try {
+    const result = agentopsInit({
+      importDashboards: true,
+      noSkills: true,
+      env: {},
+      workspaceId: 'workspace-123',
+      grafanaBaseUrl: 'https://grafana.example',
+      installDir: path.join(tempDir, 'bin'),
+      validateAzure: () => ({
+        ok: false,
+        next: ['agentops dashboard import --yes --resource-group rg-agentops-dev --grafana-name graf-agentops-dev']
+      })
+    });
+    const output = renderInit(result);
+
+    assert.equal(result.dashboard_import.ok, false);
+    assert.ok(result.next.includes('agentops dashboard import --yes --resource-group rg-agentops-dev --grafana-name graf-agentops-dev'));
+    assert.match(output, /Dashboard import: needs review/);
+    assert.match(output, /Dashboard import next:/);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
