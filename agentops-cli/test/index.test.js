@@ -3988,6 +3988,10 @@ test('collector health query summarizes collector and real ingestion signals', (
   assert.match(query, /AgentOpsSpans/);
   assert.match(query, /agentops\.smoke_id/);
   assert.match(query, /collector_errors/);
+  assert.match(query, /QueueSignals/);
+  assert.match(query, /DroppedSignals/);
+  assert.match(query, /BackpressureSignals/);
+  assert.match(query, /collector_backpressure/);
 });
 
 test('benchmark anti-cheat signals block unsafe promotion', () => {
