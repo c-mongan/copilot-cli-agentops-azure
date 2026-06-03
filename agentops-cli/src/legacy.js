@@ -5004,7 +5004,7 @@ function isPlainObject(value) {
 }
 
 const benchmarkPermissionProfiles = new Set(['allow-all-isolated', 'least-privilege', 'read-only']);
-const benchmarkSemanticAdapters = new Set(['file-contains', 'file-regex', 'file-rubric']);
+const benchmarkSemanticAdapters = new Set(['file-contains', 'file-regex', 'file-rubric', 'llm-judge']);
 const benchmarkToolRisks = new Set([
   'read-only',
   'write-file',
@@ -5422,6 +5422,17 @@ function validateBenchmarkSemanticChecks(checks, source = 'task') {
         }
       }
     }
+    if (check.adapter === 'llm-judge') {
+      if (typeof check.command !== 'string' || check.command.trim() === '') {
+        errors.push('command must be a non-empty string');
+      }
+      if (check.minScore !== undefined) {
+        const minScore = Number(check.minScore);
+        if (!Number.isFinite(minScore) || minScore < 0 || minScore > 100) {
+          errors.push('minScore must be between 0 and 100');
+        }
+      }
+    }
     if (errors.length > 0) {
       throw new Error(`Invalid benchmark task ${source}: semanticChecks[${index}] ${errors.join('; ')}`);
     }
@@ -5442,6 +5453,10 @@ function validateBenchmarkSemanticChecks(checks, source = 'task') {
         if (criterion.pattern !== undefined) normalizedCriterion.pattern = criterion.pattern;
         return normalizedCriterion;
       });
+    }
+    if (check.adapter === 'llm-judge') {
+      normalized.command = check.command;
+      normalized.minScore = check.minScore === undefined ? 100 : Number(check.minScore);
     }
     return normalized;
   });
@@ -5949,7 +5964,57 @@ function benchmarkPermissionPolicyChecks(run, changedFiles) {
   }];
 }
 
-function runBenchmarkSemanticChecks(checks = [], workspace) {
+function parseBenchmarkLlmJudgeResult(check, result) {
+  if (!commandSucceeded(result)) {
+    return {
+      id: check.id,
+      adapter: check.adapter,
+      file: check.file,
+      ok: false,
+      score: 0,
+      detail: commandFailureMessage(result)
+    };
+  }
+
+  let verdict;
+  try {
+    verdict = JSON.parse(outputText(result.stdout));
+  } catch {
+    return {
+      id: check.id,
+      adapter: check.adapter,
+      file: check.file,
+      ok: false,
+      score: 0,
+      detail: 'judge output must be JSON'
+    };
+  }
+
+  const score = Number(verdict.score);
+  if (!Number.isFinite(score) || score < 0 || score > 100) {
+    return {
+      id: check.id,
+      adapter: check.adapter,
+      file: check.file,
+      ok: false,
+      score: 0,
+      detail: 'judge score must be between 0 and 100'
+    };
+  }
+
+  const normalizedScore = roundNumber(score);
+  const ok = normalizedScore >= numberValue(check.minScore);
+  return {
+    id: check.id,
+    adapter: check.adapter,
+    file: check.file,
+    ok,
+    score: normalizedScore,
+    detail: ok ? null : (typeof verdict.detail === 'string' && verdict.detail.trim() !== '' ? verdict.detail : `judge score below ${check.minScore}`)
+  };
+}
+
+function runBenchmarkSemanticChecks(checks = [], workspace, options = {}) {
   return checks.map(check => {
     if (!benchmarkSemanticAdapters.has(check.adapter)) {
       return {
@@ -5959,6 +6024,13 @@ function runBenchmarkSemanticChecks(checks = [], workspace) {
         score: 0,
         detail: 'unsupported semantic adapter'
       };
+    }
+
+    if (check.adapter === 'llm-judge') {
+      return parseBenchmarkLlmJudgeResult(check, runShellCheck(check.command, workspace, {
+        spawnSync: options.spawnSync,
+        timeoutMs: options.judgeTimeoutMs || 30000
+      }));
     }
 
     const filePath = safeBenchmarkPath(workspace, check.file);
@@ -6133,7 +6205,7 @@ function executeBenchmarkRun(plan, run, options = {}) {
     });
   }
 
-  const semanticResults = runBenchmarkSemanticChecks(run.successChecks.semanticCheckDefinitions || [], workspace);
+  const semanticResults = runBenchmarkSemanticChecks(run.successChecks.semanticCheckDefinitions || [], workspace, { spawnSync });
   for (const result of semanticResults) {
     checkResults.push({
       name: `semantic: ${result.id}`,
