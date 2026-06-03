@@ -1897,9 +1897,14 @@ test('benchmark judge provider guide renders hosted llm judge setup', () => {
   assert.equal(guide.semanticCheckSnippet.adapter, 'llm-judge');
   assert.equal(guide.semanticCheckSnippet.provider, 'hosted');
   assert.ok(guide.wrapperScript.env.includes('AGENTOPS_JUDGE_TOKEN'));
+  assert.equal(guide.provisioningPlan.target, 'Azure Container Apps');
+  assert.ok(guide.provisioningPlan.commands.some(command => command.includes('az containerapp create')));
+  assert.match(guide.provisioningPlan.bindCommand, /AGENTOPS_JUDGE_ENDPOINT/);
 
   const rendered = renderBenchmarkJudgeProviderGuide(guide);
   assert.match(rendered, /Benchmark hosted judge provider guide/);
+  assert.match(rendered, /Provisioning target: Azure Container Apps/);
+  assert.match(rendered, /az containerapp create/);
   assert.match(rendered, /suite\.json snippet/);
   assert.match(rendered, /AGENTOPS_JUDGE_ENDPOINT/);
   assert.match(rendered, /semanticChecks snippet/);
