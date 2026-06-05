@@ -8897,6 +8897,60 @@ test('ask agentops launcher builds metadata-only assistant context', async () =>
     Validation: ['agentops experimental benchmark report bench-123'],
     RollbackCondition: 'Revert the skill change if eval score drops.'
   };
+  const savedViewRow = {
+    TimeGenerated: '2026-06-05T12:05:00.000Z',
+    SavedViewId: 'view-123',
+    Name: 'cost-spike-review',
+    Url: 'https://grafana.example/d/agentops-v2-home?var-session_id=session-123',
+    QueryHash: 'query_123',
+    SessionId: 'session-123',
+    Description: 'Metadata-only saved investigation',
+    Tags: ['cost', 'review'],
+    ChangeAnnotationCount: 1,
+    ChangeTargetRefs: ['skill:agentops-latest-run'],
+    ChangeAnnotations: [{
+      component: 'skill',
+      target: 'agentops-latest-run',
+      change_type: 'updated',
+      change_id: 'change-123',
+      version: 'v2'
+    }]
+  };
+  const alertHandoff = {
+    schema_version: 'agentops.alert-handoff.v1',
+    mode: 'metadata-only-operator-handoff',
+    alert: {
+      rule: 'failed-spans',
+      session: 'session-123',
+      last: '2h',
+      severity: 'high'
+    },
+    status: {
+      state: 'review',
+      owner: 'agentops-oncall'
+    },
+    evidence: {
+      detail: {
+        history_query: 'AgentOpsRunSummary_CL | where SessionId == "session-123"',
+        session_link: {
+          grafana_url: 'https://grafana.example/d/agentops-v2-run-replay'
+        }
+      },
+      config_changes: {
+        query: 'AgentOpsEvents_CL | where EventName == "agentops.config.changed"',
+        matched_count: 1,
+        matched_annotations: [{
+          component: 'skill',
+          target: 'agentops-latest-run',
+          change_type: 'updated',
+          change_id: 'change-123',
+          version: 'v2'
+        }]
+      }
+    },
+    operator_steps: ['Review the session link and metadata-only alert history.'],
+    guardrails: ['Do not page from this handoff.']
+  };
   const packet = buildAskAgentOpsLaunch({
     run_id: 'run-123',
     session_id: 'session-123',
@@ -8905,7 +8959,9 @@ test('ask agentops launcher builds metadata-only assistant context', async () =>
     selected_event: 'tool failure',
     benchmark_run_id: 'bench-123',
     last: '2h',
-    recommendation: recommendationRow
+    recommendation: recommendationRow,
+    saved_view: savedViewRow,
+    alert_handoff: alertHandoff
   }, {
     assistantBaseUrl: 'https://assistant.example/ask'
   });
@@ -8914,7 +8970,11 @@ test('ask agentops launcher builds metadata-only assistant context', async () =>
   assert.equal(packet.status, 'ready');
   assert.match(packet.prompt, /run run-123/);
   assert.match(packet.prompt, /SessionId == "session-123"/);
+  assert.match(packet.prompt, /Saved view: cost-spike-review/);
+  assert.match(packet.prompt, /Alert handoff: failed-spans for session-123/);
   assert.match(packet.prompt, /Do not request or enable prompt/);
+  assert.equal(packet.saved_view.saved_view_id, 'view-123');
+  assert.equal(packet.alert_handoff.rule, 'failed-spans');
   assert.equal(packet.assistant_response.mode, 'metadata-only-assistant-response');
   assert.equal(packet.assistant_response.status, 'draft');
   assert.ok(packet.assistant_response.evidence.includes('RunId=run-123'));
@@ -8922,7 +8982,12 @@ test('ask agentops launcher builds metadata-only assistant context', async () =>
   assert.ok(packet.assistant_response.evidence.includes('RecommendationBenchmarkRunId=bench-123'));
   assert.ok(packet.assistant_response.evidence.includes('ChangeTargetRefs=skill:agentops-latest-run'));
   assert.ok(packet.assistant_response.evidence.includes('MetricMovementStatus=awaiting-after-run'));
+  assert.ok(packet.assistant_response.evidence.includes('SavedViewId=view-123'));
+  assert.ok(packet.assistant_response.evidence.includes('AlertHandoff=failed-spans/session-123'));
+  assert.ok(packet.assistant_response.evidence.includes('AlertConfigChangeCount=1'));
   assert.equal(packet.assistant_response.recommendation.change_target_refs[0], 'skill:agentops-latest-run');
+  assert.equal(packet.assistant_response.saved_view.change_target_refs[0], 'skill:agentops-latest-run');
+  assert.equal(packet.assistant_response.alert_handoff.config_change_count, 1);
   assert.equal(packet.assistant_response.recommendation.expected_metric_movement.metrics[0].metric, 'EvalOverall');
   assert.equal(packet.assistant_response.recommendation.before_telemetry.eval_overall, 55);
   assert.equal(packet.assistant_response.recommendation.observed_metric_movement.status, 'awaiting-after-run');
@@ -8980,7 +9045,9 @@ test('ask agentops launcher builds metadata-only assistant context', async () =>
   await askAgentOps(recommendationHtmlContext, {
     body: {
       run_id: 'run-123',
-      recommendation: recommendationRow
+      recommendation: recommendationRow,
+      saved_view: savedViewRow,
+      alert_handoff: alertHandoff
     },
     headers: {
       accept: 'text/html'
@@ -8998,6 +9065,13 @@ test('ask agentops launcher builds metadata-only assistant context', async () =>
   assert.match(recommendationHtmlContext.res.body, /ask-agentops-guided-review/);
   assert.match(recommendationHtmlContext.res.body, /EvalOverall/);
   assert.match(recommendationHtmlContext.res.body, /awaiting-after-run/);
+  assert.match(recommendationHtmlContext.res.body, /Saved view/);
+  assert.match(recommendationHtmlContext.res.body, /cost-spike-review/);
+  assert.match(recommendationHtmlContext.res.body, /query_123/);
+  assert.match(recommendationHtmlContext.res.body, /Alert handoff/);
+  assert.match(recommendationHtmlContext.res.body, /failed-spans/);
+  assert.match(recommendationHtmlContext.res.body, /agentops-oncall/);
+  assert.match(recommendationHtmlContext.res.body, /config changes=1/);
   assert.doesNotMatch(recommendationHtmlContext.res.body, /raw diff is intentionally omitted/);
 
   const improvedReview = buildRecommendationReview({
@@ -9035,6 +9109,30 @@ test('ask agentops launcher builds metadata-only assistant context', async () =>
   assert.equal(invalidRecommendation.status, 'invalid');
   assert.ok(invalidRecommendation.errors.some(error => error.includes('recommendation: missing required recommendation field')));
   assert.ok(invalidRecommendation.errors.some(error => error.includes('raw content field: Prompt')));
+
+  const invalidSavedView = buildAskAgentOpsLaunch({
+    run_id: 'run-123',
+    saved_view: {
+      SavedViewId: 'view-bad',
+      Prompt: 'raw transcript'
+    }
+  });
+  assert.equal(invalidSavedView.status, 'invalid');
+  assert.ok(invalidSavedView.errors.some(error => error.includes('saved_view: missing required saved-view field')));
+  assert.ok(invalidSavedView.errors.some(error => error.includes('saved_view: privacy scan')));
+
+  const invalidAlertHandoff = buildAskAgentOpsLaunch({
+    run_id: 'run-123',
+    alert_handoff: {
+      schema_version: 'agentops.alert-handoff.v0',
+      alert: {
+        rule: 'failed-spans',
+        session: 'session-123'
+      }
+    }
+  });
+  assert.equal(invalidAlertHandoff.status, 'invalid');
+  assert.ok(invalidAlertHandoff.errors.some(error => error.includes('alert_handoff: unsupported alert handoff schema')));
 });
 
 test('alert history exposes metadata-only fired-alert query', () => {
