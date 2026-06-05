@@ -64,7 +64,7 @@ const { checkInstallSmoke } = require('../../scripts/check-install-smoke');
 const { checkReleaseDistribution } = require('../../scripts/check-release-distribution');
 const { checkSdkPublish, isWildcardRange } = require('../../scripts/check-sdk-publish');
 const { shouldCopy } = require('../../scripts/prepare-cli-package-assets');
-const { askAgentOps, buildActionerReview, buildAskAgentOpsLaunch, buildAskAgentOpsResponse, buildSharedStoreEditor, buildSharedStoreWrite, sharedStoreEditor, sharedStoreWrite } = require('../../actioner');
+const { askAgentOps, buildActionerReview, buildAskAgentOpsLaunch, buildAskAgentOpsResponse, buildRecommendationReview, buildSharedStoreEditor, buildSharedStoreWrite, sharedStoreEditor, sharedStoreWrite } = require('../../actioner');
 
 const {
   agentopsAttributionSmoke,
@@ -8893,6 +8893,8 @@ test('ask agentops launcher builds metadata-only assistant context', async () =>
   assert.equal(packet.assistant_response.recommendation.expected_metric_movement.metrics[0].metric, 'EvalOverall');
   assert.equal(packet.assistant_response.recommendation.before_telemetry.eval_overall, 55);
   assert.equal(packet.assistant_response.recommendation.observed_metric_movement.status, 'awaiting-after-run');
+  assert.equal(packet.assistant_response.recommendation_review.default_decision, 'needs-review');
+  assert.equal(packet.assistant_response.recommendation_review.shared_store.reviewed_row_template.OperatorReview.source, 'ask-agentops-guided-review');
   assert.equal(packet.assistant_response.recommendation.benchmark_artifact_files[0].path, 'skills/agentops/SKILL.md');
   assert.equal(packet.assistant_response.recommendation.benchmark_artifact_content_diff_files[0].path, 'benchmarks/output.md');
   assert.equal(packet.assistant_response.proposed_action, 'Open the skill diff and rerun benchmark bench-123.');
@@ -8955,9 +8957,32 @@ test('ask agentops launcher builds metadata-only assistant context', async () =>
   assert.match(recommendationHtmlContext.res.body, /skill:agentops-latest-run/);
   assert.match(recommendationHtmlContext.res.body, /benchmarks\/output\.md/);
   assert.match(recommendationHtmlContext.res.body, /Metric movement/);
+  assert.match(recommendationHtmlContext.res.body, /Guided review/);
+  assert.match(recommendationHtmlContext.res.body, /Approve/);
+  assert.match(recommendationHtmlContext.res.body, /Reject/);
+  assert.match(recommendationHtmlContext.res.body, /ask-agentops-guided-review/);
   assert.match(recommendationHtmlContext.res.body, /EvalOverall/);
   assert.match(recommendationHtmlContext.res.body, /awaiting-after-run/);
   assert.doesNotMatch(recommendationHtmlContext.res.body, /raw diff is intentionally omitted/);
+
+  const improvedReview = buildRecommendationReview({
+    ...packet.assistant_response.recommendation,
+    benchmark_decision: 'promote',
+    after_telemetry: { run_id: 'run-after', eval_overall: 72, tool_failure_count: 0 },
+    observed_metric_movement: {
+      status: 'improved',
+      results: [{ metric: 'EvalOverall', before_value: 55, after_value: 72, delta: 17, passed: true }]
+    }
+  });
+  assert.equal(improvedReview.default_decision, 'approve');
+  assert.equal(improvedReview.shared_store.reviewed_row_template.AfterTelemetry.run_id, 'run-after');
+  assert.equal(improvedReview.shared_store.reviewed_row_template.OperatorReview.decision, 'approve');
+
+  const regressedReview = buildRecommendationReview({
+    ...packet.assistant_response.recommendation,
+    observed_metric_movement: { status: 'regressed' }
+  });
+  assert.equal(regressedReview.default_decision, 'reject');
 
   const invalid = buildAskAgentOpsLaunch({ last: 'forever' });
   assert.equal(invalid.status, 'invalid');

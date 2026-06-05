@@ -54,7 +54,8 @@ const objectFields = [
   'BeforeTelemetry',
   'BenchmarkPermissionProfiles',
   'ExpectedMetricMovement',
-  'ObservedMetricMovement'
+  'ObservedMetricMovement',
+  'OperatorReview'
 ];
 
 const numericFields = [

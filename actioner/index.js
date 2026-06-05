@@ -372,6 +372,10 @@ function recommendationEvidenceFromPayload(payload = {}) {
   return {
     summary: {
       recommendation_id: stringValue(row.RecommendationId),
+      time_generated: stringValue(row.TimeGenerated),
+      run_id: stringValue(row.RunId),
+      session_id: stringValue(row.SessionId),
+      trace_id: stringValue(row.TraceId),
       action: stringValue(row.Action),
       severity: stringValue(row.Severity),
       observed_pattern: stringValue(row.ObservedPattern),
@@ -387,9 +391,90 @@ function recommendationEvidenceFromPayload(payload = {}) {
       change_target_refs: Array.isArray(row.ChangeTargetRefs) ? row.ChangeTargetRefs.map(stringValue).filter(Boolean).slice(0, 50) : [],
       validation: Array.isArray(row.Validation) ? row.Validation.map(stringValue).filter(Boolean).slice(0, 20) : [],
       rollback_condition: stringValue(row.RollbackCondition),
-      dashboard_titles: Array.isArray(row.DashboardTitles) ? row.DashboardTitles.map(stringValue).filter(Boolean).slice(0, 20) : []
+      dashboard_titles: Array.isArray(row.DashboardTitles) ? row.DashboardTitles.map(stringValue).filter(Boolean).slice(0, 20) : [],
+      operator_review: row.OperatorReview && typeof row.OperatorReview === 'object' && !Array.isArray(row.OperatorReview) ? row.OperatorReview : {}
     },
     errors: []
+  };
+}
+
+function reviewDecisionForRecommendation(recommendation = {}) {
+  const movementStatus = stringValue(recommendation.observed_metric_movement?.status);
+  const benchmarkDecision = stringValue(recommendation.benchmark_decision);
+  if (movementStatus === 'regressed' || benchmarkDecision === 'reject') return 'reject';
+  if (movementStatus === 'improved' && benchmarkDecision !== 'review') return 'approve';
+  return 'needs-review';
+}
+
+function reviewedRecommendationRow(recommendation = {}, decision = 'needs-review') {
+  const dashboardTitles = Array.isArray(recommendation.dashboard_titles) ? recommendation.dashboard_titles : [];
+  return {
+    TimeGenerated: recommendation.time_generated || new Date(0).toISOString(),
+    RecommendationId: recommendation.recommendation_id || '',
+    RunId: recommendation.run_id || '',
+    SessionId: recommendation.session_id || '',
+    TraceId: recommendation.trace_id || '',
+    Action: recommendation.action || 'review_recommendation',
+    Severity: recommendation.severity || 'medium',
+    ObservedPattern: recommendation.observed_pattern || 'Recommendation review requested.',
+    NextAction: recommendation.next_action || 'Review recommendation evidence, metric movement, validation, and rollback before applying a change.',
+    BenchmarkRunId: recommendation.benchmark_run_id || '',
+    BenchmarkDecision: recommendation.benchmark_decision || '',
+    BenchmarkArtifactFiles: recommendation.benchmark_artifact_files || [],
+    BenchmarkArtifactContentDiffs: recommendation.benchmark_artifact_content_diff_files || [],
+    ExpectedMetricMovement: recommendation.expected_metric_movement || {},
+    BeforeTelemetry: recommendation.before_telemetry || {},
+    AfterTelemetry: recommendation.after_telemetry || {},
+    ObservedMetricMovement: recommendation.observed_metric_movement || {},
+    ChangeTargetRefs: recommendation.change_target_refs || [],
+    DashboardTitles: dashboardTitles,
+    DashboardCount: dashboardTitles.length,
+    Validation: recommendation.validation || [],
+    RollbackCondition: recommendation.rollback_condition || 'Reject or rollback if validation fails, metric movement regresses, or privacy signals appear.',
+    OperatorReview: {
+      status: decision,
+      decision,
+      reviewer: '',
+      reviewed_at: '',
+      note: '',
+      source: 'ask-agentops-guided-review'
+    }
+  };
+}
+
+function buildRecommendationReview(recommendation = {}) {
+  if (!recommendation?.recommendation_id) return null;
+  const decision = reviewDecisionForRecommendation(recommendation);
+  const movementStatus = stringValue(recommendation.observed_metric_movement?.status) || 'unknown';
+  const benchmarkDecision = stringValue(recommendation.benchmark_decision) || 'unknown';
+  const reasons = [
+    movementStatus !== 'unknown' ? `observed metric movement is ${movementStatus}` : '',
+    benchmarkDecision !== 'unknown' ? `benchmark decision is ${benchmarkDecision}` : '',
+    recommendation.change_target_refs?.length ? `${recommendation.change_target_refs.length} change target(s) linked` : '',
+    recommendation.validation?.length ? `${recommendation.validation.length} validation step(s) listed` : ''
+  ].filter(Boolean);
+  return {
+    schema_version: 'agentops.recommendation-guided-review.v1',
+    mode: 'metadata-only-recommendation-review',
+    status: decision,
+    recommendation_id: recommendation.recommendation_id,
+    default_decision: decision,
+    reasons,
+    shared_store: {
+      table: 'AgentOpsRecommendations_CL',
+      id: recommendation.recommendation_id,
+      post_path: `/api/shared-store/AgentOpsRecommendations_CL/${encodeURIComponent(recommendation.recommendation_id)}`,
+      reviewed_row_template: reviewedRecommendationRow(recommendation, decision)
+    },
+    actions: [
+      { decision: 'approve', label: 'Approve recommendation for guarded action' },
+      { decision: 'reject', label: 'Reject recommendation' }
+    ],
+    guardrails: [
+      'Approve only after benchmark evidence, metric movement, validation, and rollback are reviewed.',
+      'Reject if after-run movement regresses, validation is missing, or privacy/safety signals appear.',
+      'This review writes metadata only; it does not edit repositories, change Azure resources, or route tickets.'
+    ]
   };
 }
 
@@ -429,6 +514,7 @@ function buildAskAgentOpsResponse(context = {}) {
     evidence,
     root_cause_candidates: rootCauseCandidates.filter(Boolean),
     recommendation,
+    recommendation_review: buildRecommendationReview(recommendation),
     proposed_action: recommendation?.next_action || 'Open Run Replay, run the starter KQL, then create or update one recommendation with evidence, validation, and rollback metadata.',
     validation: [
       ...(recommendation?.validation || []),
@@ -475,15 +561,50 @@ function renderMetricMovement(recommendation = {}) {
     ].filter(Boolean).join(' - '))
     : [];
   const before = recommendation.before_telemetry || {};
+  const after = recommendation.after_telemetry || {};
+  const movementResults = Array.isArray(recommendation.observed_metric_movement?.results)
+    ? recommendation.observed_metric_movement.results.map(item => [
+      item.metric,
+      item.expected_direction,
+      item.before_value === undefined || item.before_value === null ? '' : `before=${item.before_value}`,
+      item.after_value === undefined || item.after_value === null ? '' : `after=${item.after_value}`,
+      item.delta === undefined || item.delta === null ? '' : `delta=${item.delta}`,
+      item.passed === undefined ? '' : `passed=${item.passed}`
+    ].filter(Boolean).join(' - '))
+    : [];
   const beforeRows = [
     before.run_id ? `before run ${before.run_id}` : '',
     before.eval_overall === undefined || before.eval_overall === null ? '' : `eval=${before.eval_overall}`,
     before.estimated_cost_usd === undefined || before.estimated_cost_usd === null ? '' : `cost=${before.estimated_cost_usd}`,
     before.tool_failure_count === undefined || before.tool_failure_count === null ? '' : `tool failures=${before.tool_failure_count}`,
     before.risk_score === undefined || before.risk_score === null ? '' : `risk=${before.risk_score}`,
+    after.run_id ? `after run ${after.run_id}` : '',
+    after.eval_overall === undefined || after.eval_overall === null ? '' : `after eval=${after.eval_overall}`,
+    after.estimated_cost_usd === undefined || after.estimated_cost_usd === null ? '' : `after cost=${after.estimated_cost_usd}`,
+    after.tool_failure_count === undefined || after.tool_failure_count === null ? '' : `after tool failures=${after.tool_failure_count}`,
+    after.risk_score === undefined || after.risk_score === null ? '' : `after risk=${after.risk_score}`,
     recommendation.observed_metric_movement?.status ? `status=${recommendation.observed_metric_movement.status}` : ''
   ].filter(Boolean);
-  return `${renderList(metrics)}${renderList(beforeRows)}`;
+  return `${renderList(metrics)}${renderList(beforeRows)}${renderList(movementResults)}`;
+}
+
+function renderRecommendationReview(review) {
+  if (!review) return '';
+  return `<h3>Guided review</h3>
+      <p>${htmlEscape(`Default decision: ${review.default_decision}`)}</p>
+      ${renderList(review.reasons)}
+      <div class="review-box" data-review='${htmlEscape(JSON.stringify(review.shared_store.reviewed_row_template))}' data-post-path="${htmlEscape(review.shared_store.post_path)}">
+        <label>Reviewer <input id="reviewer" autocomplete="off" placeholder="name or team"></label>
+        <label>Note <textarea id="review-note" rows="3" placeholder="metadata-only review note"></textarea></label>
+        <p>
+          <button type="button" data-decision="approve">Approve</button>
+          <button type="button" data-decision="reject">Reject</button>
+        </p>
+        <p class="note">Approval creates a metadata-only reviewed recommendation row. It does not edit files, change Azure resources, or route tickets.</p>
+        <pre id="review-output">${htmlEscape(JSON.stringify(review.shared_store.reviewed_row_template, null, 2))}</pre>
+      </div>
+      <h4>Review guardrails</h4>
+      ${renderList(review.guardrails)}`;
 }
 
 function renderAskAgentOpsLaunch(packet) {
@@ -503,12 +624,16 @@ function renderAskAgentOpsLaunch(packet) {
     h1 { margin: 0 0 8px; font-size: 28px; }
     pre, .note { background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 14px; }
     pre { white-space: pre-wrap; overflow-wrap: anywhere; }
-    .button { display: inline-block; color: white; background: #2563eb; border-radius: 6px; padding: 10px 14px; text-decoration: none; }
+    .button, button { display: inline-block; color: white; background: #2563eb; border: 0; border-radius: 6px; padding: 10px 14px; text-decoration: none; cursor: pointer; }
+    button[data-decision="reject"] { background: #991b1b; }
+    label { display: block; margin: 10px 0; font-weight: 600; }
+    input, textarea { box-sizing: border-box; width: 100%; margin-top: 4px; border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px; font: inherit; }
     ul { padding-left: 20px; }
     li { margin: 6px 0; }
     @media (prefers-color-scheme: dark) {
       body { background: #0b1020; color: #e5e7eb; }
       pre, .note { background: #111827; border-color: #374151; }
+      input, textarea { background: #0b1020; color: #e5e7eb; border-color: #374151; }
     }
   </style>
 </head>
@@ -531,9 +656,47 @@ function renderAskAgentOpsLaunch(packet) {
       <ul>${packet.assistant_response.validation.map(item => `<li>${htmlEscape(item)}</li>`).join('')}</ul>
       <h3>Rollback</h3>
       <p>${htmlEscape(packet.assistant_response.rollback_condition)}</p>
+      ${renderRecommendationReview(packet.assistant_response.recommendation_review)}
     </section>` : ''}
     <pre>${htmlEscape(packet.prompt || JSON.stringify(packet.errors, null, 2))}</pre>
   </main>
+  <script>
+    const reviewBox = document.querySelector('.review-box');
+    if (reviewBox) {
+      const output = document.getElementById('review-output');
+      const reviewer = document.getElementById('reviewer');
+      const note = document.getElementById('review-note');
+      const buildRow = decision => {
+        const row = JSON.parse(reviewBox.dataset.review);
+        row.OperatorReview = {
+          ...row.OperatorReview,
+          status: decision,
+          decision,
+          reviewer: reviewer.value.trim(),
+          note: note.value.trim(),
+          reviewed_at: new Date().toISOString(),
+          source: 'ask-agentops-guided-review'
+        };
+        return row;
+      };
+      reviewBox.querySelectorAll('button[data-decision]').forEach(button => {
+        button.addEventListener('click', async () => {
+          const row = buildRow(button.dataset.decision);
+          output.textContent = JSON.stringify(row, null, 2);
+          try {
+            const response = await fetch(reviewBox.dataset.postPath, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ row })
+            });
+            if (response.ok) output.textContent = JSON.stringify(await response.json(), null, 2);
+          } catch {
+            output.textContent = JSON.stringify(row, null, 2);
+          }
+        });
+      });
+    }
+  </script>
 </body>
 </html>`;
 }
@@ -760,6 +923,7 @@ module.exports.askAgentOps = askAgentOps;
 module.exports.buildActionerReview = buildActionerReview;
 module.exports.buildAskAgentOpsLaunch = buildAskAgentOpsLaunch;
 module.exports.buildAskAgentOpsResponse = buildAskAgentOpsResponse;
+module.exports.buildRecommendationReview = buildRecommendationReview;
 module.exports.buildSharedStoreEditor = buildSharedStoreEditor;
 module.exports.buildSharedStoreWrite = buildSharedStoreWrite;
 module.exports.metadataFromPayload = metadataFromPayload;
