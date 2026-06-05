@@ -14,6 +14,7 @@ const requiredColumns = {
   AgentOpsInsights_CL: ['InsightType', 'Severity', 'RunId', 'SuggestedNextStep'],
   AgentOpsRecommendations_CL: ['TimeGenerated', 'RecommendationId', 'Action', 'Severity', 'ObservedPattern', 'NextAction'],
   AgentOpsSavedViews_CL: ['TimeGenerated', 'SavedViewId', 'Name', 'Url', 'QueryHash'],
+  AgentOpsAlertHandoffs: ['schema_version', 'alert', 'status'],
   AgentOpsCollectorHealth_CL: ['Component', 'Status', 'SchemaVersion'],
   AgentOpsContent_CL: ['TimeGenerated', 'RunId', 'SessionId', 'TraceId', 'Role', 'ContentKind', 'CaptureMode']
 };
@@ -206,7 +207,8 @@ function buildAzureIngestPlan({ dir, allowContent = false } = {}) {
 
 const sharedStorageTables = [
   'AgentOpsRecommendations_CL',
-  'AgentOpsSavedViews_CL'
+  'AgentOpsSavedViews_CL',
+  'AgentOpsAlertHandoffs'
 ];
 
 function validateSharedStorageFile(table, file) {
@@ -287,7 +289,7 @@ function buildSharedStorageUploadPlan({ dir, account, container = 'agentops-shar
     });
   }
 
-  for (const manifestName of ['recommendations-manifest.json', 'saved-views-manifest.json']) {
+  for (const manifestName of ['recommendations-manifest.json', 'saved-views-manifest.json', 'alert-handoffs-manifest.json']) {
     const file = path.join(absoluteDir, manifestName);
     if (!fs.existsSync(file)) continue;
     const text = fs.readFileSync(file, 'utf8');
@@ -320,7 +322,7 @@ function buildSharedStorageUploadPlan({ dir, account, container = 'agentops-shar
   }
 
   if (artifacts.filter(item => item.table !== 'manifest').length === 0) {
-    errors.push('no shared artifacts found; export recommendations or saved views first');
+    errors.push('no shared artifacts found; export recommendations, saved views, or alert handoffs first');
   }
   if (leaks.length > 0) {
     errors.push(`privacy scan found ${leaks.length} content-like or secret-like match(es)`);
@@ -347,7 +349,7 @@ function buildSharedStorageUploadPlan({ dir, account, container = 'agentops-shar
     guardrails: [
       'Preview-only: this command does not upload blobs or create Azure resources.',
       'Use Azure RBAC and --auth-mode login; do not use account keys in shared workflows.',
-      'Keep shared storage limited to metadata-only recommendation and saved-view exports.'
+      'Keep shared storage limited to metadata-only recommendation, saved-view, and alert-handoff exports.'
     ],
     next: [
       'Review the artifact list and privacy scan.',

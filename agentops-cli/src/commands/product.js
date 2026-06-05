@@ -240,10 +240,11 @@ function productAudit(options = {}) {
       && fileIncludes('actioner/AskAgentOpsSharedAlertHandoff/function.json', ['ask-agentops/shared/alert-handoff/{alert_handoff_blob_id}', 'alertHandoffBlob'])
       && fileIncludes('grafana/dashboards/v2/01-agentops-home.json', ['AskAgentOpsSharedLaunch', '/ask-agentops/shared/saved-view/', '/ask-agentops/shared/recommendation/'])
       && fileIncludes('grafana/dashboards/v2/03-run-replay.json', ['AskAgentOpsSharedLaunch', '/ask-agentops/shared/recommendation/'])
+      && fileIncludes('grafana/dashboards/v2/06-safety-privacy-policy.json', ['AgentOpsAlertHandoffs_CL', 'AskAgentOpsSharedLaunch', '/ask-agentops/shared/alert-handoff/'])
       && fileIncludes('grafana/dashboards/v2/09-insights-regressions.json', ['AskAgentOpsSharedLaunch', '/ask-agentops/shared/recommendation/'])
       && fileIncludes('actioner/README.md', ['saved_view', 'alert_handoff', '/api/ask-agentops/shared', 'Dashboard action cells use the GET routes'])
-      && fileIncludes('docs/agentops-architecture-product-audit.md', ['shared-storage hydrated recommendation', 'actioner/AskAgentOpsShared', 'shared Ask AgentOps action cells']),
-    ['actioner/index.js', 'actioner/AskAgentOpsShared/function.json', 'actioner/AskAgentOpsSharedRecommendation/function.json', 'actioner/AskAgentOpsSharedSavedView/function.json', 'actioner/AskAgentOpsSharedAlertHandoff/function.json', 'grafana/dashboards/v2/01-agentops-home.json', 'grafana/dashboards/v2/03-run-replay.json', 'grafana/dashboards/v2/09-insights-regressions.json', 'actioner/README.md', 'docs/agentops-architecture-product-audit.md'],
+      && fileIncludes('docs/agentops-architecture-product-audit.md', ['shared-storage hydrated recommendation', 'actioner/AskAgentOpsShared', 'shared Ask AgentOps action cells', 'alert handoff review rows']),
+    ['actioner/index.js', 'actioner/AskAgentOpsShared/function.json', 'actioner/AskAgentOpsSharedRecommendation/function.json', 'actioner/AskAgentOpsSharedSavedView/function.json', 'actioner/AskAgentOpsSharedAlertHandoff/function.json', 'grafana/dashboards/v2/01-agentops-home.json', 'grafana/dashboards/v2/03-run-replay.json', 'grafana/dashboards/v2/06-safety-privacy-policy.json', 'grafana/dashboards/v2/09-insights-regressions.json', 'actioner/README.md', 'docs/agentops-architecture-product-audit.md'],
     []
   ));
 

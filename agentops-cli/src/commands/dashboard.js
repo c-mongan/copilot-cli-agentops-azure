@@ -248,6 +248,7 @@ const v2KqlSmokePanels = [
   { uid: 'agentops-v2-models-cost-tokens', panel: 'Model ROI', requireRows: true },
   { uid: 'agentops-v2-tools-mcp-risk', panel: 'Tool risk table', requireRows: true },
   { uid: 'agentops-v2-safety-privacy-policy', panel: 'Privacy drops by kind', requireRows: true },
+  { uid: 'agentops-v2-safety-privacy-policy', panel: 'Alert handoff review', requireRows: false },
   { uid: 'agentops-v2-code-outcomes', panel: 'Runs and PR outcomes', requireRows: true },
   { uid: 'agentops-v2-code-outcomes', panel: 'Delivery timing', requireRows: true },
   { uid: 'agentops-v2-evals-quality', panel: 'Low-score runs', requireRows: true },
@@ -427,6 +428,14 @@ function validateDashboardUx() {
     if (!toolQuery.includes(field)) errors.push(`tool risk table missing ${field}`);
   }
 
+  const safety = byUid.get('agentops-v2-safety-privacy-policy');
+  const safetyTitles = new Set((safety?.body.panels || []).map(panel => panel.title));
+  if (!safetyTitles.has('Alert handoff review')) errors.push('safety dashboard missing Alert handoff review panel');
+  const alertHandoffQuery = queryFromPanel(panelByTitle(safety, 'Alert handoff review'));
+  for (const field of ['AgentOpsAlertHandoffs_CL', 'HandoffId', 'AlertRule', 'SessionId', 'ConfigChangeCount', 'ChangeTargetRefs', 'AskSharedContext', 'AskAgentOpsSharedLaunch', '/ask-agentops/shared/alert-handoff/', 'OpenReplay']) {
+    if (!alertHandoffQuery.includes(field)) errors.push(`alert handoff review missing ${field}`);
+  }
+
   const code = byUid.get('agentops-v2-code-outcomes');
   const codeTitles = new Set((code?.body.panels || []).map(panel => panel.title));
   for (const title of ['Runs and PR outcomes', 'PR and CI outcomes', 'Delivery timing', 'Edited files but no tests']) {
@@ -533,6 +542,7 @@ function validateDashboardUx() {
       policy_review: true,
       semantic_review: true,
       promotion_approvals: true,
+      alert_handoff_review: true,
       pattern_drilldowns: true,
       empty_state_dashboards: emptyStateDashboards
     },
