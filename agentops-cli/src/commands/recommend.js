@@ -394,6 +394,62 @@ function benchmarkEvidenceFromReport(report = null) {
   };
 }
 
+function metricMovementForRecommendation(run = {}, insight = {}, evaluation = {}, benchmark = null) {
+  const before = {
+    run_id: run.RunId || '',
+    eval_overall: evaluation?.EvalOverall ?? run.EvalOverall ?? null,
+    eval_bucket: evaluation?.EvalBucket || '',
+    estimated_cost_usd: run.EstimatedCostUsd ?? null,
+    input_tokens: run.InputTokens ?? null,
+    output_tokens: run.OutputTokens ?? null,
+    tool_failure_count: run.ToolFailureCount ?? null,
+    tool_denied_count: run.ToolDeniedCount ?? null,
+    risk_score: run.RiskScore ?? null,
+    outcome_status: run.OutcomeStatus || ''
+  };
+  const expected = [];
+  if (insight?.BaselineValue !== undefined || insight?.CurrentValue !== undefined) {
+    expected.push({
+      metric: insight.InsightType || 'insight-value',
+      baseline_value: insight.BaselineValue ?? null,
+      current_value: insight.CurrentValue ?? null,
+      expected_direction: insight.InsightType === 'eval-regression' ? 'increase' : 'decrease',
+      source: 'insight'
+    });
+  }
+  if (before.eval_overall !== null) {
+    expected.push({
+      metric: 'EvalOverall',
+      baseline_value: before.eval_overall,
+      current_value: before.eval_overall,
+      expected_direction: 'increase',
+      source: 'eval'
+    });
+  }
+  if (benchmark?.average_score !== undefined && benchmark?.average_score !== null) {
+    expected.push({
+      metric: 'BenchmarkAverageScore',
+      baseline_value: benchmark.average_score,
+      current_value: benchmark.average_score,
+      expected_direction: 'increase',
+      source: 'benchmark'
+    });
+  }
+
+  return {
+    expected: {
+      status: expected.length ? 'ready' : 'needs-baseline',
+      metrics: expected
+    },
+    before,
+    after: {},
+    observed: {
+      status: 'awaiting-after-run',
+      compare_command: `agentops recommend ${run.RunId || 'latest'} --runs <after-AgentOpsRunSummary_CL.jsonl> --evals <after-AgentOpsEval_CL.jsonl> --insights <after-AgentOpsInsights_CL.jsonl>`
+    }
+  };
+}
+
 function actionFromInsight(insight, run = {}) {
   if (!insight) {
     if (run.OutcomeStatus && run.OutcomeStatus !== 'success') return 'investigate_failed_run';
@@ -438,6 +494,7 @@ function buildRecommendation({ run, insight, evaluation, links, benchmarkReport,
       : 'Open Run Replay and inspect the failed span, blocked tool, eval score, and GitHub outcome.');
 
   const benchmark = benchmarkEvidenceFromReport(benchmarkReport);
+  const metricMovement = metricMovementForRecommendation(run, insight, evaluation, benchmark);
   const annotationRefs = changeAnnotations.map(changeRef).filter(Boolean);
   const validation = [
     `agentops explain ${run.RunId} --runs <AgentOpsRunSummary_CL.jsonl> --evals <AgentOpsEval_CL.jsonl> --insights <AgentOpsInsights_CL.jsonl>`,
@@ -469,6 +526,7 @@ function buildRecommendation({ run, insight, evaluation, links, benchmarkReport,
         dimension: insight.PatternDimension || ''
       } : null,
       benchmark,
+      metric_movement: metricMovement,
       change_annotations: changeAnnotations,
       file_refs: [...new Set([...fileRefsForRecommendation(action, insight, run), ...annotationRefs])]
     },
@@ -503,6 +561,7 @@ function recommendationRow(recommendation, timeGenerated = new Date().toISOStrin
   const pattern = recommendation.evidence?.pattern || {};
   const evaluation = recommendation.evidence?.eval || {};
   const benchmark = recommendation.evidence?.benchmark || {};
+  const metricMovement = recommendation.evidence?.metric_movement || {};
   const changeAnnotations = recommendation.evidence?.change_annotations || [];
   return {
     TimeGenerated: timeGenerated,
@@ -554,6 +613,10 @@ function recommendationRow(recommendation, timeGenerated = new Date().toISOStrin
     BenchmarkApprovalApprovedAt: benchmark.approval?.approved_at || '',
     BenchmarkApprovalTicket: benchmark.approval?.ticket || '',
     BenchmarkApprovalSource: benchmark.approval?.source || '',
+    ExpectedMetricMovement: metricMovement.expected || {},
+    BeforeTelemetry: metricMovement.before || {},
+    AfterTelemetry: metricMovement.after || {},
+    ObservedMetricMovement: metricMovement.observed || {},
     ChangeAnnotations: changeAnnotations,
     ChangeTargetRefs: recommendation.evidence?.file_refs || [],
     DashboardTitles: dashboards.map(dashboard => dashboard.title),

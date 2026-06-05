@@ -50,7 +50,11 @@ const arrayFields = [
 ];
 
 const objectFields = [
-  'BenchmarkPermissionProfiles'
+  'AfterTelemetry',
+  'BeforeTelemetry',
+  'BenchmarkPermissionProfiles',
+  'ExpectedMetricMovement',
+  'ObservedMetricMovement'
 ];
 
 const numericFields = [
