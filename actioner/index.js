@@ -270,12 +270,16 @@ function buildAskAgentOpsLaunch(payload = {}, options = {}) {
   const selectedEvent = stringValue(payload.selected_event || payload.selectedEvent || payload.event).trim();
   const benchmark = stringValue(payload.benchmark || payload.benchmark_run_id || payload.benchmarkRunId).trim();
   const recommendation = recommendationEvidenceFromPayload(payload);
+  const savedView = savedViewEvidenceFromPayload(payload);
+  const alertHandoff = alertHandoffEvidenceFromPayload(payload);
   const assistantBaseUrl = stringValue(options.assistantBaseUrl || payload.assistant_url || process.env.AGENTOPS_ASSISTANT_URL).trim();
   const errors = [];
 
   if (!runId && !sessionId && !traceId) errors.push('run_id, session_id, or trace_id is required');
   if (!/^\d+[mhd]$/.test(last)) errors.push(`invalid time range: ${last}`);
   if (recommendation?.errors.length) errors.push(...recommendation.errors.map(error => `recommendation: ${error}`));
+  if (savedView?.errors.length) errors.push(...savedView.errors.map(error => `saved_view: ${error}`));
+  if (alertHandoff?.errors.length) errors.push(...alertHandoff.errors.map(error => `alert_handoff: ${error}`));
 
   const identity = [
     runId ? `run ${runId}` : '',
@@ -290,6 +294,8 @@ function buildAskAgentOpsLaunch(payload = {}, options = {}) {
     `Start with KQL: ${query}`,
     selectedEvent ? `Selected event: ${selectedEvent}.` : '',
     benchmark ? `Recent benchmark: ${benchmark}.` : '',
+    savedView?.summary?.name ? `Saved view: ${savedView.summary.name}.` : '',
+    alertHandoff?.summary?.rule ? `Alert handoff: ${alertHandoff.summary.rule} for ${alertHandoff.summary.session}.` : '',
     'Use only metadata from AgentOps dashboards, KQL, and exported artifacts.',
     'Return evidence, root-cause candidates, one minimal proposed patch or workflow action, validation benchmark/query, and rollback condition.',
     'Do not request or enable prompt, response, source code, file content, tool argument, tool result, URL, request body, response body, or secret capture.'
@@ -302,7 +308,9 @@ function buildAskAgentOpsLaunch(payload = {}, options = {}) {
     dashboardUrl,
     selectedEvent,
     benchmark,
-    recommendation: recommendation?.summary || null
+    recommendation: recommendation?.summary || null,
+    savedView: savedView?.summary || null,
+    alertHandoff: alertHandoff?.summary || null
   });
 
   return {
@@ -317,6 +325,8 @@ function buildAskAgentOpsLaunch(payload = {}, options = {}) {
     selected_event: selectedEvent || null,
     benchmark_run_id: benchmark || null,
     recommendation: recommendation?.summary || null,
+    saved_view: savedView?.summary || null,
+    alert_handoff: alertHandoff?.summary || null,
     prompt: errors.length ? null : prompt,
     assistant_response: assistantResponse,
     launch_url: !errors.length && assistantBaseUrl
@@ -393,6 +403,87 @@ function recommendationEvidenceFromPayload(payload = {}) {
       rollback_condition: stringValue(row.RollbackCondition),
       dashboard_titles: Array.isArray(row.DashboardTitles) ? row.DashboardTitles.map(stringValue).filter(Boolean).slice(0, 20) : [],
       operator_review: row.OperatorReview && typeof row.OperatorReview === 'object' && !Array.isArray(row.OperatorReview) ? row.OperatorReview : {}
+    },
+    errors: []
+  };
+}
+
+function safeStringArray(value, limit = 20) {
+  return Array.isArray(value) ? value.map(stringValue).filter(Boolean).slice(0, limit) : [];
+}
+
+function safeAnnotationRefs(row = {}) {
+  return safeStringArray(row.ChangeTargetRefs || row.change_target_refs, 50);
+}
+
+function savedViewEvidenceFromPayload(payload = {}) {
+  const row = objectPayload(payload.saved_view || payload.savedView || payload.saved_view_row || payload.savedViewRow);
+  if (!row) return null;
+  const errors = [];
+  for (const field of ['SavedViewId', 'Name', 'Url', 'QueryHash']) {
+    if (!stringValue(row[field]).trim()) errors.push(`missing required saved-view field: ${field}`);
+  }
+  const text = JSON.stringify(row);
+  const leaks = sharedWriteLeakPatterns.filter(pattern => pattern.test(text));
+  if (leaks.length) errors.push(`privacy scan found ${leaks.length} content-like or secret-like match(es)`);
+  if (errors.length) return { summary: null, errors };
+  return {
+    summary: {
+      saved_view_id: stringValue(row.SavedViewId),
+      name: stringValue(row.Name),
+      url: stringValue(row.Url),
+      query_hash: stringValue(row.QueryHash),
+      session_id: stringValue(row.SessionId),
+      description: stringValue(row.Description),
+      tags: safeStringArray(row.Tags || row.tags, 20),
+      change_annotation_count: Number(row.ChangeAnnotationCount || 0),
+      change_target_refs: safeAnnotationRefs(row),
+      change_annotations: Array.isArray(row.ChangeAnnotations) ? row.ChangeAnnotations.slice(0, 20).map(annotation => ({
+        component: stringValue(annotation?.component),
+        target: stringValue(annotation?.target),
+        change_type: stringValue(annotation?.change_type),
+        change_id: stringValue(annotation?.change_id),
+        version: stringValue(annotation?.version)
+      })) : []
+    },
+    errors: []
+  };
+}
+
+function alertHandoffEvidenceFromPayload(payload = {}) {
+  const handoff = objectPayload(payload.alert_handoff || payload.alertHandoff || payload.handoff);
+  if (!handoff) return null;
+  const errors = [];
+  if (handoff.schema_version && handoff.schema_version !== 'agentops.alert-handoff.v1') errors.push(`unsupported alert handoff schema: ${handoff.schema_version}`);
+  if (!stringValue(handoff.alert?.rule).trim()) errors.push('missing alert rule');
+  if (!stringValue(handoff.alert?.session).trim()) errors.push('missing alert session');
+  const text = JSON.stringify(handoff);
+  const leaks = sharedWriteLeakPatterns.filter(pattern => pattern.test(text));
+  if (leaks.length) errors.push(`privacy scan found ${leaks.length} content-like or secret-like match(es)`);
+  if (errors.length) return { summary: null, errors };
+  const configChanges = handoff.evidence?.config_changes || {};
+  return {
+    summary: {
+      schema_version: stringValue(handoff.schema_version || 'agentops.alert-handoff.v1'),
+      rule: stringValue(handoff.alert?.rule),
+      session: stringValue(handoff.alert?.session),
+      last: stringValue(handoff.alert?.last),
+      severity: stringValue(handoff.alert?.severity),
+      owner: stringValue(handoff.status?.owner || handoff.ownership?.owners?.[0]),
+      state: stringValue(handoff.status?.state),
+      session_link: handoff.evidence?.detail?.session_link || null,
+      history_query: stringValue(handoff.evidence?.detail?.history_query),
+      config_change_query: stringValue(configChanges.query),
+      config_change_count: Number(configChanges.matched_count || 0),
+      change_annotations: Array.isArray(configChanges.matched_annotations) ? configChanges.matched_annotations.slice(0, 20).map(annotation => ({
+        component: stringValue(annotation?.component),
+        target: stringValue(annotation?.target),
+        change_type: stringValue(annotation?.change_type),
+        change_id: stringValue(annotation?.change_id),
+        version: stringValue(annotation?.version)
+      })) : [],
+      operator_steps: safeStringArray(handoff.operator_steps, 20),
+      guardrails: safeStringArray(handoff.guardrails, 20)
     },
     errors: []
   };
@@ -481,6 +572,8 @@ function buildRecommendationReview(recommendation = {}) {
 
 function buildAskAgentOpsResponse(context = {}) {
   const recommendation = context.recommendation || null;
+  const savedView = context.savedView || null;
+  const alertHandoff = context.alertHandoff || null;
   const evidence = [
     context.runId ? `RunId=${context.runId}` : '',
     context.sessionId ? `SessionId=${context.sessionId}` : '',
@@ -492,7 +585,11 @@ function buildAskAgentOpsResponse(context = {}) {
     recommendation?.recommendation_id ? `RecommendationId=${recommendation.recommendation_id}` : '',
     recommendation?.benchmark_run_id ? `RecommendationBenchmarkRunId=${recommendation.benchmark_run_id}` : '',
     recommendation?.change_target_refs?.length ? `ChangeTargetRefs=${recommendation.change_target_refs.join(', ')}` : '',
-    recommendation?.observed_metric_movement?.status ? `MetricMovementStatus=${recommendation.observed_metric_movement.status}` : ''
+    recommendation?.observed_metric_movement?.status ? `MetricMovementStatus=${recommendation.observed_metric_movement.status}` : '',
+    savedView?.saved_view_id ? `SavedViewId=${savedView.saved_view_id}` : '',
+    savedView?.change_target_refs?.length ? `SavedViewChangeTargetRefs=${savedView.change_target_refs.join(', ')}` : '',
+    alertHandoff?.rule ? `AlertHandoff=${alertHandoff.rule}/${alertHandoff.session}` : '',
+    alertHandoff?.config_change_count ? `AlertConfigChangeCount=${alertHandoff.config_change_count}` : ''
   ].filter(Boolean);
 
   const rootCauseCandidates = [
@@ -505,6 +602,12 @@ function buildAskAgentOpsResponse(context = {}) {
     context.benchmark
       ? 'Compare the linked benchmark run before treating this as safe to promote.'
       : 'Check whether the latest recommendation or eval row exists before proposing a change.',
+    savedView?.name
+      ? `Use saved view "${savedView.name}" as the durable investigation entry point.`
+      : '',
+    alertHandoff?.rule
+      ? `Review alert handoff ${alertHandoff.rule} and its config-change annotations before routing or changing thresholds.`
+      : '',
     'Confirm privacy/safety signals before requesting any additional telemetry.'
   ];
 
@@ -515,6 +618,8 @@ function buildAskAgentOpsResponse(context = {}) {
     evidence,
     root_cause_candidates: rootCauseCandidates.filter(Boolean),
     recommendation,
+    saved_view: savedView,
+    alert_handoff: alertHandoff,
     recommendation_review: buildRecommendationReview(recommendation),
     proposed_action: recommendation?.next_action || 'Open Run Replay, run the starter KQL, then create or update one recommendation with evidence, validation, and rollback metadata.',
     validation: [
@@ -523,8 +628,10 @@ function buildAskAgentOpsResponse(context = {}) {
       context.benchmark || recommendation?.benchmark_run_id
         ? `Re-run or review benchmark ${context.benchmark || recommendation.benchmark_run_id}.`
         : 'Run the relevant benchmark or dashboard query before promotion.',
+      savedView?.url ? `Open saved view ${savedView.name || savedView.saved_view_id}.` : '',
+      alertHandoff?.history_query ? `Review alert handoff KQL for ${alertHandoff.rule}.` : '',
       'Confirm no prompt, response, tool argument, tool result, source code, file content, or secret capture was enabled.'
-    ],
+    ].filter(Boolean),
     rollback_condition: recommendation?.rollback_condition || 'Rollback or reject the agent, skill, MCP, model, or instruction change if eval score drops, failures rise, cost increases unexpectedly, or privacy signals appear.'
   };
 }
@@ -550,6 +657,46 @@ function renderRecommendationEvidence(recommendation) {
       ${renderList(artifactFiles)}
       <h4>Metric movement</h4>
       ${renderMetricMovement(recommendation)}`;
+}
+
+function renderAnnotationRefs(annotations = []) {
+  return renderList(annotations.map(annotation => [
+    annotation.component,
+    annotation.target,
+    annotation.change_type,
+    annotation.change_id,
+    annotation.version
+  ].filter(Boolean).join(' - ')));
+}
+
+function renderSavedViewEvidence(savedView) {
+  if (!savedView) return '';
+  return `<h3>Saved view</h3>
+      <p>${htmlEscape([savedView.name, savedView.saved_view_id].filter(Boolean).join(' / '))}</p>
+      ${savedView.url ? `<p><a href="${htmlEscape(savedView.url)}">Open saved view</a></p>` : ''}
+      <h4>Query</h4>
+      ${renderList([savedView.query_hash ? `query_hash=${savedView.query_hash}` : '', savedView.session_id ? `session=${savedView.session_id}` : ''].filter(Boolean))}
+      <h4>Tags</h4>
+      ${renderList(savedView.tags || [])}
+      <h4>Change targets</h4>
+      ${renderList(savedView.change_target_refs || [])}
+      <h4>Config-change annotations</h4>
+      ${renderAnnotationRefs(savedView.change_annotations || [])}`;
+}
+
+function renderAlertHandoffEvidence(handoff) {
+  if (!handoff) return '';
+  return `<h3>Alert handoff</h3>
+      <p>${htmlEscape([handoff.rule, handoff.session, handoff.severity, handoff.owner, handoff.state].filter(Boolean).join(' / '))}</p>
+      ${handoff.session_link?.grafana_url ? `<p><a href="${htmlEscape(handoff.session_link.grafana_url)}">Open alert session</a></p>` : ''}
+      <h4>Alert queries</h4>
+      ${renderList([handoff.history_query, handoff.config_change_query, handoff.config_change_count ? `config changes=${handoff.config_change_count}` : ''].filter(Boolean))}
+      <h4>Config-change annotations</h4>
+      ${renderAnnotationRefs(handoff.change_annotations || [])}
+      <h4>Operator steps</h4>
+      ${renderList(handoff.operator_steps || [])}
+      <h4>Alert guardrails</h4>
+      ${renderList(handoff.guardrails || [])}`;
 }
 
 function renderMetricMovement(recommendation = {}) {
@@ -652,6 +799,8 @@ function renderAskAgentOpsLaunch(packet) {
       <h3>Root-cause candidates</h3>
       <ul>${packet.assistant_response.root_cause_candidates.map(item => `<li>${htmlEscape(item)}</li>`).join('')}</ul>
       ${renderRecommendationEvidence(packet.assistant_response.recommendation)}
+      ${renderSavedViewEvidence(packet.assistant_response.saved_view)}
+      ${renderAlertHandoffEvidence(packet.assistant_response.alert_handoff)}
       <h3>Next action</h3>
       <p>${htmlEscape(packet.assistant_response.proposed_action)}</p>
       <h3>Validation</h3>

@@ -232,6 +232,15 @@ function productAudit(options = {}) {
   ));
 
   checks.push(check(
+    'ask-agentops-shared-context',
+    fileIncludes('actioner/index.js', ['savedViewEvidenceFromPayload', 'alertHandoffEvidenceFromPayload', 'saved_view', 'alert_handoff', 'SavedViewId', 'AlertHandoff'])
+      && fileIncludes('actioner/README.md', ['saved_view', 'alert_handoff', 'saved-view query/tag/annotation context', 'alert handoff owner/query/config-change context'])
+      && fileIncludes('docs/agentops-architecture-product-audit.md', ['saved-view annotations', 'alert handoff config-change context', 'Hydrate the hosted Ask AgentOps workflow directly from shared storage']),
+    ['actioner/index.js', 'actioner/README.md', 'docs/agentops-architecture-product-audit.md'],
+    []
+  ));
+
+  checks.push(check(
     'recommendation-metric-movement',
     fileIncludes('agentops-cli/src/commands/recommend.js', ['compareRecommendationAfterRun', 'AfterTelemetry', 'ObservedMetricMovement'])
       && fileIncludes('docs/evals-and-insights.md', ['agentops recommend compare'])
