@@ -19,12 +19,14 @@ function stringValue(value) {
 
 const sharedWriteTables = new Set([
   'AgentOpsRecommendations_CL',
-  'AgentOpsSavedViews_CL'
+  'AgentOpsSavedViews_CL',
+  'AgentOpsAlertHandoffs'
 ]);
 
 const sharedWriteRequiredColumns = {
   AgentOpsRecommendations_CL: ['TimeGenerated', 'RecommendationId', 'Action', 'Severity', 'ObservedPattern', 'NextAction'],
-  AgentOpsSavedViews_CL: ['TimeGenerated', 'SavedViewId', 'Name', 'Url', 'QueryHash']
+  AgentOpsSavedViews_CL: ['TimeGenerated', 'SavedViewId', 'Name', 'Url', 'QueryHash'],
+  AgentOpsAlertHandoffs: ['schema_version', 'alert', 'status']
 };
 
 const sharedWriteLeakPatterns = [
@@ -65,7 +67,9 @@ function htmlEscape(value) {
 function rowIdFor(table, row) {
   const candidate = table === 'AgentOpsRecommendations_CL'
     ? row.RecommendationId
-    : row.SavedViewId;
+    : table === 'AgentOpsAlertHandoffs'
+      ? row.HandoffId || row.AlertHandoffId || [row.alert?.rule, row.alert?.session].filter(Boolean).join('-')
+      : row.SavedViewId;
   return safeBlobSegment(candidate) || stableId(JSON.stringify(row));
 }
 
@@ -82,6 +86,12 @@ function validateSharedWriteRow(table, row = {}) {
   if (table === 'AgentOpsRecommendations_CL') {
     const validation = validateRecommendationRow(row);
     if (!validation.ok) errors.push(...validation.errors.map(error => `${table}: ${error}`));
+  }
+  if (table === 'AgentOpsAlertHandoffs') {
+    const validation = alertHandoffEvidenceFromPayload({ alert_handoff: row });
+    if (!validation || validation.errors.length > 0) {
+      errors.push(...(validation?.errors || ['invalid alert handoff']).map(error => `${table}: ${error}`));
+    }
   }
 
   const leaks = sharedWriteLeakPatterns
@@ -118,7 +128,7 @@ function buildSharedStoreWrite(payload = {}, options = {}) {
       excluded: ['prompts', 'responses', 'tool arguments', 'tool results', 'source code', 'file contents']
     },
     guardrails: [
-      'Accept only metadata-only saved-view and recommendation rows.',
+      'Accept only metadata-only saved-view, recommendation, and alert-handoff rows.',
       'Do not store prompts, responses, tool arguments, tool results, source code, or file contents.',
       'Use storage RBAC and function-level authorization for hosted writes.'
     ]
@@ -140,7 +150,7 @@ function buildSharedStoreWrite(payload = {}, options = {}) {
       }, null, 2)}\n`
     },
     next: [
-      'Ingest or export the shared blob row into AgentOpsRecommendations_CL or AgentOpsSavedViews_CL.',
+      'Ingest or export the shared blob row into AgentOpsRecommendations_CL, AgentOpsSavedViews_CL, or AgentOpsAlertHandoffs.',
       'Review owner and privacy metadata before sharing the artifact beyond the team.'
     ]
   };
@@ -166,6 +176,35 @@ function buildSharedStoreEditor(options = {}) {
     Name: 'latest-risk',
     Url: 'https://grafana.example/d/agentops-session-detail',
     QueryHash: 'query_123'
+  };
+  const exampleAlertHandoff = {
+    schema_version: 'agentops.alert-handoff.v1',
+    mode: 'metadata-only-operator-handoff',
+    alert: {
+      rule: 'failed-spans',
+      session: 'session-123',
+      last: '24h',
+      severity: 'high'
+    },
+    status: {
+      state: 'review',
+      owner: 'agentops-oncall'
+    },
+    evidence: {
+      detail: {
+        history_query: 'AgentOpsRunSummary_CL | where SessionId == "session-123"',
+        session_link: {
+          grafana_url: 'https://grafana.example/d/agentops-v2-run-replay'
+        }
+      },
+      config_changes: {
+        query: 'AgentOpsEvents_CL | where EventName == "agentops.config.changed"',
+        matched_count: 0,
+        matched_annotations: []
+      }
+    },
+    operator_steps: ['Review the session link and metadata-only alert history.'],
+    guardrails: ['Do not page from this handoff.']
   };
 
   return `<!doctype html>
@@ -199,13 +238,14 @@ function buildSharedStoreEditor(options = {}) {
 <body>
   <main>
     <h1>AgentOps Shared Store Editor</h1>
-    <p class="note">Create one metadata-only recommendation or saved investigation row. This page posts to the hosted shared-store write API and rejects prompts, responses, tool arguments, tool results, source code, file contents, and secret-like payloads.</p>
+    <p class="note">Create one metadata-only recommendation, saved investigation, or alert handoff row. This page posts to the hosted shared-store write API and rejects prompts, responses, tool arguments, tool results, source code, file contents, and secret-like payloads.</p>
     <div class="row">
       <div>
         <label for="table">Artifact type</label>
         <select id="table">
           <option value="AgentOpsRecommendations_CL">Recommendation</option>
           <option value="AgentOpsSavedViews_CL">Saved investigation</option>
+          <option value="AgentOpsAlertHandoffs">Alert handoff</option>
         </select>
       </div>
       <div>
@@ -228,7 +268,8 @@ function buildSharedStoreEditor(options = {}) {
     const apiBase = ${JSON.stringify(basePath)};
     const samples = {
       AgentOpsRecommendations_CL: ${JSON.stringify(exampleRecommendation, null, 2)},
-      AgentOpsSavedViews_CL: ${JSON.stringify(exampleSavedView, null, 2)}
+      AgentOpsSavedViews_CL: ${JSON.stringify(exampleSavedView, null, 2)},
+      AgentOpsAlertHandoffs: ${JSON.stringify(exampleAlertHandoff, null, 2)}
     };
     const table = document.getElementById('table');
     const row = document.getElementById('row');
@@ -237,7 +278,11 @@ function buildSharedStoreEditor(options = {}) {
     const result = document.getElementById('result');
     function loadSample() {
       row.value = JSON.stringify(samples[table.value], null, 2);
-      id.value = table.value === 'AgentOpsRecommendations_CL' ? samples[table.value].RecommendationId : samples[table.value].SavedViewId;
+      id.value = table.value === 'AgentOpsRecommendations_CL'
+        ? samples[table.value].RecommendationId
+        : table.value === 'AgentOpsAlertHandoffs'
+          ? samples[table.value].alert.rule + '-' + samples[table.value].alert.session
+          : samples[table.value].SavedViewId;
     }
     table.addEventListener('change', loadSample);
     document.getElementById('sample').addEventListener('click', loadSample);

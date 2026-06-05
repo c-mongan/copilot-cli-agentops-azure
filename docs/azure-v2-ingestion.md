@@ -21,8 +21,9 @@ The plan checks:
 - content-like and secret-like leak patterns
 - `AgentOpsContent_CL` rows are absent unless you pass `--allow-content`
 - optional `AgentOpsRecommendations_CL` rows contain only metadata, actions, pattern ids, eval buckets, benchmark summaries, change-target refs, validation steps, and dashboard counts
+- optional `AgentOpsAlertHandoffs` shared artifacts contain only metadata-only alert owner, rule, session, evidence-query, config-change count, operator-step, and guardrail context
 
-It does not create Azure resources or upload data. For metadata-only saved-view and recommendation exports, `agentops azure-ingest upload-plan --dir <export-dir> --account <storage-account>` prints reviewed Azure Blob upload commands for the optional shared store.
+It does not create Azure resources or upload data. For metadata-only saved-view, recommendation, and alert-handoff exports, `agentops azure-ingest upload-plan --dir <export-dir> --account <storage-account>` prints reviewed Azure Blob upload commands for the optional shared store.
 
 ## Azure Path
 
@@ -33,11 +34,11 @@ Use Azure Monitor Logs Ingestion API with a Data Collection Rule:
 3. Send each JSONL row to the matching DCR stream.
 4. Import the V2 dashboard pack from `grafana/dashboards/v2/`.
 
-## Shared Saved Views And Recommendations
+## Shared Review Artifacts
 
-Set `deploySharedStore=true` to create an optional Azure Blob container for metadata-only `AgentOpsRecommendations_CL.jsonl` and `AgentOpsSavedViews_CL.jsonl` exports. The storage account disables public blob access and shared-key access; upload plans use Entra-backed `az storage blob upload --auth-mode login`.
+Set `deploySharedStore=true` to create an optional Azure Blob container for metadata-only `AgentOpsRecommendations_CL.jsonl`, `AgentOpsSavedViews_CL.jsonl`, and `AgentOpsAlertHandoffs.jsonl` exports. The storage account disables public blob access and shared-key access; upload plans use Entra-backed `az storage blob upload --auth-mode login`.
 
-Set `deployActioner=true` with `deploySharedStore=true` to enable the hosted write API. The Function App uses managed identity and writes one metadata-only row per blob at `/api/shared-store/{table}/{id}`. It accepts only `AgentOpsRecommendations_CL` and `AgentOpsSavedViews_CL` rows and rejects content-like payloads. Open `/api/shared-store/editor` for the browser-native metadata editor that submits to the same validated API.
+Set `deployActioner=true` with `deploySharedStore=true` to enable the hosted write API. The Function App uses managed identity and writes one metadata-only row per blob at `/api/shared-store/{table}/{id}`. It accepts only `AgentOpsRecommendations_CL`, `AgentOpsSavedViews_CL`, and `AgentOpsAlertHandoffs` rows and rejects content-like payloads. Open `/api/shared-store/editor` for the browser-native metadata editor that submits to the same validated API.
 
 Set `AGENTOPS_ASSISTANT_URL` on the Function App to enable `/api/ask-agentops` launch links. Without it, the route still renders a browser page with a metadata-only prompt for the selected run, session, or trace.
 

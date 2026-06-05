@@ -722,7 +722,7 @@ test('content status makes prompt response viewer opt-in explicit', () => {
   }
 });
 
-test('shared storage upload plan covers metadata-only saved views and recommendations', () => {
+test('shared storage upload plan covers metadata-only saved views recommendations and alert handoffs', () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-shared-store-'));
   try {
     fs.writeFileSync(path.join(tempDir, 'AgentOpsRecommendations_CL.jsonl'), `${JSON.stringify({
@@ -740,6 +740,20 @@ test('shared storage upload plan covers metadata-only saved views and recommenda
       Url: 'https://grafana.example/d/agentops-session-detail',
       QueryHash: 'query_123'
     })}\n`);
+    fs.writeFileSync(path.join(tempDir, 'AgentOpsAlertHandoffs.jsonl'), `${JSON.stringify({
+      schema_version: 'agentops.alert-handoff.v1',
+      mode: 'metadata-only-operator-handoff',
+      alert: {
+        rule: 'failed-spans',
+        session: 'session-123',
+        last: '24h',
+        severity: 'high'
+      },
+      status: {
+        state: 'review',
+        owner: 'agentops-oncall'
+      }
+    })}\n`);
     fs.writeFileSync(path.join(tempDir, 'recommendations-manifest.json'), JSON.stringify({
       privacy: 'metadata-only'
     }));
@@ -754,9 +768,10 @@ test('shared storage upload plan covers metadata-only saved views and recommenda
 
     assert.equal(plan.schema_version, 'agentops.shared-storage-upload-plan.v1');
     assert.equal(plan.ok, true);
-    assert.equal(plan.artifacts.length, 3);
+    assert.equal(plan.artifacts.length, 4);
     assert.ok(plan.artifacts.some(artifact => artifact.table === 'AgentOpsRecommendations_CL' && artifact.rows === 1));
     assert.ok(plan.artifacts.some(artifact => artifact.table === 'AgentOpsSavedViews_CL' && artifact.blob === 'team-a/latest/AgentOpsSavedViews_CL/AgentOpsSavedViews_CL.jsonl'));
+    assert.ok(plan.artifacts.some(artifact => artifact.table === 'AgentOpsAlertHandoffs' && artifact.blob === 'team-a/latest/AgentOpsAlertHandoffs/AgentOpsAlertHandoffs.jsonl'));
     assert.ok(plan.artifacts.every(artifact => artifact.command.includes('--auth-mode') && artifact.command.includes('login')));
     assert.match(rendered, /az storage blob upload/);
     assert.match(rendered, /team-a\/latest\/AgentOpsRecommendations_CL\/AgentOpsRecommendations_CL\.jsonl/);
@@ -4437,7 +4452,7 @@ test('dashboard verify combines static UX and optional live KQL gates', () => {
   });
   assert.equal(live.ok, true, live.errors.join('\n'));
   assert.equal(live.live, true);
-  assert.equal(live.summary.kql_checks, 32);
+  assert.equal(live.summary.kql_checks, 33);
 });
 
 test('V2 dashboard links preserve drilldown contracts', () => {
@@ -4567,7 +4582,7 @@ test('dashboard kql-check renders representative V2 panel queries', () => {
   });
 
   assert.equal(result.ok, true, result.errors.join('\n'));
-  assert.equal(result.checks.length, 32);
+  assert.equal(result.checks.length, 33);
   assert.ok(queries.every(item => item.options.workspaceId === 'workspace-123'));
   assert.ok(queries.every(item => item.query.includes('ago(24h)')));
   assert.ok(queries.every(item => !item.query.includes('$__timeFrom')));
@@ -8764,7 +8779,7 @@ test('actioner builds metadata-only review packet from Azure alert payload', () 
   assert.ok(incomplete.errors.some(error => error.includes('missing alert session')));
 });
 
-test('shared store write API accepts only metadata-only recommendation and saved-view rows', async () => {
+test('shared store write API accepts only metadata-only recommendation saved-view and alert-handoff rows', async () => {
   const recommendationRow = {
     TimeGenerated: '2026-06-03T12:00:00.000Z',
     RecommendationId: 'rec-123',
@@ -8795,6 +8810,29 @@ test('shared store write API accepts only metadata-only recommendation and saved
   assert.match(packet.blob.content, /agentops.shared-store-blob.v1/);
   assert.match(packet.blob.content, /rec-123/);
   assert.doesNotMatch(JSON.stringify(packet), /SECRET_FAKE_TEST_VALUE|raw transcript|tool_args/);
+
+  const alertPacket = buildSharedStoreWrite({
+    table: 'AgentOpsAlertHandoffs',
+    id: 'handoff-route-123',
+    row: {
+      schema_version: 'agentops.alert-handoff.v1',
+      mode: 'metadata-only-operator-handoff',
+      alert: {
+        rule: 'failed-spans',
+        session: 'session-123',
+        last: '24h',
+        severity: 'high'
+      },
+      status: {
+        state: 'review',
+        owner: 'agentops-oncall'
+      }
+    }
+  }, { prefix: 'team-a' });
+  assert.equal(alertPacket.status, 'ready');
+  assert.equal(alertPacket.table, 'AgentOpsAlertHandoffs');
+  assert.equal(alertPacket.blob.path, 'team-a/AgentOpsAlertHandoffs/handoff-route-123.json');
+  assert.match(alertPacket.blob.content, /failed-spans/);
 
   const context = { bindings: {} };
   await sharedStoreWrite(context, {
@@ -8849,6 +8887,7 @@ test('shared store editor renders browser-native metadata-only write form', asyn
   assert.match(html, /AgentOps Shared Store Editor/);
   assert.match(html, /AgentOpsRecommendations_CL/);
   assert.match(html, /AgentOpsSavedViews_CL/);
+  assert.match(html, /AgentOpsAlertHandoffs/);
   assert.match(html, /Save metadata artifact/);
   assert.match(html, /fetch\(apiBase \+ '\/'/);
   assert.doesNotMatch(html, /SECRET_FAKE_TEST_VALUE|raw transcript|tool_args|gen_ai\.input\.messages/);
@@ -8857,7 +8896,7 @@ test('shared store editor renders browser-native metadata-only write form', asyn
   await sharedStoreEditor(context, {});
   assert.equal(context.res.status, 200);
   assert.equal(context.res.headers['Content-Type'], 'text/html; charset=utf-8');
-  assert.match(context.res.body, /metadata-only recommendation or saved investigation row/);
+  assert.match(context.res.body, /metadata-only recommendation, saved investigation, or alert handoff row/);
 });
 
 test('ask agentops launcher builds metadata-only assistant context', async () => {

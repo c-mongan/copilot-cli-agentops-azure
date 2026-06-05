@@ -51,12 +51,13 @@ GET  /api/shared-store/editor
 POST /api/shared-store/{table}/{id}
 ```
 
-Open `/api/shared-store/editor` in a browser to create a recommendation or saved investigation without leaving the hosted AgentOps workflow. The editor submits JSON to the same write API and receives the same privacy validation response.
+Open `/api/shared-store/editor` in a browser to create a recommendation, saved investigation, or alert handoff without leaving the hosted AgentOps workflow. The editor submits JSON to the same write API and receives the same privacy validation response.
 
 Allowed `table` values:
 
 - `AgentOpsRecommendations_CL`
 - `AgentOpsSavedViews_CL`
+- `AgentOpsAlertHandoffs`
 
 Body shape:
 

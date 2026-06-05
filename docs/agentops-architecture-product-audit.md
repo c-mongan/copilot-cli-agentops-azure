@@ -1060,7 +1060,7 @@ This is strong for technical users.
 
 Missing world-class behavior:
 
-- The dashboard now gives the agent explicit session context, Run Replay URL, starter KQL, copyable `agentops ask-context` commands, a linked `AskAgentOpsLaunch` action for the hosted `/api/ask-agentops` page/packet, and one-click shared recommendation/saved-view actions for the hosted `/api/ask-agentops/shared/*` routes. The hosted page now includes a first-party metadata-only response draft with optional inline or shared-storage hydrated recommendation, saved-view, and alert-handoff context, but it still does not run a fully embedded live assistant inside Grafana.
+- The dashboard now gives the agent explicit session context, Run Replay URL, starter KQL, copyable `agentops ask-context` commands, a linked `AskAgentOpsLaunch` action for the hosted `/api/ask-agentops` page/packet, one-click shared recommendation/saved-view actions, and alert handoff review rows for the hosted `/api/ask-agentops/shared/*` routes. The hosted page now includes a first-party metadata-only response draft with optional inline or shared-storage hydrated recommendation, saved-view, and alert-handoff context, but it still does not run a fully embedded live assistant inside Grafana.
 - Recommendations are now present in Run Replay as first-class artifacts with copyable follow-up commands, a local metadata-only recommendation store, an opt-in shared Blob upload plan, a hosted metadata-only write API, and a hosted browser editor for team review artifacts. The CLI can compare a completed follow-up run with `agentops recommend compare` and populate `AfterTelemetry` plus pass/fail `ObservedMetricMovement`, then turn an approved `OperatorReview` row into a guarded `agentops recommend action-plan` patch/benchmark workflow. The hosted Ask AgentOps flow can now render recommendation target refs, benchmark links, artifact file paths, `ExpectedMetricMovement`, `BeforeTelemetry`, `AfterTelemetry`, validation, rollback, a guided approve/reject `OperatorReview`, saved-view annotations, and alert handoff config-change context, but the dashboard still does not apply the patch for the user.
 - Saved investigations now surface on the Home dashboard from metadata-only `AgentOpsSavedViews_CL` exports, with an opt-in shared Blob store, hosted metadata-only write API, and browser-native saved-view editor.
 - Saved-view exports can now include session-matched config-change annotation counts and change-target refs from `--events`, so saved investigations keep the nearby skill/hook/MCP/model change context.
@@ -1151,16 +1151,16 @@ Implemented first slice:
 - `agentops annotation config-change` now emits metadata-only `agentops.config.changed` events for skill, hook, MCP, model, deployment, and benchmark changes, with an Insights dashboard panel for change/regression correlation.
 - `agentops recommend --events` now attaches matching config-change annotations to regression recommendations and persists them as metadata-only `ChangeAnnotations` plus concrete `ChangeTargetRefs`.
 - `agentops recommend --save` now persists metadata-only recommendation rows to a local durable store, with `agentops recommend list|export` for later review or ingestion.
-- `agentops azure-ingest upload-plan` now validates metadata-only saved-view/recommendation exports and prints Entra-backed Azure Blob upload commands for the optional shared store.
-- `actioner/SharedStoreWrite` now accepts hosted metadata-only recommendation and saved-view row writes into the shared Blob store through managed identity.
-- `actioner/SharedStoreEditor` now renders a hosted browser form for metadata-only recommendation and saved-investigation rows that submits to the same validated write API.
+- `agentops azure-ingest upload-plan` now validates metadata-only saved-view, recommendation, and alert-handoff exports and prints Entra-backed Azure Blob upload commands for the optional shared store.
+- `actioner/SharedStoreWrite` now accepts hosted metadata-only recommendation, saved-view, and alert-handoff row writes into the shared Blob store through managed identity.
+- `actioner/SharedStoreEditor` now renders a hosted browser form for metadata-only recommendation, saved-investigation, and alert-handoff rows that submits to the same validated write API.
 - `actioner/AskAgentOps` now renders a hosted metadata-only assistant launch packet/page for a selected run, session, or trace, with optional `AGENTOPS_ASSISTANT_URL` deep links.
 - The Run Replay `Ask AgentOps context` panel now includes an `AskAgentOpsLaunch` action URL driven by the configurable `actioner_url` dashboard variable.
 - `actioner/AskAgentOps` now includes a first-party metadata-only response draft with evidence, root-cause candidates, proposed action, validation, and rollback condition so the hosted workflow has an immediate investigation answer even before an external assistant is configured.
 - `actioner/AskAgentOps` can now accept a schema-valid metadata-only recommendation row and render linked `ChangeTargetRefs`, benchmark run id/decision, artifact file paths, expected/before/after metric movement, validation steps, rollback, and a guided `OperatorReview` approve/reject control without rendering raw diff content.
 - `actioner/AskAgentOps` can now accept metadata-only saved-view rows and alert handoff packets, then render annotation-linked saved-view context, alert owner/query context, config-change counts, operator steps, and guardrails in the hosted workflow.
 - `actioner/AskAgentOpsShared` now exposes `/api/ask-agentops/shared`, which hydrates recommendation, saved-view, and alert-handoff context from shared Blob ids instead of requiring the full metadata packets to be posted inline.
-- Run Replay, Home, and Insights dashboards now include shared Ask AgentOps action cells for recommendation and saved-view rows, backed by GET routes that hydrate shared Blob metadata by id.
+- Run Replay, Home, Insights, and Safety dashboards now include shared Ask AgentOps action cells for recommendation, saved-view, and alert handoff review rows, backed by GET routes that hydrate shared Blob metadata by id.
 - Recommendation rows now carry metadata-only `ExpectedMetricMovement`, `BeforeTelemetry`, `AfterTelemetry`, `ObservedMetricMovement`, and `OperatorReview` fields. `agentops recommend compare` populates the after-run snapshot and marks metric movement as improved, mixed, regressed, or not comparable.
 - `agentops recommend action-plan` now requires an approved `OperatorReview` and emits a metadata-only guarded patch prompt plus branch, benchmark run, benchmark report, and after-run compare commands. It refuses unapproved, regressed, rejected, or validation-missing recommendation rows.
 - `agentops alert handoff --events` now attaches matching config-change annotations plus a session-scoped annotation KQL query to alert operator handoffs and route previews.
@@ -1226,7 +1226,6 @@ Required work:
 
 - Replace the deterministic first-party response draft with a live assistant response flow inside Grafana or the hosted AgentOps page.
 - Apply approved recommendation patches from the hosted workflow after the guarded action plan passes benchmark and after-run comparison.
-- Surface alert handoff shared ids in a dashboard action once alert handoff rows are promoted into the shared dashboard model.
 
 ### 4. Robust Eval Center
 
@@ -1291,7 +1290,7 @@ Required work:
   - recommendation panels
   - annotations
   - better saved views
-- Surface alert handoff shared ids in dashboard actions once alert handoff rows are promoted into the shared dashboard model.
+  - alert handoff review rows
 - Add collector health and data quality dashboards.
 - Add run comparison views.
 
