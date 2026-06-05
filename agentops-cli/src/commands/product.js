@@ -224,8 +224,8 @@ function productAudit(options = {}) {
 
   checks.push(check(
     'ask-agentops-response-flow',
-    fileIncludes('actioner/index.js', ['metadata-only-assistant-response', 'root_cause_candidates', 'rollback_condition'])
-      && fileIncludes('actioner/README.md', ['first-party metadata-only response draft'])
+    fileIncludes('actioner/index.js', ['metadata-only-assistant-response', 'root_cause_candidates', 'rollback_condition', 'change_target_refs'])
+      && fileIncludes('actioner/README.md', ['first-party metadata-only response draft', 'ChangeTargetRefs', 'benchmark run id'])
       && fileIncludes('docs/agentops-architecture-product-audit.md', ['first-party metadata-only response draft']),
     ['actioner/index.js', 'actioner/README.md', 'docs/agentops-architecture-product-audit.md'],
     []

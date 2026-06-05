@@ -8776,6 +8776,26 @@ test('shared store editor renders browser-native metadata-only write form', asyn
 });
 
 test('ask agentops launcher builds metadata-only assistant context', async () => {
+  const recommendationRow = {
+    TimeGenerated: '2026-06-05T12:00:00.000Z',
+    RecommendationId: 'rec-123',
+    RunId: 'run-123',
+    SessionId: 'session-123',
+    TraceId: 'trace-123',
+    Action: 'compare_regression',
+    Severity: 'high',
+    ObservedPattern: 'Eval regression after skill change.',
+    NextAction: 'Open the skill diff and rerun benchmark bench-123.',
+    BenchmarkRunId: 'bench-123',
+    BenchmarkDecision: 'review',
+    BenchmarkArtifactFiles: [{ task_id: 'task-1', change: 'modified', path: 'skills/agentops/SKILL.md' }],
+    BenchmarkArtifactContentDiffs: [{ task_id: 'task-1', change: 'modified', path: 'benchmarks/output.md', diff_preview: 'raw diff is intentionally omitted from page summary' }],
+    ChangeTargetRefs: ['skill:agentops-latest-run'],
+    DashboardTitles: ['Run Replay'],
+    DashboardCount: 1,
+    Validation: ['agentops experimental benchmark report bench-123'],
+    RollbackCondition: 'Revert the skill change if eval score drops.'
+  };
   const packet = buildAskAgentOpsLaunch({
     run_id: 'run-123',
     session_id: 'session-123',
@@ -8783,7 +8803,8 @@ test('ask agentops launcher builds metadata-only assistant context', async () =>
     dashboard_url: 'https://grafana.example/d/agentops-v2-run-replay',
     selected_event: 'tool failure',
     benchmark_run_id: 'bench-123',
-    last: '2h'
+    last: '2h',
+    recommendation: recommendationRow
   }, {
     assistantBaseUrl: 'https://assistant.example/ask'
   });
@@ -8796,8 +8817,15 @@ test('ask agentops launcher builds metadata-only assistant context', async () =>
   assert.equal(packet.assistant_response.mode, 'metadata-only-assistant-response');
   assert.equal(packet.assistant_response.status, 'draft');
   assert.ok(packet.assistant_response.evidence.includes('RunId=run-123'));
+  assert.ok(packet.assistant_response.evidence.includes('RecommendationId=rec-123'));
+  assert.ok(packet.assistant_response.evidence.includes('RecommendationBenchmarkRunId=bench-123'));
+  assert.ok(packet.assistant_response.evidence.includes('ChangeTargetRefs=skill:agentops-latest-run'));
+  assert.equal(packet.assistant_response.recommendation.change_target_refs[0], 'skill:agentops-latest-run');
+  assert.equal(packet.assistant_response.recommendation.benchmark_artifact_files[0].path, 'skills/agentops/SKILL.md');
+  assert.equal(packet.assistant_response.recommendation.benchmark_artifact_content_diff_files[0].path, 'benchmarks/output.md');
+  assert.equal(packet.assistant_response.proposed_action, 'Open the skill diff and rerun benchmark bench-123.');
   assert.ok(packet.assistant_response.validation.some(item => item.includes('bench-123')));
-  assert.match(packet.assistant_response.rollback_condition, /eval score drops/);
+  assert.equal(packet.assistant_response.rollback_condition, 'Revert the skill change if eval score drops.');
   assert.match(packet.launch_url, /^https:\/\/assistant\.example\/ask\?q=/);
   assert.doesNotMatch(JSON.stringify(packet), /SECRET_FAKE_TEST_VALUE|raw transcript|tool_args|file_content/);
 
@@ -8840,10 +8868,38 @@ test('ask agentops launcher builds metadata-only assistant context', async () =>
   assert.match(htmlContext.res.body, /Response Draft/);
   assert.match(htmlContext.res.body, /Root-cause candidates/);
 
+  const recommendationHtmlContext = {};
+  await askAgentOps(recommendationHtmlContext, {
+    body: {
+      run_id: 'run-123',
+      recommendation: recommendationRow
+    },
+    headers: {
+      accept: 'text/html'
+    }
+  });
+  assert.equal(recommendationHtmlContext.res.status, 200);
+  assert.match(recommendationHtmlContext.res.body, /Recommendation/);
+  assert.match(recommendationHtmlContext.res.body, /skill:agentops-latest-run/);
+  assert.match(recommendationHtmlContext.res.body, /benchmarks\/output\.md/);
+  assert.doesNotMatch(recommendationHtmlContext.res.body, /raw diff is intentionally omitted/);
+
   const invalid = buildAskAgentOpsLaunch({ last: 'forever' });
   assert.equal(invalid.status, 'invalid');
   assert.ok(invalid.errors.some(error => error.includes('required')));
   assert.ok(invalid.errors.some(error => error.includes('invalid time range')));
+
+  const invalidRecommendation = buildAskAgentOpsLaunch({
+    run_id: 'run-123',
+    recommendation: {
+      RecommendationId: 'rec-bad',
+      Severity: 'medium',
+      Prompt: 'raw prompt'
+    }
+  });
+  assert.equal(invalidRecommendation.status, 'invalid');
+  assert.ok(invalidRecommendation.errors.some(error => error.includes('recommendation: missing required recommendation field')));
+  assert.ok(invalidRecommendation.errors.some(error => error.includes('raw content field: Prompt')));
 });
 
 test('alert history exposes metadata-only fired-alert query', () => {

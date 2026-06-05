@@ -269,11 +269,13 @@ function buildAskAgentOpsLaunch(payload = {}, options = {}) {
   const dashboardUrl = stringValue(payload.dashboard_url || payload.dashboardUrl || payload.url).trim();
   const selectedEvent = stringValue(payload.selected_event || payload.selectedEvent || payload.event).trim();
   const benchmark = stringValue(payload.benchmark || payload.benchmark_run_id || payload.benchmarkRunId).trim();
+  const recommendation = recommendationEvidenceFromPayload(payload);
   const assistantBaseUrl = stringValue(options.assistantBaseUrl || payload.assistant_url || process.env.AGENTOPS_ASSISTANT_URL).trim();
   const errors = [];
 
   if (!runId && !sessionId && !traceId) errors.push('run_id, session_id, or trace_id is required');
   if (!/^\d+[mhd]$/.test(last)) errors.push(`invalid time range: ${last}`);
+  if (recommendation?.errors.length) errors.push(...recommendation.errors.map(error => `recommendation: ${error}`));
 
   const identity = [
     runId ? `run ${runId}` : '',
@@ -299,7 +301,8 @@ function buildAskAgentOpsLaunch(payload = {}, options = {}) {
     last,
     dashboardUrl,
     selectedEvent,
-    benchmark
+    benchmark,
+    recommendation: recommendation?.summary || null
   });
 
   return {
@@ -313,6 +316,7 @@ function buildAskAgentOpsLaunch(payload = {}, options = {}) {
     dashboard_url: dashboardUrl || null,
     selected_event: selectedEvent || null,
     benchmark_run_id: benchmark || null,
+    recommendation: recommendation?.summary || null,
     prompt: errors.length ? null : prompt,
     assistant_response: assistantResponse,
     launch_url: !errors.length && assistantBaseUrl
@@ -331,7 +335,62 @@ function buildAskAgentOpsLaunch(payload = {}, options = {}) {
   };
 }
 
+function objectPayload(value) {
+  if (!value) return null;
+  if (typeof value === 'object' && !Array.isArray(value)) return value;
+  if (typeof value !== 'string') return null;
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function recommendationEvidenceFromPayload(payload = {}) {
+  const row = objectPayload(payload.recommendation || payload.recommendation_row || payload.recommendationRow);
+  if (!row) return null;
+
+  const validation = validateRecommendationRow(row);
+  if (!validation.ok) return { summary: null, errors: validation.errors };
+
+  const artifactFiles = Array.isArray(row.BenchmarkArtifactFiles)
+    ? row.BenchmarkArtifactFiles.map(item => ({
+      task_id: stringValue(item?.task_id),
+      change: stringValue(item?.change),
+      path: stringValue(item?.path)
+    })).filter(item => item.path).slice(0, 50)
+    : [];
+  const artifactContentDiffFiles = Array.isArray(row.BenchmarkArtifactContentDiffs)
+    ? row.BenchmarkArtifactContentDiffs.map(item => ({
+      task_id: stringValue(item?.task_id),
+      change: stringValue(item?.change),
+      path: stringValue(item?.path)
+    })).filter(item => item.path).slice(0, 50)
+    : [];
+
+  return {
+    summary: {
+      recommendation_id: stringValue(row.RecommendationId),
+      action: stringValue(row.Action),
+      severity: stringValue(row.Severity),
+      observed_pattern: stringValue(row.ObservedPattern),
+      next_action: stringValue(row.NextAction),
+      benchmark_run_id: stringValue(row.BenchmarkRunId),
+      benchmark_decision: stringValue(row.BenchmarkDecision),
+      benchmark_artifact_files: artifactFiles,
+      benchmark_artifact_content_diff_files: artifactContentDiffFiles,
+      change_target_refs: Array.isArray(row.ChangeTargetRefs) ? row.ChangeTargetRefs.map(stringValue).filter(Boolean).slice(0, 50) : [],
+      validation: Array.isArray(row.Validation) ? row.Validation.map(stringValue).filter(Boolean).slice(0, 20) : [],
+      rollback_condition: stringValue(row.RollbackCondition),
+      dashboard_titles: Array.isArray(row.DashboardTitles) ? row.DashboardTitles.map(stringValue).filter(Boolean).slice(0, 20) : []
+    },
+    errors: []
+  };
+}
+
 function buildAskAgentOpsResponse(context = {}) {
+  const recommendation = context.recommendation || null;
   const evidence = [
     context.runId ? `RunId=${context.runId}` : '',
     context.sessionId ? `SessionId=${context.sessionId}` : '',
@@ -339,10 +398,16 @@ function buildAskAgentOpsResponse(context = {}) {
     `TimeRange=${context.last}`,
     context.dashboardUrl ? 'RunReplayUrl=provided' : '',
     context.selectedEvent ? `SelectedEvent=${context.selectedEvent}` : '',
-    context.benchmark ? `BenchmarkRunId=${context.benchmark}` : ''
+    context.benchmark ? `BenchmarkRunId=${context.benchmark}` : '',
+    recommendation?.recommendation_id ? `RecommendationId=${recommendation.recommendation_id}` : '',
+    recommendation?.benchmark_run_id ? `RecommendationBenchmarkRunId=${recommendation.benchmark_run_id}` : '',
+    recommendation?.change_target_refs?.length ? `ChangeTargetRefs=${recommendation.change_target_refs.join(', ')}` : ''
   ].filter(Boolean);
 
   const rootCauseCandidates = [
+    recommendation?.observed_pattern
+      ? `Use the linked recommendation pattern: ${recommendation.observed_pattern}`
+      : '',
     context.selectedEvent
       ? `Start with the selected event "${context.selectedEvent}" and inspect adjacent run timeline rows.`
       : 'Start with failed, denied, high-cost, or high-latency rows in the run timeline.',
@@ -357,15 +422,40 @@ function buildAskAgentOpsResponse(context = {}) {
     status: 'draft',
     summary: 'Open the run-scoped metadata, identify the strongest failure/cost/safety/context signal, and choose one minimal next action.',
     evidence,
-    root_cause_candidates: rootCauseCandidates,
-    proposed_action: 'Open Run Replay, run the starter KQL, then create or update one recommendation with evidence, validation, and rollback metadata.',
+    root_cause_candidates: rootCauseCandidates.filter(Boolean),
+    recommendation,
+    proposed_action: recommendation?.next_action || 'Open Run Replay, run the starter KQL, then create or update one recommendation with evidence, validation, and rollback metadata.',
     validation: [
+      ...(recommendation?.validation || []),
       `Re-run the starter KQL for ${context.last}.`,
-      context.benchmark ? `Re-run or review benchmark ${context.benchmark}.` : 'Run the relevant benchmark or dashboard query before promotion.',
+      context.benchmark || recommendation?.benchmark_run_id
+        ? `Re-run or review benchmark ${context.benchmark || recommendation.benchmark_run_id}.`
+        : 'Run the relevant benchmark or dashboard query before promotion.',
       'Confirm no prompt, response, tool argument, tool result, source code, file content, or secret capture was enabled.'
     ],
-    rollback_condition: 'Rollback or reject the agent, skill, MCP, model, or instruction change if eval score drops, failures rise, cost increases unexpectedly, or privacy signals appear.'
+    rollback_condition: recommendation?.rollback_condition || 'Rollback or reject the agent, skill, MCP, model, or instruction change if eval score drops, failures rise, cost increases unexpectedly, or privacy signals appear.'
   };
+}
+
+function renderList(items = []) {
+  return items.length ? `<ul>${items.map(item => `<li>${htmlEscape(item)}</li>`).join('')}</ul>` : '<p>None.</p>';
+}
+
+function renderRecommendationEvidence(recommendation) {
+  if (!recommendation) return '';
+  const artifactFiles = [
+    ...recommendation.benchmark_artifact_files,
+    ...recommendation.benchmark_artifact_content_diff_files
+  ].map(item => [item.task_id, item.change, item.path].filter(Boolean).join(' - '));
+  return `<h3>Recommendation</h3>
+      <p>${htmlEscape([recommendation.severity, recommendation.action, recommendation.recommendation_id].filter(Boolean).join(' / '))}</p>
+      <p>${htmlEscape(recommendation.observed_pattern)}</p>
+      <h4>Change targets</h4>
+      ${renderList(recommendation.change_target_refs)}
+      <h4>Benchmark</h4>
+      ${renderList([recommendation.benchmark_run_id, recommendation.benchmark_decision].filter(Boolean))}
+      <h4>Artifact files</h4>
+      ${renderList(artifactFiles)}`;
 }
 
 function renderAskAgentOpsLaunch(packet) {
@@ -406,6 +496,7 @@ function renderAskAgentOpsLaunch(packet) {
       <ul>${packet.assistant_response.evidence.map(item => `<li>${htmlEscape(item)}</li>`).join('')}</ul>
       <h3>Root-cause candidates</h3>
       <ul>${packet.assistant_response.root_cause_candidates.map(item => `<li>${htmlEscape(item)}</li>`).join('')}</ul>
+      ${renderRecommendationEvidence(packet.assistant_response.recommendation)}
       <h3>Next action</h3>
       <p>${htmlEscape(packet.assistant_response.proposed_action)}</p>
       <h3>Validation</h3>
