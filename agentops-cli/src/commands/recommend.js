@@ -395,18 +395,7 @@ function benchmarkEvidenceFromReport(report = null) {
 }
 
 function metricMovementForRecommendation(run = {}, insight = {}, evaluation = {}, benchmark = null) {
-  const before = {
-    run_id: run.RunId || '',
-    eval_overall: evaluation?.EvalOverall ?? run.EvalOverall ?? null,
-    eval_bucket: evaluation?.EvalBucket || '',
-    estimated_cost_usd: run.EstimatedCostUsd ?? null,
-    input_tokens: run.InputTokens ?? null,
-    output_tokens: run.OutputTokens ?? null,
-    tool_failure_count: run.ToolFailureCount ?? null,
-    tool_denied_count: run.ToolDeniedCount ?? null,
-    risk_score: run.RiskScore ?? null,
-    outcome_status: run.OutcomeStatus || ''
-  };
+  const before = telemetrySnapshot(run, evaluation);
   const expected = [];
   if (insight?.BaselineValue !== undefined || insight?.CurrentValue !== undefined) {
     expected.push({
@@ -445,8 +434,23 @@ function metricMovementForRecommendation(run = {}, insight = {}, evaluation = {}
     after: {},
     observed: {
       status: 'awaiting-after-run',
-      compare_command: `agentops recommend ${run.RunId || 'latest'} --runs <after-AgentOpsRunSummary_CL.jsonl> --evals <after-AgentOpsEval_CL.jsonl> --insights <after-AgentOpsInsights_CL.jsonl>`
+      compare_command: `agentops recommend compare --recommendation-id <id> --after-runs <after-AgentOpsRunSummary_CL.jsonl> --after-evals <after-AgentOpsEval_CL.jsonl>`
     }
+  };
+}
+
+function telemetrySnapshot(run = {}, evaluation = {}) {
+  return {
+    run_id: run.RunId || '',
+    eval_overall: evaluation?.EvalOverall ?? run.EvalOverall ?? null,
+    eval_bucket: evaluation?.EvalBucket || '',
+    estimated_cost_usd: run.EstimatedCostUsd ?? null,
+    input_tokens: run.InputTokens ?? null,
+    output_tokens: run.OutputTokens ?? null,
+    tool_failure_count: run.ToolFailureCount ?? null,
+    tool_denied_count: run.ToolDeniedCount ?? null,
+    risk_score: run.RiskScore ?? null,
+    outcome_status: run.OutcomeStatus || ''
   };
 }
 
@@ -693,6 +697,92 @@ function exportRecommendationStore({ storePath = defaultRecommendationStorePath(
   return { out_dir: absoluteDir, file, manifest, rows_written: rows.length, rows };
 }
 
+function metricValue(snapshot = {}, metric) {
+  const key = {
+    EvalOverall: 'eval_overall',
+    EstimatedCostUsd: 'estimated_cost_usd',
+    ToolFailureCount: 'tool_failure_count',
+    ToolDeniedCount: 'tool_denied_count',
+    RiskScore: 'risk_score'
+  }[metric] || metric;
+  return snapshot[key];
+}
+
+function movementResults(row = {}, after = {}) {
+  const before = row.BeforeTelemetry || {};
+  const expected = Array.isArray(row.ExpectedMetricMovement?.metrics) ? row.ExpectedMetricMovement.metrics : [];
+  return expected
+    .map(metric => {
+      const name = metric.metric;
+      const beforeValue = metricValue(before, name) ?? metric.current_value ?? metric.baseline_value ?? null;
+      const afterValue = metricValue(after, name);
+      if (typeof beforeValue !== 'number' || typeof afterValue !== 'number') return null;
+      const direction = metric.expected_direction || 'decrease';
+      const delta = Number((afterValue - beforeValue).toFixed(6));
+      const passed = direction === 'increase' ? delta >= 0 : delta <= 0;
+      return {
+        metric: name,
+        expected_direction: direction,
+        before_value: beforeValue,
+        after_value: afterValue,
+        delta,
+        passed
+      };
+    })
+    .filter(Boolean);
+}
+
+function observedMovementStatus(results = []) {
+  if (results.length === 0) return 'no-comparable-metrics';
+  if (results.every(result => result.passed)) return 'improved';
+  if (results.every(result => !result.passed)) return 'regressed';
+  return 'mixed';
+}
+
+function compareRecommendationAfterRun({
+  storePath = defaultRecommendationStorePath(),
+  recommendationId,
+  afterRunsFile,
+  afterEvalsFile,
+  afterRunId,
+  comparedAt = new Date().toISOString()
+} = {}) {
+  if (!recommendationId) throw new Error('recommend compare requires --recommendation-id <id>');
+  if (!afterRunsFile) throw new Error('recommend compare requires --after-runs <AgentOpsRunSummary_CL.jsonl>');
+
+  const payload = readRecommendationStore(storePath);
+  const row = payload.recommendations.find(item => item.RecommendationId === recommendationId);
+  if (!row) throw new Error(`recommendation not found: ${recommendationId}`);
+
+  const afterRuns = readJsonl(afterRunsFile);
+  const afterRun = afterRunId
+    ? afterRuns.find(item => item.RunId === afterRunId)
+    : latestByTime(afterRuns);
+  if (!afterRun) throw new Error('no after-run rows were available');
+
+  const afterEval = readJsonl(afterEvalsFile).find(item => item.RunId === afterRun.RunId) || null;
+  const after = telemetrySnapshot(afterRun, afterEval);
+  const results = movementResults(row, after);
+  const updated = {
+    ...row,
+    AfterTelemetry: after,
+    ObservedMetricMovement: {
+      status: observedMovementStatus(results),
+      compared_at: comparedAt,
+      after_run_id: after.RunId || after.run_id || afterRun.RunId || '',
+      results
+    }
+  };
+  const validation = validateRecommendationRow(updated);
+  if (!validation.ok) throw new Error(`updated recommendation row failed schema validation: ${validation.errors.join('; ')}`);
+
+  const next = payload.recommendations
+    .map(item => item.RecommendationId === recommendationId ? updated : item)
+    .sort((left, right) => String(right.TimeGenerated || '').localeCompare(String(left.TimeGenerated || '')));
+  writeRecommendationStore({ recommendations: next }, storePath);
+  return { path: storePath, updated, after_run: afterRun.RunId || '', status: updated.ObservedMetricMovement.status };
+}
+
 function recommendationStoreCommand(args = []) {
   const subcommand = args[0];
   const storePath = optionValue(args, '--store') || defaultRecommendationStorePath();
@@ -707,6 +797,7 @@ function recommendationStoreCommand(args = []) {
         Action: row.Action,
         RunId: row.RunId,
         NextAction: row.NextAction,
+        ObservedMetricMovementStatus: row.ObservedMetricMovement?.status || '',
         ChangeTargetRefs: row.ChangeTargetRefs || []
       }))
     };
@@ -717,7 +808,16 @@ function recommendationStoreCommand(args = []) {
       export: exportRecommendationStore({ storePath, outDir: optionValue(args, '--out') })
     };
   }
-  throw new Error('recommend requires latest|<run-id>, list, or export');
+  if (subcommand === 'compare') {
+    return compareRecommendationAfterRun({
+      storePath,
+      recommendationId: optionValue(args, '--recommendation-id'),
+      afterRunsFile: optionValue(args, '--after-runs'),
+      afterEvalsFile: optionValue(args, '--after-evals'),
+      afterRunId: optionValue(args, '--after-run-id')
+    });
+  }
+  throw new Error('recommend requires latest|<run-id>, list, export, or compare');
 }
 
 function renderRecommendationV2(recommendation) {
@@ -757,7 +857,7 @@ function renderRecommendationV2(recommendation) {
 }
 
 function recommendCommand(args = []) {
-  if (args[0] === 'list' || args[0] === 'export') {
+  if (args[0] === 'list' || args[0] === 'export' || args[0] === 'compare') {
     process.stdout.write(`${JSON.stringify(recommendationStoreCommand(args), null, 2)}\n`);
     return;
   }
@@ -809,6 +909,7 @@ module.exports = {
   normalizeChangeAnnotation,
   dashboardUrl,
   benchmarkEvidenceFromReport,
+  compareRecommendationAfterRun,
   exportRecommendationStore,
   firstPositional,
   fileRefsForRecommendation,

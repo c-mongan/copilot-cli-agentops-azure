@@ -33,7 +33,7 @@ const { browserProfileOptionsFromArgs, checkReportHtml, e2eAuthProfile, grafanaA
 const { hasV2Args } = require('../src/commands/explain');
 const { openV2FromFiles, renderOpenV2 } = require('../src/commands/open');
 const { productAudit, productAuditWithVisual, renderProductAudit, validateVisualEvidence, visualAuditRecoveryCommands } = require('../src/commands/product');
-const { benchmarkEvidenceFromReport, changeAnnotationsForRun, exportRecommendationStore, firstPositional: firstRecommendPositional, normalizeChangeAnnotation, recommendFromFiles, recommendationRow, recommendationStoreCommand, renderRecommendationV2, saveRecommendation, writeRecommendation } = require('../src/commands/recommend');
+const { benchmarkEvidenceFromReport, changeAnnotationsForRun, compareRecommendationAfterRun, exportRecommendationStore, firstPositional: firstRecommendPositional, normalizeChangeAnnotation, recommendFromFiles, recommendationRow, recommendationStoreCommand, renderRecommendationV2, saveRecommendation, writeRecommendation } = require('../src/commands/recommend');
 const { demoOptionsFromArgs, demoVerifyCommand } = require('../src/commands/demo');
 const { buildTriage, renderTriage, writeTriage } = require('../src/commands/triage');
 const { buildAzureIngestPlan, buildSharedStorageUploadPlan, renderSharedStorageUploadPlan } = require('../src/lib/azure/v2-ingest-plan');
@@ -1407,6 +1407,24 @@ test('V2 recommend persists local recommendation store and exports table rows', 
         eval: null,
         pattern: null,
         benchmark: null,
+        metric_movement: {
+          expected: {
+            status: 'ready',
+            metrics: [
+              { metric: 'EvalOverall', current_value: 60, expected_direction: 'increase' },
+              { metric: 'ToolFailureCount', current_value: 2, expected_direction: 'decrease' }
+            ]
+          },
+          before: {
+            run_id: 'run-store',
+            eval_overall: 60,
+            tool_failure_count: 2
+          },
+          after: {},
+          observed: {
+            status: 'awaiting-after-run'
+          }
+        },
         change_annotations: [{
           time_generated: '2026-06-03T12:00:00Z',
           component: 'skill',
@@ -1426,17 +1444,44 @@ test('V2 recommend persists local recommendation store and exports table rows', 
     };
 
     const saved = saveRecommendation(recommendation, storePath, '2026-06-03T12:00:01Z');
+    const afterRunsFile = path.join(tempDir, 'after-runs.jsonl');
+    const afterEvalsFile = path.join(tempDir, 'after-evals.jsonl');
+    fs.writeFileSync(afterRunsFile, `${JSON.stringify({
+      TimeGenerated: '2026-06-03T12:10:00Z',
+      RunId: 'run-store-after',
+      ToolFailureCount: 0,
+      OutcomeStatus: 'success'
+    })}\n`);
+    fs.writeFileSync(afterEvalsFile, `${JSON.stringify({
+      TimeGenerated: '2026-06-03T12:10:01Z',
+      RunId: 'run-store-after',
+      EvalOverall: 72,
+      EvalBucket: 'good'
+    })}\n`);
+    const compared = compareRecommendationAfterRun({
+      storePath,
+      recommendationId: saved.saved.RecommendationId,
+      afterRunsFile,
+      afterEvalsFile,
+      comparedAt: '2026-06-03T12:11:00Z'
+    });
     const listed = recommendationStoreCommand(['list', '--store', storePath]);
     const exported = exportRecommendationStore({ storePath, outDir: exportDir });
     const exportedRows = fs.readFileSync(exported.file, 'utf8').trim().split(/\r?\n/).map(line => JSON.parse(line));
 
     assert.equal(saved.count, 1);
+    assert.equal(compared.status, 'improved');
     assert.equal(listed.recommendations.length, 1);
     assert.equal(listed.recommendations[0].RunId, 'run-store');
+    assert.equal(listed.recommendations[0].ObservedMetricMovementStatus, 'improved');
     assert.deepEqual(listed.recommendations[0].ChangeTargetRefs, ['skill:agentops-latest-run']);
     assert.equal(exported.rows_written, 1);
     assert.equal(exportedRows[0].RecommendationId, saved.saved.RecommendationId);
     assert.equal(exportedRows[0].ChangeAnnotations[0].change_id, 'change-store');
+    assert.equal(exportedRows[0].AfterTelemetry.run_id, 'run-store-after');
+    assert.equal(exportedRows[0].AfterTelemetry.eval_overall, 72);
+    assert.equal(exportedRows[0].ObservedMetricMovement.status, 'improved');
+    assert.equal(exportedRows[0].ObservedMetricMovement.results.length, 2);
     assert.equal(recommendationStoreCommand(['export', '--store', storePath, '--out', exportDir]).export.rows_written, 1);
     assert.doesNotMatch(JSON.stringify(exportedRows), /prompt|response|tool args|source code/i);
   } finally {

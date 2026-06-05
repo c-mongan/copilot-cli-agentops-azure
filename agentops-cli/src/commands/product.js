@@ -231,6 +231,15 @@ function productAudit(options = {}) {
     []
   ));
 
+  checks.push(check(
+    'recommendation-metric-movement',
+    fileIncludes('agentops-cli/src/commands/recommend.js', ['compareRecommendationAfterRun', 'AfterTelemetry', 'ObservedMetricMovement'])
+      && fileIncludes('docs/evals-and-insights.md', ['agentops recommend compare'])
+      && fileIncludes('docs/agentops-architecture-product-audit.md', ['AfterTelemetry']),
+    ['agentops-cli/src/commands/recommend.js', 'docs/evals-and-insights.md', 'docs/agentops-architecture-product-audit.md'],
+    []
+  ));
+
   let liveDashboard = null;
   let liveAzure = null;
   if (live) {

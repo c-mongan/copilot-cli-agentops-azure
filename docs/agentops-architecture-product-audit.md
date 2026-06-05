@@ -1061,7 +1061,7 @@ This is strong for technical users.
 Missing world-class behavior:
 
 - The dashboard now gives the agent explicit session context, Run Replay URL, starter KQL, copyable `agentops ask-context` commands, and a linked `AskAgentOpsLaunch` action for the hosted `/api/ask-agentops` page/packet. The hosted page now includes a first-party metadata-only response draft, but it still does not run a fully embedded live assistant inside Grafana.
-- Recommendations are now present in Run Replay as first-class artifacts with copyable follow-up commands, a local metadata-only recommendation store, an opt-in shared Blob upload plan, a hosted metadata-only write API, and a hosted browser editor for team review artifacts. The hosted Ask AgentOps flow can now render recommendation target refs, benchmark links, artifact file paths, `ExpectedMetricMovement`, `BeforeTelemetry`, validation, and rollback, but the dashboard still does not execute the patch/action workflow for the user.
+- Recommendations are now present in Run Replay as first-class artifacts with copyable follow-up commands, a local metadata-only recommendation store, an opt-in shared Blob upload plan, a hosted metadata-only write API, and a hosted browser editor for team review artifacts. The CLI can compare a completed follow-up run with `agentops recommend compare` and populate `AfterTelemetry` plus pass/fail `ObservedMetricMovement`. The hosted Ask AgentOps flow can now render recommendation target refs, benchmark links, artifact file paths, `ExpectedMetricMovement`, `BeforeTelemetry`, `AfterTelemetry`, validation, and rollback, but the dashboard still does not execute the patch/action workflow for the user.
 - Saved investigations now surface on the Home dashboard from metadata-only `AgentOpsSavedViews_CL` exports, with an opt-in shared Blob store, hosted metadata-only write API, and browser-native saved-view editor.
 - Saved-view exports can now include session-matched config-change annotation counts and change-target refs from `--events`, so saved investigations keep the nearby skill/hook/MCP/model change context.
 
@@ -1157,8 +1157,8 @@ Implemented first slice:
 - `actioner/AskAgentOps` now renders a hosted metadata-only assistant launch packet/page for a selected run, session, or trace, with optional `AGENTOPS_ASSISTANT_URL` deep links.
 - The Run Replay `Ask AgentOps context` panel now includes an `AskAgentOpsLaunch` action URL driven by the configurable `actioner_url` dashboard variable.
 - `actioner/AskAgentOps` now includes a first-party metadata-only response draft with evidence, root-cause candidates, proposed action, validation, and rollback condition so the hosted workflow has an immediate investigation answer even before an external assistant is configured.
-- `actioner/AskAgentOps` can now accept a schema-valid metadata-only recommendation row and render linked `ChangeTargetRefs`, benchmark run id/decision, artifact file paths, validation steps, and rollback without rendering raw diff content.
-- Recommendation rows now carry metadata-only `ExpectedMetricMovement`, `BeforeTelemetry`, `AfterTelemetry`, and `ObservedMetricMovement` fields so reviews can track the intended metric movement and await an after-run comparison.
+- `actioner/AskAgentOps` can now accept a schema-valid metadata-only recommendation row and render linked `ChangeTargetRefs`, benchmark run id/decision, artifact file paths, expected/before/after metric movement, validation steps, and rollback without rendering raw diff content.
+- Recommendation rows now carry metadata-only `ExpectedMetricMovement`, `BeforeTelemetry`, `AfterTelemetry`, and `ObservedMetricMovement` fields. `agentops recommend compare` populates the after-run snapshot and marks metric movement as improved, mixed, regressed, or not comparable.
 - `agentops alert handoff --events` now attaches matching config-change annotations plus a session-scoped annotation KQL query to alert operator handoffs and route previews.
 - `agentops saved-view add|export --events` now attaches matching config-change annotations to saved investigations and surfaces annotation counts/refs on the Home dashboard.
 - `agentops init --import-dashboards` now runs the dashboard import remediation stage explicitly during the init flow, then continues toward smoke/open next steps.
@@ -1222,7 +1222,7 @@ Required work:
 
 - Replace the deterministic first-party response draft with a live assistant response flow inside Grafana or the hosted AgentOps page.
 - Promote recommendation-linked target refs and benchmark evidence from the hosted page into a guided review/action workflow.
-- Populate `AfterTelemetry` from a completed follow-up run and show pass/fail movement in the guided review/action workflow.
+- Promote before/after movement into the hosted guided review/action workflow so operators can approve or reject recommendations from the same page.
 - Use annotation-linked recommendations, alert handoffs, and saved views in the hosted workflow once shared storage exists.
 
 ### 4. Robust Eval Center
