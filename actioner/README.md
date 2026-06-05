@@ -3,6 +3,7 @@
 The actioner is an opt-in Azure Functions package for metadata-only AgentOps workflow APIs. It includes:
 
 - `AlertActioner`: turns an Azure Monitor alert payload into a metadata-only review packet with run links, alert history KQL, action-plan evidence, and an optional preview-only GitHub route plan.
+- `AskAgentOps`: renders a metadata-only assistant launch packet/page for a run, session, or trace.
 - `SharedStoreWrite`: accepts one metadata-only recommendation or saved-view row and writes it to the shared Blob artifact store.
 - `SharedStoreEditor`: renders a small browser form for creating metadata-only recommendation or saved-investigation rows through `SharedStoreWrite`.
 
@@ -21,6 +22,19 @@ The actioner expects Azure Monitor common alert schema payloads with:
 - optional `data.customProperties["agentops.last"]`
 
 If required metadata is missing, it returns `needs-review` and does not create a route plan.
+
+## Ask AgentOps Launcher
+
+Use the hosted launcher to open an assistant with run-scoped metadata already assembled. It does not call an LLM by itself; it returns a safe prompt and, when `AGENTOPS_ASSISTANT_URL` is configured, an assistant launch URL with the prompt encoded.
+
+HTTP route:
+
+```text
+GET  /api/ask-agentops?run_id=<run>&session_id=<session>&trace_id=<trace>&last=24h
+POST /api/ask-agentops
+```
+
+Supported metadata fields are `run_id`, `session_id`, `trace_id`, `dashboard_url`, `selected_event`, `benchmark_run_id`, and `last`. Add `format=json` or send `Accept: application/json` to receive the packet instead of the browser page.
 
 ## Shared Store Write API
 

@@ -53,6 +53,15 @@ function safeBlobSegment(value) {
     .slice(0, 120);
 }
 
+function htmlEscape(value) {
+  return stringValue(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function rowIdFor(table, row) {
   const candidate = table === 'AgentOpsRecommendations_CL'
     ? row.RecommendationId
@@ -248,6 +257,101 @@ function buildSharedStoreEditor(options = {}) {
     });
     loadSample();
   </script>
+</body>
+</html>`;
+}
+
+function buildAskAgentOpsLaunch(payload = {}, options = {}) {
+  const runId = stringValue(payload.run_id || payload.runId || payload.RunId).trim();
+  const sessionId = stringValue(payload.session_id || payload.sessionId || payload.SessionId).trim();
+  const traceId = stringValue(payload.trace_id || payload.traceId || payload.TraceId).trim();
+  const last = stringValue(payload.last || payload.time_range || payload.timeRange || '24h').trim() || '24h';
+  const dashboardUrl = stringValue(payload.dashboard_url || payload.dashboardUrl || payload.url).trim();
+  const selectedEvent = stringValue(payload.selected_event || payload.selectedEvent || payload.event).trim();
+  const benchmark = stringValue(payload.benchmark || payload.benchmark_run_id || payload.benchmarkRunId).trim();
+  const assistantBaseUrl = stringValue(options.assistantBaseUrl || payload.assistant_url || process.env.AGENTOPS_ASSISTANT_URL).trim();
+  const errors = [];
+
+  if (!runId && !sessionId && !traceId) errors.push('run_id, session_id, or trace_id is required');
+  if (!/^\d+[mhd]$/.test(last)) errors.push(`invalid time range: ${last}`);
+
+  const identity = [
+    runId ? `run ${runId}` : '',
+    sessionId ? `session ${sessionId}` : '',
+    traceId ? `trace ${traceId}` : ''
+  ].filter(Boolean).join(', ');
+  const query = `AgentOpsRunSummary_CL | where TimeGenerated > ago(${last}) | where RunId == "${runId}" or SessionId == "${sessionId}" or TraceId == "${traceId}" | project TimeGenerated, RunId, SessionId, TraceId, OutcomeStatus, OutcomeReason`;
+  const prompt = [
+    `Investigate AgentOps ${identity || 'run context'}.`,
+    dashboardUrl ? `Dashboard: ${dashboardUrl}` : '',
+    `Time range: ${last}.`,
+    `Start with KQL: ${query}`,
+    selectedEvent ? `Selected event: ${selectedEvent}.` : '',
+    benchmark ? `Recent benchmark: ${benchmark}.` : '',
+    'Use only metadata from AgentOps dashboards, KQL, and exported artifacts.',
+    'Return evidence, root-cause candidates, one minimal proposed patch or workflow action, validation benchmark/query, and rollback condition.',
+    'Do not request or enable prompt, response, source code, file content, tool argument, tool result, URL, request body, response body, or secret capture.'
+  ].filter(Boolean).join('\n');
+
+  return {
+    schema_version: 'agentops.ask-agentops-launch.v1',
+    mode: 'metadata-only-assistant-launch',
+    status: errors.length ? 'invalid' : 'ready',
+    run_id: runId || null,
+    session_id: sessionId || null,
+    trace_id: traceId || null,
+    last,
+    dashboard_url: dashboardUrl || null,
+    selected_event: selectedEvent || null,
+    benchmark_run_id: benchmark || null,
+    prompt: errors.length ? null : prompt,
+    launch_url: !errors.length && assistantBaseUrl
+      ? `${assistantBaseUrl}${assistantBaseUrl.includes('?') ? '&' : '?'}q=${encodeURIComponent(prompt)}`
+      : null,
+    errors,
+    privacy: {
+      mode: 'metadata-only',
+      excluded: ['prompts', 'responses', 'tool arguments', 'tool results', 'source code', 'file contents', 'request bodies', 'response bodies', 'secrets']
+    },
+    guardrails: [
+      'Launch with run/session/trace metadata only.',
+      'Keep prompts, responses, tool arguments, tool results, source code, and file contents out of the assistant context.',
+      'Use the returned prompt as review context; do not mutate systems without explicit operator approval.'
+    ]
+  };
+}
+
+function renderAskAgentOpsLaunch(packet) {
+  const launch = packet.launch_url
+    ? `<p><a class="button" href="${htmlEscape(packet.launch_url)}">Open Assistant</a></p>`
+    : '<p class="note">Set <code>AGENTOPS_ASSISTANT_URL</code> to enable a direct assistant launch URL. The metadata-only prompt is ready to copy.</p>';
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ask AgentOps</title>
+  <style>
+    :root { color-scheme: light dark; font-family: system-ui, -apple-system, Segoe UI, sans-serif; }
+    body { margin: 0; background: #f7f8fa; color: #1f2937; }
+    main { max-width: 880px; margin: 0 auto; padding: 32px 20px; }
+    h1 { margin: 0 0 8px; font-size: 28px; }
+    pre, .note { background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 14px; }
+    pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+    .button { display: inline-block; color: white; background: #2563eb; border-radius: 6px; padding: 10px 14px; text-decoration: none; }
+    @media (prefers-color-scheme: dark) {
+      body { background: #0b1020; color: #e5e7eb; }
+      pre, .note { background: #111827; border-color: #374151; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Ask AgentOps</h1>
+    <p class="note">Metadata-only assistant context for ${htmlEscape(packet.run_id || packet.session_id || packet.trace_id || 'selected run')}.</p>
+    ${packet.status === 'ready' ? launch : `<p class="note">${htmlEscape(packet.errors.join('; '))}</p>`}
+    <pre>${htmlEscape(packet.prompt || JSON.stringify(packet.errors, null, 2))}</pre>
+  </main>
 </body>
 </html>`;
 }
@@ -456,8 +560,23 @@ async function sharedStoreEditor(context) {
   };
 }
 
+async function askAgentOps(context, req) {
+  const query = req && req.query && typeof req.query === 'object' ? req.query : {};
+  const body = req && req.body && typeof req.body === 'object' ? req.body : {};
+  const packet = buildAskAgentOpsLaunch({ ...query, ...body });
+  const wantsJson = stringValue(query.format || body.format).toLowerCase() === 'json'
+    || stringValue(req?.headers?.accept).includes('application/json');
+  context.res = {
+    status: packet.status === 'ready' ? 200 : 400,
+    headers: { 'Content-Type': wantsJson ? 'application/json' : 'text/html; charset=utf-8' },
+    body: wantsJson ? packet : renderAskAgentOpsLaunch(packet)
+  };
+}
+
 module.exports = actioner;
+module.exports.askAgentOps = askAgentOps;
 module.exports.buildActionerReview = buildActionerReview;
+module.exports.buildAskAgentOpsLaunch = buildAskAgentOpsLaunch;
 module.exports.buildSharedStoreEditor = buildSharedStoreEditor;
 module.exports.buildSharedStoreWrite = buildSharedStoreWrite;
 module.exports.metadataFromPayload = metadataFromPayload;
