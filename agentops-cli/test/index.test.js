@@ -9094,6 +9094,23 @@ test('ask agentops launcher builds metadata-only assistant context', async () =>
   assert.equal(sharedContext.res.body.saved_view.saved_view_id, 'view-123');
   assert.equal(sharedContext.res.body.alert_handoff.rule, 'failed-spans');
 
+  const sharedRouteContext = { bindings: { recommendationBlob: sharedRecommendationBlob } };
+  await askAgentOps(sharedRouteContext, {
+    params: {
+      recommendation_blob_id: 'rec-route-123'
+    },
+    query: {
+      run_id: 'run-123',
+      format: 'json'
+    },
+    headers: {
+      accept: 'application/json'
+    }
+  });
+  assert.equal(sharedRouteContext.res.status, 200);
+  assert.equal(sharedRouteContext.res.body.shared_context.mode, 'shared-store-hydrated');
+  assert.equal(sharedRouteContext.res.body.recommendation.recommendation_id, 'rec-123');
+
   const htmlContext = {};
   await askAgentOps(htmlContext, {
     query: {
