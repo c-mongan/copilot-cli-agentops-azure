@@ -30,6 +30,9 @@ param dailyIngestionCapGb int = 0
 @description('Deploy the placeholder Azure Function actioner. Disabled by default for v0.1 validation because it is not required for the core telemetry loop.')
 param deployActioner bool = false
 
+@description('Optional hosted assistant URL used by the actioner /api/ask-agentops launcher.')
+param actionerAssistantUrl string = ''
+
 @description('Deploy shared Azure Blob storage for metadata-only saved-view and recommendation exports.')
 param deploySharedStore bool = false
 
@@ -168,6 +171,7 @@ module actioner 'actioner-function.bicep' = if (deployActioner) {
     sharedStoreBlobServiceUri: deploySharedStore ? sharedStore!.outputs.blobEndpoint : ''
     sharedStoreContainerName: deploySharedStore ? sharedStore!.outputs.containerName : 'agentops-shared'
     sharedStorePrefix: 'agentops-shared'
+    assistantUrl: actionerAssistantUrl
     tags: tags
   }
 }

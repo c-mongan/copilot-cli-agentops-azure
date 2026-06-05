@@ -39,6 +39,8 @@ Set `deploySharedStore=true` to create an optional Azure Blob container for meta
 
 Set `deployActioner=true` with `deploySharedStore=true` to enable the hosted write API. The Function App uses managed identity and writes one metadata-only row per blob at `/api/shared-store/{table}/{id}`. It accepts only `AgentOpsRecommendations_CL` and `AgentOpsSavedViews_CL` rows and rejects content-like payloads. Open `/api/shared-store/editor` for the browser-native metadata editor that submits to the same validated API.
 
+Set `AGENTOPS_ASSISTANT_URL` on the Function App to enable `/api/ask-agentops` launch links. Without it, the route still renders a browser page with a metadata-only prompt for the selected run, session, or trace.
+
 Preview the upload commands before sharing artifacts:
 
 ```bash

@@ -13,6 +13,9 @@ param sharedStoreContainerName string = 'agentops-shared'
 @description('Blob prefix for metadata-only hosted saved-view/recommendation writes.')
 param sharedStorePrefix string = 'agentops-shared'
 
+@description('Optional hosted assistant URL used by /api/ask-agentops launch links.')
+param assistantUrl string = ''
+
 resource storage 'Microsoft.Storage/storageAccounts@2023-01-01' = {
   name: storageName
   location: location
@@ -80,6 +83,10 @@ resource functionApp 'Microsoft.Web/sites@2023-12-01' = {
         {
           name: 'AgentOpsSharedStorage__blobServiceUri'
           value: sharedStoreBlobServiceUri
+        }
+        {
+          name: 'AGENTOPS_ASSISTANT_URL'
+          value: assistantUrl
         }
       ]
     }

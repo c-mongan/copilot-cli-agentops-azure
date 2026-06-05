@@ -64,7 +64,7 @@ const { checkInstallSmoke } = require('../../scripts/check-install-smoke');
 const { checkReleaseDistribution } = require('../../scripts/check-release-distribution');
 const { checkSdkPublish, isWildcardRange } = require('../../scripts/check-sdk-publish');
 const { shouldCopy } = require('../../scripts/prepare-cli-package-assets');
-const { buildActionerReview, buildSharedStoreEditor, buildSharedStoreWrite, sharedStoreEditor, sharedStoreWrite } = require('../../actioner');
+const { askAgentOps, buildActionerReview, buildAskAgentOpsLaunch, buildSharedStoreEditor, buildSharedStoreWrite, sharedStoreEditor, sharedStoreWrite } = require('../../actioner');
 
 const {
   agentopsAttributionSmoke,
@@ -8772,6 +8772,47 @@ test('shared store editor renders browser-native metadata-only write form', asyn
   assert.equal(context.res.status, 200);
   assert.equal(context.res.headers['Content-Type'], 'text/html; charset=utf-8');
   assert.match(context.res.body, /metadata-only recommendation or saved investigation row/);
+});
+
+test('ask agentops launcher builds metadata-only assistant context', async () => {
+  const packet = buildAskAgentOpsLaunch({
+    run_id: 'run-123',
+    session_id: 'session-123',
+    trace_id: 'trace-123',
+    dashboard_url: 'https://grafana.example/d/agentops-v2-run-replay',
+    selected_event: 'tool failure',
+    benchmark_run_id: 'bench-123',
+    last: '2h'
+  }, {
+    assistantBaseUrl: 'https://assistant.example/ask'
+  });
+
+  assert.equal(packet.schema_version, 'agentops.ask-agentops-launch.v1');
+  assert.equal(packet.status, 'ready');
+  assert.match(packet.prompt, /run run-123/);
+  assert.match(packet.prompt, /SessionId == "session-123"/);
+  assert.match(packet.prompt, /Do not request or enable prompt/);
+  assert.match(packet.launch_url, /^https:\/\/assistant\.example\/ask\?q=/);
+  assert.doesNotMatch(JSON.stringify(packet), /SECRET_FAKE_TEST_VALUE|raw transcript|tool_args|file_content/);
+
+  const context = {};
+  await askAgentOps(context, {
+    query: {
+      run_id: 'run-123',
+      format: 'json'
+    },
+    headers: {
+      accept: 'application/json'
+    }
+  });
+  assert.equal(context.res.status, 200);
+  assert.equal(context.res.headers['Content-Type'], 'application/json');
+  assert.equal(context.res.body.mode, 'metadata-only-assistant-launch');
+
+  const invalid = buildAskAgentOpsLaunch({ last: 'forever' });
+  assert.equal(invalid.status, 'invalid');
+  assert.ok(invalid.errors.some(error => error.includes('required')));
+  assert.ok(invalid.errors.some(error => error.includes('invalid time range')));
 });
 
 test('alert history exposes metadata-only fired-alert query', () => {

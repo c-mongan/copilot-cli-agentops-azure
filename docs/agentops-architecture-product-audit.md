@@ -1060,8 +1060,8 @@ This is strong for technical users.
 
 Missing world-class behavior:
 
-- The dashboard now gives the agent explicit session context, Run Replay URL, starter KQL, and copyable `agentops ask-context` commands, but it still does not launch a hosted assistant directly.
-- Recommendations are now present in Run Replay as first-class artifacts with copyable follow-up commands, a local metadata-only recommendation store, an opt-in shared Blob upload plan, a hosted metadata-only write API, and a hosted browser editor for team review artifacts, but the dashboard still does not execute the action workflow for the user.
+- The dashboard now gives the agent explicit session context, Run Replay URL, starter KQL, copyable `agentops ask-context` commands, and a hosted `/api/ask-agentops` launch page/packet that can deep-link to a configured assistant, but it still does not run a fully embedded assistant inside Grafana.
+- Recommendations are now present in Run Replay as first-class artifacts with copyable follow-up commands, a local metadata-only recommendation store, an opt-in shared Blob upload plan, a hosted metadata-only write API, and a hosted browser editor for team review artifacts, but the dashboard still does not execute the patch/action workflow for the user.
 - Saved investigations now surface on the Home dashboard from metadata-only `AgentOpsSavedViews_CL` exports, with an opt-in shared Blob store, hosted metadata-only write API, and browser-native saved-view editor.
 - Saved-view exports can now include session-matched config-change annotation counts and change-target refs from `--events`, so saved investigations keep the nearby skill/hook/MCP/model change context.
 
@@ -1154,6 +1154,7 @@ Implemented first slice:
 - `agentops azure-ingest upload-plan` now validates metadata-only saved-view/recommendation exports and prints Entra-backed Azure Blob upload commands for the optional shared store.
 - `actioner/SharedStoreWrite` now accepts hosted metadata-only recommendation and saved-view row writes into the shared Blob store through managed identity.
 - `actioner/SharedStoreEditor` now renders a hosted browser form for metadata-only recommendation and saved-investigation rows that submits to the same validated write API.
+- `actioner/AskAgentOps` now renders a hosted metadata-only assistant launch packet/page for a selected run, session, or trace, with optional `AGENTOPS_ASSISTANT_URL` deep links.
 - `agentops alert handoff --events` now attaches matching config-change annotations plus a session-scoped annotation KQL query to alert operator handoffs and route previews.
 - `agentops saved-view add|export --events` now attaches matching config-change annotations to saved investigations and surfaces annotation counts/refs on the Home dashboard.
 - `agentops init --import-dashboards` now runs the dashboard import remediation stage explicitly during the init flow, then continues toward smoke/open next steps.
@@ -1215,7 +1216,7 @@ Every suggested agent/skill/hook/MCP change has telemetry evidence, predicted me
 
 Required work:
 
-- Add browser-native recommendation and saved-view editor workflows on top of the hosted metadata-only write API.
+- Embed or deep-link the hosted Ask AgentOps launcher from Grafana action panels.
 - Link recommendations to files and benchmark runs.
 - Track before/after telemetry.
 - Use annotation-linked recommendations, alert handoffs, and saved views in the hosted workflow once shared storage exists.
@@ -1303,7 +1304,7 @@ Required work:
 - Add multi-workspace/team config.
 - Add Azure RBAC automation and validation.
 - Add enterprise network/security modes.
-- Add browser-native saved-view/recommendation editor workflows on top of shared Blob artifact storage.
+- Add browser-native action execution workflows on top of shared Blob artifact storage and explicit approval gates.
 - Expand alert actioner deployment/runbook coverage for team destinations.
 
 ## Highest-Impact Fixes
