@@ -33,9 +33,12 @@ HTTP route:
 GET  /api/ask-agentops?run_id=<run>&session_id=<session>&trace_id=<trace>&last=24h
 POST /api/ask-agentops
 POST /api/ask-agentops/shared
+GET  /api/ask-agentops/shared/recommendation/<id>
+GET  /api/ask-agentops/shared/saved-view/<id>
+GET  /api/ask-agentops/shared/alert-handoff/<id>
 ```
 
-Supported metadata fields are `run_id`, `session_id`, `trace_id`, `dashboard_url`, `selected_event`, `benchmark_run_id`, `recommendation`, `saved_view`, `alert_handoff`, and `last`. The shared route accepts `recommendation_blob_id`, `saved_view_blob_id`, and `alert_handoff_blob_id`, then reads `%AGENTOPS_SHARED_STORE_PREFIX%/AgentOpsRecommendations_CL/<id>.json`, `%AGENTOPS_SHARED_STORE_PREFIX%/AgentOpsSavedViews_CL/<id>.json`, and `%AGENTOPS_SHARED_STORE_PREFIX%/AgentOpsAlertHandoffs/<id>.json` from the configured shared Blob container. Add `format=json` or send `Accept: application/json` to receive the packet instead of the browser page.
+Supported metadata fields are `run_id`, `session_id`, `trace_id`, `dashboard_url`, `selected_event`, `benchmark_run_id`, `recommendation`, `saved_view`, `alert_handoff`, and `last`. The shared route accepts `recommendation_blob_id`, `saved_view_blob_id`, and `alert_handoff_blob_id`, then reads `%AGENTOPS_SHARED_STORE_PREFIX%/AgentOpsRecommendations_CL/<id>.json`, `%AGENTOPS_SHARED_STORE_PREFIX%/AgentOpsSavedViews_CL/<id>.json`, and `%AGENTOPS_SHARED_STORE_PREFIX%/AgentOpsAlertHandoffs/<id>.json` from the configured shared Blob container. Dashboard action cells use the GET routes for one-click shared recommendation, saved-view, or alert-handoff hydration. Add `format=json` or send `Accept: application/json` to receive the packet instead of the browser page.
 
 ## Shared Store Write API
 

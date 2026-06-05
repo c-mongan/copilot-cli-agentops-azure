@@ -1,0 +1,26 @@
+{
+  "bindings": [
+    {
+      "authLevel": "function",
+      "type": "httpTrigger",
+      "direction": "in",
+      "name": "req",
+      "methods": ["get"],
+      "route": "ask-agentops/shared/saved-view/{saved_view_blob_id}"
+    },
+    {
+      "type": "blob",
+      "direction": "in",
+      "name": "savedViewBlob",
+      "path": "%AGENTOPS_SHARED_STORE_CONTAINER%/%AGENTOPS_SHARED_STORE_PREFIX%/AgentOpsSavedViews_CL/{saved_view_blob_id}.json",
+      "connection": "AgentOpsSharedStorage"
+    },
+    {
+      "type": "http",
+      "direction": "out",
+      "name": "res"
+    }
+  ],
+  "scriptFile": "../index.js",
+  "entryPoint": "askAgentOps"
+}

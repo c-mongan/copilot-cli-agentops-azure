@@ -380,8 +380,12 @@ function validateDashboardUx() {
     if (!homeText.includes(snippet)) errors.push(`home action strip missing ${snippet}`);
   }
   const savedViewsQuery = queryFromPanel(panelByTitle(home, 'Saved investigations'));
-  for (const field of ['AgentOpsSavedViews_CL', 'SavedViewId', 'Name', 'QueryHash', 'ChangeAnnotationCount', 'ChangeTargetRefs', 'OpenSavedView', 'OpenReplay']) {
+  for (const field of ['AgentOpsSavedViews_CL', 'SavedViewId', 'Name', 'QueryHash', 'ChangeAnnotationCount', 'ChangeTargetRefs', 'AskSharedContext', 'AskAgentOpsSharedLaunch', '/ask-agentops/shared/saved-view/', 'OpenSavedView', 'OpenReplay']) {
     if (!savedViewsQuery.includes(field)) errors.push(`saved investigations panel missing ${field}`);
+  }
+  const recommendedNextActionsQuery = queryFromPanel(panelByTitle(home, 'Recommended next actions'));
+  for (const field of ['AskSharedContext', 'AskAgentOpsSharedLaunch', '/ask-agentops/shared/recommendation/']) {
+    if (!recommendedNextActionsQuery.includes(field)) errors.push(`recommended next actions panel missing ${field}`);
   }
   const sessionHealthQuery = queryFromPanel(panelByTitle(home, 'Session Health'));
   for (const field of ['LatestRecommendations', 'HealthStatus', 'RootAgent', 'RecommendedNextAction', 'ToolFailureCount', 'ToolDeniedCount', 'ContentCaptureSignal', 'ContextWindowPct', 'EvalOverall', 'OpenReplay']) {
@@ -400,7 +404,7 @@ function validateDashboardUx() {
     if (!replayTitles.has(title)) errors.push(`run replay missing panel ${title}`);
   }
   const latestRecommendationQuery = queryFromPanel(panelByTitle(replay, 'Latest recommendation'));
-  for (const field of ['RecommendationId', 'Action', 'ObservedPattern', 'NextAction', 'RecommendationCommand', 'AskContextCommand', 'OpenReplay', 'OpenPattern']) {
+  for (const field of ['RecommendationId', 'Action', 'ObservedPattern', 'NextAction', 'RecommendationCommand', 'AskContextCommand', 'AskSharedContext', 'AskAgentOpsSharedLaunch', '/ask-agentops/shared/recommendation/', 'OpenReplay', 'OpenPattern']) {
     if (!latestRecommendationQuery.includes(field)) errors.push(`latest recommendation panel missing ${field}`);
   }
   const askQuery = queryFromPanel(panelByTitle(replay, 'Ask AgentOps context'));
@@ -497,7 +501,7 @@ function validateDashboardUx() {
     if (!patternsQuery.includes(field)) errors.push(`recurring patterns panel missing ${field}`);
   }
   const recommendationsQuery = queryFromPanel(panelByTitle(insights, 'Recommendation artifacts'));
-  for (const field of ['RecommendationId', 'Action', 'ObservedPattern', 'NextAction', 'BenchmarkRunId', 'BenchmarkDecision', 'BenchmarkArtifactTotalChanged', 'BenchmarkArtifactFiles', 'BenchmarkHiddenCheckPacks', 'BenchmarkPolicyTasks', 'BenchmarkSemanticChecks', 'BenchmarkApprovalStatus', 'ChangeAnnotationCount', 'ChangeAnnotations', 'ChangeTargetRefs', 'OpenReplay', 'OpenPattern']) {
+  for (const field of ['RecommendationId', 'Action', 'ObservedPattern', 'NextAction', 'BenchmarkRunId', 'BenchmarkDecision', 'BenchmarkArtifactTotalChanged', 'BenchmarkArtifactFiles', 'BenchmarkHiddenCheckPacks', 'BenchmarkPolicyTasks', 'BenchmarkSemanticChecks', 'BenchmarkApprovalStatus', 'ChangeAnnotationCount', 'ChangeAnnotations', 'ChangeTargetRefs', 'AskSharedContext', 'AskAgentOpsSharedLaunch', '/ask-agentops/shared/recommendation/', 'OpenReplay', 'OpenPattern']) {
     if (!recommendationsQuery.includes(field)) errors.push(`recommendation artifacts panel missing ${field}`);
   }
   const evalRegressionQueueQuery = queryFromPanel(panelByTitle(insights, 'Eval regression queue'));

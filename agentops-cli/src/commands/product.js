@@ -235,9 +235,15 @@ function productAudit(options = {}) {
     'ask-agentops-shared-context',
     fileIncludes('actioner/index.js', ['savedViewEvidenceFromPayload', 'alertHandoffEvidenceFromPayload', 'hydrateAskAgentOpsPayload', 'shared_context', 'recommendationBlob', 'savedViewBlob', 'alertHandoffBlob'])
       && fileIncludes('actioner/AskAgentOpsShared/function.json', ['ask-agentops/shared', 'recommendation_blob_id', 'saved_view_blob_id', 'alert_handoff_blob_id'])
-      && fileIncludes('actioner/README.md', ['saved_view', 'alert_handoff', '/api/ask-agentops/shared', 'shared Blob ids'])
-      && fileIncludes('docs/agentops-architecture-product-audit.md', ['shared-storage hydrated recommendation', 'actioner/AskAgentOpsShared', 'Link dashboard actions to shared recommendation']),
-    ['actioner/index.js', 'actioner/AskAgentOpsShared/function.json', 'actioner/README.md', 'docs/agentops-architecture-product-audit.md'],
+      && fileIncludes('actioner/AskAgentOpsSharedRecommendation/function.json', ['ask-agentops/shared/recommendation/{recommendation_blob_id}', 'recommendationBlob'])
+      && fileIncludes('actioner/AskAgentOpsSharedSavedView/function.json', ['ask-agentops/shared/saved-view/{saved_view_blob_id}', 'savedViewBlob'])
+      && fileIncludes('actioner/AskAgentOpsSharedAlertHandoff/function.json', ['ask-agentops/shared/alert-handoff/{alert_handoff_blob_id}', 'alertHandoffBlob'])
+      && fileIncludes('grafana/dashboards/v2/01-agentops-home.json', ['AskAgentOpsSharedLaunch', '/ask-agentops/shared/saved-view/', '/ask-agentops/shared/recommendation/'])
+      && fileIncludes('grafana/dashboards/v2/03-run-replay.json', ['AskAgentOpsSharedLaunch', '/ask-agentops/shared/recommendation/'])
+      && fileIncludes('grafana/dashboards/v2/09-insights-regressions.json', ['AskAgentOpsSharedLaunch', '/ask-agentops/shared/recommendation/'])
+      && fileIncludes('actioner/README.md', ['saved_view', 'alert_handoff', '/api/ask-agentops/shared', 'Dashboard action cells use the GET routes'])
+      && fileIncludes('docs/agentops-architecture-product-audit.md', ['shared-storage hydrated recommendation', 'actioner/AskAgentOpsShared', 'shared Ask AgentOps action cells']),
+    ['actioner/index.js', 'actioner/AskAgentOpsShared/function.json', 'actioner/AskAgentOpsSharedRecommendation/function.json', 'actioner/AskAgentOpsSharedSavedView/function.json', 'actioner/AskAgentOpsSharedAlertHandoff/function.json', 'grafana/dashboards/v2/01-agentops-home.json', 'grafana/dashboards/v2/03-run-replay.json', 'grafana/dashboards/v2/09-insights-regressions.json', 'actioner/README.md', 'docs/agentops-architecture-product-audit.md'],
     []
   ));
 

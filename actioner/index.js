@@ -1130,9 +1130,10 @@ async function sharedStoreEditor(context) {
 }
 
 async function askAgentOps(context, req) {
+  const params = req && req.params && typeof req.params === 'object' ? req.params : {};
   const query = req && req.query && typeof req.query === 'object' ? req.query : {};
   const body = req && req.body && typeof req.body === 'object' ? req.body : {};
-  const packet = buildAskAgentOpsLaunch({ ...query, ...body }, {
+  const packet = buildAskAgentOpsLaunch({ ...params, ...query, ...body }, {
     sharedStoreBlobs: context?.bindings || {}
   });
   const wantsJson = stringValue(query.format || body.format).toLowerCase() === 'json'
