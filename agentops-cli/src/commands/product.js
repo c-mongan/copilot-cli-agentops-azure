@@ -240,6 +240,16 @@ function productAudit(options = {}) {
     []
   ));
 
+  checks.push(check(
+    'recommendation-action-plan',
+    fileIncludes('agentops-cli/src/commands/recommend.js', ['recommendationActionPlan', 'OperatorReview', 'benchmark_dry_run', 'compare_after_run'])
+      && fileIncludes('actioner/index.js', ['action_plan_command', 'agentops recommend action-plan'])
+      && fileIncludes('docs/evals-and-insights.md', ['agentops recommend action-plan'])
+      && fileIncludes('docs/agentops-architecture-product-audit.md', ['agentops recommend action-plan']),
+    ['agentops-cli/src/commands/recommend.js', 'actioner/index.js', 'docs/evals-and-insights.md', 'docs/agentops-architecture-product-audit.md'],
+    []
+  ));
+
   let liveDashboard = null;
   let liveAzure = null;
   if (live) {

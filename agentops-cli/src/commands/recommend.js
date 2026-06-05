@@ -739,6 +739,109 @@ function observedMovementStatus(results = []) {
   return 'mixed';
 }
 
+function reviewDecision(row = {}) {
+  return stringValue(row.OperatorReview?.decision || row.OperatorReview?.status).toLowerCase();
+}
+
+function safeToken(value, fallback = 'recommendation') {
+  return stringValue(value || fallback)
+    .trim()
+    .replace(/[^A-Za-z0-9_.-]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 80) || fallback;
+}
+
+function recommendationActionPlanForRow(row = {}, options = {}) {
+  const validation = validateRecommendationRow(row);
+  if (!validation.ok) throw new Error(`recommendation row failed schema validation: ${validation.errors.join('; ')}`);
+
+  const decision = reviewDecision(row);
+  const movementStatus = stringValue(row.ObservedMetricMovement?.status);
+  const benchmarkDecision = stringValue(row.BenchmarkDecision);
+  const approved = decision === 'approve' || decision === 'approved';
+  const blockedReasons = [
+    approved ? '' : 'operator review approval is required',
+    movementStatus === 'regressed' ? 'observed metric movement regressed' : '',
+    benchmarkDecision === 'reject' ? 'benchmark decision rejected the recommendation' : '',
+    Array.isArray(row.Validation) && row.Validation.length > 0 ? '' : 'validation steps are required',
+    row.RollbackCondition ? '' : 'rollback condition is required'
+  ].filter(Boolean);
+  const hypothesis = safeToken(options.hypothesis || row.RecommendationId || row.RunId, 'recommendation');
+  const benchmarkSuite = safeToken(options.benchmarkSuite || 'starter', 'starter');
+  const branch = `agentops/${hypothesis}`;
+  const targetRefs = Array.isArray(row.ChangeTargetRefs) ? row.ChangeTargetRefs : [];
+  const patchPrompt = [
+    `Implement approved AgentOps recommendation ${row.RecommendationId}.`,
+    `Action: ${row.Action}.`,
+    `Observed pattern: ${row.ObservedPattern}.`,
+    `Next action: ${row.NextAction}.`,
+    targetRefs.length ? `Change targets: ${targetRefs.join(', ')}.` : 'Infer the smallest safe target from the recommendation metadata.',
+    row.BenchmarkRunId ? `Benchmark evidence: ${row.BenchmarkRunId} (${benchmarkDecision || 'unknown'}).` : '',
+    movementStatus ? `Observed metric movement: ${movementStatus}.` : '',
+    'Keep prompts, responses, tool arguments, tool results, source code, file contents, request bodies, response bodies, and secrets out of telemetry artifacts.',
+    `Validation: ${(row.Validation || []).join(' | ') || 'run the benchmark/report commands in this plan'}.`,
+    `Rollback: ${row.RollbackCondition}.`
+  ].filter(Boolean).join('\n');
+
+  return {
+    schema_version: 'agentops.recommendation-action-plan.v1',
+    mode: 'metadata-only-recommendation-action-plan',
+    status: blockedReasons.length ? 'needs-review' : 'ready',
+    recommendation_id: row.RecommendationId || null,
+    run_id: row.RunId || null,
+    operator_review: row.OperatorReview || {},
+    blocked_reasons: blockedReasons,
+    guardrails: [
+      'Create a branch before editing files.',
+      'Make only the minimal patch described by the approved recommendation metadata.',
+      'Run benchmark and recommendation comparison before promoting the change.',
+      'Reject or rollback if validation fails, metric movement regresses, cost rises unexpectedly, or privacy signals appear.'
+    ],
+    commands: {
+      create_branch: `git checkout -b ${branch}`,
+      patch_prompt: patchPrompt,
+      benchmark_dry_run: `agentops benchmark run ${benchmarkSuite} --variant ${hypothesis} --repeat 1 --hypothesis ${hypothesis} --dry-run`,
+      benchmark_run: `agentops benchmark run ${benchmarkSuite} --variant ${hypothesis} --repeat 1 --hypothesis ${hypothesis}`,
+      benchmark_report: 'agentops benchmark report <candidate-run-id>',
+      compare_after_run: `agentops recommend compare --recommendation-id ${row.RecommendationId || '<id>'} --after-runs <after-AgentOpsRunSummary_CL.jsonl> --after-evals <after-AgentOpsEval_CL.jsonl>`
+    },
+    evidence: {
+      change_target_refs: targetRefs,
+      validation: row.Validation || [],
+      rollback_condition: row.RollbackCondition || '',
+      expected_metric_movement: row.ExpectedMetricMovement || {},
+      observed_metric_movement: row.ObservedMetricMovement || {},
+      before_telemetry: row.BeforeTelemetry || {},
+      after_telemetry: row.AfterTelemetry || {}
+    },
+    next: blockedReasons.length
+      ? ['Resolve blocked reasons, then regenerate this action plan.']
+      : [
+          'Create the branch.',
+          'Apply the minimal patch using the patch prompt.',
+          'Run the benchmark dry-run, benchmark run, benchmark report, and recommendation compare commands.',
+          'Promote only if benchmark and after-run movement pass.'
+        ]
+  };
+}
+
+function recommendationActionPlan({
+  storePath = defaultRecommendationStorePath(),
+  recommendationId,
+  benchmarkSuite,
+  hypothesis
+} = {}) {
+  if (!recommendationId) throw new Error('recommend action-plan requires --recommendation-id <id>');
+  const payload = readRecommendationStore(storePath);
+  const row = payload.recommendations.find(item => item.RecommendationId === recommendationId);
+  if (!row) throw new Error(`recommendation not found: ${recommendationId}`);
+  return {
+    path: storePath,
+    action_plan: recommendationActionPlanForRow(row, { benchmarkSuite, hypothesis })
+  };
+}
+
 function compareRecommendationAfterRun({
   storePath = defaultRecommendationStorePath(),
   recommendationId,
@@ -817,7 +920,15 @@ function recommendationStoreCommand(args = []) {
       afterRunId: optionValue(args, '--after-run-id')
     });
   }
-  throw new Error('recommend requires latest|<run-id>, list, export, or compare');
+  if (subcommand === 'action-plan') {
+    return recommendationActionPlan({
+      storePath,
+      recommendationId: optionValue(args, '--recommendation-id'),
+      benchmarkSuite: optionValue(args, '--benchmark-suite'),
+      hypothesis: optionValue(args, '--hypothesis')
+    });
+  }
+  throw new Error('recommend requires latest|<run-id>, list, export, compare, or action-plan');
 }
 
 function renderRecommendationV2(recommendation) {
@@ -857,7 +968,7 @@ function renderRecommendationV2(recommendation) {
 }
 
 function recommendCommand(args = []) {
-  if (args[0] === 'list' || args[0] === 'export' || args[0] === 'compare') {
+  if (args[0] === 'list' || args[0] === 'export' || args[0] === 'compare' || args[0] === 'action-plan') {
     process.stdout.write(`${JSON.stringify(recommendationStoreCommand(args), null, 2)}\n`);
     return;
   }
@@ -915,6 +1026,8 @@ module.exports = {
   fileRefsForRecommendation,
   recommendCommand,
   recommendFromFiles,
+  recommendationActionPlan,
+  recommendationActionPlanForRow,
   recommendationStoreCommand,
   recommendationRow,
   renderRecommendationV2,

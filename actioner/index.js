@@ -466,6 +466,7 @@ function buildRecommendationReview(recommendation = {}) {
       post_path: `/api/shared-store/AgentOpsRecommendations_CL/${encodeURIComponent(recommendation.recommendation_id)}`,
       reviewed_row_template: reviewedRecommendationRow(recommendation, decision)
     },
+    action_plan_command: `agentops recommend action-plan --recommendation-id ${recommendation.recommendation_id}`,
     actions: [
       { decision: 'approve', label: 'Approve recommendation for guarded action' },
       { decision: 'reject', label: 'Reject recommendation' }
@@ -594,6 +595,7 @@ function renderRecommendationReview(review) {
       <p>${htmlEscape(`Default decision: ${review.default_decision}`)}</p>
       ${renderList(review.reasons)}
       <div class="review-box" data-review='${htmlEscape(JSON.stringify(review.shared_store.reviewed_row_template))}' data-post-path="${htmlEscape(review.shared_store.post_path)}">
+        <p><code>${htmlEscape(review.action_plan_command)}</code></p>
         <label>Reviewer <input id="reviewer" autocomplete="off" placeholder="name or team"></label>
         <label>Note <textarea id="review-note" rows="3" placeholder="metadata-only review note"></textarea></label>
         <p>
