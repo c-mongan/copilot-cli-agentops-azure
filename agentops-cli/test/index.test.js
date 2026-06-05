@@ -33,7 +33,7 @@ const { browserProfileOptionsFromArgs, checkReportHtml, e2eAuthProfile, grafanaA
 const { hasV2Args } = require('../src/commands/explain');
 const { openV2FromFiles, renderOpenV2 } = require('../src/commands/open');
 const { productAudit, productAuditWithVisual, renderProductAudit, validateVisualEvidence, visualAuditRecoveryCommands } = require('../src/commands/product');
-const { benchmarkEvidenceFromReport, changeAnnotationsForRun, compareRecommendationAfterRun, exportRecommendationStore, firstPositional: firstRecommendPositional, normalizeChangeAnnotation, recommendFromFiles, recommendationRow, recommendationStoreCommand, renderRecommendationV2, saveRecommendation, writeRecommendation } = require('../src/commands/recommend');
+const { benchmarkEvidenceFromReport, changeAnnotationsForRun, compareRecommendationAfterRun, exportRecommendationStore, firstPositional: firstRecommendPositional, normalizeChangeAnnotation, recommendFromFiles, recommendationActionPlanForRow, recommendationRow, recommendationStoreCommand, renderRecommendationV2, saveRecommendation, writeRecommendation } = require('../src/commands/recommend');
 const { demoOptionsFromArgs, demoVerifyCommand } = require('../src/commands/demo');
 const { buildTriage, renderTriage, writeTriage } = require('../src/commands/triage');
 const { buildAzureIngestPlan, buildSharedStorageUploadPlan, renderSharedStorageUploadPlan } = require('../src/lib/azure/v2-ingest-plan');
@@ -1482,6 +1482,39 @@ test('V2 recommend persists local recommendation store and exports table rows', 
     assert.equal(exportedRows[0].AfterTelemetry.eval_overall, 72);
     assert.equal(exportedRows[0].ObservedMetricMovement.status, 'improved');
     assert.equal(exportedRows[0].ObservedMetricMovement.results.length, 2);
+    const unapprovedPlan = recommendationActionPlanForRow(exportedRows[0]);
+    assert.equal(unapprovedPlan.status, 'needs-review');
+    assert.ok(unapprovedPlan.blocked_reasons.includes('operator review approval is required'));
+    const approvedPayload = {
+      recommendations: [{
+        ...exportedRows[0],
+        OperatorReview: {
+          status: 'approved',
+          decision: 'approve',
+          reviewer: 'platform-team',
+          reviewed_at: '2026-06-03T12:12:00Z',
+          source: 'ask-agentops-guided-review'
+        }
+      }]
+    };
+    fs.writeFileSync(storePath, `${JSON.stringify(approvedPayload, null, 2)}\n`);
+    const actionPlan = recommendationStoreCommand([
+      'action-plan',
+      '--store',
+      storePath,
+      '--recommendation-id',
+      saved.saved.RecommendationId,
+      '--benchmark-suite',
+      'starter',
+      '--hypothesis',
+      'rec-store'
+    ]).action_plan;
+    assert.equal(actionPlan.status, 'ready');
+    assert.match(actionPlan.commands.create_branch, /agentops\/rec-store/);
+    assert.match(actionPlan.commands.benchmark_dry_run, /benchmark run starter/);
+    assert.match(actionPlan.commands.patch_prompt, /Open Tools & MCP Risk/);
+    assert.match(actionPlan.commands.compare_after_run, /recommend compare --recommendation-id/);
+    assert.deepEqual(actionPlan.evidence.change_target_refs, ['skill:agentops-latest-run']);
     assert.equal(recommendationStoreCommand(['export', '--store', storePath, '--out', exportDir]).export.rows_written, 1);
     assert.doesNotMatch(JSON.stringify(exportedRows), /prompt|response|tool args|source code/i);
   } finally {
@@ -8895,6 +8928,7 @@ test('ask agentops launcher builds metadata-only assistant context', async () =>
   assert.equal(packet.assistant_response.recommendation.observed_metric_movement.status, 'awaiting-after-run');
   assert.equal(packet.assistant_response.recommendation_review.default_decision, 'needs-review');
   assert.equal(packet.assistant_response.recommendation_review.shared_store.reviewed_row_template.OperatorReview.source, 'ask-agentops-guided-review');
+  assert.match(packet.assistant_response.recommendation_review.action_plan_command, /recommend action-plan --recommendation-id rec-123/);
   assert.equal(packet.assistant_response.recommendation.benchmark_artifact_files[0].path, 'skills/agentops/SKILL.md');
   assert.equal(packet.assistant_response.recommendation.benchmark_artifact_content_diff_files[0].path, 'benchmarks/output.md');
   assert.equal(packet.assistant_response.proposed_action, 'Open the skill diff and rerun benchmark bench-123.');
@@ -8960,6 +8994,7 @@ test('ask agentops launcher builds metadata-only assistant context', async () =>
   assert.match(recommendationHtmlContext.res.body, /Guided review/);
   assert.match(recommendationHtmlContext.res.body, /Approve/);
   assert.match(recommendationHtmlContext.res.body, /Reject/);
+  assert.match(recommendationHtmlContext.res.body, /recommend action-plan --recommendation-id rec-123/);
   assert.match(recommendationHtmlContext.res.body, /ask-agentops-guided-review/);
   assert.match(recommendationHtmlContext.res.body, /EvalOverall/);
   assert.match(recommendationHtmlContext.res.body, /awaiting-after-run/);

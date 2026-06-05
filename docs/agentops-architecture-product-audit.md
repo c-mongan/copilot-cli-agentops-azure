@@ -1061,7 +1061,7 @@ This is strong for technical users.
 Missing world-class behavior:
 
 - The dashboard now gives the agent explicit session context, Run Replay URL, starter KQL, copyable `agentops ask-context` commands, and a linked `AskAgentOpsLaunch` action for the hosted `/api/ask-agentops` page/packet. The hosted page now includes a first-party metadata-only response draft, but it still does not run a fully embedded live assistant inside Grafana.
-- Recommendations are now present in Run Replay as first-class artifacts with copyable follow-up commands, a local metadata-only recommendation store, an opt-in shared Blob upload plan, a hosted metadata-only write API, and a hosted browser editor for team review artifacts. The CLI can compare a completed follow-up run with `agentops recommend compare` and populate `AfterTelemetry` plus pass/fail `ObservedMetricMovement`. The hosted Ask AgentOps flow can now render recommendation target refs, benchmark links, artifact file paths, `ExpectedMetricMovement`, `BeforeTelemetry`, `AfterTelemetry`, validation, rollback, and a guided approve/reject `OperatorReview`, but the dashboard still does not execute the patch/action workflow for the user.
+- Recommendations are now present in Run Replay as first-class artifacts with copyable follow-up commands, a local metadata-only recommendation store, an opt-in shared Blob upload plan, a hosted metadata-only write API, and a hosted browser editor for team review artifacts. The CLI can compare a completed follow-up run with `agentops recommend compare` and populate `AfterTelemetry` plus pass/fail `ObservedMetricMovement`, then turn an approved `OperatorReview` row into a guarded `agentops recommend action-plan` patch/benchmark workflow. The hosted Ask AgentOps flow can now render recommendation target refs, benchmark links, artifact file paths, `ExpectedMetricMovement`, `BeforeTelemetry`, `AfterTelemetry`, validation, rollback, and a guided approve/reject `OperatorReview`, but the dashboard still does not apply the patch for the user.
 - Saved investigations now surface on the Home dashboard from metadata-only `AgentOpsSavedViews_CL` exports, with an opt-in shared Blob store, hosted metadata-only write API, and browser-native saved-view editor.
 - Saved-view exports can now include session-matched config-change annotation counts and change-target refs from `--events`, so saved investigations keep the nearby skill/hook/MCP/model change context.
 
@@ -1159,6 +1159,7 @@ Implemented first slice:
 - `actioner/AskAgentOps` now includes a first-party metadata-only response draft with evidence, root-cause candidates, proposed action, validation, and rollback condition so the hosted workflow has an immediate investigation answer even before an external assistant is configured.
 - `actioner/AskAgentOps` can now accept a schema-valid metadata-only recommendation row and render linked `ChangeTargetRefs`, benchmark run id/decision, artifact file paths, expected/before/after metric movement, validation steps, rollback, and a guided `OperatorReview` approve/reject control without rendering raw diff content.
 - Recommendation rows now carry metadata-only `ExpectedMetricMovement`, `BeforeTelemetry`, `AfterTelemetry`, `ObservedMetricMovement`, and `OperatorReview` fields. `agentops recommend compare` populates the after-run snapshot and marks metric movement as improved, mixed, regressed, or not comparable.
+- `agentops recommend action-plan` now requires an approved `OperatorReview` and emits a metadata-only guarded patch prompt plus branch, benchmark run, benchmark report, and after-run compare commands. It refuses unapproved, regressed, rejected, or validation-missing recommendation rows.
 - `agentops alert handoff --events` now attaches matching config-change annotations plus a session-scoped annotation KQL query to alert operator handoffs and route previews.
 - `agentops saved-view add|export --events` now attaches matching config-change annotations to saved investigations and surfaces annotation counts/refs on the Home dashboard.
 - `agentops init --import-dashboards` now runs the dashboard import remediation stage explicitly during the init flow, then continues toward smoke/open next steps.
@@ -1221,7 +1222,7 @@ Every suggested agent/skill/hook/MCP change has telemetry evidence, predicted me
 Required work:
 
 - Replace the deterministic first-party response draft with a live assistant response flow inside Grafana or the hosted AgentOps page.
-- Execute approved recommendation actions through a guarded patch/benchmark workflow instead of stopping at metadata-only approval.
+- Apply approved recommendation patches from the hosted workflow after the guarded action plan passes benchmark and after-run comparison.
 - Use annotation-linked recommendations, alert handoffs, and saved views in the hosted workflow once shared storage exists.
 
 ### 4. Robust Eval Center
