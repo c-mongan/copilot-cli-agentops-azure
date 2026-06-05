@@ -233,10 +233,11 @@ function productAudit(options = {}) {
 
   checks.push(check(
     'ask-agentops-shared-context',
-    fileIncludes('actioner/index.js', ['savedViewEvidenceFromPayload', 'alertHandoffEvidenceFromPayload', 'saved_view', 'alert_handoff', 'SavedViewId', 'AlertHandoff'])
-      && fileIncludes('actioner/README.md', ['saved_view', 'alert_handoff', 'saved-view query/tag/annotation context', 'alert handoff owner/query/config-change context'])
-      && fileIncludes('docs/agentops-architecture-product-audit.md', ['saved-view annotations', 'alert handoff config-change context', 'Hydrate the hosted Ask AgentOps workflow directly from shared storage']),
-    ['actioner/index.js', 'actioner/README.md', 'docs/agentops-architecture-product-audit.md'],
+    fileIncludes('actioner/index.js', ['savedViewEvidenceFromPayload', 'alertHandoffEvidenceFromPayload', 'hydrateAskAgentOpsPayload', 'shared_context', 'recommendationBlob', 'savedViewBlob', 'alertHandoffBlob'])
+      && fileIncludes('actioner/AskAgentOpsShared/function.json', ['ask-agentops/shared', 'recommendation_blob_id', 'saved_view_blob_id', 'alert_handoff_blob_id'])
+      && fileIncludes('actioner/README.md', ['saved_view', 'alert_handoff', '/api/ask-agentops/shared', 'shared Blob ids'])
+      && fileIncludes('docs/agentops-architecture-product-audit.md', ['shared-storage hydrated recommendation', 'actioner/AskAgentOpsShared', 'Link dashboard actions to shared recommendation']),
+    ['actioner/index.js', 'actioner/AskAgentOpsShared/function.json', 'actioner/README.md', 'docs/agentops-architecture-product-audit.md'],
     []
   ));
 
