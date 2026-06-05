@@ -27,6 +27,7 @@ function validateDashboards() {
     'datasource',
     'workspace',
     'timeRange',
+    'actioner_url',
     'run_id',
     'session_id',
     'trace_id',
@@ -403,7 +404,7 @@ function validateDashboardUx() {
     if (!latestRecommendationQuery.includes(field)) errors.push(`latest recommendation panel missing ${field}`);
   }
   const askQuery = queryFromPanel(panelByTitle(replay, 'Ask AgentOps context'));
-  for (const field of ['RunReplayUrl', 'InvestigationKql', 'AskContextCommand', 'BundleCommand', 'AskPrompt', 'TriageCommand', 'OpenReplay', 'Do not request or enable prompt']) {
+  for (const field of ['RunReplayUrl', 'InvestigationKql', 'AskContextCommand', 'BundleCommand', 'AskPrompt', 'TriageCommand', 'AskAgentOpsLaunch', '/ask-agentops', 'OpenReplay', 'Do not request or enable prompt']) {
     if (!askQuery.includes(field)) errors.push(`ask agentops context panel missing ${field}`);
   }
   const transcriptQuery = queryFromPanel(panelByTitle(replay, 'Transcript availability'));

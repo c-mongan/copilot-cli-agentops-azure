@@ -477,6 +477,24 @@
           {
             "matcher": {
               "id": "byName",
+              "options": "AskAgentOpsLaunch"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Ask AgentOps",
+                    "url": "${__data.fields.AskAgentOpsLaunch}",
+                    "targetBlank": true
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
               "options": "OpenTrace"
             },
             "properties": [
@@ -978,6 +996,24 @@
           {
             "matcher": {
               "id": "byName",
+              "options": "AskAgentOpsLaunch"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Ask AgentOps",
+                    "url": "${__data.fields.AskAgentOpsLaunch}",
+                    "targetBlank": true
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
               "options": "OpenTrace"
             },
             "properties": [
@@ -1419,6 +1455,24 @@
                     "title": "Open Run Replay",
                     "url": "/d/agentops-v2-run-replay?var-run_id=${__data.fields.RunId}&var-session_id=${__data.fields.SessionId}&var-trace_id=${__data.fields.TraceId}&${__url_time_range}",
                     "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "AskAgentOpsLaunch"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Ask AgentOps",
+                    "url": "${__data.fields.AskAgentOpsLaunch}",
+                    "targetBlank": true
                   }
                 ]
               }
@@ -1876,6 +1930,24 @@
           {
             "matcher": {
               "id": "byName",
+              "options": "AskAgentOpsLaunch"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Ask AgentOps",
+                    "url": "${__data.fields.AskAgentOpsLaunch}",
+                    "targetBlank": true
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
               "options": "OpenTrace"
             },
             "properties": [
@@ -2317,6 +2389,24 @@
                     "title": "Open Run Replay",
                     "url": "/d/agentops-v2-run-replay?var-run_id=${__data.fields.RunId}&var-session_id=${__data.fields.SessionId}&var-trace_id=${__data.fields.TraceId}&${__url_time_range}",
                     "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "AskAgentOpsLaunch"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Ask AgentOps",
+                    "url": "${__data.fields.AskAgentOpsLaunch}",
+                    "targetBlank": true
                   }
                 ]
               }
@@ -2774,6 +2864,24 @@
           {
             "matcher": {
               "id": "byName",
+              "options": "AskAgentOpsLaunch"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Ask AgentOps",
+                    "url": "${__data.fields.AskAgentOpsLaunch}",
+                    "targetBlank": true
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
               "options": "OpenTrace"
             },
             "properties": [
@@ -3215,6 +3323,24 @@
                     "title": "Open Run Replay",
                     "url": "/d/agentops-v2-run-replay?var-run_id=${__data.fields.RunId}&var-session_id=${__data.fields.SessionId}&var-trace_id=${__data.fields.TraceId}&${__url_time_range}",
                     "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "AskAgentOpsLaunch"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Ask AgentOps",
+                    "url": "${__data.fields.AskAgentOpsLaunch}",
+                    "targetBlank": true
                   }
                 ]
               }
@@ -3672,6 +3798,24 @@
           {
             "matcher": {
               "id": "byName",
+              "options": "AskAgentOpsLaunch"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Ask AgentOps",
+                    "url": "${__data.fields.AskAgentOpsLaunch}",
+                    "targetBlank": true
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
               "options": "OpenTrace"
             },
             "properties": [
@@ -4113,6 +4257,24 @@
                     "title": "Open Run Replay",
                     "url": "/d/agentops-v2-run-replay?var-run_id=${__data.fields.RunId}&var-session_id=${__data.fields.SessionId}&var-trace_id=${__data.fields.TraceId}&${__url_time_range}",
                     "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "AskAgentOpsLaunch"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Ask AgentOps",
+                    "url": "${__data.fields.AskAgentOpsLaunch}",
+                    "targetBlank": true
                   }
                 ]
               }
@@ -4570,6 +4732,24 @@
           {
             "matcher": {
               "id": "byName",
+              "options": "AskAgentOpsLaunch"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Ask AgentOps",
+                    "url": "${__data.fields.AskAgentOpsLaunch}",
+                    "targetBlank": true
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
               "options": "OpenTrace"
             },
             "properties": [
@@ -5011,6 +5191,24 @@
                     "title": "Open Run Replay",
                     "url": "/d/agentops-v2-run-replay?var-run_id=${__data.fields.RunId}&var-session_id=${__data.fields.SessionId}&var-trace_id=${__data.fields.TraceId}&${__url_time_range}",
                     "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "AskAgentOpsLaunch"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Ask AgentOps",
+                    "url": "${__data.fields.AskAgentOpsLaunch}",
+                    "targetBlank": true
                   }
                 ]
               }
@@ -5468,6 +5666,24 @@
           {
             "matcher": {
               "id": "byName",
+              "options": "AskAgentOpsLaunch"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Ask AgentOps",
+                    "url": "${__data.fields.AskAgentOpsLaunch}",
+                    "targetBlank": true
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
               "options": "OpenTrace"
             },
             "properties": [
@@ -5606,6 +5822,17 @@
           "selected": true,
           "text": "24h",
           "value": "24h"
+        }
+      },
+      {
+        "name": "actioner_url",
+        "type": "custom",
+        "label": "actioner url",
+        "query": "/api",
+        "current": {
+          "selected": true,
+          "text": "/api",
+          "value": "/api"
         }
       },
       {
