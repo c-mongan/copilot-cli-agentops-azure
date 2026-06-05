@@ -25,7 +25,7 @@ If required metadata is missing, it returns `needs-review` and does not create a
 
 ## Ask AgentOps Launcher
 
-Use the hosted launcher to open an assistant with run-scoped metadata already assembled. It does not call an LLM by itself; it returns a safe prompt, a first-party metadata-only response draft, and, when `AGENTOPS_ASSISTANT_URL` is configured, an assistant launch URL with the prompt encoded.
+Use the hosted launcher to open an assistant with run-scoped metadata already assembled. It does not call an LLM by itself; it returns a safe prompt, a first-party metadata-only response draft, and, when `AGENTOPS_ASSISTANT_URL` is configured, an assistant launch URL with the prompt encoded. POST bodies can include a schema-valid metadata-only `recommendation` row; the page links its `ChangeTargetRefs`, benchmark run id, artifact file paths, validation steps, and rollback condition without rendering raw diff content.
 
 HTTP route:
 
@@ -34,7 +34,7 @@ GET  /api/ask-agentops?run_id=<run>&session_id=<session>&trace_id=<trace>&last=2
 POST /api/ask-agentops
 ```
 
-Supported metadata fields are `run_id`, `session_id`, `trace_id`, `dashboard_url`, `selected_event`, `benchmark_run_id`, and `last`. Add `format=json` or send `Accept: application/json` to receive the packet instead of the browser page.
+Supported metadata fields are `run_id`, `session_id`, `trace_id`, `dashboard_url`, `selected_event`, `benchmark_run_id`, `recommendation`, and `last`. Add `format=json` or send `Accept: application/json` to receive the packet instead of the browser page.
 
 ## Shared Store Write API
 
