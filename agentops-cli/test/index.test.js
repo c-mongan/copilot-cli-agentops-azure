@@ -1628,6 +1628,13 @@ test('V2 recommend carries benchmark gate and change-target metadata', () => {
     assert.equal(row.BenchmarkApprovalApprovedAt, '2026-06-03T04:00:00Z');
     assert.equal(row.BenchmarkApprovalTicket, 'APPROVAL-123');
     assert.equal(row.BenchmarkApprovalSource, 'approval.json');
+    assert.equal(row.ExpectedMetricMovement.status, 'ready');
+    assert.ok(row.ExpectedMetricMovement.metrics.some(metric => metric.metric === 'EvalOverall'));
+    assert.equal(row.BeforeTelemetry.run_id, 'run-benchmark-current');
+    assert.equal(row.BeforeTelemetry.eval_overall, 58);
+    assert.equal(row.AfterTelemetry && typeof row.AfterTelemetry, 'object');
+    assert.equal(row.ObservedMetricMovement.status, 'awaiting-after-run');
+    assert.match(row.ObservedMetricMovement.compare_command, /after-AgentOpsRunSummary_CL\.jsonl/);
     assert.ok(row.ChangeTargetRefs.includes('tests_or_benchmark_suite'));
     assert.equal(validateRecommendationRow(row).ok, true);
     assert.equal(recommendationSchemaDocument().table, 'AgentOpsRecommendations_CL');
@@ -8790,6 +8797,22 @@ test('ask agentops launcher builds metadata-only assistant context', async () =>
     BenchmarkDecision: 'review',
     BenchmarkArtifactFiles: [{ task_id: 'task-1', change: 'modified', path: 'skills/agentops/SKILL.md' }],
     BenchmarkArtifactContentDiffs: [{ task_id: 'task-1', change: 'modified', path: 'benchmarks/output.md', diff_preview: 'raw diff is intentionally omitted from page summary' }],
+    ExpectedMetricMovement: {
+      status: 'ready',
+      metrics: [{ metric: 'EvalOverall', baseline_value: 55, current_value: 55, expected_direction: 'increase' }]
+    },
+    BeforeTelemetry: {
+      run_id: 'run-123',
+      eval_overall: 55,
+      estimated_cost_usd: 1.25,
+      tool_failure_count: 2,
+      risk_score: 70
+    },
+    AfterTelemetry: {},
+    ObservedMetricMovement: {
+      status: 'awaiting-after-run',
+      compare_command: 'agentops recommend run-123 --runs <after-AgentOpsRunSummary_CL.jsonl>'
+    },
     ChangeTargetRefs: ['skill:agentops-latest-run'],
     DashboardTitles: ['Run Replay'],
     DashboardCount: 1,
@@ -8820,7 +8843,11 @@ test('ask agentops launcher builds metadata-only assistant context', async () =>
   assert.ok(packet.assistant_response.evidence.includes('RecommendationId=rec-123'));
   assert.ok(packet.assistant_response.evidence.includes('RecommendationBenchmarkRunId=bench-123'));
   assert.ok(packet.assistant_response.evidence.includes('ChangeTargetRefs=skill:agentops-latest-run'));
+  assert.ok(packet.assistant_response.evidence.includes('MetricMovementStatus=awaiting-after-run'));
   assert.equal(packet.assistant_response.recommendation.change_target_refs[0], 'skill:agentops-latest-run');
+  assert.equal(packet.assistant_response.recommendation.expected_metric_movement.metrics[0].metric, 'EvalOverall');
+  assert.equal(packet.assistant_response.recommendation.before_telemetry.eval_overall, 55);
+  assert.equal(packet.assistant_response.recommendation.observed_metric_movement.status, 'awaiting-after-run');
   assert.equal(packet.assistant_response.recommendation.benchmark_artifact_files[0].path, 'skills/agentops/SKILL.md');
   assert.equal(packet.assistant_response.recommendation.benchmark_artifact_content_diff_files[0].path, 'benchmarks/output.md');
   assert.equal(packet.assistant_response.proposed_action, 'Open the skill diff and rerun benchmark bench-123.');
@@ -8882,6 +8909,9 @@ test('ask agentops launcher builds metadata-only assistant context', async () =>
   assert.match(recommendationHtmlContext.res.body, /Recommendation/);
   assert.match(recommendationHtmlContext.res.body, /skill:agentops-latest-run/);
   assert.match(recommendationHtmlContext.res.body, /benchmarks\/output\.md/);
+  assert.match(recommendationHtmlContext.res.body, /Metric movement/);
+  assert.match(recommendationHtmlContext.res.body, /EvalOverall/);
+  assert.match(recommendationHtmlContext.res.body, /awaiting-after-run/);
   assert.doesNotMatch(recommendationHtmlContext.res.body, /raw diff is intentionally omitted/);
 
   const invalid = buildAskAgentOpsLaunch({ last: 'forever' });

@@ -380,6 +380,10 @@ function recommendationEvidenceFromPayload(payload = {}) {
       benchmark_decision: stringValue(row.BenchmarkDecision),
       benchmark_artifact_files: artifactFiles,
       benchmark_artifact_content_diff_files: artifactContentDiffFiles,
+      expected_metric_movement: row.ExpectedMetricMovement && typeof row.ExpectedMetricMovement === 'object' && !Array.isArray(row.ExpectedMetricMovement) ? row.ExpectedMetricMovement : {},
+      before_telemetry: row.BeforeTelemetry && typeof row.BeforeTelemetry === 'object' && !Array.isArray(row.BeforeTelemetry) ? row.BeforeTelemetry : {},
+      after_telemetry: row.AfterTelemetry && typeof row.AfterTelemetry === 'object' && !Array.isArray(row.AfterTelemetry) ? row.AfterTelemetry : {},
+      observed_metric_movement: row.ObservedMetricMovement && typeof row.ObservedMetricMovement === 'object' && !Array.isArray(row.ObservedMetricMovement) ? row.ObservedMetricMovement : {},
       change_target_refs: Array.isArray(row.ChangeTargetRefs) ? row.ChangeTargetRefs.map(stringValue).filter(Boolean).slice(0, 50) : [],
       validation: Array.isArray(row.Validation) ? row.Validation.map(stringValue).filter(Boolean).slice(0, 20) : [],
       rollback_condition: stringValue(row.RollbackCondition),
@@ -401,7 +405,8 @@ function buildAskAgentOpsResponse(context = {}) {
     context.benchmark ? `BenchmarkRunId=${context.benchmark}` : '',
     recommendation?.recommendation_id ? `RecommendationId=${recommendation.recommendation_id}` : '',
     recommendation?.benchmark_run_id ? `RecommendationBenchmarkRunId=${recommendation.benchmark_run_id}` : '',
-    recommendation?.change_target_refs?.length ? `ChangeTargetRefs=${recommendation.change_target_refs.join(', ')}` : ''
+    recommendation?.change_target_refs?.length ? `ChangeTargetRefs=${recommendation.change_target_refs.join(', ')}` : '',
+    recommendation?.observed_metric_movement?.status ? `MetricMovementStatus=${recommendation.observed_metric_movement.status}` : ''
   ].filter(Boolean);
 
   const rootCauseCandidates = [
@@ -455,7 +460,30 @@ function renderRecommendationEvidence(recommendation) {
       <h4>Benchmark</h4>
       ${renderList([recommendation.benchmark_run_id, recommendation.benchmark_decision].filter(Boolean))}
       <h4>Artifact files</h4>
-      ${renderList(artifactFiles)}`;
+      ${renderList(artifactFiles)}
+      <h4>Metric movement</h4>
+      ${renderMetricMovement(recommendation)}`;
+}
+
+function renderMetricMovement(recommendation = {}) {
+  const metrics = Array.isArray(recommendation.expected_metric_movement?.metrics)
+    ? recommendation.expected_metric_movement.metrics.map(item => [
+      item.metric,
+      item.expected_direction,
+      item.current_value === undefined || item.current_value === null ? '' : `current=${item.current_value}`,
+      item.baseline_value === undefined || item.baseline_value === null ? '' : `baseline=${item.baseline_value}`
+    ].filter(Boolean).join(' - '))
+    : [];
+  const before = recommendation.before_telemetry || {};
+  const beforeRows = [
+    before.run_id ? `before run ${before.run_id}` : '',
+    before.eval_overall === undefined || before.eval_overall === null ? '' : `eval=${before.eval_overall}`,
+    before.estimated_cost_usd === undefined || before.estimated_cost_usd === null ? '' : `cost=${before.estimated_cost_usd}`,
+    before.tool_failure_count === undefined || before.tool_failure_count === null ? '' : `tool failures=${before.tool_failure_count}`,
+    before.risk_score === undefined || before.risk_score === null ? '' : `risk=${before.risk_score}`,
+    recommendation.observed_metric_movement?.status ? `status=${recommendation.observed_metric_movement.status}` : ''
+  ].filter(Boolean);
+  return `${renderList(metrics)}${renderList(beforeRows)}`;
 }
 
 function renderAskAgentOpsLaunch(packet) {
