@@ -64,7 +64,7 @@ const { checkInstallSmoke } = require('../../scripts/check-install-smoke');
 const { checkReleaseDistribution } = require('../../scripts/check-release-distribution');
 const { checkSdkPublish, isWildcardRange } = require('../../scripts/check-sdk-publish');
 const { shouldCopy } = require('../../scripts/prepare-cli-package-assets');
-const { askAgentOps, buildActionerReview, buildAskAgentOpsLaunch, buildSharedStoreEditor, buildSharedStoreWrite, sharedStoreEditor, sharedStoreWrite } = require('../../actioner');
+const { askAgentOps, buildActionerReview, buildAskAgentOpsLaunch, buildAskAgentOpsResponse, buildSharedStoreEditor, buildSharedStoreWrite, sharedStoreEditor, sharedStoreWrite } = require('../../actioner');
 
 const {
   agentopsAttributionSmoke,
@@ -4162,7 +4162,8 @@ test('product audit proves the local AgentOps control-room contract', () => {
     'grafana-v2-pack',
     'kql-library',
     'content-transcript-opt-in',
-    'first-run-loop'
+    'first-run-loop',
+    'ask-agentops-response-flow'
   ]) {
     assert.equal(byName[name].ok, true, name);
   }
@@ -8792,8 +8793,23 @@ test('ask agentops launcher builds metadata-only assistant context', async () =>
   assert.match(packet.prompt, /run run-123/);
   assert.match(packet.prompt, /SessionId == "session-123"/);
   assert.match(packet.prompt, /Do not request or enable prompt/);
+  assert.equal(packet.assistant_response.mode, 'metadata-only-assistant-response');
+  assert.equal(packet.assistant_response.status, 'draft');
+  assert.ok(packet.assistant_response.evidence.includes('RunId=run-123'));
+  assert.ok(packet.assistant_response.validation.some(item => item.includes('bench-123')));
+  assert.match(packet.assistant_response.rollback_condition, /eval score drops/);
   assert.match(packet.launch_url, /^https:\/\/assistant\.example\/ask\?q=/);
   assert.doesNotMatch(JSON.stringify(packet), /SECRET_FAKE_TEST_VALUE|raw transcript|tool_args|file_content/);
+
+  const response = buildAskAgentOpsResponse({
+    runId: 'run-456',
+    sessionId: 'session-456',
+    traceId: 'trace-456',
+    last: '24h',
+    selectedEvent: 'cost spike'
+  });
+  assert.equal(response.mode, 'metadata-only-assistant-response');
+  assert.ok(response.root_cause_candidates.some(item => item.includes('cost spike')));
 
   const context = {};
   await askAgentOps(context, {
@@ -8808,6 +8824,21 @@ test('ask agentops launcher builds metadata-only assistant context', async () =>
   assert.equal(context.res.status, 200);
   assert.equal(context.res.headers['Content-Type'], 'application/json');
   assert.equal(context.res.body.mode, 'metadata-only-assistant-launch');
+  assert.equal(context.res.body.assistant_response.mode, 'metadata-only-assistant-response');
+
+  const htmlContext = {};
+  await askAgentOps(htmlContext, {
+    query: {
+      run_id: 'run-123'
+    },
+    headers: {
+      accept: 'text/html'
+    }
+  });
+  assert.equal(htmlContext.res.status, 200);
+  assert.equal(htmlContext.res.headers['Content-Type'], 'text/html; charset=utf-8');
+  assert.match(htmlContext.res.body, /Response Draft/);
+  assert.match(htmlContext.res.body, /Root-cause candidates/);
 
   const invalid = buildAskAgentOpsLaunch({ last: 'forever' });
   assert.equal(invalid.status, 'invalid');

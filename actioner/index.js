@@ -292,6 +292,15 @@ function buildAskAgentOpsLaunch(payload = {}, options = {}) {
     'Return evidence, root-cause candidates, one minimal proposed patch or workflow action, validation benchmark/query, and rollback condition.',
     'Do not request or enable prompt, response, source code, file content, tool argument, tool result, URL, request body, response body, or secret capture.'
   ].filter(Boolean).join('\n');
+  const assistantResponse = errors.length ? null : buildAskAgentOpsResponse({
+    runId,
+    sessionId,
+    traceId,
+    last,
+    dashboardUrl,
+    selectedEvent,
+    benchmark
+  });
 
   return {
     schema_version: 'agentops.ask-agentops-launch.v1',
@@ -305,6 +314,7 @@ function buildAskAgentOpsLaunch(payload = {}, options = {}) {
     selected_event: selectedEvent || null,
     benchmark_run_id: benchmark || null,
     prompt: errors.length ? null : prompt,
+    assistant_response: assistantResponse,
     launch_url: !errors.length && assistantBaseUrl
       ? `${assistantBaseUrl}${assistantBaseUrl.includes('?') ? '&' : '?'}q=${encodeURIComponent(prompt)}`
       : null,
@@ -318,6 +328,43 @@ function buildAskAgentOpsLaunch(payload = {}, options = {}) {
       'Keep prompts, responses, tool arguments, tool results, source code, and file contents out of the assistant context.',
       'Use the returned prompt as review context; do not mutate systems without explicit operator approval.'
     ]
+  };
+}
+
+function buildAskAgentOpsResponse(context = {}) {
+  const evidence = [
+    context.runId ? `RunId=${context.runId}` : '',
+    context.sessionId ? `SessionId=${context.sessionId}` : '',
+    context.traceId ? `TraceId=${context.traceId}` : '',
+    `TimeRange=${context.last}`,
+    context.dashboardUrl ? 'RunReplayUrl=provided' : '',
+    context.selectedEvent ? `SelectedEvent=${context.selectedEvent}` : '',
+    context.benchmark ? `BenchmarkRunId=${context.benchmark}` : ''
+  ].filter(Boolean);
+
+  const rootCauseCandidates = [
+    context.selectedEvent
+      ? `Start with the selected event "${context.selectedEvent}" and inspect adjacent run timeline rows.`
+      : 'Start with failed, denied, high-cost, or high-latency rows in the run timeline.',
+    context.benchmark
+      ? 'Compare the linked benchmark run before treating this as safe to promote.'
+      : 'Check whether the latest recommendation or eval row exists before proposing a change.',
+    'Confirm privacy/safety signals before requesting any additional telemetry.'
+  ];
+
+  return {
+    mode: 'metadata-only-assistant-response',
+    status: 'draft',
+    summary: 'Open the run-scoped metadata, identify the strongest failure/cost/safety/context signal, and choose one minimal next action.',
+    evidence,
+    root_cause_candidates: rootCauseCandidates,
+    proposed_action: 'Open Run Replay, run the starter KQL, then create or update one recommendation with evidence, validation, and rollback metadata.',
+    validation: [
+      `Re-run the starter KQL for ${context.last}.`,
+      context.benchmark ? `Re-run or review benchmark ${context.benchmark}.` : 'Run the relevant benchmark or dashboard query before promotion.',
+      'Confirm no prompt, response, tool argument, tool result, source code, file content, or secret capture was enabled.'
+    ],
+    rollback_condition: 'Rollback or reject the agent, skill, MCP, model, or instruction change if eval score drops, failures rise, cost increases unexpectedly, or privacy signals appear.'
   };
 }
 
@@ -339,6 +386,8 @@ function renderAskAgentOpsLaunch(packet) {
     pre, .note { background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 14px; }
     pre { white-space: pre-wrap; overflow-wrap: anywhere; }
     .button { display: inline-block; color: white; background: #2563eb; border-radius: 6px; padding: 10px 14px; text-decoration: none; }
+    ul { padding-left: 20px; }
+    li { margin: 6px 0; }
     @media (prefers-color-scheme: dark) {
       body { background: #0b1020; color: #e5e7eb; }
       pre, .note { background: #111827; border-color: #374151; }
@@ -350,6 +399,20 @@ function renderAskAgentOpsLaunch(packet) {
     <h1>Ask AgentOps</h1>
     <p class="note">Metadata-only assistant context for ${htmlEscape(packet.run_id || packet.session_id || packet.trace_id || 'selected run')}.</p>
     ${packet.status === 'ready' ? launch : `<p class="note">${htmlEscape(packet.errors.join('; '))}</p>`}
+    ${packet.assistant_response ? `<section class="note">
+      <h2>Response Draft</h2>
+      <p>${htmlEscape(packet.assistant_response.summary)}</p>
+      <h3>Evidence</h3>
+      <ul>${packet.assistant_response.evidence.map(item => `<li>${htmlEscape(item)}</li>`).join('')}</ul>
+      <h3>Root-cause candidates</h3>
+      <ul>${packet.assistant_response.root_cause_candidates.map(item => `<li>${htmlEscape(item)}</li>`).join('')}</ul>
+      <h3>Next action</h3>
+      <p>${htmlEscape(packet.assistant_response.proposed_action)}</p>
+      <h3>Validation</h3>
+      <ul>${packet.assistant_response.validation.map(item => `<li>${htmlEscape(item)}</li>`).join('')}</ul>
+      <h3>Rollback</h3>
+      <p>${htmlEscape(packet.assistant_response.rollback_condition)}</p>
+    </section>` : ''}
     <pre>${htmlEscape(packet.prompt || JSON.stringify(packet.errors, null, 2))}</pre>
   </main>
 </body>
@@ -577,6 +640,7 @@ module.exports = actioner;
 module.exports.askAgentOps = askAgentOps;
 module.exports.buildActionerReview = buildActionerReview;
 module.exports.buildAskAgentOpsLaunch = buildAskAgentOpsLaunch;
+module.exports.buildAskAgentOpsResponse = buildAskAgentOpsResponse;
 module.exports.buildSharedStoreEditor = buildSharedStoreEditor;
 module.exports.buildSharedStoreWrite = buildSharedStoreWrite;
 module.exports.metadataFromPayload = metadataFromPayload;

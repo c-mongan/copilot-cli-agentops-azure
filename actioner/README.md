@@ -3,7 +3,7 @@
 The actioner is an opt-in Azure Functions package for metadata-only AgentOps workflow APIs. It includes:
 
 - `AlertActioner`: turns an Azure Monitor alert payload into a metadata-only review packet with run links, alert history KQL, action-plan evidence, and an optional preview-only GitHub route plan.
-- `AskAgentOps`: renders a metadata-only assistant launch packet/page for a run, session, or trace.
+- `AskAgentOps`: renders a metadata-only assistant launch packet/page for a run, session, or trace, including a first-party response draft with evidence, root-cause candidates, validation, and rollback metadata.
 - `SharedStoreWrite`: accepts one metadata-only recommendation or saved-view row and writes it to the shared Blob artifact store.
 - `SharedStoreEditor`: renders a small browser form for creating metadata-only recommendation or saved-investigation rows through `SharedStoreWrite`.
 
@@ -25,7 +25,7 @@ If required metadata is missing, it returns `needs-review` and does not create a
 
 ## Ask AgentOps Launcher
 
-Use the hosted launcher to open an assistant with run-scoped metadata already assembled. It does not call an LLM by itself; it returns a safe prompt and, when `AGENTOPS_ASSISTANT_URL` is configured, an assistant launch URL with the prompt encoded.
+Use the hosted launcher to open an assistant with run-scoped metadata already assembled. It does not call an LLM by itself; it returns a safe prompt, a first-party metadata-only response draft, and, when `AGENTOPS_ASSISTANT_URL` is configured, an assistant launch URL with the prompt encoded.
 
 HTTP route:
 
