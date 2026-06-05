@@ -9002,6 +9002,49 @@ test('ask agentops launcher builds metadata-only assistant context', async () =>
   assert.match(packet.launch_url, /^https:\/\/assistant\.example\/ask\?q=/);
   assert.doesNotMatch(JSON.stringify(packet), /SECRET_FAKE_TEST_VALUE|raw transcript|tool_args|file_content/);
 
+  const sharedRecommendationBlob = JSON.stringify({
+    schema_version: 'agentops.shared-store-blob.v1',
+    table: 'AgentOpsRecommendations_CL',
+    id: 'rec-route-123',
+    row: recommendationRow
+  });
+  const sharedSavedViewBlob = JSON.stringify({
+    schema_version: 'agentops.shared-store-blob.v1',
+    table: 'AgentOpsSavedViews_CL',
+    id: 'view-route-123',
+    row: savedViewRow
+  });
+  const sharedAlertHandoffBlob = JSON.stringify({
+    schema_version: 'agentops.shared-store-blob.v1',
+    table: 'AgentOpsAlertHandoffs',
+    id: 'handoff-route-123',
+    row: alertHandoff
+  });
+  const sharedPacket = buildAskAgentOpsLaunch({
+    run_id: 'run-123',
+    session_id: 'session-123',
+    trace_id: 'trace-123',
+    recommendation_blob_id: 'rec-route-123',
+    saved_view_blob_id: 'view-route-123',
+    alert_handoff_blob_id: 'handoff-route-123',
+    last: '2h'
+  }, {
+    sharedStoreBlobs: {
+      recommendationBlob: sharedRecommendationBlob,
+      savedViewBlob: Buffer.from(sharedSavedViewBlob),
+      alertHandoffBlob: sharedAlertHandoffBlob
+    }
+  });
+  assert.equal(sharedPacket.status, 'ready');
+  assert.equal(sharedPacket.recommendation.recommendation_id, 'rec-123');
+  assert.equal(sharedPacket.saved_view.saved_view_id, 'view-123');
+  assert.equal(sharedPacket.alert_handoff.rule, 'failed-spans');
+  assert.equal(sharedPacket.shared_context.mode, 'shared-store-hydrated');
+  assert.ok(sharedPacket.shared_context.sources.includes('recommendation=shared:rec-route-123'));
+  assert.ok(sharedPacket.assistant_response.evidence.includes('SavedViewId=view-123'));
+  assert.ok(sharedPacket.assistant_response.evidence.includes('AlertHandoff=failed-spans/session-123'));
+  assert.doesNotMatch(JSON.stringify(sharedPacket), /SECRET_FAKE_TEST_VALUE|raw transcript|tool_args|file_content/);
+
   const response = buildAskAgentOpsResponse({
     runId: 'run-456',
     sessionId: 'session-456',
@@ -9026,6 +9069,30 @@ test('ask agentops launcher builds metadata-only assistant context', async () =>
   assert.equal(context.res.headers['Content-Type'], 'application/json');
   assert.equal(context.res.body.mode, 'metadata-only-assistant-launch');
   assert.equal(context.res.body.assistant_response.mode, 'metadata-only-assistant-response');
+
+  const sharedContext = { bindings: {
+    recommendationBlob: sharedRecommendationBlob,
+    savedViewBlob: sharedSavedViewBlob,
+    alertHandoffBlob: sharedAlertHandoffBlob
+  } };
+  await askAgentOps(sharedContext, {
+    body: {
+      run_id: 'run-123',
+      session_id: 'session-123',
+      recommendation_blob_id: 'rec-route-123',
+      saved_view_blob_id: 'view-route-123',
+      alert_handoff_blob_id: 'handoff-route-123',
+      format: 'json'
+    },
+    headers: {
+      accept: 'application/json'
+    }
+  });
+  assert.equal(sharedContext.res.status, 200);
+  assert.equal(sharedContext.res.body.shared_context.mode, 'shared-store-hydrated');
+  assert.equal(sharedContext.res.body.recommendation.recommendation_id, 'rec-123');
+  assert.equal(sharedContext.res.body.saved_view.saved_view_id, 'view-123');
+  assert.equal(sharedContext.res.body.alert_handoff.rule, 'failed-spans');
 
   const htmlContext = {};
   await askAgentOps(htmlContext, {
@@ -9133,6 +9200,13 @@ test('ask agentops launcher builds metadata-only assistant context', async () =>
   });
   assert.equal(invalidAlertHandoff.status, 'invalid');
   assert.ok(invalidAlertHandoff.errors.some(error => error.includes('alert_handoff: unsupported alert handoff schema')));
+
+  const missingSharedBlob = buildAskAgentOpsLaunch({
+    run_id: 'run-123',
+    recommendation_blob_id: 'rec-route-404'
+  });
+  assert.equal(missingSharedBlob.status, 'invalid');
+  assert.ok(missingSharedBlob.errors.some(error => error.includes('shared_context: recommendation: shared blob rec-route-404 was not loaded')));
 });
 
 test('alert history exposes metadata-only fired-alert query', () => {

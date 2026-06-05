@@ -262,6 +262,8 @@ function buildSharedStoreEditor(options = {}) {
 }
 
 function buildAskAgentOpsLaunch(payload = {}, options = {}) {
+  const hydration = hydrateAskAgentOpsPayload(payload, options.sharedStoreBlobs || {});
+  payload = hydration.payload;
   const runId = stringValue(payload.run_id || payload.runId || payload.RunId).trim();
   const sessionId = stringValue(payload.session_id || payload.sessionId || payload.SessionId).trim();
   const traceId = stringValue(payload.trace_id || payload.traceId || payload.TraceId).trim();
@@ -277,6 +279,7 @@ function buildAskAgentOpsLaunch(payload = {}, options = {}) {
 
   if (!runId && !sessionId && !traceId) errors.push('run_id, session_id, or trace_id is required');
   if (!/^\d+[mhd]$/.test(last)) errors.push(`invalid time range: ${last}`);
+  if (hydration.context.errors.length) errors.push(...hydration.context.errors.map(error => `shared_context: ${error}`));
   if (recommendation?.errors.length) errors.push(...recommendation.errors.map(error => `recommendation: ${error}`));
   if (savedView?.errors.length) errors.push(...savedView.errors.map(error => `saved_view: ${error}`));
   if (alertHandoff?.errors.length) errors.push(...alertHandoff.errors.map(error => `alert_handoff: ${error}`));
@@ -327,6 +330,7 @@ function buildAskAgentOpsLaunch(payload = {}, options = {}) {
     recommendation: recommendation?.summary || null,
     saved_view: savedView?.summary || null,
     alert_handoff: alertHandoff?.summary || null,
+    shared_context: hydration.context,
     prompt: errors.length ? null : prompt,
     assistant_response: assistantResponse,
     launch_url: !errors.length && assistantBaseUrl
@@ -355,6 +359,75 @@ function objectPayload(value) {
   } catch {
     return null;
   }
+}
+
+function sharedBlobPayload(value) {
+  if (!value) return null;
+  if (Buffer.isBuffer(value)) return objectPayload(value.toString('utf8'));
+  return objectPayload(value);
+}
+
+function rowFromSharedBlob(blob, expectedTable) {
+  const parsed = sharedBlobPayload(blob);
+  if (!parsed) return { row: null, error: 'shared blob is empty or invalid JSON' };
+  const table = stringValue(parsed.table || parsed.Table).trim();
+  if (expectedTable && table && table !== expectedTable) return { row: null, error: `shared blob table mismatch: expected ${expectedTable}, got ${table}` };
+  const row = parsed.row && typeof parsed.row === 'object' && !Array.isArray(parsed.row) ? parsed.row : parsed;
+  return { row, error: null };
+}
+
+function hydrateAskAgentOpsPayload(payload = {}, sharedStoreBlobs = {}) {
+  const hydrated = { ...payload };
+  const errors = [];
+  const sources = [];
+  const definitions = [
+    {
+      field: 'recommendation',
+      id: stringValue(payload.recommendation_blob_id || payload.recommendationBlobId).trim(),
+      blob: sharedStoreBlobs.recommendationBlob,
+      table: 'AgentOpsRecommendations_CL'
+    },
+    {
+      field: 'saved_view',
+      id: stringValue(payload.saved_view_blob_id || payload.savedViewBlobId).trim(),
+      blob: sharedStoreBlobs.savedViewBlob,
+      table: 'AgentOpsSavedViews_CL'
+    },
+    {
+      field: 'alert_handoff',
+      id: stringValue(payload.alert_handoff_blob_id || payload.alertHandoffBlobId).trim(),
+      blob: sharedStoreBlobs.alertHandoffBlob,
+      table: ''
+    }
+  ];
+
+  for (const item of definitions) {
+    if (!item.id) continue;
+    if (hydrated[item.field]) {
+      sources.push(`${item.field}=inline`);
+      continue;
+    }
+    if (!item.blob) {
+      errors.push(`${item.field}: shared blob ${item.id} was not loaded`);
+      continue;
+    }
+    const result = rowFromSharedBlob(item.blob, item.table);
+    if (result.error) {
+      errors.push(`${item.field}: ${result.error}`);
+      continue;
+    }
+    hydrated[item.field] = result.row;
+    sources.push(`${item.field}=shared:${item.id}`);
+  }
+
+  return {
+    payload: hydrated,
+    context: {
+      mode: sources.length ? 'shared-store-hydrated' : 'inline-or-empty',
+      sources,
+      errors
+    }
+  };
 }
 
 function recommendationEvidenceFromPayload(payload = {}) {
@@ -1059,7 +1132,9 @@ async function sharedStoreEditor(context) {
 async function askAgentOps(context, req) {
   const query = req && req.query && typeof req.query === 'object' ? req.query : {};
   const body = req && req.body && typeof req.body === 'object' ? req.body : {};
-  const packet = buildAskAgentOpsLaunch({ ...query, ...body });
+  const packet = buildAskAgentOpsLaunch({ ...query, ...body }, {
+    sharedStoreBlobs: context?.bindings || {}
+  });
   const wantsJson = stringValue(query.format || body.format).toLowerCase() === 'json'
     || stringValue(req?.headers?.accept).includes('application/json');
   context.res = {
