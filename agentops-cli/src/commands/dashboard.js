@@ -266,7 +266,8 @@ const v2KqlSmokePanels = [
   { uid: 'agentops-v2-insights-regressions', panel: 'Eval regression queue', requireRows: false },
   { uid: 'agentops-v2-insights-regressions', panel: 'Recommendation artifacts', requireRows: false },
   { uid: 'agentops-v2-insights-regressions', panel: 'Config change annotations', requireRows: false },
-  { uid: 'agentops-v2-collector-health', panel: 'Collector checks', requireRows: true }
+  { uid: 'agentops-v2-collector-health', panel: 'Collector checks', requireRows: true },
+  { uid: 'agentops-v2-collector-health', panel: 'Schema version coverage', requireRows: false }
 ];
 
 function queryFromPanel(panel) {
@@ -522,6 +523,14 @@ function validateDashboardUx() {
     if (!configAnnotationsQuery.includes(field)) errors.push(`config change annotations missing ${field}`);
   }
 
+  const collector = byUid.get('agentops-v2-collector-health');
+  const collectorTitles = new Set((collector?.body.panels || []).map(panel => panel.title));
+  if (!collectorTitles.has('Schema version coverage')) errors.push('collector health missing Schema version coverage panel');
+  const schemaCoverageQuery = queryFromPanel(panelByTitle(collector, 'Schema version coverage'));
+  for (const field of ['SchemaStatus', 'ExpectedSchemaVersion', 'MissingSchemaVersion', 'SchemaVersion', 'AgentOpsRunSummary_CL']) {
+    if (!schemaCoverageQuery.includes(field)) errors.push(`schema version coverage missing ${field}`);
+  }
+
   return {
     ok: errors.length === 0,
     dashboards: dashboards.length,
@@ -543,6 +552,7 @@ function validateDashboardUx() {
       semantic_review: true,
       promotion_approvals: true,
       alert_handoff_review: true,
+      schema_version_coverage: true,
       pattern_drilldowns: true,
       empty_state_dashboards: emptyStateDashboards
     },

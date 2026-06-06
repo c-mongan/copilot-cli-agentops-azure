@@ -1259,11 +1259,12 @@ Implemented:
 - Token rollup audit.
 - Collector health.
 - Content-capture detector.
+- Schema versioning in demo rows, ingest-plan warnings, and Collector Health coverage.
 
 Required work:
 
 - Exporter failure visibility.
-- Schema versioning.
+- Schema migration policy.
 - Real Copilot fixture regression tests.
 
 ## Recommended Roadmap

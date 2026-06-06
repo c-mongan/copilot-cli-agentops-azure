@@ -49,6 +49,8 @@ Identifiers that could reveal local paths, users, branches, repo names, or promp
 
 ## Conceptual Tables
 
+Every `AgentOps*_CL` row should include `SchemaVersion` so ingest planning and Collector Health can flag mixed or legacy exports before operators trust the dashboards.
+
 - `AgentOpsRunSummary_CL`: one row per run.
 - `AgentOpsEvents_CL`: timeline events.
 - `AgentOpsToolCalls_CL`: tool calls.

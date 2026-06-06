@@ -6,6 +6,7 @@ const path = require('node:path');
 const legacy = require('../legacy');
 const { hasFlag, optionValue } = require('../lib/args');
 const { latestByTime } = require('../lib/explain/v2-explain');
+const { AGENTOPS_SCHEMA_VERSION } = require('../lib/schema/agentops-attributes');
 const { validateRecommendationRow } = require('../lib/schema/recommendation-schema');
 
 const severityRank = {
@@ -569,6 +570,7 @@ function recommendationRow(recommendation, timeGenerated = new Date().toISOStrin
   const changeAnnotations = recommendation.evidence?.change_annotations || [];
   return {
     TimeGenerated: timeGenerated,
+    SchemaVersion: AGENTOPS_SCHEMA_VERSION,
     RecommendationId: stableId([
       recommendation.run_id || 'none',
       recommendation.action || 'none',
