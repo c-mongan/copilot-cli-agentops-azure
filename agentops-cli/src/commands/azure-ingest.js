@@ -14,6 +14,7 @@ const {
 } = require('../lib/azure/v2-ingest-plan');
 
 const repoRoot = path.resolve(__dirname, '..', '..', '..');
+const logsIngestionResource = 'https://monitor.azure.com/';
 
 function azureIngestCommand(args = []) {
   const [subcommand = 'plan'] = args;
@@ -96,6 +97,8 @@ function runLogsIngestionUpload(plan, options = {}) {
       'post',
       '--uri',
       upload.uri,
+      '--resource',
+      logsIngestionResource,
       '--headers',
       'Content-Type=application/json',
       '--body',
