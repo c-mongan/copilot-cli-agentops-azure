@@ -298,6 +298,15 @@ function productAudit(options = {}) {
   ));
 
   checks.push(check(
+    'ask-agentops-live-response-flow',
+    fileIncludes('actioner/index.js', ['metadata-only-live-assistant-request', 'AGENTOPS_ASSISTANT_API_URL', 'live-assistant-run', 'fetch(liveBox.dataset.apiUrl'])
+      && fileIncludes('actioner/README.md', ['AGENTOPS_ASSISTANT_API_URL', 'inline live assistant form', 'metadata-only prompt and compact context'])
+      && fileIncludes('docs/agentops-architecture-product-audit.md', ['browser-native metadata-only live assistant response flow', 'AGENTOPS_ASSISTANT_API_URL']),
+    ['actioner/index.js', 'actioner/README.md', 'docs/agentops-architecture-product-audit.md'],
+    []
+  ));
+
+  checks.push(check(
     'ask-agentops-shared-context',
     fileIncludes('actioner/index.js', ['savedViewEvidenceFromPayload', 'alertHandoffEvidenceFromPayload', 'hydrateAskAgentOpsPayload', 'shared_context', 'recommendationBlob', 'savedViewBlob', 'alertHandoffBlob'])
       && fileIncludes('actioner/AskAgentOpsShared/function.json', ['ask-agentops/shared', 'recommendation_blob_id', 'saved_view_blob_id', 'alert_handoff_blob_id'])
