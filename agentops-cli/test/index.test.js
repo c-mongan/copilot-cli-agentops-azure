@@ -671,6 +671,7 @@ test('azure-ingest logs-upload plans reviewed Logs Ingestion API calls', () => {
     assert.equal(result.endpoint, 'https://dce.example.ingest.monitor.azure.com');
     assert.equal(result.uploads.find(upload => upload.table === 'AgentOpsRunSummary_CL').stream, 'Custom-AgentOpsRunSummary_CL');
     assert.match(result.uploads[0].uri, /dataCollectionRules\/dcr-abc\/streams\/Custom-/);
+    assert.equal(result.uploads[0].command[result.uploads[0].command.indexOf('--resource') + 1], 'https://monitor.azure.com/');
     assert.equal(logsIngestionUri('https://dce.example/', 'dcr id', 'Custom-AgentOpsRunSummary_CL'), 'https://dce.example/dataCollectionRules/dcr%20id/streams/Custom-AgentOpsRunSummary_CL?api-version=2023-01-01');
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
@@ -700,6 +701,7 @@ test('azure-ingest logs-upload executes az rest only after a ready plan', () => 
     assert.equal(result.executed, true);
     assert.equal(calls[0].command, 'az');
     assert.deepEqual(calls[0].args.slice(0, 4), ['rest', '--method', 'post', '--uri']);
+    assert.equal(calls[0].args[calls[0].args.indexOf('--resource') + 1], 'https://monitor.azure.com/');
     assert.ok(calls[0].args.includes('Content-Type=application/json'));
     assert.ok(calls[0].args.some(arg => /^@.*AgentOpsRunSummary_CL\.json$/.test(arg)));
     assert.equal(JSON.parse(fs.readFileSync(calls[0].args.at(-1).slice(1), 'utf8')).length, 1);

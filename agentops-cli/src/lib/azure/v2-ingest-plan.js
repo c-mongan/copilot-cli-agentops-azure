@@ -34,6 +34,7 @@ const optionalEmptyTables = new Set([
 ]);
 
 const schemaVersionTables = new Set(tableNames.filter(table => table.endsWith('_CL')));
+const logsIngestionResource = 'https://monitor.azure.com/';
 
 const schemaMigrationPolicy = {
   current_version: AGENTOPS_SCHEMA_VERSION,
@@ -344,6 +345,8 @@ function buildLogsIngestionUploadPlan({
         'post',
         '--uri',
         uri || '<logs-ingestion-uri>',
+        '--resource',
+        logsIngestionResource,
         '--headers',
         'Content-Type=application/json',
         '--body',
