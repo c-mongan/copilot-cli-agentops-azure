@@ -1223,12 +1223,9 @@ Success criterion:
 Every suggested agent/skill/hook/MCP change has telemetry evidence, predicted metric movement, validation, and rollback.
 ```
 
-Required work:
-
-- Replace the deterministic first-party response draft with a live assistant response flow inside Grafana or the hosted AgentOps page.
-
 Implemented:
 
+- `AskAgentOps` now supports a browser-native metadata-only live assistant response flow inside the hosted page: when `AGENTOPS_ASSISTANT_API_URL` or `assistant_api_url` is configured, the page POSTs the safe prompt and compact run/recommendation context to that endpoint and renders the response inline. The deterministic first-party response draft remains as the fallback.
 - Approved recommendation patch application now has a hosted guarded apply packet: `AskAgentOps` returns `metadata-only-guarded-apply` with branch/action-plan/benchmark/compare commands and a patch handoff only after operator approval, benchmark evidence, after-run metric movement, validation, rollback, and change-target refs are present.
 
 ### 4. Robust Eval Center

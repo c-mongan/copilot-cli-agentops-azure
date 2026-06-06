@@ -4336,6 +4336,7 @@ test('product audit proves the local AgentOps control-room contract', () => {
     'content-transcript-opt-in',
     'first-run-loop',
     'ask-agentops-response-flow',
+    'ask-agentops-live-response-flow',
     'agent-improvement-guarded-apply'
   ]) {
     assert.equal(byName[name].ok, true, name);
@@ -9059,7 +9060,8 @@ test('ask agentops launcher builds metadata-only assistant context', async () =>
     saved_view: savedViewRow,
     alert_handoff: alertHandoff
   }, {
-    assistantBaseUrl: 'https://assistant.example/ask'
+    assistantBaseUrl: 'https://assistant.example/ask',
+    assistantApiUrl: 'https://assistant.example/api/respond'
   });
 
   assert.equal(packet.schema_version, 'agentops.ask-agentops-launch.v1');
@@ -9073,6 +9075,13 @@ test('ask agentops launcher builds metadata-only assistant context', async () =>
   assert.equal(packet.alert_handoff.rule, 'failed-spans');
   assert.equal(packet.assistant_response.mode, 'metadata-only-assistant-response');
   assert.equal(packet.assistant_response.status, 'draft');
+  assert.equal(packet.live_assistant.mode, 'metadata-only-live-assistant-request');
+  assert.equal(packet.live_assistant.status, 'ready');
+  assert.equal(packet.live_assistant.api_url, 'https://assistant.example/api/respond');
+  assert.equal(packet.live_assistant.request.context.run_id, 'run-123');
+  assert.equal(packet.live_assistant.request.context.recommendation_id, 'rec-123');
+  assert.ok(packet.live_assistant.request.context.change_target_refs.includes('skill:agentops-latest-run'));
+  assert.match(packet.live_assistant.request.prompt, /Use only metadata/);
   assert.ok(packet.assistant_response.evidence.includes('RunId=run-123'));
   assert.ok(packet.assistant_response.evidence.includes('RecommendationId=rec-123'));
   assert.ok(packet.assistant_response.evidence.includes('RecommendationBenchmarkRunId=bench-123'));
@@ -9168,6 +9177,7 @@ test('ask agentops launcher builds metadata-only assistant context', async () =>
   assert.equal(context.res.headers['Content-Type'], 'application/json');
   assert.equal(context.res.body.mode, 'metadata-only-assistant-launch');
   assert.equal(context.res.body.assistant_response.mode, 'metadata-only-assistant-response');
+  assert.equal(context.res.body.live_assistant.status, 'disabled');
 
   const sharedContext = { bindings: {
     recommendationBlob: sharedRecommendationBlob,
@@ -9223,6 +9233,7 @@ test('ask agentops launcher builds metadata-only assistant context', async () =>
   assert.equal(htmlContext.res.headers['Content-Type'], 'text/html; charset=utf-8');
   assert.match(htmlContext.res.body, /Response Draft/);
   assert.match(htmlContext.res.body, /Root-cause candidates/);
+  assert.match(htmlContext.res.body, /AGENTOPS_ASSISTANT_API_URL/);
 
   const recommendationHtmlContext = {};
   await askAgentOps(recommendationHtmlContext, {
@@ -9230,13 +9241,17 @@ test('ask agentops launcher builds metadata-only assistant context', async () =>
       run_id: 'run-123',
       recommendation: recommendationRow,
       saved_view: savedViewRow,
-      alert_handoff: alertHandoff
+      alert_handoff: alertHandoff,
+      assistant_api_url: 'https://assistant.example/api/respond'
     },
     headers: {
       accept: 'text/html'
     }
   });
   assert.equal(recommendationHtmlContext.res.status, 200);
+  assert.match(recommendationHtmlContext.res.body, /Live Assistant/);
+  assert.match(recommendationHtmlContext.res.body, /metadata-only-live-assistant-request/);
+  assert.match(recommendationHtmlContext.res.body, /live-assistant-run/);
   assert.match(recommendationHtmlContext.res.body, /Recommendation/);
   assert.match(recommendationHtmlContext.res.body, /skill:agentops-latest-run/);
   assert.match(recommendationHtmlContext.res.body, /benchmarks\/output\.md/);

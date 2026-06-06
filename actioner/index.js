@@ -320,6 +320,7 @@ function buildAskAgentOpsLaunch(payload = {}, options = {}) {
   const savedView = savedViewEvidenceFromPayload(payload);
   const alertHandoff = alertHandoffEvidenceFromPayload(payload);
   const assistantBaseUrl = stringValue(options.assistantBaseUrl || payload.assistant_url || process.env.AGENTOPS_ASSISTANT_URL).trim();
+  const assistantApiUrl = stringValue(options.assistantApiUrl || payload.assistant_api_url || process.env.AGENTOPS_ASSISTANT_API_URL).trim();
   const errors = [];
 
   if (!runId && !sessionId && !traceId) errors.push('run_id, session_id, or trace_id is required');
@@ -378,6 +379,20 @@ function buildAskAgentOpsLaunch(payload = {}, options = {}) {
     shared_context: hydration.context,
     prompt: errors.length ? null : prompt,
     assistant_response: assistantResponse,
+    live_assistant: errors.length ? null : buildLiveAssistantRequest({
+      apiUrl: assistantApiUrl,
+      prompt,
+      runId,
+      sessionId,
+      traceId,
+      last,
+      dashboardUrl,
+      selectedEvent,
+      benchmark,
+      recommendation: recommendation?.summary || null,
+      savedView: savedView?.summary || null,
+      alertHandoff: alertHandoff?.summary || null
+    }),
     launch_url: !errors.length && assistantBaseUrl
       ? `${assistantBaseUrl}${assistantBaseUrl.includes('?') ? '&' : '?'}q=${encodeURIComponent(prompt)}`
       : null,
@@ -390,6 +405,48 @@ function buildAskAgentOpsLaunch(payload = {}, options = {}) {
       'Launch with run/session/trace metadata only.',
       'Keep prompts, responses, tool arguments, tool results, source code, and file contents out of the assistant context.',
       'Use the returned prompt as review context; do not mutate systems without explicit operator approval.'
+    ]
+  };
+}
+
+function buildLiveAssistantRequest(context = {}) {
+  const recommendation = context.recommendation || null;
+  const savedView = context.savedView || null;
+  const alertHandoff = context.alertHandoff || null;
+  const apiUrl = stringValue(context.apiUrl).trim();
+  const metadata = {
+    run_id: context.runId || null,
+    session_id: context.sessionId || null,
+    trace_id: context.traceId || null,
+    last: context.last || null,
+    dashboard_url_present: Boolean(context.dashboardUrl),
+    selected_event: context.selectedEvent || null,
+    benchmark_run_id: context.benchmark || recommendation?.benchmark_run_id || null,
+    recommendation_id: recommendation?.recommendation_id || null,
+    saved_view_id: savedView?.saved_view_id || null,
+    alert_rule: alertHandoff?.rule || null,
+    change_target_refs: [
+      ...(recommendation?.change_target_refs || []),
+      ...(savedView?.change_target_refs || [])
+    ].filter(Boolean)
+  };
+  return {
+    mode: 'metadata-only-live-assistant-request',
+    status: apiUrl ? 'ready' : 'disabled',
+    api_url: apiUrl || null,
+    request: apiUrl ? {
+      prompt: context.prompt,
+      context: metadata,
+      privacy: {
+        mode: 'metadata-only',
+        excluded: ['raw user prompts', 'model responses', 'tool arguments', 'tool results', 'source code', 'file contents', 'request bodies', 'response bodies', 'secrets']
+      }
+    } : null,
+    fallback_response: 'metadata-only-assistant-response',
+    guardrails: [
+      'Post only the metadata-only prompt and compact context.',
+      'Render the assistant answer inside this hosted page.',
+      'Do not send raw user prompt text, model responses, tool arguments, tool results, source code, file contents, request bodies, response bodies, or secrets.'
     ]
   };
 }
@@ -982,6 +1039,14 @@ function renderAskAgentOpsLaunch(packet) {
   const launch = packet.launch_url
     ? `<p><a class="button" href="${htmlEscape(packet.launch_url)}">Open Assistant</a></p>`
     : '<p class="note">Set <code>AGENTOPS_ASSISTANT_URL</code> to enable a direct assistant launch URL. The metadata-only prompt is ready to copy.</p>';
+  const liveAssistant = packet.live_assistant?.status === 'ready'
+    ? `<section class="note live-assistant" data-api-url="${htmlEscape(packet.live_assistant.api_url)}" data-request='${htmlEscape(JSON.stringify(packet.live_assistant.request))}'>
+      <h2>Live Assistant</h2>
+      <p>Run a metadata-only live assistant response inside this page.</p>
+      <button type="button" id="live-assistant-run">Ask Live Assistant</button>
+      <pre id="live-assistant-output">${htmlEscape(JSON.stringify({ status: 'ready', mode: packet.live_assistant.mode }, null, 2))}</pre>
+    </section>`
+    : '<p class="note">Set <code>AGENTOPS_ASSISTANT_API_URL</code> to enable an inline live assistant response flow. The first-party response draft remains available below.</p>';
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -1013,6 +1078,7 @@ function renderAskAgentOpsLaunch(packet) {
     <h1>Ask AgentOps</h1>
     <p class="note">Metadata-only assistant context for ${htmlEscape(packet.run_id || packet.session_id || packet.trace_id || 'selected run')}.</p>
     ${packet.status === 'ready' ? launch : `<p class="note">${htmlEscape(packet.errors.join('; '))}</p>`}
+    ${packet.status === 'ready' ? liveAssistant : ''}
     ${packet.assistant_response ? `<section class="note">
       <h2>Response Draft</h2>
       <p>${htmlEscape(packet.assistant_response.summary)}</p>
@@ -1068,6 +1134,26 @@ function renderAskAgentOpsLaunch(packet) {
             output.textContent = JSON.stringify(row, null, 2);
           }
         });
+      });
+    }
+    const liveBox = document.querySelector('.live-assistant');
+    if (liveBox) {
+      const output = document.getElementById('live-assistant-output');
+      document.getElementById('live-assistant-run').addEventListener('click', async () => {
+        const request = JSON.parse(liveBox.dataset.request);
+        output.textContent = JSON.stringify({ status: 'running', mode: 'metadata-only-live-assistant-request' }, null, 2);
+        try {
+          const response = await fetch(liveBox.dataset.apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(request)
+          });
+          const contentType = response.headers.get('content-type') || '';
+          const body = contentType.includes('application/json') ? await response.json() : { text: await response.text() };
+          output.textContent = JSON.stringify({ status: response.ok ? 'ok' : 'error', response: body }, null, 2);
+        } catch (error) {
+          output.textContent = JSON.stringify({ status: 'error', error: error.message }, null, 2);
+        }
       });
     }
   </script>
