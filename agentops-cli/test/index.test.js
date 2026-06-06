@@ -4332,6 +4332,7 @@ test('product audit proves the local AgentOps control-room contract', () => {
     'grafana-v2-pack',
     'kql-library',
     'run-centric-ui-contract',
+    'robust-eval-center-contract',
     'content-transcript-opt-in',
     'first-run-loop',
     'ask-agentops-response-flow',

@@ -1239,15 +1239,21 @@ Success criterion:
 Users can compare baseline vs candidate agents and detect safety, quality, cost, and anti-cheat regressions before promotion.
 ```
 
+Implemented:
+
+- Hidden check packs are supported as masked, sealed check packs, with signed fixture pack manifests, trust roots, revoked signing key IDs, and rotation windows.
+- Rubric and semantic scoring supports deterministic file-content, regex, file-rubric, and command-backed `llm-judge` checks with reusable hosted judge provider command templates.
+- Network and permission controls include per-task permission profiles, read-only copied fixtures, allowed-tool risk policies, and opt-in macOS `sandbox-exec` network blocking that fails closed when requested on unsupported hosts.
+- Local harness tamper resistance includes copied fixture workspaces, read-only benchmark profiles, sealed fixture packs, and `commandFileSeal` checks for test scripts and command files.
+- Artifact diffing is available in CLI reports and the Evals & Quality dashboard, including per-file review and capped content diff previews.
+- Scorecard UI is present in the Evals & Quality dashboard through eval scorecards, regression follow-up, before/after comparisons, hidden check review, policy review, semantic review, artifact review, and promotion approvals.
+- Promotion policy can require gate results, approval evidence, approver identity/counts, approved external review metadata, and optional external review verification for GitHub PRs, Azure DevOps PRs, and Jira issues.
+- `agentops product audit` now includes `robust-eval-center-contract` so this eval-center shape remains a local release gate.
+
 Required work:
 
-- Hidden tests.
-- Rubric/semantic scoring beyond deterministic file-content adapters.
-- Network and permission profiles.
-- Managed immutable harness isolation beyond command-file seals.
-- Artifact diffing.
-- Scorecard UI.
-- Promotion policy.
+- Cross-platform managed OS-level immutable harness and network egress isolation beyond the current copied fixture, read-only profile, command-file seals, signed fixture packs, and opt-in macOS network sandbox.
+- Hosted judge service deployment for `llm-judge` beyond the current non-mutating Azure Container Apps provisioning plan.
 
 ### 5. Trustworthy Data Quality
 

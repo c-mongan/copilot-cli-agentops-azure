@@ -229,6 +229,40 @@ function productAudit(options = {}) {
   ));
 
   checks.push(check(
+    'robust-eval-center-contract',
+    ux.ok
+      && ux.contracts?.robust_eval_center === true
+      && fileIncludes('agentops-cli/src/legacy.js', [
+        'hiddenCheckPacks',
+        'permissionProfiles',
+        'macos-network-blocked',
+        'commandFileSeal',
+        'semanticChecks',
+        'llm-judge',
+        'artifactDiff',
+        'promotionApproval'
+      ])
+      && fileIncludes('grafana/dashboards/v2/08-evals-quality.json', [
+        'BenchmarkArtifactContentDiffs',
+        'BenchmarkApproval'
+      ])
+      && fileIncludes('docs/agentops-architecture-product-audit.md', [
+        'Robust Eval Center',
+        'Hidden check packs',
+        'Rubric and semantic scoring',
+        'Artifact diffing',
+        'Promotion policy',
+        'Cross-platform managed OS-level'
+      ]),
+    [
+      'agentops-cli/src/legacy.js',
+      'grafana/dashboards/v2/08-evals-quality.json',
+      'docs/agentops-architecture-product-audit.md'
+    ],
+    ux.errors
+  ));
+
+  checks.push(check(
     'azure-ingest-privacy-plan',
     fileIncludes('agentops-cli/src/lib/azure/v2-ingest-plan.js', ['--allow-content', 'AgentOpsContent_CL', 'schema_versioning', 'schema_migration_policy'])
       && fileIncludes('docs/azure-v2-ingestion.md', ['AgentOpsContent_CL', '--allow-content', 'SchemaVersion', 'schema migration policy']),
