@@ -1261,10 +1261,10 @@ Implemented:
 - Content-capture detector.
 - Schema versioning in demo rows, ingest-plan warnings, and Collector Health coverage.
 - Exporter failure visibility in Collector Health rows and dashboard review actions.
+- Schema migration policy in ingest planning for current, legacy, missing, and unsupported newer table versions.
 
 Required work:
 
-- Schema migration policy.
 - Real Copilot fixture regression tests.
 
 ## Recommended Roadmap

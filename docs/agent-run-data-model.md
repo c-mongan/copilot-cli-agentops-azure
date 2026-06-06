@@ -50,6 +50,7 @@ Identifiers that could reveal local paths, users, branches, repo names, or promp
 ## Conceptual Tables
 
 Every `AgentOps*_CL` row should include `SchemaVersion` so ingest planning and Collector Health can flag mixed or legacy exports before operators trust the dashboards.
+The ingest planner treats version `2` as current, version `1` as legacy migration-required, missing versions as regeneration-required, and newer unknown versions as blocked until the CLI/dashboard pack is upgraded.
 
 - `AgentOpsRunSummary_CL`: one row per run.
 - `AgentOpsEvents_CL`: timeline events.

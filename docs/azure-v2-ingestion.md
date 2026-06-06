@@ -17,6 +17,7 @@ The plan checks:
 - required columns for each table
 - inferred Azure column types for DCR stream declarations
 - `SchemaVersion` coverage, missing-row warnings, and mismatches from expected schema version `2`
+- schema migration policy actions for missing, legacy, or unsupported newer versions
 - stream names such as `Custom-AgentOpsRunSummary_CL`
 - row counts for run summary and event tables
 - content-like and secret-like leak patterns
@@ -67,4 +68,4 @@ agentops open
 
 If the plan reports a privacy failure, fix the local producer or collector before configuring cloud ingestion.
 
-If the plan reports schema-version warnings, keep the export local until the producing collector stamps each `AgentOps*_CL` row with `SchemaVersion: "2"`. The Collector Health dashboard also shows schema coverage by table so mixed or legacy exports are visible after ingestion.
+If the plan reports schema-version warnings, keep the export local until the producing collector stamps each `AgentOps*_CL` row with `SchemaVersion: "2"`. Legacy version `1` rows and missing versions are treated as migration-required warnings with concrete regeneration guidance. Newer unsupported versions fail the plan; upgrade the AgentOps CLI and Grafana dashboard pack before ingesting them. The Collector Health dashboard also shows schema coverage by table so mixed or legacy exports are visible after ingestion.
