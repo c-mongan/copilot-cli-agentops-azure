@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const { validateAgentRun } = require('../schema/agent-run-schema');
+const { AGENTOPS_SCHEMA_VERSION } = require('../schema/agentops-attributes');
 
 const tableNames = [
   'AgentOpsRunSummary_CL',
@@ -643,6 +644,12 @@ function generateDemoData(options = {}) {
     });
 
     addEvent(tables, isoMinutesAgo((runs - index) * 11 - 10), run, 'run.completed', { Status: run.OutcomeStatus });
+  }
+
+  for (const rows of Object.values(tables)) {
+    for (const row of rows) {
+      if (row.SchemaVersion === undefined) row.SchemaVersion = AGENTOPS_SCHEMA_VERSION;
+    }
   }
 
   return {

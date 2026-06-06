@@ -1109,6 +1109,58 @@
           }
         }
       ]
+    },
+    {
+      "id": 22,
+      "title": "Schema version coverage",
+      "type": "table",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "azure-monitor-oob"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 22
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "links": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "cellHeight": "sm",
+        "showHeader": true,
+        "footer": {
+          "show": false
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor-oob"
+          },
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
+            ],
+            "resultFormat": "table",
+            "query": "let SchemaCoverageSeed = datatable(TimeGenerated:datetime, SchemaVersion:string)[datetime(null), '2']; union isfuzzy=true withsource=TableName SchemaCoverageSeed, AgentOpsRunSummary_CL, AgentOpsEvents_CL, AgentOpsToolCalls_CL, AgentOpsMcpCalls_CL, AgentOpsPrivacy_CL, AgentOpsEval_CL, AgentOpsGithubOutcomes_CL, AgentOpsInsights_CL, AgentOpsRecommendations_CL, AgentOpsSavedViews_CL, AgentOpsCollectorHealth_CL | where isnull(TimeGenerated) or TimeGenerated between ($__timeFrom() .. $__timeTo()) | extend SchemaVersion=tostring(column_ifexists('SchemaVersion', '')) | summarize Rows=count(), MissingSchemaVersion=countif(isempty(SchemaVersion)), MismatchedSchemaVersion=countif(isnotempty(SchemaVersion) and SchemaVersion != '2'), Versions=make_set(SchemaVersion), LastSeen=max(TimeGenerated) by TableName | where isnotnull(LastSeen) | extend ExpectedSchemaVersion='2' | extend SchemaStatus=case(MissingSchemaVersion > 0, 'missing-version', MismatchedSchemaVersion > 0, 'version-review', 'ok') | project TableName, SchemaStatus, Rows, MissingSchemaVersion, MismatchedSchemaVersion, Versions, ExpectedSchemaVersion, LastSeen | order by SchemaStatus asc, TableName asc"
+          }
+        }
+      ]
     }
   ],
   "refresh": "1m",

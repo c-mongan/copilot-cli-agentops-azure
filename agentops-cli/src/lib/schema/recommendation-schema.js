@@ -15,6 +15,7 @@ const requiredFields = [
 
 const fieldTypes = {
   TimeGenerated: 'string',
+  SchemaVersion: 'string',
   RecommendationId: 'string',
   RunId: 'string',
   SessionId: 'string',

@@ -636,11 +636,45 @@ test('azure-ingest plan validates V2 table files and privacy shape', () => {
     assert.equal(result.tables.AgentOpsRunSummary_CL.stream_name, 'Custom-AgentOpsRunSummary_CL');
     assert.equal(result.tables.AgentOpsRunSummary_CL.column_types.TimeGenerated, 'datetime');
     assert.equal(result.tables.AgentOpsRunSummary_CL.column_types.RunId, 'string');
+    assert.equal(result.tables.AgentOpsRunSummary_CL.column_types.SchemaVersion, 'string');
     assert.equal(result.tables.AgentOpsRunSummary_CL.column_types.ToolCount, 'long');
     assert.equal(result.tables.AgentOpsRunSummary_CL.column_types.EstimatedCostUsd, 'real');
     assert.equal(result.tables.AgentOpsRunSummary_CL.column_types.PrOpened, 'boolean');
+    assert.equal(result.tables.AgentOpsRunSummary_CL.schema_version.ok, true);
+    assert.equal(result.schema_versioning.ok, true);
+    assert.equal(result.schema_versioning.expected, '2');
     assert.equal(result.azure.streams.AgentOpsRunSummary_CL, 'Custom-AgentOpsRunSummary_CL');
     assert.match(result.azure.ingestion_path, /Logs Ingestion API/);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('azure-ingest plan warns on missing or mismatched schema versions', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-azure-ingest-schema-'));
+  try {
+    const demo = generateDemoData({ runs: 2 });
+    const { writeDemoData } = require('../src/lib/demo/agentops-demo-data');
+    writeDemoData(demo, tempDir);
+
+    const runFile = path.join(tempDir, 'AgentOpsRunSummary_CL.jsonl');
+    const rows = fs.readFileSync(runFile, 'utf8')
+      .trim()
+      .split('\n')
+      .map(line => JSON.parse(line));
+    delete rows[0].SchemaVersion;
+    rows[1].SchemaVersion = '1';
+    fs.writeFileSync(runFile, `${rows.map(row => JSON.stringify(row)).join('\n')}\n`);
+
+    const result = buildAzureIngestPlan({ dir: tempDir });
+    assert.equal(result.ok, true, result.errors.join('\n'));
+    assert.equal(result.schema_versioning.ok, false);
+    assert.equal(result.schema_versioning.missing_rows, 1);
+    assert.deepEqual(result.schema_versioning.mismatched_tables, [
+      { table: 'AgentOpsRunSummary_CL', versions: ['1'] }
+    ]);
+    assert.match(result.warnings.join('\n'), /missing SchemaVersion/);
+    assert.match(result.warnings.join('\n'), /schema version mismatch 1; expected 2/);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
@@ -4452,7 +4486,7 @@ test('dashboard verify combines static UX and optional live KQL gates', () => {
   });
   assert.equal(live.ok, true, live.errors.join('\n'));
   assert.equal(live.live, true);
-  assert.equal(live.summary.kql_checks, 33);
+  assert.equal(live.summary.kql_checks, 34);
 });
 
 test('V2 dashboard links preserve drilldown contracts', () => {
@@ -4582,7 +4616,7 @@ test('dashboard kql-check renders representative V2 panel queries', () => {
   });
 
   assert.equal(result.ok, true, result.errors.join('\n'));
-  assert.equal(result.checks.length, 33);
+  assert.equal(result.checks.length, 34);
   assert.ok(queries.every(item => item.options.workspaceId === 'workspace-123'));
   assert.ok(queries.every(item => item.query.includes('ago(24h)')));
   assert.ok(queries.every(item => !item.query.includes('$__timeFrom')));

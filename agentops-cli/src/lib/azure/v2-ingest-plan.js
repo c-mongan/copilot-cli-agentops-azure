@@ -2,6 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const { tableNames } = require('../demo/agentops-demo-data');
+const { AGENTOPS_SCHEMA_VERSION } = require('../schema/agentops-attributes');
 
 const requiredColumns = {
   AgentOpsRunSummary_CL: ['TimeGenerated', 'RunId', 'SessionId', 'TraceId', 'OutcomeStatus'],
@@ -31,6 +32,8 @@ const optionalEmptyTables = new Set([
   'AgentOpsCollectorHealth_CL',
   'AgentOpsContent_CL'
 ]);
+
+const schemaVersionTables = new Set(tableNames.filter(table => table.endsWith('_CL')));
 
 const leakPatterns = [
   /SECRET_FAKE_TEST_VALUE/i,
@@ -117,6 +120,7 @@ function validateTable(table, dir, options = {}) {
   const errors = [...parseErrors];
   const warnings = [];
   const required = requiredColumns[table] || [];
+  const schemaVersion = schemaVersionFor(table, rows);
 
   if (!(rows.length === 0 && optionalEmptyTables.has(table))) {
     for (const column of required) {
@@ -124,6 +128,12 @@ function validateTable(table, dir, options = {}) {
     }
   }
   if (rows.length === 0) warnings.push(`${table}: no rows yet; dashboards will show empty-state guidance for this table`);
+  if (schemaVersion.checked && schemaVersion.missing_rows > 0) {
+    warnings.push(`${table}: ${schemaVersion.missing_rows} row(s) missing SchemaVersion; dashboards will flag schema coverage`);
+  }
+  if (schemaVersion.checked && schemaVersion.mismatched_versions.length > 0) {
+    warnings.push(`${table}: schema version mismatch ${schemaVersion.mismatched_versions.join(', ')}; expected ${AGENTOPS_SCHEMA_VERSION}`);
+  }
 
   return {
     file,
@@ -132,9 +142,39 @@ function validateTable(table, dir, options = {}) {
     columnTypes,
     streamName: streamNameFor(table),
     required_columns: required,
+    schema_version: schemaVersion,
     warnings,
     errors,
     leaks: scanForLeaks(table, text, options)
+  };
+}
+
+function schemaVersionFor(table, rows) {
+  if (!schemaVersionTables.has(table) || rows.length === 0) {
+    return {
+      checked: false,
+      expected: AGENTOPS_SCHEMA_VERSION,
+      versions: [],
+      missing_rows: 0,
+      mismatched_versions: [],
+      ok: true
+    };
+  }
+
+  const versions = [...new Set(rows
+    .map(row => row?.SchemaVersion)
+    .filter(value => value !== undefined && value !== null && value !== '')
+    .map(value => String(value)))].sort();
+  const missingRows = rows.filter(row => row?.SchemaVersion === undefined || row?.SchemaVersion === null || row?.SchemaVersion === '').length;
+  const mismatchedVersions = versions.filter(version => version !== AGENTOPS_SCHEMA_VERSION);
+
+  return {
+    checked: true,
+    expected: AGENTOPS_SCHEMA_VERSION,
+    versions,
+    missing_rows: missingRows,
+    mismatched_versions: mismatchedVersions,
+    ok: missingRows === 0 && mismatchedVersions.length === 0
   };
 }
 
@@ -153,7 +193,8 @@ function buildAzureIngestPlan({ dir, allowContent = false } = {}) {
       columns: result.columns,
       column_types: result.columnTypes,
       stream_name: result.streamName,
-      required_columns: result.required_columns
+      required_columns: result.required_columns,
+      schema_version: result.schema_version
     };
     errors.push(...result.errors);
     warnings.push(...result.warnings);
@@ -189,6 +230,7 @@ function buildAzureIngestPlan({ dir, allowContent = false } = {}) {
       rows: contentRows,
       warning: contentRows > 0 ? 'Content rows may include prompts or responses. Use a separate restricted workspace/dashboard for shared environments.' : ''
     },
+    schema_versioning: schemaVersioningSummary(tables),
     azure: {
       workspace: '<log-analytics-workspace>',
       table_suffix: '_CL',
@@ -202,6 +244,27 @@ function buildAzureIngestPlan({ dir, allowContent = false } = {}) {
       'agentops validate-azure --last 24h',
       'agentops open'
     ]
+  };
+}
+
+function schemaVersioningSummary(tables) {
+  const checked = Object.entries(tables)
+    .filter(([, table]) => table.schema_version?.checked)
+    .map(([name, table]) => ({ name, ...table.schema_version }));
+  const missingRows = checked.reduce((total, table) => total + table.missing_rows, 0);
+  const mismatchedTables = checked
+    .filter(table => table.mismatched_versions.length > 0)
+    .map(table => ({
+      table: table.name,
+      versions: table.mismatched_versions
+    }));
+
+  return {
+    ok: missingRows === 0 && mismatchedTables.length === 0,
+    expected: AGENTOPS_SCHEMA_VERSION,
+    checked_tables: checked.length,
+    missing_rows: missingRows,
+    mismatched_tables: mismatchedTables
   };
 }
 

@@ -16,6 +16,7 @@ The plan checks:
 - every expected `AgentOps*_CL.jsonl` file
 - required columns for each table
 - inferred Azure column types for DCR stream declarations
+- `SchemaVersion` coverage, missing-row warnings, and mismatches from expected schema version `2`
 - stream names such as `Custom-AgentOpsRunSummary_CL`
 - row counts for run summary and event tables
 - content-like and secret-like leak patterns
@@ -65,3 +66,5 @@ agentops open
 ```
 
 If the plan reports a privacy failure, fix the local producer or collector before configuring cloud ingestion.
+
+If the plan reports schema-version warnings, keep the export local until the producing collector stamps each `AgentOps*_CL` row with `SchemaVersion: "2"`. The Collector Health dashboard also shows schema coverage by table so mixed or legacy exports are visible after ingestion.
