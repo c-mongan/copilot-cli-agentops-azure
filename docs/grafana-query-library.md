@@ -13,7 +13,7 @@ The reusable V2 KQL files live under `grafana/kql/`.
 - `evals.kql`: deterministic quality scores.
 - `insights.kql`: anomalies, regressions, and recurring metadata-only patterns.
 - `recommendations.kql`: persisted next actions from recommendations, with fallback rows projected from insights.
-- `collector-health.kql`: collector/export health.
+- `collector-health.kql`: collector/export health, including exporter failure fields.
 - `content-viewer.kql`: optional prompt/response rows from `AgentOpsContent_CL`.
 
 These queries target conceptual `AgentOps*_CL` tables. Current Application Insights tables can be adapted into the same shape with KQL views or rollup jobs.
