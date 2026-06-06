@@ -1226,7 +1226,10 @@ Every suggested agent/skill/hook/MCP change has telemetry evidence, predicted me
 Required work:
 
 - Replace the deterministic first-party response draft with a live assistant response flow inside Grafana or the hosted AgentOps page.
-- Apply approved recommendation patches from the hosted workflow after the guarded action plan passes benchmark and after-run comparison.
+
+Implemented:
+
+- Approved recommendation patch application now has a hosted guarded apply packet: `AskAgentOps` returns `metadata-only-guarded-apply` with branch/action-plan/benchmark/compare commands and a patch handoff only after operator approval, benchmark evidence, after-run metric movement, validation, rollback, and change-target refs are present.
 
 ### 4. Robust Eval Center
 
