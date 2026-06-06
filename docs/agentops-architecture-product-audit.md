@@ -24,7 +24,7 @@ The short answer to the product questions:
 - Does it make it simple to use? Simpler. The CLI now covers first-run setup, Azure/Grafana validation, smoke verification, latest-run summaries, ask-context bundles, and benchmark gates. The remaining complexity is cloud provisioning/binding and dashboard import automation.
 - Is it native to Copilot? Locally, almost. The shadow shim, bundled skills, custom agents, hooks, and MCP config all point in the right direction. The missing piece is a single Copilot-facing install/configure/check loop that hides infrastructure details until needed.
 - Can a coding agent monitor another agent through MCP? The architecture supports this concept. The repo includes read-only Azure Monitor MCP and Grafana MCP configs plus telemetry-investigator/optimizer agents. The current implementation now has hosted Ask AgentOps context and optional live response flow, but not yet a seamless Grafana-native page-context assistant.
-- Can it detect cheating in evals? At a credible local-control level. The benchmark runner checks success commands, hidden check packs, signed fixture packs, sealed command harness files, expected files, forbidden files, semantic/rubric/hosted-judge checks, external answer-source tools, safety signals, content capture, tool failures, policy blocks, tokens, and cost. It also supports opt-in macOS and container-runtime network isolation. It still needs production hardening around managed runner images and private sandbox infrastructure.
+- Can it detect cheating in evals? At a credible local-control level. The benchmark runner checks success commands, hidden check packs, signed fixture packs, sealed command harness files, expected files, forbidden files, semantic/rubric/hosted-judge checks, external answer-source tools, safety signals, content capture, tool failures, policy blocks, tokens, and cost. It also supports opt-in macOS and container-runtime network isolation, plus a managed benchmark runner base image for private derived runners. It still needs private registry automation and private sandbox infrastructure.
 
 My product judgment: keep the current metadata-first/privacy-first foundation. Do not add prompt/content capture as the default. To become a world-class Copilot AgentOps product, the next major move should be a session-first UI and setup wizard, not more scattered KQL. The user should land on "what happened, why, what changed, what should I do next" within one minute of running `copilot`.
 
@@ -1105,7 +1105,7 @@ Setup simplicity                          Medium           Good scripts, too man
 Azure validation                          Medium-good      Read-only CLI preflight includes Grafana datasource/dashboard checks; auto-remediation is incomplete.
 Collector health                          Medium           Local health endpoint, KQL, and dashboard panel exist; exporter/drop/backpressure metrics are still thin.
 Eval/benchmark support                    Medium           Nice starter gate, not robust eval platform.
-Cheating detection                        Medium-high      Hidden tests, signed fixture packs, semantic eval, hosted judge deployment, policy blockers, macOS network sandboxing, and container runtime network isolation exist; managed runner hardening is still needed.
+Cheating detection                        Medium-high      Hidden tests, signed fixture packs, semantic eval, hosted judge deployment, policy blockers, macOS network sandboxing, container runtime network isolation, and a managed runner base image exist; registry and private sandbox hardening are still needed.
 Meta-agent via MCP                        Medium-good      Good scaffolding, not seamless UI-integrated loop.
 Enterprise readiness                      Medium-low       Needs RBAC/private networking/packaging hardening.
 ```
@@ -1242,6 +1242,7 @@ Implemented:
 - Rubric and semantic scoring supports deterministic file-content, regex, file-rubric, and command-backed `llm-judge` checks with reusable hosted judge provider command templates.
 - Hosted `llm-judge` deployment is backed by a deployable Azure Container Apps hosted judge service, Dockerfile, Bicep module, health/score endpoints, and `agentops product audit` coverage through `hosted-llm-judge-deployment`.
 - Network and permission controls include per-task permission profiles, read-only copied fixtures, allowed-tool risk policies, opt-in macOS `sandbox-exec` network blocking that fails closed when requested on unsupported hosts, and opt-in `container-network-blocked` execution through Docker/Podman-compatible runtimes with `--network none`. Container runtime network isolation keeps Copilot inside the copied fixture and isolated Copilot home instead of falling back to host execution.
+- A managed benchmark runner base image under `benchmark-runners/copilot-sandbox` gives teams a repeatable private-image contract for `container-network-blocked` tasks, with entrypoint checks for `/workspace`, `COPILOT_HOME`, and a private derived Copilot CLI install. `agentops product audit` covers this through `managed-benchmark-runner-image`.
 - Local harness tamper resistance includes copied fixture workspaces, read-only benchmark profiles, sealed fixture packs, and `commandFileSeal` checks for test scripts and command files.
 - Artifact diffing is available in CLI reports and the Evals & Quality dashboard, including per-file review and capped content diff previews.
 - Scorecard UI is present in the Evals & Quality dashboard through eval scorecards, regression follow-up, before/after comparisons, hidden check review, policy review, semantic review, artifact review, and promotion approvals.
@@ -1250,7 +1251,7 @@ Implemented:
 
 Required work:
 
-- Production hardening for managed runner images, private registries, and private sandbox infrastructure beyond the current copied fixture, read-only profile, command-file seals, signed fixture packs, opt-in macOS network sandbox, and opt-in container runtime network isolation.
+- Private registry automation, immutable image promotion, and private sandbox infrastructure beyond the current copied fixture, read-only profile, command-file seals, signed fixture packs, opt-in macOS network sandbox, opt-in container runtime network isolation, and managed runner base image.
 
 ### 5. Trustworthy Data Quality
 
@@ -1304,7 +1305,7 @@ Implemented:
 - Expand benchmark schemas.
 - Add signed fixture pack distribution guidance for rotating benchmark trust roots.
 - Harden hosted judge operations with private ingress options and managed provider identity where supported.
-- Harden opt-in container runtime network isolation with managed runner images, private registries, and tool sandbox policies.
+- Harden opt-in container runtime network isolation with private registry promotion, image signing, and tool sandbox policies.
 - Expand Grafana-native artifact content diff review from capped previews into a full approved-artifact drilldown workflow.
 - Add remaining change-management workflow API integrations for candidate promotion gates beyond GitHub, Azure DevOps, and Jira.
 - Expand eval scorecard and regression dashboards as production usage reveals more review slices.

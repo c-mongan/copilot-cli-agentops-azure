@@ -283,6 +283,36 @@ function productAudit(options = {}) {
   ));
 
   checks.push(check(
+    'managed-benchmark-runner-image',
+    fileIncludes('benchmark-runners/copilot-sandbox/Dockerfile', [
+      'node:22-bookworm-slim',
+      'AGENTOPS_BENCHMARK_RUNNER=managed-container-sandbox',
+      'agentops-benchmark-entrypoint'
+    ])
+      && fileIncludes('benchmark-runners/copilot-sandbox/docker-entrypoint.sh', [
+        'COPILOT_HOME',
+        'command -v',
+        'private derived image'
+      ])
+      && fileIncludes('benchmark-runners/copilot-sandbox/README.md', [
+        'container-network-blocked',
+        '--network none',
+        'private registry'
+      ])
+      && fileIncludes('docs/agentops-architecture-product-audit.md', [
+        'managed benchmark runner base image',
+        'managed-benchmark-runner-image'
+      ]),
+    [
+      'benchmark-runners/copilot-sandbox/Dockerfile',
+      'benchmark-runners/copilot-sandbox/docker-entrypoint.sh',
+      'benchmark-runners/copilot-sandbox/README.md',
+      'docs/agentops-architecture-product-audit.md'
+    ],
+    []
+  ));
+
+  checks.push(check(
     'azure-ingest-privacy-plan',
     fileIncludes('agentops-cli/src/lib/azure/v2-ingest-plan.js', ['--allow-content', 'AgentOpsContent_CL', 'schema_versioning', 'schema_migration_policy'])
       && fileIncludes('docs/azure-v2-ingestion.md', ['AgentOpsContent_CL', '--allow-content', 'SchemaVersion', 'schema migration policy']),
