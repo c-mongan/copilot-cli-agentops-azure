@@ -299,6 +299,15 @@ function productAudit(options = {}) {
     []
   ));
 
+  checks.push(check(
+    'agent-improvement-guarded-apply',
+    fileIncludes('actioner/index.js', ['buildGuardedRecommendationApply', 'metadata-only-guarded-apply', 'after-run metric movement', 'patch_handoff'])
+      && fileIncludes('actioner/README.md', ['guarded apply packet', 'after-run metric movement', 'patch handoff'])
+      && fileIncludes('docs/agentops-architecture-product-audit.md', ['guarded apply packet', 'metadata-only-guarded-apply']),
+    ['actioner/index.js', 'actioner/README.md', 'docs/agentops-architecture-product-audit.md'],
+    []
+  ));
+
   let liveDashboard = null;
   let liveAzure = null;
   if (live) {

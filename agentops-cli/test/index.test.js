@@ -65,7 +65,7 @@ const { checkInstallSmoke } = require('../../scripts/check-install-smoke');
 const { checkReleaseDistribution } = require('../../scripts/check-release-distribution');
 const { checkSdkPublish, isWildcardRange } = require('../../scripts/check-sdk-publish');
 const { shouldCopy } = require('../../scripts/prepare-cli-package-assets');
-const { askAgentOps, buildActionerReview, buildAskAgentOpsLaunch, buildAskAgentOpsResponse, buildRecommendationReview, buildSharedStoreEditor, buildSharedStoreWrite, sharedStoreEditor, sharedStoreWrite } = require('../../actioner');
+const { askAgentOps, buildActionerReview, buildAskAgentOpsLaunch, buildAskAgentOpsResponse, buildGuardedRecommendationApply, buildRecommendationReview, buildSharedStoreEditor, buildSharedStoreWrite, sharedStoreEditor, sharedStoreWrite } = require('../../actioner');
 
 const {
   agentopsAttributionSmoke,
@@ -4334,7 +4334,8 @@ test('product audit proves the local AgentOps control-room contract', () => {
     'run-centric-ui-contract',
     'content-transcript-opt-in',
     'first-run-loop',
-    'ask-agentops-response-flow'
+    'ask-agentops-response-flow',
+    'agent-improvement-guarded-apply'
   ]) {
     assert.equal(byName[name].ok, true, name);
   }
@@ -9088,6 +9089,9 @@ test('ask agentops launcher builds metadata-only assistant context', async () =>
   assert.equal(packet.assistant_response.recommendation_review.default_decision, 'needs-review');
   assert.equal(packet.assistant_response.recommendation_review.shared_store.reviewed_row_template.OperatorReview.source, 'ask-agentops-guided-review');
   assert.match(packet.assistant_response.recommendation_review.action_plan_command, /recommend action-plan --recommendation-id rec-123/);
+  assert.equal(packet.assistant_response.guarded_apply.status, 'blocked');
+  assert.ok(packet.assistant_response.guarded_apply.blocked_reasons.includes('operator approval is required'));
+  assert.ok(packet.assistant_response.guarded_apply.blocked_reasons.includes('after-run metric movement must be improved or mixed'));
   assert.equal(packet.assistant_response.recommendation.benchmark_artifact_files[0].path, 'skills/agentops/SKILL.md');
   assert.equal(packet.assistant_response.recommendation.benchmark_artifact_content_diff_files[0].path, 'benchmarks/output.md');
   assert.equal(packet.assistant_response.proposed_action, 'Open the skill diff and rerun benchmark bench-123.');
@@ -9237,6 +9241,7 @@ test('ask agentops launcher builds metadata-only assistant context', async () =>
   assert.match(recommendationHtmlContext.res.body, /benchmarks\/output\.md/);
   assert.match(recommendationHtmlContext.res.body, /Metric movement/);
   assert.match(recommendationHtmlContext.res.body, /Guided review/);
+  assert.match(recommendationHtmlContext.res.body, /Guarded apply/);
   assert.match(recommendationHtmlContext.res.body, /Approve/);
   assert.match(recommendationHtmlContext.res.body, /Reject/);
   assert.match(recommendationHtmlContext.res.body, /recommend action-plan --recommendation-id rec-123/);
@@ -9264,6 +9269,25 @@ test('ask agentops launcher builds metadata-only assistant context', async () =>
   assert.equal(improvedReview.default_decision, 'approve');
   assert.equal(improvedReview.shared_store.reviewed_row_template.AfterTelemetry.run_id, 'run-after');
   assert.equal(improvedReview.shared_store.reviewed_row_template.OperatorReview.decision, 'approve');
+  const guardedApply = buildGuardedRecommendationApply({
+    ...packet.assistant_response.recommendation,
+    benchmark_decision: 'promote',
+    after_telemetry: { run_id: 'run-after', eval_overall: 72, tool_failure_count: 0 },
+    observed_metric_movement: {
+      status: 'improved',
+      results: [{ metric: 'EvalOverall', before_value: 55, after_value: 72, delta: 17, passed: true }]
+    },
+    operator_review: {
+      status: 'approved',
+      decision: 'approve',
+      reviewer: 'platform-team',
+      reviewed_at: '2026-06-05T12:15:00.000Z'
+    }
+  });
+  assert.equal(guardedApply.status, 'ready');
+  assert.match(guardedApply.commands.action_plan, /recommend action-plan --recommendation-id rec-123/);
+  assert.match(guardedApply.patch_handoff.prompt, /skill:agentops-latest-run/);
+  assert.doesNotMatch(JSON.stringify(guardedApply), /raw diff is intentionally omitted|tool_args|file_content/);
 
   const regressedReview = buildRecommendationReview({
     ...packet.assistant_response.recommendation,

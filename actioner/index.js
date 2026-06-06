@@ -688,6 +688,95 @@ function buildRecommendationReview(recommendation = {}) {
   };
 }
 
+function safeBranchToken(value, fallback = 'recommendation') {
+  return stringValue(value || fallback)
+    .trim()
+    .replace(/[^A-Za-z0-9_.-]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 80) || fallback;
+}
+
+function reviewApproved(operatorReview = {}) {
+  const decision = stringValue(operatorReview.decision || operatorReview.status).toLowerCase();
+  return decision === 'approve' || decision === 'approved';
+}
+
+function buildGuardedRecommendationApply(recommendation = {}) {
+  if (!recommendation?.recommendation_id) return null;
+  const movementStatus = stringValue(recommendation.observed_metric_movement?.status).toLowerCase();
+  const benchmarkDecision = stringValue(recommendation.benchmark_decision).toLowerCase();
+  const afterRunId = stringValue(recommendation.after_telemetry?.run_id);
+  const branchToken = safeBranchToken(recommendation.recommendation_id || recommendation.run_id, 'recommendation');
+  const targetRefs = recommendation.change_target_refs || [];
+  const blockedReasons = [
+    reviewApproved(recommendation.operator_review) ? '' : 'operator approval is required',
+    ['improved', 'mixed'].includes(movementStatus) ? '' : 'after-run metric movement must be improved or mixed',
+    benchmarkDecision === 'reject' ? 'benchmark rejected the recommendation' : '',
+    recommendation.benchmark_run_id || benchmarkDecision ? '' : 'benchmark evidence is required',
+    afterRunId ? '' : 'after-run telemetry is required',
+    targetRefs.length ? '' : 'change target refs are required',
+    recommendation.validation?.length ? '' : 'validation steps are required',
+    recommendation.rollback_condition ? '' : 'rollback condition is required'
+  ].filter(Boolean);
+
+  return {
+    schema_version: 'agentops.guarded-recommendation-apply.v1',
+    mode: 'metadata-only-guarded-apply',
+    status: blockedReasons.length ? 'blocked' : 'ready',
+    recommendation_id: recommendation.recommendation_id,
+    run_id: recommendation.run_id || null,
+    branch: `agentops/${branchToken}`,
+    blocked_reasons: blockedReasons,
+    evidence: {
+      operator_review: recommendation.operator_review || {},
+      benchmark_run_id: recommendation.benchmark_run_id || '',
+      benchmark_decision: recommendation.benchmark_decision || '',
+      observed_metric_movement: recommendation.observed_metric_movement || {},
+      before_telemetry: recommendation.before_telemetry || {},
+      after_telemetry: recommendation.after_telemetry || {},
+      change_target_refs: targetRefs,
+      validation: recommendation.validation || [],
+      rollback_condition: recommendation.rollback_condition || ''
+    },
+    commands: {
+      create_branch: `git checkout -b agentops/${branchToken}`,
+      action_plan: `agentops recommend action-plan --recommendation-id ${recommendation.recommendation_id}`,
+      benchmark_report: recommendation.benchmark_run_id
+        ? `agentops benchmark report ${recommendation.benchmark_run_id}`
+        : 'agentops benchmark report <candidate-run-id>',
+      compare_after_run: `agentops recommend compare --recommendation-id ${recommendation.recommendation_id} --after-runs <after-AgentOpsRunSummary_CL.jsonl> --after-evals <after-AgentOpsEval_CL.jsonl>`
+    },
+    patch_handoff: {
+      prompt: [
+        `Implement approved AgentOps recommendation ${recommendation.recommendation_id}.`,
+        `Action: ${recommendation.action || 'review_recommendation'}.`,
+        `Observed pattern: ${recommendation.observed_pattern || 'See recommendation metadata.'}.`,
+        `Next action: ${recommendation.next_action || 'Apply the smallest safe change.'}.`,
+        `Change targets: ${targetRefs.join(', ')}.`,
+        `Benchmark: ${recommendation.benchmark_run_id || 'required'} (${recommendation.benchmark_decision || 'unknown'}).`,
+        `Observed metric movement: ${movementStatus || 'unknown'}.`,
+        `Validation: ${(recommendation.validation || []).join(' | ')}.`,
+        `Rollback: ${recommendation.rollback_condition || 'Reject if validation fails.'}.`,
+        'Do not include prompts, responses, tool arguments, tool results, source code, file contents, request bodies, response bodies, or secrets in telemetry artifacts.'
+      ].join('\n')
+    },
+    next: blockedReasons.length
+      ? ['Resolve blocked reasons, rerun benchmark/compare if needed, then regenerate the guarded apply packet.']
+      : [
+          'Create the branch.',
+          'Use the patch handoff prompt to make the smallest approved change.',
+          'Run the benchmark report and after-run comparison commands before promotion.',
+          'Reject or rollback if validation fails, metric movement regresses, cost rises unexpectedly, or privacy/safety signals appear.'
+        ],
+    guardrails: [
+      'This packet does not edit repositories, deploy infrastructure, or route tickets.',
+      'Apply only metadata-approved targets after operator approval and after-run comparison.',
+      'Keep raw code diffs, prompts, responses, tool arguments, tool results, and secrets out of hosted AgentOps artifacts.'
+    ]
+  };
+}
+
 function buildAskAgentOpsResponse(context = {}) {
   const recommendation = context.recommendation || null;
   const savedView = context.savedView || null;
@@ -739,6 +828,7 @@ function buildAskAgentOpsResponse(context = {}) {
     saved_view: savedView,
     alert_handoff: alertHandoff,
     recommendation_review: buildRecommendationReview(recommendation),
+    guarded_apply: buildGuardedRecommendationApply(recommendation),
     proposed_action: recommendation?.next_action || 'Open Run Replay, run the starter KQL, then create or update one recommendation with evidence, validation, and rollback metadata.',
     validation: [
       ...(recommendation?.validation || []),
@@ -874,6 +964,20 @@ function renderRecommendationReview(review) {
       ${renderList(review.guardrails)}`;
 }
 
+function renderGuardedApply(apply) {
+  if (!apply) return '';
+  const commands = apply.commands || {};
+  return `<h3>Guarded apply</h3>
+      <p>${htmlEscape(`Status: ${apply.status}`)}</p>
+      ${apply.blocked_reasons?.length ? `<h4>Blocked reasons</h4>${renderList(apply.blocked_reasons)}` : ''}
+      <h4>Commands</h4>
+      ${renderList([commands.create_branch, commands.action_plan, commands.benchmark_report, commands.compare_after_run].filter(Boolean))}
+      <h4>Patch handoff</h4>
+      <pre>${htmlEscape(apply.patch_handoff?.prompt || '')}</pre>
+      <h4>Apply guardrails</h4>
+      ${renderList(apply.guardrails || [])}`;
+}
+
 function renderAskAgentOpsLaunch(packet) {
   const launch = packet.launch_url
     ? `<p><a class="button" href="${htmlEscape(packet.launch_url)}">Open Assistant</a></p>`
@@ -926,6 +1030,7 @@ function renderAskAgentOpsLaunch(packet) {
       <h3>Rollback</h3>
       <p>${htmlEscape(packet.assistant_response.rollback_condition)}</p>
       ${renderRecommendationReview(packet.assistant_response.recommendation_review)}
+      ${renderGuardedApply(packet.assistant_response.guarded_apply)}
     </section>` : ''}
     <pre>${htmlEscape(packet.prompt || JSON.stringify(packet.errors, null, 2))}</pre>
   </main>
@@ -1195,6 +1300,7 @@ module.exports.askAgentOps = askAgentOps;
 module.exports.buildActionerReview = buildActionerReview;
 module.exports.buildAskAgentOpsLaunch = buildAskAgentOpsLaunch;
 module.exports.buildAskAgentOpsResponse = buildAskAgentOpsResponse;
+module.exports.buildGuardedRecommendationApply = buildGuardedRecommendationApply;
 module.exports.buildRecommendationReview = buildRecommendationReview;
 module.exports.buildSharedStoreEditor = buildSharedStoreEditor;
 module.exports.buildSharedStoreWrite = buildSharedStoreWrite;
