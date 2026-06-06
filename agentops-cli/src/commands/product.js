@@ -236,6 +236,9 @@ function productAudit(options = {}) {
         'hiddenCheckPacks',
         'permissionProfiles',
         'macos-network-blocked',
+        'container-network-blocked',
+        '--network',
+        'none',
         'commandFileSeal',
         'semanticChecks',
         'llm-judge',
@@ -252,7 +255,7 @@ function productAudit(options = {}) {
         'Rubric and semantic scoring',
         'Artifact diffing',
         'Promotion policy',
-        'Cross-platform managed OS-level'
+        'Container runtime network isolation'
       ]),
     [
       'agentops-cli/src/legacy.js',

@@ -6045,7 +6045,7 @@ function isPlainObject(value) {
 }
 
 const benchmarkPermissionProfiles = new Set(['allow-all-isolated', 'least-privilege', 'read-only']);
-const benchmarkOsSandboxModes = new Set(['none', 'macos-network-blocked']);
+const benchmarkOsSandboxModes = new Set(['none', 'macos-network-blocked', 'container-network-blocked']);
 const benchmarkSemanticAdapters = new Set(['file-contains', 'file-regex', 'file-rubric', 'llm-judge']);
 const benchmarkToolRisks = new Set([
   'read-only',
@@ -6084,6 +6084,20 @@ function normalizeBenchmarkOsSandbox(sandbox, source = 'task') {
   }
   if (mode === 'none') {
     return { mode, enforced: false, network: 'not_enforced', tool: 'not_enforced' };
+  }
+  if (mode === 'container-network-blocked') {
+    if (typeof sandbox.image !== 'string' || sandbox.image.trim() === '') {
+      throw new Error(`Invalid benchmark task ${source}: osSandbox.image is required for container-network-blocked`);
+    }
+    return {
+      mode,
+      enforced: true,
+      network: 'blocked',
+      tool: 'container_command_wrapped',
+      platform: 'cross-platform-container-runtime',
+      command: sandbox.runtime || 'docker',
+      image: sandbox.image.trim()
+    };
   }
   return {
     mode,
@@ -7450,6 +7464,36 @@ function benchmarkSandboxProfile(run, workspace) {
 function benchmarkCopilotInvocation(run, workspace, options = {}) {
   const copilotCommand = options.copilotCommand || run.copilot.command;
   const copilotArgs = [...run.copilot.args, '-p', run.copilot.prompt];
+  if (run.osSandbox?.mode === 'container-network-blocked') {
+    const runtime = options.containerRuntimeCommand || run.osSandbox.command || 'docker';
+    return {
+      command: runtime,
+      args: [
+        'run',
+        '--rm',
+        '--network',
+        'none',
+        '-v',
+        `${workspace}:/workspace`,
+        '-v',
+        `${run.copilotHome}:/copilot-home`,
+        '-w',
+        '/workspace',
+        '-e',
+        'COPILOT_HOME=/copilot-home',
+        run.osSandbox.image,
+        copilotCommand,
+        ...copilotArgs
+      ],
+      sandbox: {
+        mode: run.osSandbox.mode,
+        active: true,
+        command: runtime,
+        image: run.osSandbox.image,
+        network: 'blocked'
+      }
+    };
+  }
   if (run.osSandbox?.mode !== 'macos-network-blocked') {
     return {
       command: copilotCommand,
