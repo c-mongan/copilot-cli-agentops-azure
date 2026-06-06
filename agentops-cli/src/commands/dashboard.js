@@ -561,6 +561,7 @@ function validateDashboardUx() {
       schema_version_coverage: true,
       exporter_failure_review: true,
       pattern_drilldowns: true,
+      run_centric_ui: true,
       empty_state_dashboards: emptyStateDashboards
     },
     errors

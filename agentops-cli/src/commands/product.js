@@ -209,6 +209,24 @@ function productAudit(options = {}) {
   checks.push(check('dashboard-drilldowns', links.ok, [`${links.checked_links} nav/data links checked`], links.errors));
   const ux = validateDashboardUx();
   checks.push(check('dashboard-operator-ux', ux.ok, ['Home, Runs, Replay, transcript, patterns, recommendations, and empty states checked'], ux.errors));
+  checks.push(check(
+    'run-centric-ui-contract',
+    ux.ok
+      && ux.contracts?.run_centric_ui === true
+      && fileIncludes('docs/agentops-architecture-product-audit.md', [
+        'Run-Centric UI',
+        'Session explorer as first screen',
+        'Trace waterfall through Run Replay',
+        'Ask AgentOps panel'
+      ]),
+    [
+      'grafana/dashboards/v2/01-agentops-home.json',
+      'grafana/dashboards/v2/02-runs-explorer.json',
+      'grafana/dashboards/v2/03-run-replay.json',
+      'docs/agentops-architecture-product-audit.md'
+    ],
+    ux.errors
+  ));
 
   checks.push(check(
     'azure-ingest-privacy-plan',

@@ -1203,16 +1203,17 @@ Success criterion:
 The default UI answers: what happened, why did it fail or cost money, what changed, what should I do next?
 ```
 
-Required work:
+Implemented:
 
-- Session explorer as first screen.
-- Trace waterfall.
-- Policy/safety strip.
-- Tool/MCP waterfall.
-- Context/tokens panel.
-- Recommendation panel.
-- Eval/benchmark linkage.
-- Ask AgentOps panel.
+- Session explorer as first screen through the Home **Session Health** panel and the **Runs Explorer** dashboard.
+- Trace waterfall through Run Replay's **Replay timeline** and `OpenTrace` drilldowns.
+- Policy/safety strip through Run Replay's **Policy, privacy, tests, and GitHub outcome** panel plus the Safety, Privacy & Policy dashboard.
+- Tool/MCP waterfall through Run Replay's **Agent, skill, and MCP lineage** panel plus the Tools & MCP Risk dashboard.
+- Context/tokens panel through Run Replay's **Context and cache posture** panel and the Models, Cost & Tokens dashboard.
+- Recommendation panel through Home **Recommended next actions**, Run Replay **Latest recommendation**, and Insights **Recommendation artifacts**.
+- Eval/benchmark linkage through Evals & Quality scorecards, before/after comparison, artifact review, hidden checks, policy review, semantic checks, and promotion approvals.
+- Ask AgentOps panel through Run Replay **Ask AgentOps context** and hosted Ask AgentOps action links.
+- `agentops product audit` now includes `run-centric-ui-contract` so this UI shape remains a local release gate.
 
 ### 3. Agent Improvement Loop
 
