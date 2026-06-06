@@ -301,6 +301,85 @@ function buildAzureIngestPlan({ dir, allowContent = false } = {}) {
   };
 }
 
+function normalizeLogsEndpoint(endpoint) {
+  return String(endpoint || '').trim().replace(/\/+$/g, '');
+}
+
+function logsIngestionUri(endpoint, dcrImmutableId, stream, apiVersion = '2023-01-01') {
+  return `${normalizeLogsEndpoint(endpoint)}/dataCollectionRules/${encodeURIComponent(dcrImmutableId)}/streams/${encodeURIComponent(stream)}?api-version=${encodeURIComponent(apiVersion)}`;
+}
+
+function buildLogsIngestionUploadPlan({
+  dir,
+  endpoint,
+  dcrImmutableId,
+  allowContent = false,
+  apiVersion = '2023-01-01'
+} = {}) {
+  const ingestPlan = buildAzureIngestPlan({ dir, allowContent });
+  const normalizedEndpoint = normalizeLogsEndpoint(endpoint);
+  const immutableId = String(dcrImmutableId || '').trim();
+  const errors = [...ingestPlan.errors];
+  const uploads = [];
+
+  if (!normalizedEndpoint) errors.push('logs-upload requires --endpoint <logs-ingestion-endpoint>');
+  if (!immutableId) errors.push('logs-upload requires --dcr-immutable-id <immutable-id>');
+
+  for (const [table, summary] of Object.entries(ingestPlan.tables)) {
+    if (summary.rows === 0) continue;
+    if (table === 'AgentOpsContent_CL' && !allowContent) continue;
+    const uri = normalizedEndpoint && immutableId
+      ? logsIngestionUri(normalizedEndpoint, immutableId, summary.stream_name, apiVersion)
+      : null;
+    uploads.push({
+      table,
+      file: summary.file,
+      rows: summary.rows,
+      stream: summary.stream_name,
+      uri,
+      command: [
+        'az',
+        'rest',
+        '--method',
+        'post',
+        '--uri',
+        uri || '<logs-ingestion-uri>',
+        '--headers',
+        'Content-Type=application/json',
+        '--body',
+        `@<${table}.json>`
+      ]
+    });
+  }
+
+  if (uploads.length === 0) errors.push('logs-upload found no non-empty AgentOps tables to upload');
+
+  return {
+    schema_version: 'agentops.logs-ingestion-upload-plan.v1',
+    mode: 'dry-run-unless---yes',
+    ok: errors.length === 0,
+    dir: ingestPlan.dir,
+    endpoint: normalizedEndpoint || null,
+    dcr_immutable_id: immutableId || null,
+    api_version: apiVersion,
+    uploads,
+    warnings: ingestPlan.warnings,
+    errors,
+    privacy: ingestPlan.privacy,
+    content_capture: ingestPlan.content_capture,
+    guardrails: [
+      'Dry run by default: no Azure writes happen unless --yes is provided.',
+      'Rows are uploaded through Azure Monitor Logs Ingestion API with Azure CLI credentials.',
+      'Run azure-ingest plan first and keep content rows disabled unless using an approved restricted content workspace.'
+    ],
+    next: [
+      'Review the upload list and privacy scan.',
+      'Run the same command with --yes only after confirming the DCR streams map to the AgentOps custom tables.',
+      'Run agentops product audit --live --require-rows after ingestion latency has passed.'
+    ]
+  };
+}
+
 function schemaVersioningSummary(tables) {
   const checked = Object.entries(tables)
     .filter(([, table]) => table.schema_version?.checked)
@@ -569,12 +648,46 @@ function renderAzureIngestPlan(plan) {
   return `${lines.join('\n')}\n`;
 }
 
+function renderLogsIngestionUploadPlan(plan) {
+  const lines = [];
+  lines.push('AgentOps Logs Ingestion upload plan');
+  lines.push('');
+  lines.push(`Status: ${plan.ok ? 'ready' : 'not ready'}`);
+  lines.push(`Directory: ${plan.dir}`);
+  lines.push(`Endpoint: ${plan.endpoint || '<logs-ingestion-endpoint>'}`);
+  lines.push(`DCR immutable ID: ${plan.dcr_immutable_id || '<immutable-id>'}`);
+  lines.push(`Privacy scan: ${plan.privacy.ok ? 'passed' : 'failed'}`);
+  lines.push('');
+  lines.push('Uploads:');
+  for (const upload of plan.uploads) lines.push(`- ${upload.table}: ${upload.rows} row(s) -> ${upload.stream}`);
+  if (plan.errors.length > 0) {
+    lines.push('');
+    lines.push('Errors:');
+    for (const error of plan.errors) lines.push(`- ${error}`);
+  }
+  if (plan.warnings.length > 0) {
+    lines.push('');
+    lines.push('Warnings:');
+    for (const warning of plan.warnings) lines.push(`- ${warning}`);
+  }
+  lines.push('');
+  lines.push('Commands:');
+  for (const upload of plan.uploads) lines.push(`- ${upload.command.join(' ')}`);
+  lines.push('');
+  lines.push('Next:');
+  for (const command of plan.next) lines.push(`- ${command}`);
+  return `${lines.join('\n')}\n`;
+}
+
 module.exports = {
   buildAzureIngestPlan,
+  buildLogsIngestionUploadPlan,
   buildSharedStorageUploadPlan,
   columnTypesFor,
   inferAzureColumnType,
+  logsIngestionUri,
   renderAzureIngestPlan,
+  renderLogsIngestionUploadPlan,
   renderSharedStorageUploadPlan,
   requiredColumns,
   leakPatterns,
