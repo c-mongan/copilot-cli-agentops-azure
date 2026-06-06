@@ -31,10 +31,25 @@ It does not create Azure resources or upload data. For metadata-only saved-view,
 
 Use Azure Monitor Logs Ingestion API with a Data Collection Rule:
 
-1. Create one custom Log Analytics table per `AgentOps*_CL` table.
-2. Create one DCR stream per table using the columns reported by `agentops azure-ingest plan`.
-3. Send each JSONL row to the matching DCR stream.
-4. Import the V2 dashboard pack from `grafana/dashboards/v2/`.
+1. Deploy the optional V2 ingestion infrastructure:
+
+```bash
+az deployment group create \
+  --resource-group <rg> \
+  --template-file infra/bicep/main.bicep \
+  --parameters deployV2Ingestion=true
+```
+
+2. Export the deployment outputs:
+
+```bash
+export AGENTOPS_LOGS_INGESTION_ENDPOINT="<AGENTOPS_LOGS_INGESTION_ENDPOINT output>"
+export AGENTOPS_DCR_IMMUTABLE_ID="<AGENTOPS_DCR_IMMUTABLE_ID output>"
+```
+
+3. Confirm one custom Log Analytics table per `AgentOps*_CL` table and one DCR stream per table exist.
+4. Send each JSONL row to the matching DCR stream.
+5. Import the V2 dashboard pack from `grafana/dashboards/v2/`.
 
 `azure-ingest logs-upload` turns the reviewed plan into Azure Monitor Logs Ingestion API calls. It is dry-run by default and requires `--yes` before it runs `az rest`:
 
@@ -72,7 +87,7 @@ agentops azure-ingest upload-plan \
   --container agentops-shared \
   --prefix team-a/latest
 ```
-5. Run `agentops validate-azure --last 24h`.
+Run `agentops validate-azure --last 24h` after sharing artifacts.
 
 The dashboards never require raw prompts, responses, file contents, tool arguments, or tool results. If you intentionally enable content capture, keep it in `AgentOpsContent_CL`, use `agentops azure-ingest plan --allow-content`, and expose it only through a separate, access-controlled workspace/dashboard.
 

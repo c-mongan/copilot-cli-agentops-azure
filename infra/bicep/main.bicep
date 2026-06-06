@@ -36,6 +36,9 @@ param actionerAssistantUrl string = ''
 @description('Deploy shared Azure Blob storage for metadata-only saved-view and recommendation exports.')
 param deploySharedStore bool = false
 
+@description('Deploy AgentOps V2 custom tables plus Data Collection Endpoint/Rule for Logs Ingestion API uploads.')
+param deployV2Ingestion bool = false
+
 @allowed([
   'Enabled'
   'Disabled'
@@ -186,6 +189,18 @@ module sharedStore 'shared-store.bicep' = if (deploySharedStore) {
   }
 }
 
+module v2Ingestion 'v2-ingestion.bicep' = if (deployV2Ingestion) {
+  name: 'v2-ingestion'
+  params: {
+    location: location
+    workspaceName: logAnalytics.outputs.name
+    baseName: baseName
+    environmentName: environmentName
+    retentionInDays: effectiveLogRetentionDays
+    tags: tags
+  }
+}
+
 resource sharedStoreAccount 'Microsoft.Storage/storageAccounts@2023-01-01' existing = if (deployActioner && deploySharedStore) {
   name: sharedStoreName
 }
@@ -257,3 +272,8 @@ output SHARED_STORE_ACCOUNT_NAME string = deploySharedStore ? sharedStore!.outpu
 output SHARED_STORE_BLOB_ENDPOINT string = deploySharedStore ? sharedStore!.outputs.blobEndpoint : ''
 output SHARED_STORE_CONTAINER_NAME string = deploySharedStore ? sharedStore!.outputs.containerName : ''
 output SHARED_STORE_RESOURCE_ID string = deploySharedStore ? sharedStore!.outputs.resourceId : ''
+output V2_INGESTION_DEPLOYED bool = deployV2Ingestion
+output AGENTOPS_LOGS_INGESTION_ENDPOINT string = deployV2Ingestion ? v2Ingestion!.outputs.logsIngestionEndpoint : ''
+output AGENTOPS_DCR_IMMUTABLE_ID string = deployV2Ingestion ? v2Ingestion!.outputs.dataCollectionRuleImmutableId : ''
+output AGENTOPS_DCR_RESOURCE_ID string = deployV2Ingestion ? v2Ingestion!.outputs.dataCollectionRuleResourceId : ''
+output AGENTOPS_V2_TABLE_COUNT int = deployV2Ingestion ? v2Ingestion!.outputs.tableCount : 0
