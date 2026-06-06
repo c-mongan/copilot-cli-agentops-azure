@@ -1161,6 +1161,58 @@
           }
         }
       ]
+    },
+    {
+      "id": 23,
+      "title": "Exporter failure review",
+      "type": "table",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "azure-monitor-oob"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 30
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "links": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "cellHeight": "sm",
+        "showHeader": true,
+        "footer": {
+          "show": false
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor-oob"
+          },
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
+            ],
+            "resultFormat": "table",
+            "query": "union isfuzzy=true (AgentOpsCollectorHealth_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo())), (AppDependencies | where TimeGenerated between ($__timeFrom() .. $__timeTo()) | where tostring(Properties) has_any ('github.copilot', 'gen_ai.operation.name', 'agentops.', 'codex') or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') | summarize LastSpanReceived=max(TimeGenerated), SpanRows=count(), ExportErrors=countif(Success == false or tostring(Success) =~ 'false') | extend TimeGenerated=now(), Component='appinsights-compat', CheckName='live-ingestion', Status=iff(ExportErrors > 0, 'degraded', iff(SpanRows > 0, 'healthy', 'empty')), Detail=strcat('Existing Application Insights telemetry rows: ', tostring(SpanRows)), PrivacyMode='strict', CollectorMode='compat', OtlpEndpoint='application-insights', AzureConfigured=true, GrafanaConfigured=true, DashboardVersion='v2', SchemaVersion='2', DroppedContentCount=0, LastExportSuccess=LastSpanReceived | project TimeGenerated, Component, CheckName, Status, Detail, PrivacyMode, CollectorMode, OtlpEndpoint, AzureConfigured, GrafanaConfigured, DashboardVersion, SchemaVersion, LastSpanReceived, LastExportSuccess, ExportErrors, DroppedContentCount) | where ('$privacy_mode' == '__all' or tostring(column_ifexists('PrivacyMode', '')) == '$privacy_mode') | extend ExportErrors=tolong(column_ifexists('ExportErrors', 0)), LastExportSuccess=todatetime(column_ifexists('LastExportSuccess', datetime(null))), LastSpanReceived=todatetime(column_ifexists('LastSpanReceived', datetime(null))) | extend ExplicitExportFailureReason=tostring(column_ifexists('ExportFailureReason', '')), ExplicitExportFailureAction=tostring(column_ifexists('ExportFailureAction', '')) | extend ExportFailureReason=iff(ExplicitExportFailureReason != '', ExplicitExportFailureReason, case(ExportErrors > 0, 'export-error-count', isnotnull(LastSpanReceived) and isnull(LastExportSuccess), 'missing-export-success', tostring(Status) !in ('healthy', 'ok', 'empty'), strcat('collector-status-', tostring(Status)), '')) | extend ExportFailureAction=iff(ExplicitExportFailureAction != '', ExplicitExportFailureAction, case(ExportErrors > 0, 'Check collector exporter logs, Azure Monitor DCR/DCE routing, credentials, and network egress.', isnotnull(LastSpanReceived) and isnull(LastExportSuccess), 'Confirm the exporter is configured and can reach Azure Monitor.', tostring(Status) !in ('healthy', 'ok', 'empty'), 'Open collector health details and rerun agentops collector smoke --privacy strict --poison --json.', '')) | where ExportFailureReason != '' | project TimeGenerated, Component, Status, ExportErrors, ExportFailureReason, ExportFailureAction, LastSpanReceived, LastExportSuccess, OtlpEndpoint, CollectorMode, PrivacyMode | order by TimeGenerated desc | take 100"
+          }
+        }
+      ]
     }
   ],
   "refresh": "1m",

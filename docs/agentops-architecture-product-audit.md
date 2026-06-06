@@ -1260,10 +1260,10 @@ Implemented:
 - Collector health.
 - Content-capture detector.
 - Schema versioning in demo rows, ingest-plan warnings, and Collector Health coverage.
+- Exporter failure visibility in Collector Health rows and dashboard review actions.
 
 Required work:
 
-- Exporter failure visibility.
 - Schema migration policy.
 - Real Copilot fixture regression tests.
 

@@ -186,11 +186,13 @@ It shows:
 - last span received;
 - export success;
 - export errors;
+- exporter failure reason and next operator action;
 - dropped content count;
 - collector mode;
 - privacy mode;
 - OTLP endpoint;
 - Azure/Grafana/schema/dashboard version.
+- schema version coverage by metadata table.
 
 ## Recommended Path
 

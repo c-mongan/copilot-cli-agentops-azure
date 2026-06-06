@@ -267,7 +267,8 @@ const v2KqlSmokePanels = [
   { uid: 'agentops-v2-insights-regressions', panel: 'Recommendation artifacts', requireRows: false },
   { uid: 'agentops-v2-insights-regressions', panel: 'Config change annotations', requireRows: false },
   { uid: 'agentops-v2-collector-health', panel: 'Collector checks', requireRows: true },
-  { uid: 'agentops-v2-collector-health', panel: 'Schema version coverage', requireRows: false }
+  { uid: 'agentops-v2-collector-health', panel: 'Schema version coverage', requireRows: false },
+  { uid: 'agentops-v2-collector-health', panel: 'Exporter failure review', requireRows: false }
 ];
 
 function queryFromPanel(panel) {
@@ -526,9 +527,14 @@ function validateDashboardUx() {
   const collector = byUid.get('agentops-v2-collector-health');
   const collectorTitles = new Set((collector?.body.panels || []).map(panel => panel.title));
   if (!collectorTitles.has('Schema version coverage')) errors.push('collector health missing Schema version coverage panel');
+  if (!collectorTitles.has('Exporter failure review')) errors.push('collector health missing Exporter failure review panel');
   const schemaCoverageQuery = queryFromPanel(panelByTitle(collector, 'Schema version coverage'));
   for (const field of ['SchemaStatus', 'ExpectedSchemaVersion', 'MissingSchemaVersion', 'SchemaVersion', 'AgentOpsRunSummary_CL']) {
     if (!schemaCoverageQuery.includes(field)) errors.push(`schema version coverage missing ${field}`);
+  }
+  const exporterFailureQuery = queryFromPanel(panelByTitle(collector, 'Exporter failure review'));
+  for (const field of ['ExportFailureReason', 'ExportFailureAction', 'ExportErrors', 'LastExportSuccess', 'agentops collector smoke --privacy strict --poison --json']) {
+    if (!exporterFailureQuery.includes(field)) errors.push(`exporter failure review missing ${field}`);
   }
 
   return {
@@ -553,6 +559,7 @@ function validateDashboardUx() {
       promotion_approvals: true,
       alert_handoff_review: true,
       schema_version_coverage: true,
+      exporter_failure_review: true,
       pattern_drilldowns: true,
       empty_state_dashboards: emptyStateDashboards
     },

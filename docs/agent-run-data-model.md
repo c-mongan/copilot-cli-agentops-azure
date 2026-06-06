@@ -63,6 +63,8 @@ Every `AgentOps*_CL` row should include `SchemaVersion` so ingest planning and C
 - `AgentOpsCollectorHealth_CL`: collector/export/schema health.
 - `AgentOpsContent_CL`: optional prompt/response viewer rows. This table must be empty or absent in strict default deployments.
 
+Collector health rows should include `ExportErrors`, `LastExportSuccess`, `ExportFailureReason`, and `ExportFailureAction` so exporter failures are visible and actionable without opening raw collector logs first.
+
 Agent and skill fields make sub-agent workflows debuggable without content capture:
 
 - `AgentName`: active agent or surface actor.

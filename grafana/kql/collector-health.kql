@@ -13,8 +13,9 @@ union isfuzzy=true AgentOpsCollectorHealth_CL
     DashboardVersion,
     SchemaVersion,
     ExportErrors,
+    ExportFailureReason,
+    ExportFailureAction,
     DroppedContentCount,
     LastSpanReceived,
     LastExportSuccess
 | order by TimeGenerated desc
-
