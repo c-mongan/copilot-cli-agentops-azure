@@ -519,13 +519,49 @@ const compatNormalize = [
   "| extend Failed=Success == false or tostring(Success) =~ 'false' or isnotempty(tostring(Properties['error.type']))"
 ].join(' ');
 
+const v2RunSummary = [
+  'AgentOpsRunSummary_CL',
+  '| where TimeGenerated between ($__timeFrom() .. $__timeTo())',
+  '| extend DurationMs=todouble(DurationMs), InputTokens=todouble(InputTokens), OutputTokens=todouble(OutputTokens), ReasoningTokens=todouble(ReasoningTokens), CacheReadTokens=todouble(CacheReadTokens), CacheCreationTokens=todouble(CacheCreationTokens), EstimatedCostUsd=todouble(EstimatedCostUsd), ToolCount=tolong(ToolCount), ToolFailureCount=tolong(ToolFailureCount), ToolDeniedCount=tolong(ToolDeniedCount)'
+].join(' ');
+
+const v2Events = [
+  'AgentOpsEvents_CL',
+  '| where TimeGenerated between ($__timeFrom() .. $__timeTo())',
+  '| extend DurationMs=todouble(DurationMs), InputTokens=todouble(InputTokens), OutputTokens=todouble(OutputTokens), EstimatedCostUsd=todouble(EstimatedCostUsd)'
+].join(' ');
+
+const v2Tools = [
+  'AgentOpsToolCalls_CL',
+  '| where TimeGenerated between ($__timeFrom() .. $__timeTo())',
+  '| extend DurationMs=todouble(DurationMs), OutputSizeBytes=todouble(OutputSizeBytes)'
+].join(' ');
+
+const v2McpCalls = [
+  'AgentOpsMcpCalls_CL',
+  '| where TimeGenerated between ($__timeFrom() .. $__timeTo())',
+  '| extend DurationMs=todouble(DurationMs), ResultSizeBytes=todouble(ResultSizeBytes)'
+].join(' ');
+
+const v2Evals = [
+  'AgentOpsEval_CL',
+  '| where TimeGenerated between ($__timeFrom() .. $__timeTo())',
+  '| extend EvalOverall=tolong(EvalOverall), TestDiscipline=tolong(TestDiscipline), ToolEfficiency=tolong(ToolEfficiency), Security=tolong(Security), Reliability=tolong(Reliability), CodeOutcome=tolong(CodeOutcome)'
+].join(' ');
+
+const v2Recommendations = [
+  'AgentOpsRecommendations_CL',
+  '| where TimeGenerated between ($__timeFrom() .. $__timeTo())',
+  '| extend EvalOverall=tolong(EvalOverall)'
+].join(' ');
+
 function compatRunSummary() {
   return [
     compatWhere,
     compatNormalize,
     "| summarize TimeGenerated=max(TimeGenerated), Started=min(TimeGenerated), TraceId=take_any(TraceId), Surface=take_any(Surface), RepoHash=take_any(RepoHash), BranchHash=take_any(BranchHash), TaskType=take_any(TaskType), AgentName=take_any(AgentName), SkillName=take_any(SkillName), ParentAgentName=take_any(ParentAgentName), SubAgentName=take_any(SubAgentName), DelegationId=take_any(DelegationId), ModelActual=take_any(ModelActual), PrivacyMode=take_any(PrivacyMode), ContentCaptureSignal=max(toint(ContentCaptureSignal)), InputTokens=sum(InputTokens), OutputTokens=sum(OutputTokens), ReasoningTokens=sum(ReasoningTokens), CacheReadTokens=sum(CacheReadTokens), CacheCreationTokens=sum(CacheCreationTokens), ContextWindowPct=max(ContextWindowPct), TokensRemoved=sum(TokensRemoved), PermissionWaitMs=sum(PermissionWaitMs), EstimatedCostUsd=sum(EstimatedCostUsd), ToolCount=countif(Operation == 'execute_tool' or isnotempty(ToolName)), ToolFailureCount=countif((Operation == 'execute_tool' or isnotempty(ToolName)) and Failed), Failures=countif(Failed), ToolDeniedCount=countif(tostring(Properties['agentops.mcp.allowed']) =~ 'false'), FilesReadCount=countif(ToolName has 'read'), FilesEditedCount=countif(ToolName has_any ('edit', 'write', 'patch')), TestsRan=countif(ToolName has_any ('test', 'lint', 'typecheck')) > 0 by RunId, SessionId",
-    "| extend DurationMs=datetime_diff('millisecond', TimeGenerated, Started)",
-    "| extend ModelRequested=ModelActual, ContentCaptureMode=iff(ContentCaptureSignal > 0, 'signal_only', 'off'), OutcomeStatus=iff(Failures > 0, 'failed', 'success'), OutcomeReason=iff(Failures > 0, 'span_failure', 'completed'), TestsPassed=TestsRan and ToolFailureCount == 0, PrOpened=false, PrNumberHash='', CiStatus='not_run', EvalOverall=iff(Failures > 0, 50, 85), RiskScore=ToolFailureCount * 20 + ToolDeniedCount * 30 + ContentCaptureSignal * 15",
+    "| extend DurationMs=todouble(datetime_diff('millisecond', TimeGenerated, Started))",
+    "| extend ModelRequested=ModelActual, ContentCaptureMode=iff(ContentCaptureSignal > 0, 'signal_only', 'off'), OutcomeStatus=iff(Failures > 0, 'failed', 'success'), OutcomeReason=iff(Failures > 0, 'span_failure', 'completed'), TestsPassed=TestsRan and ToolFailureCount == 0, PrOpened=false, PrNumberHash='', CiStatus='not_run', EvalOverall=tolong(iff(Failures > 0, 50, 85)), RiskScore=ToolFailureCount * 20 + ToolDeniedCount * 30 + ContentCaptureSignal * 15",
     "| project TimeGenerated, RunId, SessionId, TraceId, Surface, RepoHash, BranchHash, TaskType, AgentName, SkillName, ParentAgentName, SubAgentName, DelegationId, ModelRequested, ModelActual, PrivacyMode, ContentCaptureMode, ContentCaptureSignal=ContentCaptureSignal > 0, OutcomeStatus, OutcomeReason, DurationMs, InputTokens, OutputTokens, ReasoningTokens, CacheReadTokens, CacheCreationTokens, ContextWindowPct, TokensRemoved, PermissionWaitMs, EstimatedCostUsd, ToolCount, ToolFailureCount, ToolDeniedCount, TestsRan, TestsPassed, FilesReadCount, FilesEditedCount, PrOpened, PrNumberHash, CiStatus, EvalOverall, RiskScore"
   ].join(' ');
 }
@@ -549,7 +585,7 @@ function compatTools() {
     "| where Operation == 'execute_tool' or isnotempty(ToolName)",
     "| extend ToolRisk=case(ToolName has_any ('secret', 'credential', 'token', 'ssh'), 'secret-access', ToolName has_any ('rm', 'delete', 'destroy'), 'destructive', ToolName has_any ('browser', 'playwright'), 'browser-control', ToolName has_any ('shell', 'bash', 'terminal'), 'shell', ToolName has_any ('edit', 'write', 'patch'), 'write-file', ToolName has_any ('http', 'fetch', 'curl'), 'network', 'read-only')",
     "| extend McpServer=case(ToolName startswith 'mcp__', extract('^mcp__([^_]+)__', 1, ToolName), ToolName contains '/', tostring(split(ToolName, '/')[0]), ToolName startswith 'azure-mcp-', 'azure-mcp', '')",
-    "| project TimeGenerated, RunId, SessionId, TraceId, SpanId=Id, Surface, AgentName, SkillName, ParentAgentName, SubAgentName, DelegationId, ModelActual, ToolName, ToolType=ToolRisk, ToolRisk, McpServer, Allowed=true, DeniedReason='', Status=iff(Failed, 'failed', 'success'), DurationMs, ErrorType, OutputSizeBytes=real(null), ArgsSchemaHash=''"
+    "| project TimeGenerated, RunId, SessionId, TraceId, SpanId=Id, Surface, AgentName, SkillName, ParentAgentName, SubAgentName, DelegationId, ModelActual, ToolName, ToolType=ToolRisk, ToolRisk, McpServer, Allowed=true, DeniedReason='', Status=iff(Failed, 'failed', 'success'), DurationMs=todouble(DurationMs), ErrorType, OutputSizeBytes=real(null), ArgsSchemaHash=''"
   ].join(' ');
 }
 
@@ -571,7 +607,7 @@ function compatEvals() {
     "| extend Security=case(ContentCaptureSignal == true or ToolDeniedCount > 0, 65, PrivacyMode == 'unsafe', 20, 90)",
     "| extend Reliability=case(OutcomeStatus != 'success', 45, 90)",
     "| extend CodeOutcome=case(PrOpened == true and CiStatus == 'passed', 85, PrOpened == true, 70, FilesEditedCount > 0 and TestsRan != true, 40, 60)",
-    "| extend EvalOverall=toint((TestDiscipline + ToolEfficiency + Security + Reliability + CodeOutcome) / 5)",
+    "| extend EvalOverall=tolong((TestDiscipline + ToolEfficiency + Security + Reliability + CodeOutcome) / 5)",
     "| extend EvalBucket=case(EvalOverall >= 80, 'good', EvalOverall >= 60, 'review', 'poor')",
     "| extend EvalReason='compat score from existing Copilot OpenTelemetry metadata'",
     "| project TimeGenerated, RunId, TraceId, RepoHash, ModelActual, TaskType, EvalOverall, TestDiscipline, ToolEfficiency, Security, Reliability, CodeOutcome, EvalBucket, EvalReason"
@@ -593,7 +629,7 @@ function compatInsights() {
     "| extend Severity=case(OutcomeStatus != 'success' or RiskScore >= 60, 'high', RiskScore >= 20, 'medium', 'low')",
     "| extend Summary=case(OutcomeStatus != 'success', strcat('Run failed from existing Copilot OpenTelemetry: ', OutcomeReason), ContentCaptureSignal == true, 'Content-like fields were observed and represented as privacy signals.', ToolFailureCount > 0, strcat('Tool failures observed: ', tostring(ToolFailureCount)), EstimatedCostUsd >= 1.0, strcat('Estimated cost is elevated: $', tostring(round(EstimatedCostUsd, 2))), 'Risk score is elevated.')",
     "| extend SuggestedNextStep='Open Run Replay and inspect the linked metadata-only timeline.'",
-    "| project TimeGenerated, InsightId=strcat('compat_', RunId, '_', InsightType), RunId, TraceId, InsightType, Severity, Title=InsightType, Summary, SuggestedNextStep, RepoHash, ModelActual, TaskType, ToolName='', BaselineValue=real(null), CurrentValue=RiskScore, ConfigHash=''"
+    "| project TimeGenerated, InsightId=strcat('compat_', RunId, '_', InsightType), RunId, TraceId, InsightType, Severity, Title=InsightType, Summary, SuggestedNextStep, RepoHash, ModelActual, TaskType, ToolName='', BaselineValue=real(null), CurrentValue=todouble(RiskScore), ConfigHash=''"
   ].join(' ');
 }
 
@@ -603,7 +639,7 @@ function compatRecommendations() {
     `(${compatInsights()})`,
     insightsNormalize(),
     "| extend Action=case(InsightType startswith 'recurring-', 'triage_recurring_pattern', InsightType has 'test', 'run_validation', InsightType has 'tool', 'investigate_tool', InsightType has 'collector', 'check_collector', InsightType has_any ('policy', 'privacy'), 'review_policy', InsightType has_any ('cost', 'context'), 'reduce_context_or_cost', InsightType has 'ci', 'fix_ci', InsightType has_any ('eval', 'instruction', 'config'), 'compare_regression', 'investigate')",
-    "| project TimeGenerated, RecommendationId=coalesce(tostring(column_ifexists('RecommendationId', '')), tostring(column_ifexists('InsightId', ''))), RunId, SessionId='', TraceId, Action, Severity, ObservedPattern=Summary, NextAction=SuggestedNextStep, PatternId, PatternKey, PatternRuns, PatternDimension, EvalOverall=real(null), EvalBucket='', BenchmarkRunId='', BenchmarkDecision='', BenchmarkPassRatePct=real(null), BenchmarkAverageScore=real(null), BenchmarkSafetyViolationCount=long(null), BenchmarkArtifactAdded=long(null), BenchmarkArtifactModified=long(null), BenchmarkArtifactDeleted=long(null), BenchmarkArtifactTotalChanged=long(null), BenchmarkArtifactFiles=dynamic([]), BenchmarkArtifactContentDiffs=dynamic([]), BenchmarkHiddenChecksPassed=long(null), BenchmarkHiddenChecksFailed=long(null), BenchmarkHiddenCheckPacks=dynamic([]), BenchmarkPolicyBlocks=long(null), BenchmarkPermissionProfiles=dynamic({}), BenchmarkPolicyTasks=dynamic([]), BenchmarkSemanticCheckCount=long(null), BenchmarkSemanticAverageScore=real(null), BenchmarkSemanticChecks=dynamic([]), BenchmarkApprovalStatus='', BenchmarkApprovalCount=long(null), BenchmarkRequiredApprovals=long(null), BenchmarkApprovalApprovedAt='', BenchmarkApprovalTicket='', BenchmarkApprovalSource='', ChangeAnnotations=dynamic([]), ChangeTargetRefs=dynamic([]), DashboardTitles=dynamic(['Run Replay', 'Insights & Regressions']), DashboardCount=2, Validation=dynamic(['agentops dashboard kql-check --last 24h --json']), RollbackCondition='Rollback the agent, skill, MCP, model, instruction, or benchmark artifact change if eval score drops, failures rise, privacy drops appear unexpectedly, or CI worsens.'"
+    "| project TimeGenerated, RecommendationId=coalesce(tostring(column_ifexists('RecommendationId', '')), tostring(column_ifexists('InsightId', ''))), RunId, SessionId='', TraceId, Action, Severity, ObservedPattern=Summary, NextAction=SuggestedNextStep, PatternId, PatternKey, PatternRuns, PatternDimension, EvalOverall=long(null), EvalBucket='', BenchmarkRunId='', BenchmarkDecision='', BenchmarkPassRatePct=real(null), BenchmarkAverageScore=real(null), BenchmarkSafetyViolationCount=long(null), BenchmarkArtifactAdded=long(null), BenchmarkArtifactModified=long(null), BenchmarkArtifactDeleted=long(null), BenchmarkArtifactTotalChanged=long(null), BenchmarkArtifactFiles=dynamic([]), BenchmarkArtifactContentDiffs=dynamic([]), BenchmarkHiddenChecksPassed=long(null), BenchmarkHiddenChecksFailed=long(null), BenchmarkHiddenCheckPacks=dynamic([]), BenchmarkPolicyBlocks=long(null), BenchmarkPermissionProfiles=dynamic({}), BenchmarkPolicyTasks=dynamic([]), BenchmarkSemanticCheckCount=long(null), BenchmarkSemanticAverageScore=real(null), BenchmarkSemanticChecks=dynamic([]), BenchmarkApprovalStatus='', BenchmarkApprovalCount=long(null), BenchmarkRequiredApprovals=long(null), BenchmarkApprovalApprovedAt='', BenchmarkApprovalTicket='', BenchmarkApprovalSource='', ChangeAnnotations=dynamic([]), ChangeTargetRefs=dynamic([]), DashboardTitles=dynamic(['Run Replay', 'Insights & Regressions']), DashboardCount=2, Validation=dynamic(['agentops dashboard kql-check --last 24h --json']), RollbackCondition='Rollback the agent, skill, MCP, model, instruction, or benchmark artifact change if eval score drops, failures rise, privacy drops appear unexpectedly, or CI worsens.'"
   ].join(' ');
 }
 
@@ -617,14 +653,14 @@ function compatHealth() {
 }
 
 const q = {
-  runSummary: `union isfuzzy=true (AgentOpsRunSummary_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo())), (${compatRunSummary()}) ${runNormalize()} ${runFilters()}`,
-  events: `union isfuzzy=true (AgentOpsEvents_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo())), (${compatEvents()}) ${eventNormalize()} ${eventFilters()}`,
-  tools: `union isfuzzy=true (AgentOpsToolCalls_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo())), (AgentOpsMcpCalls_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo())), (${compatTools()}) ${toolNormalize()} ${toolFilters()}`,
+  runSummary: `union isfuzzy=true (${v2RunSummary}), (${compatRunSummary()}) ${runNormalize()} ${runFilters()}`,
+  events: `union isfuzzy=true (${v2Events}), (${compatEvents()}) ${eventNormalize()} ${eventFilters()}`,
+  tools: `union isfuzzy=true (${v2Tools}), (${v2McpCalls}), (${compatTools()}) ${toolNormalize()} ${toolFilters()}`,
   privacy: `union isfuzzy=true (AgentOpsPrivacy_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo())), (${compatPrivacy()}) ${privacyFilters()}`,
-  evals: `union isfuzzy=true (AgentOpsEval_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo())), (${compatEvals()}) ${evalNormalize()} ${evalFilters()}`,
+  evals: `union isfuzzy=true (${v2Evals}), (${compatEvals()}) ${evalNormalize()} ${evalFilters()}`,
   github: `union isfuzzy=true (AgentOpsGithubOutcomes_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo())), (${compatGithubOutcomes()}) ${githubNormalize()} ${githubFilters()}`,
   insights: `union isfuzzy=true (AgentOpsInsights_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo())), (${compatInsights()}) ${insightsNormalize()} ${insightsFilters()}`,
-  recommendations: `union isfuzzy=true (AgentOpsRecommendations_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo())), (${compatRecommendations()}) ${recommendationsNormalize()} ${recommendationsFilters()}`,
+  recommendations: `union isfuzzy=true (${v2Recommendations}), (${compatRecommendations()}) ${recommendationsNormalize()} ${recommendationsFilters()}`,
   savedViews: `union isfuzzy=true (AgentOpsSavedViews_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo())), (print TimeGenerated=now(), SavedViewId='', Name='', Description='', Url='', QueryHash='', Tags=dynamic([]), SessionId='', CreatedAt='', ChangeAnnotations=dynamic([]), ChangeAnnotationCount=long(null), ChangeTargetRefs=dynamic([]) | where false)`,
   health: `union isfuzzy=true (AgentOpsCollectorHealth_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo())), (${compatHealth()}) | where ('$privacy_mode' == '__all' or tostring(column_ifexists('PrivacyMode', '')) == '$privacy_mode')`,
   content: `union isfuzzy=true (AgentOpsContent_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo())), (print TimeGenerated=now(), RunId='', SessionId='', TraceId='', SpanId='', TurnIndex=long(null), Role='', ContentKind='', CaptureMode='', RedactionStatus='', ModelActual='', ToolName='', PromptText='', ResponseText='', ContentHash='', ContentLength=long(null) | where false) | extend PromptText=tostring(column_ifexists('PromptText', '')), ResponseText=tostring(column_ifexists('ResponseText', '')), CaptureMode=tostring(column_ifexists('CaptureMode', '')), RedactionStatus=tostring(column_ifexists('RedactionStatus', '')) | extend MessageText=case(isnotempty(PromptText), PromptText, isnotempty(ResponseText), ResponseText, '') | extend ViewerNote=case(isempty(MessageText), 'no captured content', CaptureMode == 'full', 'explicit opt-in: full content row', CaptureMode == 'redacted', 'explicit opt-in: redacted content row', 'explicit opt-in content row') ${contentFilters()}`
@@ -741,7 +777,7 @@ const dashboards = {
     tablePanel(11, 'Recurring patterns', 0, 12, 24, 8, `${q.insights} | where isnotempty(PatternId) or InsightType startswith 'recurring-' | extend OpenPattern='Pattern', OpenReplay='Replay' | project TimeGenerated, InsightType, Severity, PatternRuns, PatternDimension, PatternKey, Summary, SuggestedNextStep, OpenPattern, OpenReplay, RunId, RepoHash, ModelActual, ToolName, CurrentValue | order by PatternRuns desc, TimeGenerated desc | take 100`),
     timeseriesPanel(20, 'Insight volume', 0, 20, 12, 8, `${q.insights} | summarize Insights=count() by TimeGenerated=bin(TimeGenerated, $__interval), Severity | order by TimeGenerated asc`),
     tablePanel(21, 'Regression evidence', 12, 20, 12, 8, `${q.insights} | where InsightType has 'regression' or InsightType has 'anomaly' | project TimeGenerated, InsightType, Severity, RepoHash, ModelActual, ToolName, BaselineValue, CurrentValue, ConfigHash, Summary | order by TimeGenerated desc | take 100`),
-    tablePanel(23, 'Eval regression queue', 0, 28, 24, 8, `union isfuzzy=true (${q.insights} | where InsightType has_any ('eval', 'regression', 'anomaly') | project TimeGenerated, Source='insight', Severity, Action=InsightType, RunId, TraceId, RepoHash, ModelActual, TaskType, EvalOverall=real(null), EvalBucket='', BaselineValue, CurrentValue, PatternKey, Summary, NextAction=SuggestedNextStep), (${q.recommendations} | where EvalBucket in ('poor', 'review') or Action has 'regression' or ObservedPattern has 'eval' | project TimeGenerated, Source='recommendation', Severity, Action, RunId, TraceId, RepoHash='', ModelActual='', TaskType='', EvalOverall, EvalBucket, BaselineValue=real(null), CurrentValue=EvalOverall, PatternKey, Summary=ObservedPattern, NextAction) | extend OpenReplay='Replay', OpenPattern=iff(isnotempty(PatternKey), 'Pattern', '') | project TimeGenerated, Source, Severity, Action, EvalOverall, EvalBucket, BaselineValue, CurrentValue, Summary, NextAction, RunId, TraceId, RepoHash, ModelActual, TaskType, PatternKey, OpenReplay, OpenPattern | order by TimeGenerated desc | take 200`),
+    tablePanel(23, 'Eval regression queue', 0, 28, 24, 8, `union isfuzzy=true (${q.insights} | where InsightType has_any ('eval', 'regression', 'anomaly') | project TimeGenerated, Source='insight', Severity, Action=InsightType, RunId, TraceId, RepoHash, ModelActual, TaskType, EvalOverall=real(null), EvalBucket='', BaselineValue, CurrentValue, PatternKey, Summary, NextAction=SuggestedNextStep), (${q.recommendations} | where EvalBucket in ('poor', 'review') or Action has 'regression' or ObservedPattern has 'eval' | project TimeGenerated, Source='recommendation', Severity, Action, RunId, TraceId, RepoHash='', ModelActual='', TaskType='', EvalOverall, EvalBucket, BaselineValue=real(null), CurrentValue=todouble(EvalOverall), PatternKey, Summary=ObservedPattern, NextAction) | extend OpenReplay='Replay', OpenPattern=iff(isnotempty(PatternKey), 'Pattern', '') | project TimeGenerated, Source, Severity, Action, EvalOverall, EvalBucket, BaselineValue, CurrentValue, Summary, NextAction, RunId, TraceId, RepoHash, ModelActual, TaskType, PatternKey, OpenReplay, OpenPattern | order by TimeGenerated desc | take 200`),
     tablePanel(22, 'Recommendation artifacts', 0, 36, 24, 8, `${q.recommendations} | extend OpenReplay='Replay', OpenPattern=iff(isnotempty(PatternKey), 'Pattern', ''), ChangeAnnotationCount=array_length(ChangeAnnotations) | project TimeGenerated, RecommendationId, Severity, Action, ObservedPattern, NextAction, RunId, TraceId, PatternKey, PatternRuns, PatternDimension, EvalOverall, EvalBucket, BenchmarkRunId, BenchmarkDecision, BenchmarkPassRatePct, BenchmarkAverageScore, BenchmarkSafetyViolationCount, BenchmarkArtifactAdded, BenchmarkArtifactModified, BenchmarkArtifactDeleted, BenchmarkArtifactTotalChanged, BenchmarkArtifactFiles, BenchmarkHiddenChecksPassed, BenchmarkHiddenChecksFailed, BenchmarkHiddenCheckPacks, BenchmarkPolicyBlocks, BenchmarkPermissionProfiles, BenchmarkPolicyTasks, BenchmarkSemanticCheckCount, BenchmarkSemanticAverageScore, BenchmarkSemanticChecks, BenchmarkApprovalStatus, BenchmarkApprovalCount, BenchmarkRequiredApprovals, ChangeAnnotationCount, ChangeAnnotations, ChangeTargetRefs, DashboardCount, OpenReplay, OpenPattern | order by TimeGenerated desc | take 200`),
     tablePanel(24, 'Config change annotations', 0, 44, 24, 8, `${configAnnotationsQuery()} | order by TimeGenerated desc | take 200`)
   ]),
