@@ -316,8 +316,10 @@ function productAudit(options = {}) {
     'azure-ingest-privacy-plan',
     fileIncludes('agentops-cli/src/lib/azure/v2-ingest-plan.js', ['--allow-content', 'AgentOpsContent_CL', 'schema_versioning', 'schema_migration_policy', 'logs-ingestion-upload-plan'])
       && fileIncludes('agentops-cli/src/commands/azure-ingest.js', ['logs-upload', '--yes', 'az', 'rest'])
+      && fileIncludes('infra/bicep/v2-ingestion.bicep', ['AgentOpsRunSummary_CL', 'dataCollectionRules', 'streamDeclarations', 'logsIngestionEndpoint'])
+      && fileIncludes('infra/bicep/main.bicep', ['deployV2Ingestion', 'AGENTOPS_LOGS_INGESTION_ENDPOINT', 'AGENTOPS_DCR_IMMUTABLE_ID'])
       && fileIncludes('docs/azure-v2-ingestion.md', ['AgentOpsContent_CL', '--allow-content', 'SchemaVersion', 'schema migration policy', 'azure-ingest logs-upload']),
-    ['agentops-cli/src/lib/azure/v2-ingest-plan.js', 'agentops-cli/src/commands/azure-ingest.js', 'docs/azure-v2-ingestion.md'],
+    ['agentops-cli/src/lib/azure/v2-ingest-plan.js', 'agentops-cli/src/commands/azure-ingest.js', 'infra/bicep/v2-ingestion.bicep', 'infra/bicep/main.bicep', 'docs/azure-v2-ingestion.md'],
     []
   ));
 
