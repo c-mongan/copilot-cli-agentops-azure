@@ -35,6 +35,15 @@ const optionalEmptyTables = new Set([
 
 const schemaVersionTables = new Set(tableNames.filter(table => table.endsWith('_CL')));
 
+const schemaMigrationPolicy = {
+  current_version: AGENTOPS_SCHEMA_VERSION,
+  supported_versions: [AGENTOPS_SCHEMA_VERSION],
+  legacy_versions: ['1'],
+  missing_version_action: 'Regenerate or roll up telemetry with the current AgentOps CLI so every AgentOps*_CL row includes SchemaVersion.',
+  legacy_version_action: 'Regenerate the affected AgentOps*_CL files or re-run the local rollup before cloud ingestion.',
+  unsupported_newer_version_action: 'Upgrade the AgentOps CLI and Grafana dashboard pack before ingesting newer schema rows.'
+};
+
 const leakPatterns = [
   /SECRET_FAKE_TEST_VALUE/i,
   /api_key\s*=/i,
@@ -134,6 +143,7 @@ function validateTable(table, dir, options = {}) {
   if (schemaVersion.checked && schemaVersion.mismatched_versions.length > 0) {
     warnings.push(`${table}: schema version mismatch ${schemaVersion.mismatched_versions.join(', ')}; expected ${AGENTOPS_SCHEMA_VERSION}`);
   }
+  for (const action of schemaVersion.migration.actions) warnings.push(`${table}: ${action}`);
 
   return {
     file,
@@ -151,30 +161,68 @@ function validateTable(table, dir, options = {}) {
 
 function schemaVersionFor(table, rows) {
   if (!schemaVersionTables.has(table) || rows.length === 0) {
+    const migration = schemaMigrationFor({ table, missingRows: 0, versions: [] });
     return {
       checked: false,
       expected: AGENTOPS_SCHEMA_VERSION,
       versions: [],
       missing_rows: 0,
       mismatched_versions: [],
+      migration,
       ok: true
     };
   }
 
-  const versions = [...new Set(rows
-    .map(row => row?.SchemaVersion)
-    .filter(value => value !== undefined && value !== null && value !== '')
-    .map(value => String(value)))].sort();
+  const versions = versionCounts(rows);
   const missingRows = rows.filter(row => row?.SchemaVersion === undefined || row?.SchemaVersion === null || row?.SchemaVersion === '').length;
-  const mismatchedVersions = versions.filter(version => version !== AGENTOPS_SCHEMA_VERSION);
+  const mismatchedVersions = Object.keys(versions).filter(version => version !== AGENTOPS_SCHEMA_VERSION);
+  const migration = schemaMigrationFor({ table, missingRows, versions: Object.keys(versions) });
 
   return {
     checked: true,
     expected: AGENTOPS_SCHEMA_VERSION,
-    versions,
+    versions: Object.keys(versions).sort(),
+    version_counts: versions,
     missing_rows: missingRows,
     mismatched_versions: mismatchedVersions,
+    migration,
     ok: missingRows === 0 && mismatchedVersions.length === 0
+  };
+}
+
+function versionCounts(rows) {
+  const counts = {};
+  for (const row of rows) {
+    const version = row?.SchemaVersion;
+    if (version === undefined || version === null || version === '') continue;
+    const key = String(version);
+    counts[key] = (counts[key] || 0) + 1;
+  }
+  return Object.fromEntries(Object.entries(counts).sort(([left], [right]) => left.localeCompare(right)));
+}
+
+function schemaMigrationFor({ table, missingRows, versions }) {
+  const legacyVersions = versions.filter(version => schemaMigrationPolicy.legacy_versions.includes(version));
+  const unsupportedVersions = versions.filter(version => !schemaMigrationPolicy.supported_versions.includes(version) && !schemaMigrationPolicy.legacy_versions.includes(version));
+  const actions = [];
+  if (missingRows > 0) actions.push(`schema migration required for ${missingRows} missing-version row(s): ${schemaMigrationPolicy.missing_version_action}`);
+  if (legacyVersions.length > 0) actions.push(`schema migration required from version(s) ${legacyVersions.join(', ')} to ${AGENTOPS_SCHEMA_VERSION}: ${schemaMigrationPolicy.legacy_version_action}`);
+  if (unsupportedVersions.length > 0) actions.push(`unsupported newer schema version(s) ${unsupportedVersions.join(', ')}: ${schemaMigrationPolicy.unsupported_newer_version_action}`);
+
+  return {
+    table,
+    status: unsupportedVersions.length > 0
+      ? 'unsupported-newer'
+      : missingRows > 0
+        ? 'missing-version'
+        : legacyVersions.length > 0
+          ? 'legacy-migration-required'
+          : 'current',
+    migration_required: missingRows > 0 || legacyVersions.length > 0 || unsupportedVersions.length > 0,
+    compatible_for_ingest: unsupportedVersions.length === 0,
+    legacy_versions: legacyVersions,
+    unsupported_versions: unsupportedVersions,
+    actions
   };
 }
 
@@ -215,6 +263,11 @@ function buildAzureIngestPlan({ dir, allowContent = false } = {}) {
     if ((tables[table]?.rows || 0) === 0) errors.push(`${table}: required table has no rows`);
   }
 
+  const schemaMigration = schemaMigrationSummary(tables);
+  for (const table of schemaMigration.unsupported_tables) {
+    errors.push(`${table.table}: unsupported newer schema version(s) ${table.versions.join(', ')}; ${schemaMigrationPolicy.unsupported_newer_version_action}`);
+  }
+
   return {
     ok: errors.length === 0,
     dir: absoluteDir,
@@ -231,6 +284,7 @@ function buildAzureIngestPlan({ dir, allowContent = false } = {}) {
       warning: contentRows > 0 ? 'Content rows may include prompts or responses. Use a separate restricted workspace/dashboard for shared environments.' : ''
     },
     schema_versioning: schemaVersioningSummary(tables),
+    schema_migration_policy: schemaMigration,
     azure: {
       workspace: '<log-analytics-workspace>',
       table_suffix: '_CL',
@@ -265,6 +319,36 @@ function schemaVersioningSummary(tables) {
     checked_tables: checked.length,
     missing_rows: missingRows,
     mismatched_tables: mismatchedTables
+  };
+}
+
+function schemaMigrationSummary(tables) {
+  const migrations = Object.entries(tables)
+    .filter(([, table]) => table.schema_version?.migration?.migration_required)
+    .map(([name, table]) => ({
+      table: name,
+      status: table.schema_version.migration.status,
+      compatible_for_ingest: table.schema_version.migration.compatible_for_ingest,
+      versions: table.schema_version.versions,
+      missing_rows: table.schema_version.missing_rows,
+      actions: table.schema_version.migration.actions
+    }));
+  const unsupportedTables = migrations
+    .filter(migration => migration.compatible_for_ingest === false)
+    .map(migration => ({
+      table: migration.table,
+      versions: tables[migration.table].schema_version.migration.unsupported_versions
+    }));
+
+  return {
+    current_version: schemaMigrationPolicy.current_version,
+    supported_versions: schemaMigrationPolicy.supported_versions,
+    legacy_versions: schemaMigrationPolicy.legacy_versions,
+    ok: unsupportedTables.length === 0,
+    migration_required: migrations.length > 0,
+    migrations,
+    unsupported_tables: unsupportedTables,
+    actions: migrations.flatMap(migration => migration.actions)
   };
 }
 
@@ -462,6 +546,7 @@ function renderAzureIngestPlan(plan) {
   lines.push(`Directory: ${plan.dir}`);
   lines.push(`Privacy scan: ${plan.privacy.ok ? 'passed' : 'failed'}`);
   lines.push(`Content rows: ${plan.content_capture.rows}${plan.content_capture.allowed ? ' (explicitly allowed)' : ''}`);
+  lines.push(`Schema migration policy: ${plan.schema_migration_policy.migration_required ? 'migration required' : 'current'} (current ${plan.schema_migration_policy.current_version})`);
   lines.push('');
   lines.push('Tables:');
   for (const [table, summary] of Object.entries(plan.tables)) {

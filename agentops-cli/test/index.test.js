@@ -643,6 +643,8 @@ test('azure-ingest plan validates V2 table files and privacy shape', () => {
     assert.equal(result.tables.AgentOpsRunSummary_CL.schema_version.ok, true);
     assert.equal(result.schema_versioning.ok, true);
     assert.equal(result.schema_versioning.expected, '2');
+    assert.equal(result.schema_migration_policy.ok, true);
+    assert.equal(result.schema_migration_policy.migration_required, false);
     assert.equal(result.azure.streams.AgentOpsRunSummary_CL, 'Custom-AgentOpsRunSummary_CL');
     assert.match(result.azure.ingestion_path, /Logs Ingestion API/);
   } finally {
@@ -673,8 +675,40 @@ test('azure-ingest plan warns on missing or mismatched schema versions', () => {
     assert.deepEqual(result.schema_versioning.mismatched_tables, [
       { table: 'AgentOpsRunSummary_CL', versions: ['1'] }
     ]);
+    assert.equal(result.schema_migration_policy.ok, true);
+    assert.equal(result.schema_migration_policy.migration_required, true);
+    assert.equal(result.schema_migration_policy.migrations[0].status, 'missing-version');
     assert.match(result.warnings.join('\n'), /missing SchemaVersion/);
     assert.match(result.warnings.join('\n'), /schema version mismatch 1; expected 2/);
+    assert.match(result.warnings.join('\n'), /schema migration required from version\(s\) 1 to 2/);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('azure-ingest plan blocks unsupported newer schema versions', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-azure-ingest-schema-newer-'));
+  try {
+    const demo = generateDemoData({ runs: 2 });
+    const { writeDemoData } = require('../src/lib/demo/agentops-demo-data');
+    writeDemoData(demo, tempDir);
+
+    const runFile = path.join(tempDir, 'AgentOpsRunSummary_CL.jsonl');
+    const rows = fs.readFileSync(runFile, 'utf8')
+      .trim()
+      .split('\n')
+      .map(line => JSON.parse(line));
+    rows[0].SchemaVersion = '3';
+    fs.writeFileSync(runFile, `${rows.map(row => JSON.stringify(row)).join('\n')}\n`);
+
+    const result = buildAzureIngestPlan({ dir: tempDir });
+    assert.equal(result.ok, false);
+    assert.equal(result.schema_migration_policy.ok, false);
+    assert.deepEqual(result.schema_migration_policy.unsupported_tables, [
+      { table: 'AgentOpsRunSummary_CL', versions: ['3'] }
+    ]);
+    assert.match(result.errors.join('\n'), /unsupported newer schema version\(s\) 3/);
+    assert.match(result.schema_migration_policy.actions.join('\n'), /Upgrade the AgentOps CLI and Grafana dashboard pack/);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }

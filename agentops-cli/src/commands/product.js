@@ -198,8 +198,8 @@ function productAudit(options = {}) {
 
   checks.push(check(
     'azure-ingest-privacy-plan',
-    fileIncludes('agentops-cli/src/lib/azure/v2-ingest-plan.js', ['--allow-content', 'AgentOpsContent_CL', 'schema_versioning'])
-      && fileIncludes('docs/azure-v2-ingestion.md', ['AgentOpsContent_CL', '--allow-content', 'SchemaVersion']),
+    fileIncludes('agentops-cli/src/lib/azure/v2-ingest-plan.js', ['--allow-content', 'AgentOpsContent_CL', 'schema_versioning', 'schema_migration_policy'])
+      && fileIncludes('docs/azure-v2-ingestion.md', ['AgentOpsContent_CL', '--allow-content', 'SchemaVersion', 'schema migration policy']),
     ['agentops-cli/src/lib/azure/v2-ingest-plan.js', 'docs/azure-v2-ingestion.md'],
     []
   ));
