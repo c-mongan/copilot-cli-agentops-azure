@@ -263,6 +263,23 @@ function productAudit(options = {}) {
   ));
 
   checks.push(check(
+    'hosted-llm-judge-deployment',
+    fileIncludes('benchmark-judges/hosted-judge/server.js', ['metadata-only-hosted-llm-judge', 'POST', '/score', 'OPENAI_API_KEY', 'AGENTOPS_JUDGE_TOKEN'])
+      && fileIncludes('benchmark-judges/hosted-judge/Dockerfile', ['node:22-alpine', 'server.js'])
+      && fileIncludes('infra/bicep/hosted-judge.bicep', ['Microsoft.App/containerApps', 'judge-token', 'openai-api-key', 'judgeEndpoint'])
+      && fileIncludes('agentops-cli/src/legacy.js', ['serviceArtifact', 'benchmark-judges/hosted-judge', 'infra/bicep/hosted-judge.bicep'])
+      && fileIncludes('docs/agentops-architecture-product-audit.md', ['deployable Azure Container Apps hosted judge', 'hosted-llm-judge-deployment']),
+    [
+      'benchmark-judges/hosted-judge/server.js',
+      'benchmark-judges/hosted-judge/Dockerfile',
+      'infra/bicep/hosted-judge.bicep',
+      'agentops-cli/src/legacy.js',
+      'docs/agentops-architecture-product-audit.md'
+    ],
+    []
+  ));
+
+  checks.push(check(
     'azure-ingest-privacy-plan',
     fileIncludes('agentops-cli/src/lib/azure/v2-ingest-plan.js', ['--allow-content', 'AgentOpsContent_CL', 'schema_versioning', 'schema_migration_policy'])
       && fileIncludes('docs/azure-v2-ingestion.md', ['AgentOpsContent_CL', '--allow-content', 'SchemaVersion', 'schema migration policy']),
