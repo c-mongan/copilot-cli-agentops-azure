@@ -6,6 +6,7 @@ const { dashboardVerify, validateDashboardLinks, validateDashboardUx, validateDa
 const { e2eBrowserCheck } = require('./e2e');
 const { repoRoot } = require('../lib/paths');
 const { validateWrapperContract } = require('../lib/copilot/wrapper-contract');
+const { validateCopilotOtelFixtureContract } = require('../lib/copilot/fixture-contract');
 const legacy = require('../legacy');
 
 const requiredVisualDashboards = [
@@ -104,12 +105,25 @@ function productAudit(options = {}) {
     'agentops-cli/src/lib/copilot/resolve-real-copilot.js',
     'agentops-cli/src/lib/copilot/run-metadata.js',
     'agentops-cli/src/lib/copilot/flag-contract.js',
+    'agentops-cli/src/lib/copilot/fixture-contract.js',
     'agentops-cli/src/lib/copilot/session-parser.js',
     'agentops-cli/src/lib/copilot/tool-classifier.js',
     'agentops-cli/src/lib/copilot/run-summary.js',
     'docs/copilot-cli-instrumentation.md',
     'docs/copilot-cli-flag-contract.md'
   ]));
+
+  const copilotFixture = validateCopilotOtelFixtureContract();
+  checks.push(check(
+    'real-copilot-otel-fixture-contract',
+    copilotFixture.ok && fileIncludes('docs/telemetry-schema.md', ['copilot-cli-wrapper-snapshot.jsonl', 'contract fixture']),
+    [
+      'tests/sample-otel/copilot-cli-wrapper-snapshot.jsonl',
+      'agentops-cli/src/lib/copilot/fixture-contract.js',
+      'docs/telemetry-schema.md'
+    ],
+    copilotFixture.mismatches
+  ));
 
   checks.push(requiredFilesCheck('copilot-sdk-adapter', [
     'packages/agentops-copilot-sdk/package.json',

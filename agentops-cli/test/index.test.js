@@ -15,6 +15,7 @@ const { parseCopilotSessionRows } = require('../src/lib/copilot/session-parser')
 const { summarizeCopilotRun } = require('../src/lib/copilot/run-summary');
 const { classifyToolName, summarizeAllowedTools } = require('../src/lib/copilot/tool-classifier');
 const { auditCopilotHelpFlags, parseCopilotHelpFlags, trackedFlags } = require('../src/lib/copilot/flag-contract');
+const { validateCopilotOtelFixtureContract } = require('../src/lib/copilot/fixture-contract');
 const { sharedTerms: wrapperSharedTerms, validateWrapperContract, wrapperFiles } = require('../src/lib/copilot/wrapper-contract');
 const privacy = require('../src/lib/privacy');
 const { collectorReleaseContract, readCollectorRelease } = require('../src/lib/collector-release');
@@ -4323,6 +4324,7 @@ test('product audit proves the local AgentOps control-room contract', () => {
     'privacy-defaults',
     'copilot-wrapper-sync-contract',
     'copilot-cli-surface',
+    'real-copilot-otel-fixture-contract',
     'copilot-sdk-adapter',
     'mcp-observability-proxy',
     'github-outcomes',
@@ -8377,28 +8379,12 @@ test('span source reads local JSONL without Azure access', () => {
 });
 
 test('real Copilot OTel snapshot preserves wrapper envelope contract', () => {
-  const rows = spanRowsFromSource(['--file', path.join(root, 'tests', 'sample-otel', 'copilot-cli-wrapper-snapshot.jsonl')]).rows;
-  const result = rollupSpanRows(rows, { baseTime: '2026-06-01T12:00:00.000Z' });
-  const run = result.tables.AgentOpsRunSummary_CL[0];
-  const tool = result.tables.AgentOpsToolCalls_CL[0];
-  const mcp = result.tables.AgentOpsMcpCalls_CL[0];
+  const contract = validateCopilotOtelFixtureContract();
 
-  assert.equal(result.ok, true);
-  assert.equal(result.runs, 1);
-  assert.equal(run.RunId, 'wrapper_run_snapshot');
-  assert.equal(run.SessionId, 'wrapper_session_snapshot');
-  assert.equal(run.TraceId, 'trace-copilot-snapshot');
-  assert.equal(run.AgentName, 'telemetry-investigator');
-  assert.equal(run.ModelActual, 'gpt-5-mini');
-  assert.equal(run.InputTokens, 1200);
-  assert.equal(run.OutputTokens, 180);
-  assert.equal(run.PrivacyMode, 'strict');
-  assert.equal(run.ContentCaptureSignal, false);
-  assert.equal(run.OutcomeStatus, 'success');
-  assert.equal(tool.ToolName, 'mcp__azure__monitor_query');
-  assert.equal(tool.Allowed, true);
-  assert.equal(mcp.McpServerName, 'azure');
-  assert.equal(mcp.ResultSizeBytes, 2048);
+  assert.equal(contract.ok, true, contract.mismatches.join('\n'));
+  assert.equal(contract.rows, 2);
+  assert.equal(contract.table_counts.AgentOpsRunSummary_CL, 1);
+  assert.equal(contract.table_counts.AgentOpsPrivacy_CL, 0);
 });
 
 test('saved views add, list, show, open, and export durable investigations', () => {

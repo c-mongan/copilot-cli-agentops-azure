@@ -406,7 +406,7 @@ Current gaps:
 
 Product recommendation:
 
-- Keep real Copilot OTel fixture snapshot contract tests in CI as Copilot fields evolve.
+- Keep real Copilot OTel fixture snapshot contract tests in CI as Copilot fields evolve. The local `real-copilot-otel-fixture-contract` product-audit check now validates `tests/sample-otel/copilot-cli-wrapper-snapshot.jsonl` through `agentops-cli/src/lib/copilot/fixture-contract.js`.
 - Keep Copilot help snapshots current and classify new flags as tracked or intentionally ignored.
 - Generate Bash/PowerShell flag metadata from one source of truth if this grows further.
 
@@ -1262,10 +1262,7 @@ Implemented:
 - Schema versioning in demo rows, ingest-plan warnings, and Collector Health coverage.
 - Exporter failure visibility in Collector Health rows and dashboard review actions.
 - Schema migration policy in ingest planning for current, legacy, missing, and unsupported newer table versions.
-
-Required work:
-
-- Real Copilot fixture regression tests.
+- Real Copilot fixture regression tests through `real-copilot-otel-fixture-contract` and `tests/sample-otel/copilot-cli-wrapper-snapshot.jsonl`.
 
 ## Recommended Roadmap
 
