@@ -557,6 +557,7 @@ function validateDashboardUx() {
       policy_review: true,
       semantic_review: true,
       promotion_approvals: true,
+      robust_eval_center: true,
       alert_handoff_review: true,
       schema_version_coverage: true,
       exporter_failure_review: true,
