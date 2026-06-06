@@ -4339,6 +4339,7 @@ test('product audit proves the local AgentOps control-room contract', () => {
     'run-centric-ui-contract',
     'robust-eval-center-contract',
     'hosted-llm-judge-deployment',
+    'managed-benchmark-runner-image',
     'content-transcript-opt-in',
     'first-run-loop',
     'ask-agentops-response-flow',
