@@ -6596,6 +6596,82 @@ test('benchmark OS sandbox fails closed when configured on unsupported platforms
   }
 });
 
+test('benchmark container OS sandbox wraps Copilot with network isolation', () => {
+  const runId = `bench-container-sandbox-${Date.now()}`;
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-bench-container-sandbox-'));
+  const suiteDir = path.join(tempDir, 'benchmarks', 'container-sandbox-suite');
+  const fixtureDir = path.join(suiteDir, 'fixtures', 'tiny-repo');
+  const tasksDir = path.join(suiteDir, 'tasks');
+  let sandboxCall = null;
+
+  try {
+    fs.mkdirSync(fixtureDir, { recursive: true });
+    fs.mkdirSync(tasksDir, { recursive: true });
+    fs.writeFileSync(path.join(suiteDir, 'suite.json'), `${JSON.stringify({ id: 'container-sandbox-suite', title: 'Container sandbox suite' })}\n`);
+    fs.writeFileSync(path.join(fixtureDir, 'README.md'), '# Container sandbox fixture\n');
+    fs.writeFileSync(path.join(tasksDir, 'inspect.json'), `${JSON.stringify({
+      id: 'inspect',
+      title: 'Inspect with container OS sandbox',
+      fixture: 'fixtures/tiny-repo',
+      prompt: 'Inspect the repo without network.',
+      copilotArgs: [],
+      permissionProfile: 'least-privilege',
+      osSandbox: { mode: 'container-network-blocked', image: 'agentops/copilot-runner:test' },
+      successCommands: [],
+      expectedFiles: [],
+      forbiddenFiles: [],
+      timeoutSec: 10,
+      tags: []
+    })}\n`);
+
+    const dryRun = benchmarkRunPlan('container-sandbox-suite', {
+      benchmarksDir: path.join(tempDir, 'benchmarks'),
+      variant: 'candidate',
+      dryRun: true,
+      runId
+    });
+    assert.deepEqual(dryRun.runs[0].osSandbox, {
+      mode: 'container-network-blocked',
+      enforced: true,
+      network: 'blocked',
+      tool: 'container_command_wrapped',
+      platform: 'cross-platform-container-runtime',
+      command: 'docker',
+      image: 'agentops/copilot-runner:test'
+    });
+
+    const result = runBenchmarkSuite('container-sandbox-suite', {
+      benchmarksDir: path.join(tempDir, 'benchmarks'),
+      variant: 'candidate',
+      repeat: 1,
+      runId,
+      summariesDir: path.join(tempDir, 'summaries'),
+      containerRuntimeCommand: 'podman',
+      spawnSync: (command, args) => {
+        sandboxCall = { command, args };
+        return { status: 0, stdout: 'inspected', stderr: '' };
+      }
+    });
+
+    assert.equal(sandboxCall.command, 'podman');
+    assert.deepEqual(sandboxCall.args.slice(0, 5), ['run', '--rm', '--network', 'none', '-v']);
+    assert.ok(sandboxCall.args.includes('agentops/copilot-runner:test'));
+    assert.ok(sandboxCall.args.includes('COPILOT_HOME=/copilot-home'));
+    assert.equal(sandboxCall.args.at(-3), 'copilot');
+    assert.deepEqual(result.summaries[0].osSandboxRuntime, {
+      mode: 'container-network-blocked',
+      active: true,
+      command: 'podman',
+      image: 'agentops/copilot-runner:test',
+      network: 'blocked'
+    });
+    assert.equal(result.report.tasks[0].osSandboxRuntime.active, true);
+  } finally {
+    fs.rmSync(path.join(benchmarkRunBaseDir, runId), { recursive: true, force: true });
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
 test('benchmark command file seal rejects tampered check harness', () => {
   const runId = `bench-command-seal-${Date.now()}`;
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-bench-command-seal-'));
