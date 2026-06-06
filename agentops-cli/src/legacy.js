@@ -6394,14 +6394,20 @@ function benchmarkJudgeProviderGuide() {
         '  --data @<(node -e \'const fs=require("fs"); const [file,check]=process.argv.slice(1); process.stdout.write(JSON.stringify({check_id:check,file,content:fs.readFileSync(file,"utf8")}));\' "$file" "$check_id")'
       ]
     },
+    serviceArtifact: {
+      path: 'benchmark-judges/hosted-judge',
+      imageBuild: 'az acr build --registry <acr-name> --image agentops-hosted-judge:latest benchmark-judges/hosted-judge',
+      deployTemplate: 'infra/bicep/hosted-judge.bicep',
+      endpoints: ['/health', '/score']
+    },
     provisioningPlan: {
       target: 'Azure Container Apps',
       requiredSecrets: ['OPENAI_API_KEY', 'AGENTOPS_JUDGE_TOKEN'],
       commands: [
         'az group create --name rg-agentops-judges --location eastus',
-        'az containerapp env create --name agentops-judge-env --resource-group rg-agentops-judges --location eastus',
-        'az containerapp create --name agentops-hosted-judge --resource-group rg-agentops-judges --environment agentops-judge-env --image <acr-or-registry>/agentops-hosted-judge:latest --ingress external --target-port 8080 --secrets openai-api-key=$OPENAI_API_KEY judge-token=$AGENTOPS_JUDGE_TOKEN --env-vars OPENAI_API_KEY=secretref:openai-api-key AGENTOPS_JUDGE_TOKEN=secretref:judge-token',
-        'az containerapp show --name agentops-hosted-judge --resource-group rg-agentops-judges --query properties.configuration.ingress.fqdn --output tsv'
+        'az acr build --registry <acr-name> --image agentops-hosted-judge:latest benchmark-judges/hosted-judge',
+        'az deployment group create --resource-group rg-agentops-judges --name agentops-hosted-judge --template-file infra/bicep/hosted-judge.bicep --parameters image=<acr-login-server>/agentops-hosted-judge:latest judgeToken=$AGENTOPS_JUDGE_TOKEN openAiApiKey=$OPENAI_API_KEY',
+        'az deployment group show --resource-group rg-agentops-judges --name agentops-hosted-judge --query properties.outputs.judgeEndpoint.value --output tsv'
       ],
       healthCheck: 'curl -fsS https://<judge-fqdn>/health -H "Authorization: Bearer $AGENTOPS_JUDGE_TOKEN"',
       bindCommand: 'export AGENTOPS_JUDGE_ENDPOINT=https://<judge-fqdn>/score'
@@ -6451,6 +6457,11 @@ function renderBenchmarkJudgeProviderGuide(guide = benchmarkJudgeProviderGuide()
     '```bash',
     ...guide.wrapperScript.example,
     '```',
+    '',
+    `Deployable service: ${guide.serviceArtifact.path}`,
+    `Image build: ${guide.serviceArtifact.imageBuild}`,
+    `Bicep template: ${guide.serviceArtifact.deployTemplate}`,
+    `Endpoints: ${guide.serviceArtifact.endpoints.join(', ')}`,
     '',
     `Provisioning target: ${guide.provisioningPlan.target}`,
     `Required secrets: ${guide.provisioningPlan.requiredSecrets.join(', ')}`,

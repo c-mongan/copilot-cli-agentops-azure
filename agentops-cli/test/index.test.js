@@ -2407,14 +2407,19 @@ test('benchmark judge provider guide renders hosted llm judge setup', () => {
   assert.equal(guide.semanticCheckSnippet.adapter, 'llm-judge');
   assert.equal(guide.semanticCheckSnippet.provider, 'hosted');
   assert.ok(guide.wrapperScript.env.includes('AGENTOPS_JUDGE_TOKEN'));
+  assert.equal(guide.serviceArtifact.path, 'benchmark-judges/hosted-judge');
+  assert.equal(guide.serviceArtifact.deployTemplate, 'infra/bicep/hosted-judge.bicep');
+  assert.ok(guide.serviceArtifact.imageBuild.includes('az acr build'));
   assert.equal(guide.provisioningPlan.target, 'Azure Container Apps');
-  assert.ok(guide.provisioningPlan.commands.some(command => command.includes('az containerapp create')));
+  assert.ok(guide.provisioningPlan.commands.some(command => command.includes('az deployment group create')));
   assert.match(guide.provisioningPlan.bindCommand, /AGENTOPS_JUDGE_ENDPOINT/);
 
   const rendered = renderBenchmarkJudgeProviderGuide(guide);
   assert.match(rendered, /Benchmark hosted judge provider guide/);
+  assert.match(rendered, /Deployable service: benchmark-judges\/hosted-judge/);
+  assert.match(rendered, /Bicep template: infra\/bicep\/hosted-judge\.bicep/);
   assert.match(rendered, /Provisioning target: Azure Container Apps/);
-  assert.match(rendered, /az containerapp create/);
+  assert.match(rendered, /az deployment group create/);
   assert.match(rendered, /suite\.json snippet/);
   assert.match(rendered, /AGENTOPS_JUDGE_ENDPOINT/);
   assert.match(rendered, /semanticChecks snippet/);
@@ -4333,6 +4338,7 @@ test('product audit proves the local AgentOps control-room contract', () => {
     'kql-library',
     'run-centric-ui-contract',
     'robust-eval-center-contract',
+    'hosted-llm-judge-deployment',
     'content-transcript-opt-in',
     'first-run-loop',
     'ask-agentops-response-flow',

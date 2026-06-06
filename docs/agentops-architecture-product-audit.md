@@ -20,11 +20,11 @@ This repository is a credible, privacy-first AgentOps control plane for GitHub C
 The short answer to the product questions:
 
 - Is it easy to use and set up for anyone using Copilot? Better than before. The installer now creates a direct `agentops` command, `copilot-agentops`, optional plain `copilot` shadowing, bundled skills, local setup checks, Azure validation, and closed-loop smoke verification. It still assumes users have or can create the Azure resources.
-- Do we have really good observability? Good metadata observability, yes. The latest slice adds collector health, real-ingestion checks, Grafana datasource/dashboard validation, and anti-cheat blockers. World-class agent observability still needs a purpose-built investigation UI and stronger eval isolation.
+- Do we have really good observability? Good metadata observability, yes. The latest slices add collector health, real-ingestion checks, Grafana datasource/dashboard validation, hosted judge deployment, and anti-cheat blockers. World-class agent observability still needs a purpose-built investigation UI and stronger cross-platform eval isolation.
 - Does it make it simple to use? Simpler. The CLI now covers first-run setup, Azure/Grafana validation, smoke verification, latest-run summaries, ask-context bundles, and benchmark gates. The remaining complexity is cloud provisioning/binding and dashboard import automation.
 - Is it native to Copilot? Locally, almost. The shadow shim, bundled skills, custom agents, hooks, and MCP config all point in the right direction. The missing piece is a single Copilot-facing install/configure/check loop that hides infrastructure details until needed.
-- Can a coding agent monitor another agent through MCP? The architecture supports this concept. The repo includes read-only Azure Monitor MCP and Grafana MCP configs plus telemetry-investigator/optimizer agents. The current implementation is an evidence and prompt workflow, not yet a seamless page-context-aware "Ask AgentOps about this run" product.
-- Can it detect cheating in evals? Only at a starter level. The benchmark runner checks success commands, sealed command harness files, expected files, forbidden files, external answer-source tools, safety signals, content capture, tool failures, policy blocks, tokens, and cost. It now has hidden checks, sealed fixture pack manifests, deterministic semantic/rubric checks, and pre-run allowed-tool policy blocking, but it does not yet provide robust OS-level anti-cheat isolation or network egress controls.
+- Can a coding agent monitor another agent through MCP? The architecture supports this concept. The repo includes read-only Azure Monitor MCP and Grafana MCP configs plus telemetry-investigator/optimizer agents. The current implementation now has hosted Ask AgentOps context and optional live response flow, but not yet a seamless Grafana-native page-context assistant.
+- Can it detect cheating in evals? At a credible local-control level. The benchmark runner checks success commands, hidden check packs, signed fixture packs, sealed command harness files, expected files, forbidden files, semantic/rubric/hosted-judge checks, external answer-source tools, safety signals, content capture, tool failures, policy blocks, tokens, and cost. It still needs cross-platform managed OS-level anti-cheat isolation and network egress controls.
 
 My product judgment: keep the current metadata-first/privacy-first foundation. Do not add prompt/content capture as the default. To become a world-class Copilot AgentOps product, the next major move should be a session-first UI and setup wizard, not more scattered KQL. The user should land on "what happened, why, what changed, what should I do next" within one minute of running `copilot`.
 
@@ -816,7 +816,7 @@ Current anti-cheat limitations:
 - Hidden check packs exist as separate masked command packs, fixture seals can reject checksum drift, reusable fixture seal pack manifests can distribute fixture checksum sets across tasks, and the CLI can generate and verify Ed25519-signed fixture pack manifests from fixture directories. Suites can now require fixture pack signatures to match configured trust-root public keys, reject revoked signing key IDs, and enforce trust-root rotation windows. The Evals & Quality dashboard surfaces metadata-only hidden pack review.
 - Network egress isolation is available only for opt-in macOS `sandbox-exec` benchmark tasks; network tool policies can also block explicit `--allow-tool` network allowances before execution, but cross-platform OS-level egress prevention is still missing.
 - Read-only benchmark profiles now block any workspace file change in the copied fixture.
-- Semantic evaluator adapters exist for deterministic file-content, regex, file-rubric checks, and command-backed `llm-judge` scoring, and suites can configure reusable judge provider command templates for hosted judge CLIs. The CLI now includes hosted judge provider setup guidance with a non-mutating Azure Container Apps provisioning plan. The Evals & Quality dashboard surfaces metadata-only semantic check review. Hosted judge service deployment is still external to the benchmark runner.
+- Semantic evaluator adapters exist for deterministic file-content, regex, file-rubric checks, and command-backed `llm-judge` scoring, and suites can configure reusable judge provider command templates for hosted judge CLIs. The CLI now includes hosted judge provider setup guidance, a deployable Azure Container Apps hosted judge service under `benchmark-judges/hosted-judge`, and Bicep deployment in `infra/bicep/hosted-judge.bicep`. The Evals & Quality dashboard surfaces metadata-only semantic check review.
 - Candidate promotion gates can require approval evidence from an approval file, named approver identities, approval counts, and approved external review metadata such as a GitHub PR, Azure DevOps PR, Jira ticket, or change workflow URL. The CLI can generate run-scoped approval evidence, and `benchmark report` / `benchmark compare` can now verify GitHub PR review evidence through `gh pr view`, Azure DevOps PR reviewer/status evidence through `az repos pr show`, plus Jira issue status evidence through the Jira REST API when `--verify-external-review` is set. The Evals & Quality dashboard surfaces metadata-only approval review status. Other change-management system API verification is still not integrated.
 - Suites can seal command harness files with `commandFileSeal`; benchmark runs now reject candidates that change sealed test scripts or command files in the copied fixture. This is not a replacement for OS-level sandboxing.
 - The Evals & Quality dashboard now includes artifact diff counts, per-file artifact path review, capped artifact content diff previews, hidden check pack review, policy review, and semantic check review for benchmark recommendations. The CLI can now review artifact file paths and explicit fixture-to-workspace content diffs for local benchmark runs, and Grafana can review capped benchmark artifact content diff previews when those recommendation rows include `BenchmarkArtifactContentDiffs`.
@@ -1060,7 +1060,7 @@ This is strong for technical users.
 
 Missing world-class behavior:
 
-- The dashboard now gives the agent explicit session context, Run Replay URL, starter KQL, copyable `agentops ask-context` commands, a linked `AskAgentOpsLaunch` action for the hosted `/api/ask-agentops` page/packet, one-click shared recommendation/saved-view actions, and alert handoff review rows for the hosted `/api/ask-agentops/shared/*` routes. The hosted page now includes a first-party metadata-only response draft with optional inline or shared-storage hydrated recommendation, saved-view, and alert-handoff context, but it still does not run a fully embedded live assistant inside Grafana.
+- The dashboard now gives the agent explicit session context, Run Replay URL, starter KQL, copyable `agentops ask-context` commands, a linked `AskAgentOpsLaunch` action for the hosted `/api/ask-agentops` page/packet, one-click shared recommendation/saved-view actions, and alert handoff review rows for the hosted `/api/ask-agentops/shared/*` routes. The hosted page now includes a first-party metadata-only response draft, optional metadata-only live assistant response flow, and optional inline or shared-storage hydrated recommendation, saved-view, and alert-handoff context. It is still not a fully embedded Grafana-native assistant.
 - Recommendations are now present in Run Replay as first-class artifacts with copyable follow-up commands, a local metadata-only recommendation store, an opt-in shared Blob upload plan, a hosted metadata-only write API, and a hosted browser editor for team review artifacts. The CLI can compare a completed follow-up run with `agentops recommend compare` and populate `AfterTelemetry` plus pass/fail `ObservedMetricMovement`, then turn an approved `OperatorReview` row into a guarded `agentops recommend action-plan` patch/benchmark workflow. The hosted Ask AgentOps flow can now render recommendation target refs, benchmark links, artifact file paths, `ExpectedMetricMovement`, `BeforeTelemetry`, `AfterTelemetry`, validation, rollback, a guided approve/reject `OperatorReview`, saved-view annotations, and alert handoff config-change context, but the dashboard still does not apply the patch for the user.
 - Saved investigations now surface on the Home dashboard from metadata-only `AgentOpsSavedViews_CL` exports, with an opt-in shared Blob store, hosted metadata-only write API, and browser-native saved-view editor.
 - Saved-view exports can now include session-matched config-change annotation counts and change-target refs from `--events`, so saved investigations keep the nearby skill/hook/MCP/model change context.
@@ -1105,7 +1105,7 @@ Setup simplicity                          Medium           Good scripts, too man
 Azure validation                          Medium-good      Read-only CLI preflight includes Grafana datasource/dashboard checks; auto-remediation is incomplete.
 Collector health                          Medium           Local health endpoint, KQL, and dashboard panel exist; exporter/drop/backpressure metrics are still thin.
 Eval/benchmark support                    Medium           Nice starter gate, not robust eval platform.
-Cheating detection                        Medium           Anti-cheat blockers exist; hidden tests, isolation, and semantic eval are still missing.
+Cheating detection                        Medium-high      Hidden tests, signed fixture packs, semantic eval, hosted judge deployment, and policy blockers exist; cross-platform managed isolation is still missing.
 Meta-agent via MCP                        Medium-good      Good scaffolding, not seamless UI-integrated loop.
 Enterprise readiness                      Medium-low       Needs RBAC/private networking/packaging hardening.
 ```
@@ -1240,6 +1240,7 @@ Implemented:
 
 - Hidden check packs are supported as masked, sealed check packs, with signed fixture pack manifests, trust roots, revoked signing key IDs, and rotation windows.
 - Rubric and semantic scoring supports deterministic file-content, regex, file-rubric, and command-backed `llm-judge` checks with reusable hosted judge provider command templates.
+- Hosted `llm-judge` deployment is backed by a deployable Azure Container Apps hosted judge service, Dockerfile, Bicep module, health/score endpoints, and `agentops product audit` coverage through `hosted-llm-judge-deployment`.
 - Network and permission controls include per-task permission profiles, read-only copied fixtures, allowed-tool risk policies, and opt-in macOS `sandbox-exec` network blocking that fails closed when requested on unsupported hosts.
 - Local harness tamper resistance includes copied fixture workspaces, read-only benchmark profiles, sealed fixture packs, and `commandFileSeal` checks for test scripts and command files.
 - Artifact diffing is available in CLI reports and the Evals & Quality dashboard, including per-file review and capped content diff previews.
@@ -1250,7 +1251,6 @@ Implemented:
 Required work:
 
 - Cross-platform managed OS-level immutable harness and network egress isolation beyond the current copied fixture, read-only profile, command-file seals, signed fixture packs, and opt-in macOS network sandbox.
-- Hosted judge service deployment for `llm-judge` beyond the current non-mutating Azure Container Apps provisioning plan.
 
 ### 5. Trustworthy Data Quality
 
@@ -1303,7 +1303,7 @@ Implemented:
 
 - Expand benchmark schemas.
 - Add signed fixture pack distribution guidance for rotating benchmark trust roots.
-- Add managed hosted judge service deployment for `llm-judge` semantic scoring beyond the current non-mutating Azure Container Apps provision plan.
+- Harden hosted judge operations with private ingress options and managed provider identity where supported.
 - Expand opt-in macOS network sandboxing into cross-platform OS-level network and tool sandboxing.
 - Expand Grafana-native artifact content diff review from capped previews into a full approved-artifact drilldown workflow.
 - Add remaining change-management workflow API integrations for candidate promotion gates beyond GitHub, Azure DevOps, and Jira.
