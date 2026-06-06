@@ -36,6 +36,25 @@ Use Azure Monitor Logs Ingestion API with a Data Collection Rule:
 3. Send each JSONL row to the matching DCR stream.
 4. Import the V2 dashboard pack from `grafana/dashboards/v2/`.
 
+`azure-ingest logs-upload` turns the reviewed plan into Azure Monitor Logs Ingestion API calls. It is dry-run by default and requires `--yes` before it runs `az rest`:
+
+```bash
+agentops azure-ingest logs-upload \
+  --dir .agentops/demo/latest \
+  --endpoint "$AGENTOPS_LOGS_INGESTION_ENDPOINT" \
+  --dcr-immutable-id "$AGENTOPS_DCR_IMMUTABLE_ID" \
+  --json
+
+agentops azure-ingest logs-upload \
+  --dir .agentops/demo/latest \
+  --endpoint "$AGENTOPS_LOGS_INGESTION_ENDPOINT" \
+  --dcr-immutable-id "$AGENTOPS_DCR_IMMUTABLE_ID" \
+  --yes \
+  --json
+```
+
+Keep `AgentOpsContent_CL` disabled unless the target workspace is approved for restricted content review; pass `--allow-content` only for that separate workspace.
+
 ## Shared Review Artifacts
 
 Set `deploySharedStore=true` to create an optional Azure Blob container for metadata-only `AgentOpsRecommendations_CL.jsonl`, `AgentOpsSavedViews_CL.jsonl`, and `AgentOpsAlertHandoffs.jsonl` exports. The storage account disables public blob access and shared-key access; upload plans use Entra-backed `az storage blob upload --auth-mode login`.

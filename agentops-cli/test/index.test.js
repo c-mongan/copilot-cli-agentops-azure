@@ -37,7 +37,8 @@ const { productAudit, productAuditWithVisual, renderProductAudit, validateVisual
 const { benchmarkEvidenceFromReport, changeAnnotationsForRun, compareRecommendationAfterRun, exportRecommendationStore, firstPositional: firstRecommendPositional, normalizeChangeAnnotation, recommendFromFiles, recommendationActionPlanForRow, recommendationRow, recommendationStoreCommand, renderRecommendationV2, saveRecommendation, writeRecommendation } = require('../src/commands/recommend');
 const { demoOptionsFromArgs, demoVerifyCommand } = require('../src/commands/demo');
 const { buildTriage, renderTriage, writeTriage } = require('../src/commands/triage');
-const { buildAzureIngestPlan, buildSharedStorageUploadPlan, renderSharedStorageUploadPlan } = require('../src/lib/azure/v2-ingest-plan');
+const { buildAzureIngestPlan, buildLogsIngestionUploadPlan, buildSharedStorageUploadPlan, logsIngestionUri, renderSharedStorageUploadPlan } = require('../src/lib/azure/v2-ingest-plan');
+const { runLogsIngestionUpload } = require('../src/commands/azure-ingest');
 const { generateDemoData, tableNames, writeDemoData } = require('../src/lib/demo/agentops-demo-data');
 const { ciStatusFromChecks, enrichGithubOutcomes, rowFromPullRequest, stableHash } = require('../src/lib/github/outcome-enricher');
 const { isRevertPullRequest } = require('../src/lib/github/revert-detector');
@@ -648,6 +649,60 @@ test('azure-ingest plan validates V2 table files and privacy shape', () => {
     assert.equal(result.schema_migration_policy.migration_required, false);
     assert.equal(result.azure.streams.AgentOpsRunSummary_CL, 'Custom-AgentOpsRunSummary_CL');
     assert.match(result.azure.ingestion_path, /Logs Ingestion API/);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('azure-ingest logs-upload plans reviewed Logs Ingestion API calls', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-logs-upload-plan-'));
+  try {
+    const demo = generateDemoData({ runs: 2 });
+    writeDemoData(demo, tempDir);
+
+    const result = buildLogsIngestionUploadPlan({
+      dir: tempDir,
+      endpoint: 'https://dce.example.ingest.monitor.azure.com/',
+      dcrImmutableId: 'dcr-abc'
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.mode, 'dry-run-unless---yes');
+    assert.equal(result.endpoint, 'https://dce.example.ingest.monitor.azure.com');
+    assert.equal(result.uploads.find(upload => upload.table === 'AgentOpsRunSummary_CL').stream, 'Custom-AgentOpsRunSummary_CL');
+    assert.match(result.uploads[0].uri, /dataCollectionRules\/dcr-abc\/streams\/Custom-/);
+    assert.equal(logsIngestionUri('https://dce.example/', 'dcr id', 'Custom-AgentOpsRunSummary_CL'), 'https://dce.example/dataCollectionRules/dcr%20id/streams/Custom-AgentOpsRunSummary_CL?api-version=2023-01-01');
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('azure-ingest logs-upload executes az rest only after a ready plan', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-logs-upload-run-'));
+  const calls = [];
+  try {
+    const demo = generateDemoData({ runs: 1 });
+    writeDemoData(demo, tempDir);
+    const plan = buildLogsIngestionUploadPlan({
+      dir: tempDir,
+      endpoint: 'https://dce.example.ingest.monitor.azure.com',
+      dcrImmutableId: 'dcr-abc'
+    });
+
+    const result = runLogsIngestionUpload(plan, {
+      spawnSync: (command, args) => {
+        calls.push({ command, args });
+        return { status: 0, stdout: '', stderr: '' };
+      }
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.executed, true);
+    assert.equal(calls[0].command, 'az');
+    assert.deepEqual(calls[0].args.slice(0, 4), ['rest', '--method', 'post', '--uri']);
+    assert.ok(calls[0].args.includes('Content-Type=application/json'));
+    assert.ok(calls[0].args.some(arg => /^@.*AgentOpsRunSummary_CL\.json$/.test(arg)));
+    assert.equal(JSON.parse(fs.readFileSync(calls[0].args.at(-1).slice(1), 'utf8')).length, 1);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
