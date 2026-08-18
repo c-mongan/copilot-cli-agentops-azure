@@ -18,7 +18,7 @@ const payload = {
           { key: 'service.namespace', value: { stringValue: 'copilot-agentops' } },
           { key: 'agent.runtime', value: { stringValue: 'github-copilot-cli' } },
           { key: 'agentops.profile', value: { stringValue: 'safe-default' } },
-          { key: 'agentops.smoke_id', value: { stringValue: smokeId } }
+          { key: 'agentops.e2e.id', value: { stringValue: smokeId } }
         ]
       },
       scopeLogs: [
@@ -31,7 +31,7 @@ const payload = {
               severityText: 'INFO',
               body: { stringValue: `AgentOps OTLP smoke log ${smokeId}` },
               attributes: [
-                { key: 'agentops.smoke_id', value: { stringValue: smokeId } },
+                { key: 'agentops.custom_event_id', value: { stringValue: smokeId } },
                 { key: 'gen_ai.operation.name', value: { stringValue: 'smoke_test' } },
                 { key: 'content.capture.enabled', value: { boolValue: false } }
               ]
@@ -59,5 +59,5 @@ endpoint=${endpoint}
 Query it with:
 az monitor log-analytics query \\
   --workspace "\${AGENTOPS_LOG_ANALYTICS_WORKSPACE_ID}" \\
-  --analytics-query "AppTraces | where TimeGenerated > ago(2h) | where Properties has '${smoke_id}' or Message has '${smoke_id}' | take 20"
+  --analytics-query "OTelLogs | where TimeGenerated > ago(2h) | where tostring(Attributes) contains '${smoke_id}' or tostring(ResourceAttributes) contains '${smoke_id}' | project TimeGenerated, Body, Attributes, ResourceAttributes | take 20"
 MSG

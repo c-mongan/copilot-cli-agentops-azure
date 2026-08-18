@@ -1,8 +1,8 @@
-const crypto = require('node:crypto');
+const { prefixedHash } = require('../hash');
 
 function stableHashJson(value, prefix = 'schema') {
   const json = JSON.stringify(value ?? null);
-  return `${prefix}_${crypto.createHash('sha256').update(json).digest('hex').slice(0, 16)}`;
+  return prefixedHash(json, prefix);
 }
 
 function jsonByteSize(value) {

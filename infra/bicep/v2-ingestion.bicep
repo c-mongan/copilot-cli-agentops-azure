@@ -42,7 +42,10 @@ var v2Tables = [
       { name: 'ReasoningTokens', type: 'long' }
       { name: 'CacheReadTokens', type: 'long' }
       { name: 'CacheCreationTokens', type: 'long' }
-      { name: 'EstimatedCostUsd', type: 'real' }
+      // Compatibility: this column was originally deployed as long. Azure does
+      // not allow reusing an existing column name with a different type.
+      { name: 'EstimatedCostUsd', type: 'long' }
+      { name: 'EstimatedCostUsdReal', type: 'real' }
       { name: 'DurationMs', type: 'long' }
       { name: 'ToolCount', type: 'long' }
       { name: 'ToolFailureCount', type: 'long' }
@@ -68,6 +71,9 @@ var v2Tables = [
     stream: 'Custom-AgentOpsEvents_CL'
     columns: [
       { name: 'TimeGenerated', type: 'datetime' }
+      { name: 'Sequence', type: 'long' }
+      { name: 'EventId', type: 'string' }
+      { name: 'ParentEventId', type: 'string' }
       { name: 'RunId', type: 'string' }
       { name: 'SessionId', type: 'string' }
       { name: 'TraceId', type: 'string' }
@@ -75,6 +81,10 @@ var v2Tables = [
       { name: 'SpanName', type: 'string' }
       { name: 'Status', type: 'string' }
       { name: 'ToolName', type: 'string' }
+      { name: 'McpServerName', type: 'string' }
+      { name: 'McpToolName', type: 'string' }
+      { name: 'CommandName', type: 'string' }
+      { name: 'ScriptName', type: 'string' }
       { name: 'AgentName', type: 'string' }
       { name: 'SkillName', type: 'string' }
       { name: 'SubAgentName', type: 'string' }
@@ -82,10 +92,35 @@ var v2Tables = [
       { name: 'ModelActual', type: 'string' }
       { name: 'InputTokens', type: 'long' }
       { name: 'OutputTokens', type: 'long' }
+      { name: 'ReasoningTokens', type: 'long' }
+      { name: 'CacheReadTokens', type: 'long' }
+      { name: 'CacheWriteTokens', type: 'long' }
+      { name: 'TotalTokens', type: 'long' }
+      { name: 'TotalToolCalls', type: 'long' }
       { name: 'DurationMs', type: 'long' }
+      { name: 'CopilotCost', type: 'real' }
+      // Compatibility: this column was originally deployed as long. Keep it
+      // immutable and use the additive real column for fractional values.
       { name: 'EstimatedCostUsd', type: 'long' }
+      { name: 'EstimatedCostUsdReal', type: 'real' }
+      { name: 'PermissionKind', type: 'string' }
+      { name: 'PermissionDecision', type: 'string' }
+      { name: 'ErrorType', type: 'string' }
+      { name: 'PremiumRequests', type: 'long' }
+      { name: 'TotalNanoAiu', type: 'long' }
+      { name: 'ApiDurationMs', type: 'long' }
+      { name: 'LinesAdded', type: 'long' }
+      { name: 'LinesRemoved', type: 'long' }
+      { name: 'FilesModified', type: 'long' }
       { name: 'ContentCaptureSignal', type: 'boolean' }
+      { name: 'ContentDroppedBytes', type: 'long' }
+      { name: 'ContentAction', type: 'string' }
+      { name: 'SecretLike', type: 'boolean' }
+      { name: 'ContentCaptureMode', type: 'string' }
       { name: 'PrivacyMode', type: 'string' }
+      { name: 'RepoHash', type: 'string' }
+      { name: 'BranchHash', type: 'string' }
+      { name: 'WorkingDirectoryHash', type: 'string' }
       { name: 'Surface', type: 'string' }
       { name: 'SchemaVersion', type: 'string' }
     ]

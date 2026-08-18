@@ -29,7 +29,7 @@ The local OpenTelemetry Collector is the scrub-before-export boundary. If the co
 
 ## Explicit Content Opt-In
 
-The Run Replay dashboard can read `AgentOpsContent_CL` when an operator intentionally enables content capture. This table is outside the strict default path.
+The Run Story dashboard can read `AgentOpsContent_CL` when an operator intentionally enables content capture. This table is outside the strict default path.
 
 Rules:
 

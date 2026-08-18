@@ -1,3 +1,4 @@
+const fs = require('node:fs');
 const path = require('node:path');
 
 const { readJsonlRows, rollupSpanRows } = require('../rollup/span-to-agentops-tables');
@@ -54,9 +55,23 @@ function mismatchesForObject(actual = {}, expected = {}, prefix = '') {
 }
 
 function validateCopilotOtelFixtureContract(options = {}) {
-  const fixturePath = path.resolve(options.fixturePath || path.join(__dirname, '..', '..', '..', '..', 'tests', 'sample-otel', 'copilot-cli-wrapper-snapshot.jsonl'));
+  const packagedFixture = path.join(__dirname, '..', '..', '..', 'fixtures', 'sample-otel', 'copilot-cli-wrapper-snapshot.ndjson.fixture');
+  const sourceFixture = path.join(__dirname, '..', '..', '..', '..', 'fixtures', 'sample-otel', 'copilot-cli-wrapper-snapshot.ndjson.fixture');
+  const fixturePath = path.resolve(options.fixturePath || (fs.existsSync(packagedFixture) ? packagedFixture : sourceFixture));
   const expected = options.expected || defaultExpected;
-  const rows = readJsonlRows(fixturePath);
+  let rows;
+  try {
+    rows = readJsonlRows(fixturePath);
+  } catch (error) {
+    return {
+      ok: false,
+      fixture: fixturePath,
+      rows: 0,
+      table_counts: {},
+      mismatches: [`fixture could not be read: ${error.message}`],
+      contract: expected
+    };
+  }
   const result = rollupSpanRows(rows, { baseTime: '2026-06-01T12:00:00.000Z' });
   const run = result.tables.AgentOpsRunSummary_CL[0] || {};
   const tool = result.tables.AgentOpsToolCalls_CL[0] || {};

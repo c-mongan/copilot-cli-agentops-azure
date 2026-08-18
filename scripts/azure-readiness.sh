@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-subscription_id="${AZURE_SUBSCRIPTION_ID:-}"
-resource_group="${AZURE_RESOURCE_GROUP:-rg-agentops-dev}"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${script_dir}/lib/azure-subscription-guard.sh"
 
-if [[ -n "$subscription_id" ]]; then
-  az account set --subscription "$subscription_id"
-fi
+subscription_id="${AGENTOPS_AZURE_SUBSCRIPTION_ID:-}"
+resource_group="${AZURE_RESOURCE_GROUP:-rg-copilot-agentops-dev}"
+
+agentops_require_azure_subscription
 az account show --query '{name:name,id:id,tenantId:tenantId,user:user.name}' -o table
 
 for ns in Microsoft.OperationalInsights Microsoft.Insights Microsoft.Monitor Microsoft.Dashboard Microsoft.KeyVault Microsoft.Web Microsoft.Storage; do

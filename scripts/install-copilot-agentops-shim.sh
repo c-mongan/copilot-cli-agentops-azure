@@ -3,6 +3,10 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/.." && pwd)"
+cli_entry="${repo_root}/agentops-cli/src/index.js"
+if [[ ! -f "${cli_entry}" ]]; then
+  cli_entry="${repo_root}/src/index.js"
+fi
 install_dir="${AGENTOPS_BIN_DIR:-${HOME}/.local/bin}"
 mode="command"
 
@@ -38,8 +42,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 mkdir -p "${install_dir}"
-chmod +x "${repo_root}/agentops-cli/src/index.js" "${repo_root}/scripts/copilot-agentops" "${repo_root}/scripts/agentops-codex" "${repo_root}/scripts/collector-azuremonitor-up.sh" "${repo_root}/copilot/copilot-observe"
-ln -sf "${repo_root}/agentops-cli/src/index.js" "${install_dir}/agentops"
+chmod +x "${cli_entry}" "${repo_root}/scripts/copilot-agentops" "${repo_root}/scripts/agentops-codex" "${repo_root}/scripts/collector-azuremonitor-up.sh" "${repo_root}/copilot/copilot-observe"
+ln -sf "${cli_entry}" "${install_dir}/agentops"
 ln -sf "${repo_root}/scripts/copilot-agentops" "${install_dir}/copilot-agentops"
 ln -sf "${repo_root}/scripts/agentops-codex" "${install_dir}/agentops-codex"
 
@@ -56,12 +60,26 @@ if [[ "${mode}" == "shadow" ]]; then
     exit 2
   fi
 
-  cat >"${install_dir}/copilot" <<SH
+  shadow_cmd="${install_dir}/copilot"
+  shadow_backup="${install_dir}/copilot.agentops-original"
+  shadow_marker="# AgentOps managed shadow shim"
+  if [[ -e "${shadow_cmd}" || -L "${shadow_cmd}" ]]; then
+    if ! grep -Fq "${shadow_marker}" "${shadow_cmd}" 2>/dev/null; then
+      if [[ -e "${shadow_backup}" || -L "${shadow_backup}" ]]; then
+        echo "ERROR: refusing to overwrite ${shadow_cmd} because the AgentOps backup already exists at ${shadow_backup}." >&2
+        exit 2
+      fi
+      mv "${shadow_cmd}" "${shadow_backup}"
+    fi
+  fi
+
+  cat >"${shadow_cmd}" <<SH
 #!/usr/bin/env bash
+${shadow_marker}
 export COPILOT_CLI_BIN="${real_copilot}"
 exec "${repo_root}/scripts/copilot-agentops" "\$@"
 SH
-  chmod +x "${install_dir}/copilot"
+  chmod +x "${shadow_cmd}"
 fi
 
 cat <<MSG
@@ -84,7 +102,7 @@ Run observed Copilot sessions with:
   copilot-agentops
 
 To make plain \`copilot\` observed too, rerun:
-  ./scripts/install-copilot-agentops-shim.sh --shadow-copilot
+  agentops install --shadow-copilot
 MSG
 fi
 

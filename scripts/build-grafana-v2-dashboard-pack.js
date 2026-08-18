@@ -43,9 +43,9 @@ const globalVariables = [
 ];
 
 const nav = [
-  ['Home', 'agentops-v2-home'],
+  ['Today', 'agentops-v2-home'],
   ['Runs', 'agentops-v2-runs-explorer'],
-  ['Replay', 'agentops-v2-run-replay'],
+  ['Run Story', 'agentops-v2-run-replay'],
   ['Models', 'agentops-v2-models-cost-tokens'],
   ['Tools', 'agentops-v2-tools-mcp-risk'],
   ['Privacy', 'agentops-v2-safety-privacy-policy'],
@@ -55,11 +55,43 @@ const nav = [
   ['Collector', 'agentops-v2-collector-health']
 ].map(([title, uid]) => ({ title, uid, type: 'link', icon: 'dashboard', url: `/d/${uid}`, targetBlank: false, keepTime: true, includeVars: true }));
 
-function variable(name, value) {
+const visibleVariablesByUid = {
+  'agentops-v2-home': ['timeRange', 'repo_hash', 'model', 'agent_name', 'outcome_status', 'privacy_mode'],
+  'agentops-v2-runs-explorer': ['timeRange', 'repo_hash', 'agent_name', 'skill_name', 'outcome_status'],
+  'agentops-v2-run-replay': ['timeRange', 'run_id', 'session_id', 'trace_id'],
+  'agentops-v2-models-cost-tokens': ['timeRange', 'repo_hash', 'model', 'agent_name', 'task_type'],
+  'agentops-v2-tools-mcp-risk': ['timeRange', 'repo_hash', 'agent_name', 'tool_name', 'tool_risk', 'mcp_server'],
+  'agentops-v2-safety-privacy-policy': ['timeRange', 'privacy_mode', 'tool_risk', 'outcome_status'],
+  'agentops-v2-code-outcomes': ['timeRange', 'repo_hash', 'model', 'agent_name', 'outcome_status'],
+  'agentops-v2-evals-quality': ['timeRange', 'repo_hash', 'model', 'task_type', 'eval_bucket'],
+  'agentops-v2-insights-regressions': ['timeRange', 'repo_hash', 'model', 'pattern_key', 'outcome_status'],
+  'agentops-v2-collector-health': ['timeRange', 'surface', 'privacy_mode']
+};
+
+const friendlyVariableLabels = {
+  timeRange: 'Lookback',
+  repo_hash: 'Repository',
+  agent_name: 'Agent',
+  skill_name: 'Skill',
+  outcome_status: 'Outcome',
+  privacy_mode: 'Privacy',
+  run_id: 'Run',
+  session_id: 'Session',
+  trace_id: 'Trace',
+  task_type: 'Task type',
+  tool_name: 'Tool',
+  tool_risk: 'Tool risk',
+  mcp_server: 'MCP server',
+  eval_bucket: 'Eval result',
+  pattern_key: 'Pattern'
+};
+
+function variable(name, value, visible = false) {
   return {
     name,
     type: 'custom',
-    label: name.replace(/_/g, ' '),
+    label: friendlyVariableLabels[name] || name.replace(/_/g, ' '),
+    hide: visible ? 0 : 2,
     query: value,
     current: { selected: true, text: value === '__all' ? 'All' : value, value }
   };
@@ -115,6 +147,11 @@ function statPanel(id, title, x, y, query, unit = 'short', color = 'blue') {
 }
 
 function tablePanel(id, title, x, y, w, h, query, links = []) {
+  const sharedLinkTitle = query.includes('/shared/saved-view/')
+    ? 'Ask AgentOps with shared saved view'
+    : query.includes('/shared/alert-handoff/')
+      ? 'Ask AgentOps with shared alert handoff'
+      : 'Ask AgentOps with shared recommendation';
   return {
     id,
     title,
@@ -129,7 +166,7 @@ function tablePanel(id, title, x, y, w, h, query, links = []) {
       overrides: [
         {
           matcher: { id: 'byName', options: 'RunId' },
-          properties: [{ id: 'links', value: [{ title: 'Open Run Replay', url: '/d/agentops-v2-run-replay?var-run_id=${__data.fields.RunId}&${__url_time_range}', targetBlank: false }] }]
+          properties: [{ id: 'links', value: [{ title: 'Open Run Story', url: '/d/agentops-v2-run-replay?var-run_id=${__data.fields.RunId}&${__url_time_range}', targetBlank: false }] }]
         },
         {
           matcher: { id: 'byName', options: 'SessionId' },
@@ -197,7 +234,7 @@ function tablePanel(id, title, x, y, w, h, query, links = []) {
         },
         {
           matcher: { id: 'byName', options: 'OpenReplay' },
-          properties: [{ id: 'links', value: [{ title: 'Open Run Replay', url: '/d/agentops-v2-run-replay?var-run_id=${__data.fields.RunId}&var-session_id=${__data.fields.SessionId}&var-trace_id=${__data.fields.TraceId}&${__url_time_range}', targetBlank: false }] }]
+          properties: [{ id: 'links', value: [{ title: 'Open Run Story', url: '/d/agentops-v2-run-replay?var-run_id=${__data.fields.RunId}&var-session_id=${__data.fields.SessionId}&var-trace_id=${__data.fields.TraceId}&${__url_time_range}', targetBlank: false }] }]
         },
         {
           matcher: { id: 'byName', options: 'AskAgentOpsLaunch' },
@@ -218,12 +255,21 @@ function tablePanel(id, title, x, y, w, h, query, links = []) {
         {
           matcher: { id: 'byName', options: 'OpenSavedView' },
           properties: [{ id: 'links', value: [{ title: 'Open saved view', url: '${__data.fields.Url}', targetBlank: true }] }]
-        }
+        },
+        ...(query.includes('AskSharedContext') ? [{
+          matcher: { id: 'byName', options: 'AskSharedContext' },
+          properties: [{ id: 'links', value: [{ title: sharedLinkTitle, url: '${__data.fields.AskAgentOpsSharedLaunch}', targetBlank: true }] }]
+        }] : [])
       ]
     },
     options: { cellHeight: 'sm', showHeader: true, footer: { show: false } },
     targets: target(query, 'table')
   };
+}
+
+function withOverrides(panel, overrides) {
+  panel.fieldConfig.overrides = overrides;
+  return panel;
 }
 
 function timeseriesPanel(id, title, x, y, w, h, query, unit = 'short') {
@@ -240,6 +286,61 @@ function timeseriesPanel(id, title, x, y, w, h, query, unit = 'short') {
 }
 
 function dashboard(uid, title, panels) {
+  const visibleVariables = new Set(visibleVariablesByUid[uid] || ['timeRange']);
+  const primaryPanelDescriptions = {
+    'agentops-v2-home': {
+      'Runs': 'Number of runs visible for the selected time range and filters.',
+      'Success rate': 'Percentage of visible runs reporting a successful outcome. The label and value carry the meaning; colour is supplementary.',
+      'Runs needing review': 'Visible runs reporting failed, cancelled, blocked, or unknown outcomes. Open Runs to see the reported outcome.',
+      'Content items blocked': 'Content items AgentOps dropped under its privacy rules. A higher number can mean the privacy guard is actively protecting data, not that content was stored.',
+      'Estimated cost': 'Estimated model cost for visible runs. This is an estimate, not an Azure invoice.',
+      'Healthy collector checks': 'Collector checks reporting healthy. Open Collector for unhealthy, empty, or missing checks.',
+      'Policy blocks': 'Policy events explicitly reporting denied or blocked status.',
+      'Input tokens': 'Input tokens reported for visible runs.',
+      'Output tokens': 'Output tokens reported for visible runs.',
+      'p95 duration': '95th-percentile run duration. In plain language, about 95% of measured runs finished within this time.',
+      'Tests ran %': 'Percentage of visible runs reporting that tests ran.',
+      'PRs opened': 'Visible runs reporting that a pull request was opened.',
+      'Session Health': 'Newest run evidence first. Delivery and coverage are shown before health so missing or best-effort evidence is not mistaken for a complete run.',
+      'Recommended next actions': 'Evidence-backed follow-up suggestions. An empty table means no recommendation rows matched the current filters.',
+      'Most expensive runs': 'Highest estimated-cost runs first. An empty table means no matching run cost was reported.',
+      'GitHub outcomes summary': 'Newest reported pull request and CI outcomes first.',
+      'Saved investigations': 'Saved evidence views, newest first. Links preserve the selected time range where supported.'
+    },
+    'agentops-v2-runs-explorer': {
+      'Runs': 'Newest runs first. Delivery and coverage appear before identity, outcome, cost, and action links. An empty table means no runs matched the current time range and filters.',
+      'Runs by reported outcome': 'Run count over time, split by the written outcome label. Series labels and the legend carry meaning; colour is supplementary.',
+      'Token use': 'Reported input and output tokens over time. Cost remains a separate column in the Runs table so unlike units are not plotted on one axis.'
+    },
+    'agentops-v2-run-replay': {
+      'Run summary': 'Newest matching run summary first. Choose a Run, Session, or Trace filter to isolate one story.',
+      'Ordered timeline': 'Oldest matching event first, with timestamp ties ordered by sequence and event ID. Written status, attribution, privacy, and permission fields carry meaning; colour is not required.',
+      'Agent, skill, and MCP lineage': 'Observed parent, agent, sub-agent, skill, MCP, and tool relationships in first-seen order. Missing attribution is reported explicitly.',
+      'Context and cache posture': 'Token, cache, context pressure, and permission-wait evidence for the selected run.',
+      'Why this failed / next check': 'Highest-severity matching insight first. An empty table means no insight row matched; it does not prove the run succeeded.',
+      'Latest recommendation': 'Highest-priority matching recommendation first. Treat recommendations as evidence-backed suggestions, not automatic approval.',
+      'Ask AgentOps context': 'Metadata-only investigation commands and links for the selected run.',
+      'Transcript availability': 'States whether AgentOps has opt-in content rows. Zero rows means no AgentOps transcript is available.',
+      'Prompt and response viewer (explicit opt-in)': 'Displays AgentOpsContent_CL only. It remains empty in the default strict metadata-only mode.',
+      'Policy, privacy, tests, and GitHub outcome': 'Related evidence in time order, with written event and status fields.'
+    },
+    'agentops-v2-safety-privacy-policy': {
+      'AgentOps capture posture': 'AgentOps telemetry scope, privacy mode, content-capture mode, coverage, run count, and a plain-language meaning. Unknown or non-strict rows require review.',
+      'Content items blocked': 'Content items AgentOps reports dropping. This indicates a privacy action, not successful storage.',
+      'Secret-like items blocked': 'Secret-like items AgentOps reports dropping. The written label and value carry meaning; colour is supplementary.',
+      'Runs reporting unsafe mode': 'Runs whose AgentOps privacy mode is explicitly reported as unsafe. Review every non-zero result.',
+      'Policy blocks': 'Policy events explicitly reporting denied or blocked status.',
+      'Successful poison tests': 'Privacy poison checks explicitly reporting OK. A zero or empty result is not proof of privacy safety.',
+      'Strict-mode runs': 'Runs explicitly reporting strict AgentOps privacy mode.',
+      'Blocked or redacted items by kind': 'AgentOps privacy actions grouped by content kind, action, and privacy mode.',
+      'Runs needing privacy or policy review': 'Runs reporting unsafe mode, risk, or denied tools. An empty table means no matching rows were found; it is not a universal safety guarantee.',
+      'Alert handoff review': 'Privacy-related alert handoffs with written severity, owner, state, and evidence links.'
+    }
+  };
+  const descriptions = primaryPanelDescriptions[uid] || {};
+  for (const panel of panels) {
+    if (descriptions[panel.title]) panel.description = descriptions[panel.title];
+  }
   return {
     annotations: { list: [] },
     editable: true,
@@ -251,7 +352,7 @@ function dashboard(uid, title, panels) {
     refresh: '1m',
     schemaVersion: 39,
     tags: ['agentops', 'agentops-v2', 'copilot', 'azure'],
-    templating: { list: globalVariables.map(([name, value]) => variable(name, value)) },
+    templating: { list: globalVariables.map(([name, value]) => variable(name, value, visibleVariables.has(name))) },
     time: { from: 'now-24h', to: 'now' },
     timepicker: {},
     timezone: 'browser',
@@ -278,6 +379,9 @@ function runNormalize() {
     "| extend ParentAgentName=tostring(column_ifexists('ParentAgentName', ''))",
     "| extend SubAgentName=case(isnotempty(tostring(column_ifexists('SubAgentName', ''))), tostring(column_ifexists('SubAgentName', '')), isnotempty(ParentAgentName) and isnotempty(tostring(column_ifexists('AgentName', ''))) and tostring(column_ifexists('AgentName', '')) != ParentAgentName, tostring(column_ifexists('AgentName', '')), '')",
     "| extend DelegationId=tostring(column_ifexists('DelegationId', ''))",
+    "| extend BranchDurationMs=todouble(column_ifexists('BranchDurationMs', 0.0))",
+    "| extend BranchTokens=todouble(column_ifexists('BranchTokens', 0.0))",
+    "| extend BranchToolCount=tolong(column_ifexists('BranchToolCount', 0))",
     "| extend CacheReadTokens=todouble(column_ifexists('CacheReadTokens', 0.0))",
     "| extend CacheCreationTokens=todouble(column_ifexists('CacheCreationTokens', 0.0))",
     "| extend ContextWindowPct=todouble(column_ifexists('ContextWindowPct', 0.0))",
@@ -288,11 +392,21 @@ function runNormalize() {
 
 function eventNormalize() {
   return [
+    "| extend Sequence=tolong(column_ifexists('Sequence', long(null))), EventId=tostring(column_ifexists('EventId', '')), ParentEventId=tostring(column_ifexists('ParentEventId', ''))",
+    "| extend EventType=tostring(column_ifexists('EventType', '')), CommandName=tostring(column_ifexists('CommandName', '')), ScriptName=tostring(column_ifexists('ScriptName', '')), McpToolName=tostring(column_ifexists('McpToolName', ''))",
+    "| extend InputTokens=todouble(column_ifexists('InputTokens', real(null))), OutputTokens=todouble(column_ifexists('OutputTokens', real(null))), ReasoningTokens=todouble(column_ifexists('ReasoningTokens', real(null))), TotalTokens=todouble(column_ifexists('TotalTokens', real(null))), EstimatedCostUsd=todouble(column_ifexists('EstimatedCostUsd', real(null)))",
+    "| extend PermissionKind=tostring(column_ifexists('PermissionKind', '')), PermissionDecision=tostring(column_ifexists('PermissionDecision', '')), PrivacyMode=tostring(column_ifexists('PrivacyMode', '')), ContentCaptureMode=tostring(column_ifexists('ContentCaptureMode', '')), ContentCaptureSignal=tobool(column_ifexists('ContentCaptureSignal', false)), ContentAction=tostring(column_ifexists('ContentAction', '')), ContentDroppedBytes=tolong(column_ifexists('ContentDroppedBytes', long(null))), SecretLike=tobool(column_ifexists('SecretLike', false))",
     "| extend SkillName=tostring(column_ifexists('SkillName', ''))",
     "| extend ParentAgentName=tostring(column_ifexists('ParentAgentName', ''))",
     "| extend SubAgentName=case(isnotempty(tostring(column_ifexists('SubAgentName', ''))), tostring(column_ifexists('SubAgentName', '')), isnotempty(ParentAgentName) and isnotempty(tostring(column_ifexists('AgentName', ''))) and tostring(column_ifexists('AgentName', '')) != ParentAgentName, tostring(column_ifexists('AgentName', '')), '')",
     "| extend DelegationId=tostring(column_ifexists('DelegationId', ''))",
-    "| extend McpServer=case(isnotempty(tostring(column_ifexists('McpServer', ''))), tostring(column_ifexists('McpServer', '')), isnotempty(tostring(column_ifexists('McpServerName', ''))), tostring(column_ifexists('McpServerName', '')), tostring(column_ifexists('ServerName', '')))"
+    "| extend BranchDurationMs=todouble(column_ifexists('BranchDurationMs', 0.0))",
+    "| extend BranchTokens=todouble(column_ifexists('BranchTokens', 0.0))",
+    "| extend BranchToolCount=tolong(column_ifexists('BranchToolCount', 0))",
+    "| extend McpServer=case(isnotempty(tostring(column_ifexists('McpServer', ''))), tostring(column_ifexists('McpServer', '')), isnotempty(tostring(column_ifexists('McpServerName', ''))), tostring(column_ifexists('McpServerName', '')), tostring(column_ifexists('ServerName', ''))) ",
+    "| extend EventType=case(isnotempty(EventType), EventType, EventName startswith 'agentops.run.' or EventName startswith 'agentops.wrapper.' or EventName startswith 'agentops.collector.', 'lifecycle', isnotempty(McpToolName) or isnotempty(McpServer) or EventName has 'mcp', 'mcp_tool', EventName == 'execute_tool' or EventName has 'tool' or isnotempty(ToolName), 'tool', EventName has 'skill' or isnotempty(SkillName), 'skill', EventName has 'subagent' or isnotempty(SubAgentName), 'subagent', EventName has 'agent', 'agent', isnotempty(CommandName), 'cli', isnotempty(ScriptName), 'script', EventName == 'chat' or isnotempty(ModelActual), 'llm', 'span')",
+    "| extend AttributionGap=case(EventType in ('agent', 'subagent') and isempty(AgentName) and isempty(SubAgentName), 'agent identity missing', EventType == 'skill' and isempty(SkillName), 'skill identity missing', EventType in ('tool', 'mcp_tool') and isempty(ToolName), 'tool identity missing', EventType == 'mcp_tool' and isempty(McpServer) and isempty(McpToolName), 'MCP attribution missing', EventType in ('command', 'cli') and isempty(CommandName), 'command identity missing', EventType == 'script' and isempty(ScriptName), 'script identity missing', EventType == 'llm' and isempty(ModelActual), 'model identity missing', '')",
+    "| extend AttributionConfidence=case(isnotempty(AttributionGap), 'missing', isnotempty(EventId) and isnotnull(Sequence), 'exact', tostring(column_ifexists('AttributionConfidence', '')) == 'inferred', 'inferred', 'best effort')"
   ].join(' ');
 }
 
@@ -506,6 +620,7 @@ const compatNormalize = [
   "| extend ParentAgentName=tostring(Properties['agentops.parent_agent.name'])",
   "| extend SubAgentName=case(isnotempty(tostring(Properties['agentops.sub_agent.name'])), tostring(Properties['agentops.sub_agent.name']), isnotempty(tostring(Properties['agentops.child_agent.name'])), tostring(Properties['agentops.child_agent.name']), isnotempty(ParentAgentName) and isnotempty(AgentName) and AgentName != ParentAgentName, AgentName, '')",
   "| extend DelegationId=tostring(Properties['agentops.delegation.id'])",
+  "| extend BranchDurationMs=todouble(Properties['agentops.subagent.duration_ms']), BranchTokens=todouble(Properties['agentops.subagent.total_tokens']), BranchToolCount=tolong(Properties['agentops.subagent.tool_count'])",
   "| extend Surface=case(isnotempty(tostring(Properties['agentops.surface'])), tostring(Properties['agentops.surface']), AppRoleName has 'codex', 'custom', AppRoleName has 'copilot', 'cli', 'cli')",
   "| extend RepoHash=tostring(Properties['agentops.repo.hash'])",
   "| extend BranchHash=tostring(Properties['agentops.branch.hash'])",
@@ -522,13 +637,14 @@ const compatNormalize = [
 const v2RunSummary = [
   'AgentOpsRunSummary_CL',
   '| where TimeGenerated between ($__timeFrom() .. $__timeTo())',
-  '| extend DurationMs=todouble(DurationMs), InputTokens=todouble(InputTokens), OutputTokens=todouble(OutputTokens), ReasoningTokens=todouble(ReasoningTokens), CacheReadTokens=todouble(CacheReadTokens), CacheCreationTokens=todouble(CacheCreationTokens), EstimatedCostUsd=todouble(EstimatedCostUsd), ToolCount=tolong(ToolCount), ToolFailureCount=tolong(ToolFailureCount), ToolDeniedCount=tolong(ToolDeniedCount)'
+  '| extend DurationMs=todouble(DurationMs), InputTokens=todouble(InputTokens), OutputTokens=todouble(OutputTokens), ReasoningTokens=todouble(ReasoningTokens), CacheReadTokens=todouble(CacheReadTokens), CacheCreationTokens=todouble(CacheCreationTokens), EstimatedCostUsd=todouble(EstimatedCostUsd), ToolCount=tolong(ToolCount), ToolFailureCount=tolong(ToolFailureCount), ToolDeniedCount=tolong(ToolDeniedCount)',
+  "| extend Delivery='Visible in Azure', Coverage='AgentOps managed'"
 ].join(' ');
 
 const v2Events = [
   'AgentOpsEvents_CL',
   '| where TimeGenerated between ($__timeFrom() .. $__timeTo())',
-  '| extend DurationMs=todouble(DurationMs), InputTokens=todouble(InputTokens), OutputTokens=todouble(OutputTokens), EstimatedCostUsd=todouble(EstimatedCostUsd)'
+  "| extend DurationMs=todouble(DurationMs), InputTokens=todouble(InputTokens), OutputTokens=todouble(OutputTokens), EstimatedCostUsd=todouble(EstimatedCostUsd), Delivery='Visible in Azure', Coverage='AgentOps managed', AttributionConfidence='exact'"
 ].join(' ');
 
 const v2Tools = [
@@ -562,7 +678,7 @@ function compatRunSummary() {
     "| summarize TimeGenerated=max(TimeGenerated), Started=min(TimeGenerated), TraceId=take_any(TraceId), Surface=take_any(Surface), RepoHash=take_any(RepoHash), BranchHash=take_any(BranchHash), TaskType=take_any(TaskType), AgentName=take_any(AgentName), SkillName=take_any(SkillName), ParentAgentName=take_any(ParentAgentName), SubAgentName=take_any(SubAgentName), DelegationId=take_any(DelegationId), ModelActual=take_any(ModelActual), PrivacyMode=take_any(PrivacyMode), ContentCaptureSignal=max(toint(ContentCaptureSignal)), InputTokens=sum(InputTokens), OutputTokens=sum(OutputTokens), ReasoningTokens=sum(ReasoningTokens), CacheReadTokens=sum(CacheReadTokens), CacheCreationTokens=sum(CacheCreationTokens), ContextWindowPct=max(ContextWindowPct), TokensRemoved=sum(TokensRemoved), PermissionWaitMs=sum(PermissionWaitMs), EstimatedCostUsd=sum(EstimatedCostUsd), ToolCount=countif(Operation == 'execute_tool' or isnotempty(ToolName)), ToolFailureCount=countif((Operation == 'execute_tool' or isnotempty(ToolName)) and Failed), Failures=countif(Failed), ToolDeniedCount=countif(tostring(Properties['agentops.mcp.allowed']) =~ 'false'), FilesReadCount=countif(ToolName has 'read'), FilesEditedCount=countif(ToolName has_any ('edit', 'write', 'patch')), TestsRan=countif(ToolName has_any ('test', 'lint', 'typecheck')) > 0 by RunId, SessionId",
     "| extend DurationMs=todouble(datetime_diff('millisecond', TimeGenerated, Started))",
     "| extend ModelRequested=ModelActual, ContentCaptureMode=iff(ContentCaptureSignal > 0, 'signal_only', 'off'), OutcomeStatus=iff(Failures > 0, 'failed', 'success'), OutcomeReason=iff(Failures > 0, 'span_failure', 'completed'), TestsPassed=TestsRan and ToolFailureCount == 0, PrOpened=false, PrNumberHash='', CiStatus='not_run', EvalOverall=tolong(iff(Failures > 0, 50, 85)), RiskScore=ToolFailureCount * 20 + ToolDeniedCount * 30 + ContentCaptureSignal * 15",
-    "| project TimeGenerated, RunId, SessionId, TraceId, Surface, RepoHash, BranchHash, TaskType, AgentName, SkillName, ParentAgentName, SubAgentName, DelegationId, ModelRequested, ModelActual, PrivacyMode, ContentCaptureMode, ContentCaptureSignal=ContentCaptureSignal > 0, OutcomeStatus, OutcomeReason, DurationMs, InputTokens, OutputTokens, ReasoningTokens, CacheReadTokens, CacheCreationTokens, ContextWindowPct, TokensRemoved, PermissionWaitMs, EstimatedCostUsd, ToolCount, ToolFailureCount, ToolDeniedCount, TestsRan, TestsPassed, FilesReadCount, FilesEditedCount, PrOpened, PrNumberHash, CiStatus, EvalOverall, RiskScore"
+    "| project TimeGenerated, RunId, SessionId, TraceId, Surface, RepoHash, BranchHash, TaskType, AgentName, SkillName, ParentAgentName, SubAgentName, DelegationId, ModelRequested, ModelActual, PrivacyMode, ContentCaptureMode, ContentCaptureSignal=ContentCaptureSignal > 0, OutcomeStatus, OutcomeReason, DurationMs, InputTokens, OutputTokens, ReasoningTokens, CacheReadTokens, CacheCreationTokens, ContextWindowPct, TokensRemoved, PermissionWaitMs, EstimatedCostUsd, ToolCount, ToolFailureCount, ToolDeniedCount, TestsRan, TestsPassed, FilesReadCount, FilesEditedCount, PrOpened, PrNumberHash, CiStatus, EvalOverall, RiskScore, Delivery='Visible in Azure', Coverage='Native best effort'"
   ].join(' ');
 }
 
@@ -574,7 +690,8 @@ function compatEvents() {
     "| extend EventType=case(Operation == 'chat', 'llm', Operation == 'execute_tool' or isnotempty(ToolName), 'tool', ContentCaptureSignal, 'content', Failed, 'error', 'span')",
     "| extend Status=iff(Failed, 'failed', 'success')",
     "| extend McpServer=case(ToolName startswith 'mcp__', extract('^mcp__([^_]+)__', 1, ToolName), ToolName contains '/', tostring(split(ToolName, '/')[0]), ToolName startswith 'azure-mcp-', 'azure-mcp', '')",
-    "| project TimeGenerated, RunId, SessionId, TraceId, SpanId=Id, EventName, EventType, AgentName, SkillName, ParentAgentName, SubAgentName, DelegationId, McpServer, ToolName, ModelActual, Status, DurationMs, ErrorType, OutcomeStatus=Status, Details=ResultCode, Surface, PrivacyMode, ContentCaptureSignal"
+    "| extend Sequence=long(null), EventId='', ParentEventId='', CommandName='', ScriptName='', McpToolName='', TotalTokens=InputTokens + OutputTokens + ReasoningTokens, PermissionKind='', PermissionDecision='', ContentCaptureMode=iff(ContentCaptureSignal, 'signal only', 'off'), ContentAction=iff(ContentCaptureSignal, 'dropped', ''), ContentDroppedBytes=long(null), SecretLike=false, Delivery='Visible in Azure', Coverage='Native best effort', AttributionConfidence='inferred'",
+    "| project TimeGenerated, Sequence, EventId, ParentEventId, RunId, SessionId, TraceId, SpanId=Id, EventName, EventType, AgentName, SkillName, ParentAgentName, SubAgentName, DelegationId, BranchDurationMs, BranchTokens, BranchToolCount, McpServer, McpToolName, ToolName, CommandName, ScriptName, ModelActual, Status, DurationMs, InputTokens, OutputTokens, ReasoningTokens, TotalTokens, EstimatedCostUsd, PermissionKind, PermissionDecision, ErrorType, OutcomeStatus=Status, Details=ResultCode, Surface, PrivacyMode, ContentCaptureMode, ContentCaptureSignal, ContentAction, ContentDroppedBytes, SecretLike, Delivery, Coverage, AttributionConfidence"
   ].join(' ');
 }
 
@@ -628,7 +745,7 @@ function compatInsights() {
     "| extend InsightType=case(OutcomeStatus != 'success', 'failure-anomaly', ContentCaptureSignal == true, 'privacy-signal', ToolFailureCount > 0, 'tool-failure-anomaly', EstimatedCostUsd >= 1.0, 'cost-anomaly', 'risk-signal')",
     "| extend Severity=case(OutcomeStatus != 'success' or RiskScore >= 60, 'high', RiskScore >= 20, 'medium', 'low')",
     "| extend Summary=case(OutcomeStatus != 'success', strcat('Run failed from existing Copilot OpenTelemetry: ', OutcomeReason), ContentCaptureSignal == true, 'Content-like fields were observed and represented as privacy signals.', ToolFailureCount > 0, strcat('Tool failures observed: ', tostring(ToolFailureCount)), EstimatedCostUsd >= 1.0, strcat('Estimated cost is elevated: $', tostring(round(EstimatedCostUsd, 2))), 'Risk score is elevated.')",
-    "| extend SuggestedNextStep='Open Run Replay and inspect the linked metadata-only timeline.'",
+    "| extend SuggestedNextStep='Open Run Story and inspect the linked metadata-only timeline.'",
     "| project TimeGenerated, InsightId=strcat('compat_', RunId, '_', InsightType), RunId, TraceId, InsightType, Severity, Title=InsightType, Summary, SuggestedNextStep, RepoHash, ModelActual, TaskType, ToolName='', BaselineValue=real(null), CurrentValue=todouble(RiskScore), ConfigHash=''"
   ].join(' ');
 }
@@ -639,7 +756,7 @@ function compatRecommendations() {
     `(${compatInsights()})`,
     insightsNormalize(),
     "| extend Action=case(InsightType startswith 'recurring-', 'triage_recurring_pattern', InsightType has 'test', 'run_validation', InsightType has 'tool', 'investigate_tool', InsightType has 'collector', 'check_collector', InsightType has_any ('policy', 'privacy'), 'review_policy', InsightType has_any ('cost', 'context'), 'reduce_context_or_cost', InsightType has 'ci', 'fix_ci', InsightType has_any ('eval', 'instruction', 'config'), 'compare_regression', 'investigate')",
-    "| project TimeGenerated, RecommendationId=coalesce(tostring(column_ifexists('RecommendationId', '')), tostring(column_ifexists('InsightId', ''))), RunId, SessionId='', TraceId, Action, Severity, ObservedPattern=Summary, NextAction=SuggestedNextStep, PatternId, PatternKey, PatternRuns, PatternDimension, EvalOverall=long(null), EvalBucket='', BenchmarkRunId='', BenchmarkDecision='', BenchmarkPassRatePct=real(null), BenchmarkAverageScore=real(null), BenchmarkSafetyViolationCount=long(null), BenchmarkArtifactAdded=long(null), BenchmarkArtifactModified=long(null), BenchmarkArtifactDeleted=long(null), BenchmarkArtifactTotalChanged=long(null), BenchmarkArtifactFiles=dynamic([]), BenchmarkArtifactContentDiffs=dynamic([]), BenchmarkHiddenChecksPassed=long(null), BenchmarkHiddenChecksFailed=long(null), BenchmarkHiddenCheckPacks=dynamic([]), BenchmarkPolicyBlocks=long(null), BenchmarkPermissionProfiles=dynamic({}), BenchmarkPolicyTasks=dynamic([]), BenchmarkSemanticCheckCount=long(null), BenchmarkSemanticAverageScore=real(null), BenchmarkSemanticChecks=dynamic([]), BenchmarkApprovalStatus='', BenchmarkApprovalCount=long(null), BenchmarkRequiredApprovals=long(null), BenchmarkApprovalApprovedAt='', BenchmarkApprovalTicket='', BenchmarkApprovalSource='', ChangeAnnotations=dynamic([]), ChangeTargetRefs=dynamic([]), DashboardTitles=dynamic(['Run Replay', 'Insights & Regressions']), DashboardCount=2, Validation=dynamic(['agentops dashboard kql-check --last 24h --json']), RollbackCondition='Rollback the agent, skill, MCP, model, instruction, or benchmark artifact change if eval score drops, failures rise, privacy drops appear unexpectedly, or CI worsens.'"
+    "| project TimeGenerated, RecommendationId=coalesce(tostring(column_ifexists('RecommendationId', '')), tostring(column_ifexists('InsightId', ''))), RunId, SessionId='', TraceId, Action, Severity, ObservedPattern=Summary, NextAction=SuggestedNextStep, PatternId, PatternKey, PatternRuns, PatternDimension, EvalOverall=long(null), EvalBucket='', BenchmarkRunId='', BenchmarkDecision='', BenchmarkPassRatePct=real(null), BenchmarkAverageScore=real(null), BenchmarkSafetyViolationCount=long(null), BenchmarkArtifactAdded=long(null), BenchmarkArtifactModified=long(null), BenchmarkArtifactDeleted=long(null), BenchmarkArtifactTotalChanged=long(null), BenchmarkArtifactFiles=dynamic([]), BenchmarkArtifactContentDiffs=dynamic([]), BenchmarkHiddenChecksPassed=long(null), BenchmarkHiddenChecksFailed=long(null), BenchmarkHiddenCheckPacks=dynamic([]), BenchmarkPolicyBlocks=long(null), BenchmarkPermissionProfiles=dynamic({}), BenchmarkPolicyTasks=dynamic([]), BenchmarkSemanticCheckCount=long(null), BenchmarkSemanticAverageScore=real(null), BenchmarkSemanticChecks=dynamic([]), BenchmarkApprovalStatus='', BenchmarkApprovalCount=long(null), BenchmarkRequiredApprovals=long(null), BenchmarkApprovalApprovedAt='', BenchmarkApprovalTicket='', BenchmarkApprovalSource='', ChangeAnnotations=dynamic([]), ChangeTargetRefs=dynamic([]), DashboardTitles=dynamic(['Run Story', 'Insights & Regressions']), DashboardCount=2, Validation=dynamic(['agentops dashboard kql-check --last 24h --json']), RollbackCondition='Rollback the agent, skill, MCP, model, instruction, or benchmark artifact change if eval score drops, failures rise, privacy drops appear unexpectedly, or CI worsens.'"
   ].join(' ');
 }
 
@@ -675,45 +792,45 @@ function configAnnotationsQuery() {
 }
 
 const dashboards = {
-  '01-agentops-home.json': dashboard('agentops-v2-home', 'AgentOps Home', [
-    textPanel(1, 'What happened?', 0, 0, 24, 3, `## AgentOps Home\nCopilot AgentOps control room for Azure. ${emptyState}`),
-    textPanel(18, 'Open latest run', 0, 3, 8, 3, "### Open latest run\nStart with the newest session, then drill into Run Replay.\n\n`agentops open latest --last 2h --json`\n\n[Run Replay](/d/agentops-v2-run-replay?${__url_time_range})"),
+  '01-agentops-home.json': dashboard('agentops-v2-home', 'Today', [
+    textPanel(1, 'What happened?', 0, 0, 24, 3, `## Today\nThese runs are visible in Azure. If a recent run is missing, check \`agentops delivery status\`. Coverage is marked as AgentOps managed or Native best effort. ${emptyState}`),
+    textPanel(18, 'Open latest run', 0, 3, 8, 3, "### Open latest run\nStart with the newest session, then drill into Run Story.\n\n`agentops open latest --last 2h --json`\n\n[Run Story](/d/agentops-v2-run-replay?${__url_time_range})"),
     textPanel(19, 'Get recommendation', 8, 3, 8, 3, "### Get recommendation\nGenerate one evidence-backed next action for the current run set.\n\n`agentops recommend latest --last 2h`\n\n[Insights](/d/agentops-v2-insights-regressions?${__url_time_range})"),
-    textPanel(20, 'Ask AgentOps', 16, 3, 8, 3, "### Ask AgentOps\nBuild a metadata-only context bundle for investigation.\n\n`agentops ask-context latest --last 2h --json`\n\nExported evidence bundle:\n\n`agentops ask-context latest --last 2h --runs <AgentOpsRunSummary_CL.jsonl> --events <AgentOpsEvents_CL.jsonl> --tools <AgentOpsToolCalls_CL.jsonl> --privacy <AgentOpsPrivacy_CL.jsonl> --github <AgentOpsGitHubOutcome_CL.jsonl> --evals <AgentOpsEval_CL.jsonl> --insights <AgentOpsInsights_CL.jsonl> --recommendations <AgentOpsRecommendations_CL.jsonl> --json`\n\nUse `docs/copilot-mcp-agentops-prompts.md` for session, tool failure, benchmark, agent, hook, and MCP regression templates.\n\n[Run Replay](/d/agentops-v2-run-replay?${__url_time_range})"),
+    textPanel(20, 'Ask AgentOps', 16, 3, 8, 3, "### Ask AgentOps\nBuild a metadata-only context bundle for investigation.\n\n`agentops ask-context latest --last 2h --json`\n\nExported evidence bundle:\n\n`agentops ask-context latest --last 2h --runs <AgentOpsRunSummary_CL.jsonl> --events <AgentOpsEvents_CL.jsonl> --tools <AgentOpsToolCalls_CL.jsonl> --privacy <AgentOpsPrivacy_CL.jsonl> --github <AgentOpsGitHubOutcome_CL.jsonl> --evals <AgentOpsEval_CL.jsonl> --insights <AgentOpsInsights_CL.jsonl> --recommendations <AgentOpsRecommendations_CL.jsonl> --json`\n\nUse `docs/copilot-mcp-agentops-prompts.md` for session, tool failure, benchmark, agent, hook, and MCP regression templates.\n\n[Run Story](/d/agentops-v2-run-replay?${__url_time_range})"),
     statPanel(2, 'Runs', 0, 6, `${q.runSummary} | summarize value=count() by bin(TimeGenerated, $__interval)`),
     statPanel(3, 'Success rate', 4, 6, `${q.runSummary} | summarize value=100.0 * countif(OutcomeStatus == 'success') / count() by bin(TimeGenerated, $__interval)`, 'percent', 'green'),
-    statPanel(4, 'Failed runs', 8, 6, `${q.runSummary} | summarize value=countif(OutcomeStatus != 'success') by bin(TimeGenerated, $__interval)`, 'short', 'red'),
-    statPanel(5, 'Privacy drops', 12, 6, `${q.privacy} | summarize value=sum(DroppedCount) by bin(TimeGenerated, $__interval)`, 'short', 'yellow'),
+    statPanel(4, 'Runs needing review', 8, 6, `${q.runSummary} | summarize value=countif(OutcomeStatus != 'success') by bin(TimeGenerated, $__interval)`, 'short', 'red'),
+    statPanel(5, 'Content items blocked', 12, 6, `${q.privacy} | summarize value=sum(DroppedCount) by bin(TimeGenerated, $__interval)`, 'short', 'yellow'),
     statPanel(6, 'Estimated cost', 16, 6, `${q.runSummary} | summarize value=sum(EstimatedCostUsd) by bin(TimeGenerated, $__interval)`, 'currencyUSD', 'yellow'),
-    statPanel(7, 'Collector health', 20, 6, `${q.health} | summarize value=countif(Status == 'healthy') by bin(TimeGenerated, $__interval)`, 'short', 'green'),
+    statPanel(7, 'Healthy collector checks', 20, 6, `${q.health} | summarize value=countif(Status == 'healthy') by bin(TimeGenerated, $__interval)`, 'short', 'green'),
     statPanel(8, 'Policy blocks', 0, 10, `${q.events} | where EventType == 'policy' | summarize value=countif(Status == 'denied' or Status == 'blocked') by bin(TimeGenerated, $__interval)`, 'short', 'red'),
     statPanel(9, 'Input tokens', 4, 10, `${q.runSummary} | summarize value=sum(InputTokens) by bin(TimeGenerated, $__interval)`),
     statPanel(14, 'Output tokens', 8, 10, `${q.runSummary} | summarize value=sum(OutputTokens) by bin(TimeGenerated, $__interval)`),
     statPanel(15, 'p95 duration', 12, 10, `${q.runSummary} | summarize value=percentile(DurationMs, 95) by bin(TimeGenerated, $__interval)`, 'ms', 'yellow'),
     statPanel(16, 'Tests ran %', 16, 10, `${q.runSummary} | summarize value=100.0 * countif(TestsRan == true) / count() by bin(TimeGenerated, $__interval)`, 'percent', 'green'),
     statPanel(17, 'PRs opened', 20, 10, `${q.runSummary} | summarize value=countif(PrOpened == true) by bin(TimeGenerated, $__interval)`, 'short', 'green'),
-    tablePanel(10, 'Session Health', 0, 14, 12, 9, `let LatestRecommendations = ${q.recommendations} | summarize arg_max(TimeGenerated, Severity, Action, NextAction, PatternKey, BenchmarkRunId, BenchmarkDecision) by RunId; ${q.runSummary} | join kind=leftouter LatestRecommendations on RunId | extend HealthStatus=case(OutcomeStatus != 'success', 'failed', RiskScore >= 60, 'high risk', RiskScore >= 20, 'review', ContentCaptureSignal == true, 'privacy review', 'healthy'), RootAgent=case(isnotempty(ParentAgentName), ParentAgentName, isnotempty(AgentName), AgentName, 'agent'), RecommendedNextAction=case(isnotempty(NextAction), NextAction, 'Open Run Replay and inspect the metadata timeline.'), OpenReplay='Replay' | project TimeGenerated, HealthStatus, RiskScore, RootAgent, ModelActual, ToolFailureCount, ToolDeniedCount, ContentCaptureSignal, ContextWindowPct, EvalOverall, BenchmarkRunId, BenchmarkDecision, RecommendedNextAction, RunId, SessionId, TraceId, OpenReplay | order by TimeGenerated desc | take 50`),
-    tablePanel(11, 'Recommended next actions', 12, 14, 12, 9, `${q.recommendations} | extend OpenReplay='Replay', OpenPattern=iff(isnotempty(PatternKey), 'Pattern', ''), ChangeAnnotationCount=array_length(ChangeAnnotations) | project TimeGenerated, Severity, Action, ObservedPattern, NextAction, RunId, TraceId, PatternKey, PatternRuns, BenchmarkRunId, BenchmarkDecision, ChangeAnnotationCount, ChangeTargetRefs, DashboardCount, OpenReplay, OpenPattern | order by TimeGenerated desc | take 50`),
+    tablePanel(10, 'Session Health', 0, 14, 12, 9, `let LatestRecommendations = ${q.recommendations} | summarize arg_max(TimeGenerated, Severity, Action, NextAction, PatternKey, BenchmarkRunId, BenchmarkDecision) by RunId; ${q.runSummary} | join kind=leftouter LatestRecommendations on RunId | extend HealthStatus=case(OutcomeStatus != 'success', 'failed', RiskScore >= 60, 'high risk', RiskScore >= 20, 'review', ContentCaptureSignal == true, 'privacy review', 'healthy'), RootAgent=case(isnotempty(ParentAgentName), ParentAgentName, isnotempty(AgentName), AgentName, 'agent'), RecommendedNextAction=case(isnotempty(NextAction), NextAction, 'Open Run Story and inspect the metadata timeline.'), OpenReplay='Replay' | project TimeGenerated, Delivery, Coverage, HealthStatus, RiskScore, RootAgent, ModelActual, ToolFailureCount, ToolDeniedCount, ContentCaptureSignal, ContextWindowPct, EvalOverall, BenchmarkRunId, BenchmarkDecision, RecommendedNextAction, RunId, SessionId, TraceId, OpenReplay | order by TimeGenerated desc | take 50`),
+    tablePanel(11, 'Recommended next actions', 12, 14, 12, 9, `${q.recommendations} | extend OpenReplay='Replay', OpenPattern=iff(isnotempty(PatternKey), 'Pattern', ''), ChangeAnnotationCount=array_length(ChangeAnnotations), AskAgentOpsSharedLaunch=iff(isnotempty(RecommendationId), strcat('$actioner_url', '/ask-agentops/shared/recommendation/', url_encode(RecommendationId), '?run_id=', url_encode(RunId), '&trace_id=', url_encode(TraceId), '&last=$timeRange'), ''), AskSharedContext=iff(isnotempty(RecommendationId), 'Ask shared', '') | project TimeGenerated, Severity, Action, ObservedPattern, NextAction, RunId, TraceId, PatternKey, PatternRuns, BenchmarkRunId, BenchmarkDecision, ChangeAnnotationCount, ChangeTargetRefs, DashboardCount, AskSharedContext, AskAgentOpsSharedLaunch, OpenReplay, OpenPattern | order by TimeGenerated desc | take 50`),
     tablePanel(12, 'Most expensive runs', 0, 23, 12, 9, `${q.runSummary} | project TimeGenerated, RunId, RepoHash, TaskType, ModelActual, OutcomeStatus, EstimatedCostUsd, InputTokens, OutputTokens | order by EstimatedCostUsd desc | take 50`),
     tablePanel(13, 'GitHub outcomes summary', 12, 23, 12, 9, `${q.github} | project TimeGenerated, RunId, RepoHash, PrOpened, PrMerged, PrReverted, CiStatus, TimeToPrMinutes, TimeToMergeMinutes, ReviewCommentCount, FilesChangedCount | order by TimeGenerated desc | take 50`),
-    tablePanel(21, 'Saved investigations', 0, 32, 24, 8, `${q.savedViews} | extend TagsText=strcat_array(Tags, ', '), ChangeAnnotationCount=coalesce(ChangeAnnotationCount, array_length(ChangeAnnotations)), OpenSavedView=iff(isnotempty(Url), 'Open', ''), OpenReplay=iff(isnotempty(SessionId), 'Replay', '') | project TimeGenerated, Name, Description, TagsText, SessionId, QueryHash, ChangeAnnotationCount, ChangeTargetRefs, CreatedAt, Url, OpenSavedView, OpenReplay | order by TimeGenerated desc | take 100`)
+    tablePanel(21, 'Saved investigations', 0, 32, 24, 8, `${q.savedViews} | extend TagsText=strcat_array(Tags, ', '), ChangeAnnotationCount=coalesce(ChangeAnnotationCount, array_length(ChangeAnnotations)), OpenSavedView=iff(isnotempty(Url), 'Open', ''), OpenReplay=iff(isnotempty(SessionId), 'Replay', ''), AskAgentOpsSharedLaunch=iff(isnotempty(SavedViewId), strcat('$actioner_url', '/ask-agentops/shared/saved-view/', url_encode(SavedViewId), '?session_id=', url_encode(SessionId), '&dashboard_url=', url_encode(Url), '&last=$timeRange'), ''), AskSharedContext=iff(isnotempty(SavedViewId), 'Ask shared', '') | project TimeGenerated, SavedViewId, Name, Description, TagsText, SessionId, QueryHash, ChangeAnnotationCount, ChangeTargetRefs, CreatedAt, Url, AskSharedContext, AskAgentOpsSharedLaunch, OpenSavedView, OpenReplay | order by TimeGenerated desc | take 100`)
   ]),
 
-  '02-runs-explorer.json': dashboard('agentops-v2-runs-explorer', 'Runs Explorer', [
-    textPanel(1, 'Find a run', 0, 0, 24, 2, `## Runs Explorer\nDatadog-style run list. ${emptyState}`),
-    tablePanel(10, 'Runs', 0, 2, 24, 17, `${q.runSummary} | extend OpenReplay='Replay', OpenTrace='Trace', OpenGithub=iff(PrOpened == true or isnotempty(PrNumberHash) or CiStatus != 'not_run', 'Outcome', '') | project TimeGenerated, RunId, SessionId, TraceId, Surface, RepoHash, BranchHash, TaskType, AgentName, SkillName, ParentAgentName, SubAgentName, DelegationId, ModelActual, OutcomeStatus, OutcomeReason, DurationMs, InputTokens, OutputTokens, CacheReadTokens, ContextWindowPct, TokensRemoved, PermissionWaitMs, EstimatedCostUsd, ToolCount, ToolFailureCount, ToolDeniedCount, TestsRan, TestsPassed, PrOpened, PrNumberHash, CiStatus, EvalOverall, RiskScore, OpenReplay, OpenTrace, OpenGithub | order by TimeGenerated desc | take 500`),
-    timeseriesPanel(20, 'Runs by outcome', 0, 19, 12, 8, `${q.runSummary} | summarize Runs=count() by TimeGenerated=bin(TimeGenerated, $__interval), OutcomeStatus | order by TimeGenerated asc`),
-    timeseriesPanel(21, 'Cost and tokens', 12, 19, 12, 8, `${q.runSummary} | summarize Cost=sum(EstimatedCostUsd), InputTokens=sum(InputTokens), OutputTokens=sum(OutputTokens) by TimeGenerated=bin(TimeGenerated, $__interval) | order by TimeGenerated asc`)
+  '02-runs-explorer.json': dashboard('agentops-v2-runs-explorer', 'Runs', [
+    textPanel(1, 'Find a run', 0, 0, 24, 2, `## Runs\nFind a Copilot run and open its story or outcome evidence. Results are newest first; use the linked Run, Session, or Trace value to continue without relying on colour. ${emptyState}`),
+    tablePanel(10, 'Runs', 0, 2, 24, 17, `${q.runSummary} | extend OpenReplay='Replay', OpenTrace='Trace', OpenGithub=iff(PrOpened == true or isnotempty(PrNumberHash) or CiStatus != 'not_run', 'Outcome', '') | project TimeGenerated, Delivery, Coverage, RunId, SessionId, TraceId, Surface, RepoHash, BranchHash, TaskType, AgentName, SkillName, ParentAgentName, SubAgentName, DelegationId, ModelActual, OutcomeStatus, OutcomeReason, DurationMs, InputTokens, OutputTokens, CacheReadTokens, ContextWindowPct, TokensRemoved, PermissionWaitMs, EstimatedCostUsd, ToolCount, ToolFailureCount, ToolDeniedCount, TestsRan, TestsPassed, PrOpened, PrNumberHash, CiStatus, EvalOverall, RiskScore, OpenReplay, OpenTrace, OpenGithub | order by TimeGenerated desc | take 500`),
+    timeseriesPanel(20, 'Runs by reported outcome', 0, 19, 12, 8, `${q.runSummary} | summarize Runs=count() by TimeGenerated=bin(TimeGenerated, $__interval), OutcomeStatus | order by TimeGenerated asc`),
+    timeseriesPanel(21, 'Token use', 12, 19, 12, 8, `${q.runSummary} | summarize InputTokens=sum(InputTokens), OutputTokens=sum(OutputTokens) by TimeGenerated=bin(TimeGenerated, $__interval) | order by TimeGenerated asc`)
   ]),
 
-  '03-run-replay.json': dashboard('agentops-v2-run-replay', 'Agent Run Replay', [
-    textPanel(1, 'Replay', 0, 0, 24, 2, `## Agent Run Replay\nTimeline of one Copilot run. Strict mode shows metadata only; prompt/response rows appear only when AgentOpsContent_CL is explicitly enabled. ${emptyState}`),
-    tablePanel(10, 'Run summary', 0, 2, 24, 5, `${q.runSummary} | project TimeGenerated, RunId, SessionId, TraceId, Surface, RepoHash, TaskType, AgentName, SkillName, ParentAgentName, SubAgentName, DelegationId, ModelActual, OutcomeStatus, OutcomeReason, DurationMs, EstimatedCostUsd, ContextWindowPct, CacheReadTokens, TokensRemoved, PermissionWaitMs, TestsRan, TestsPassed, PrOpened, CiStatus, EvalOverall, RiskScore | order by TimeGenerated desc | take 20`),
-    tablePanel(20, 'Replay timeline', 0, 7, 24, 10, `${q.events} | project TimeGenerated, RunId, SessionId, TraceId, SpanId, EventName, EventType, AgentName, SkillName, ParentAgentName, SubAgentName, DelegationId, McpServer, ToolName, ModelActual, Status, DurationMs, ErrorType, OutcomeStatus, Details | order by TimeGenerated asc | take 1000`),
-    tablePanel(23, 'Agent, skill, and MCP lineage', 0, 17, 24, 6, `${q.events} | extend Actor=case(isnotempty(SubAgentName), SubAgentName, isnotempty(AgentName), AgentName, 'agent'), Parent=iff(isempty(ParentAgentName), 'root', ParentAgentName), Skill=iff(isempty(SkillName), 'none', SkillName), Mcp=iff(isempty(McpServer), 'none', McpServer), Tool=iff(isempty(ToolName), 'none', ToolName) | summarize Events=count(), Tools=dcountif(Tool, Tool != 'none'), Failures=countif(Status != 'success'), P95DurationMs=percentile(DurationMs, 95), FirstSeen=min(TimeGenerated), LastSeen=max(TimeGenerated) by Parent, Actor, Skill, Mcp, Tool, DelegationId | order by FirstSeen asc | take 200`),
+  '03-run-replay.json': dashboard('agentops-v2-run-replay', 'Run Story', [
+    textPanel(1, 'Run Story', 0, 0, 24, 2, `## Run Story\nChoose a Run, Session, or Trace filter to isolate one Copilot story; with all three set to All, panels can mix matching runs. Events are ordered oldest first, with sequence and event ID breaking timestamp ties. Strict mode shows metadata only; prompt/response rows appear only when AgentOpsContent_CL is explicitly enabled. ${emptyState}`),
+    tablePanel(10, 'Run summary', 0, 2, 24, 5, `${q.runSummary} | project TimeGenerated, Delivery, Coverage, RunId, SessionId, TraceId, Surface, RepoHash, TaskType, AgentName, SkillName, ParentAgentName, SubAgentName, DelegationId, ModelActual, OutcomeStatus, OutcomeReason, DurationMs, EstimatedCostUsd, ContextWindowPct, CacheReadTokens, TokensRemoved, PermissionWaitMs, TestsRan, TestsPassed, PrOpened, CiStatus, EvalOverall, RiskScore | order by TimeGenerated desc | take 20`),
+    tablePanel(20, 'Ordered timeline', 0, 7, 24, 10, `${q.events} | extend SequenceSort=coalesce(Sequence, long(9223372036854775807)) | project TimeGenerated, Sequence, EventId, ParentEventId, Delivery, Coverage, AttributionConfidence, AttributionGap, EventName, EventType, AgentName, ParentAgentName, SubAgentName, SkillName, DelegationId, McpServer, McpToolName, ToolName, CommandName, ScriptName, ModelActual, Status, DurationMs, InputTokens, OutputTokens, ReasoningTokens, TotalTokens, EstimatedCostUsd, PermissionKind, PermissionDecision, PrivacyMode, ContentCaptureMode, ContentCaptureSignal, ContentAction, ContentDroppedBytes, SecretLike, ErrorType, OutcomeStatus, RunId, SessionId, TraceId, SpanId, Details, SequenceSort | order by TimeGenerated asc, SequenceSort asc, EventId asc | project-away SequenceSort | take 1000`),
+    tablePanel(23, 'Agent, skill, and MCP lineage', 0, 17, 24, 6, `${q.events} | extend Actor=case(isnotempty(SubAgentName), SubAgentName, isnotempty(AgentName), AgentName, 'attribution missing'), Parent=iff(isempty(ParentAgentName), 'root or missing', ParentAgentName), Skill=iff(isempty(SkillName), 'not observed', SkillName), Mcp=iff(isempty(McpServer), 'not observed', McpServer), Tool=iff(isempty(ToolName), 'not observed', ToolName) | summarize Events=count(), Tools=dcountif(Tool, Tool != 'not observed'), Failures=countif(Status in ('failed', 'error', 'denied', 'blocked')), MissingAttribution=countif(AttributionConfidence == 'missing'), P95DurationMs=percentile(DurationMs, 95), BranchDurationMs=max(BranchDurationMs), BranchTokens=max(BranchTokens), BranchToolCount=max(BranchToolCount), FirstSeen=min(TimeGenerated), LastSeen=max(TimeGenerated) by Parent, Actor, Skill, Mcp, Tool, DelegationId, Coverage | order by FirstSeen asc | take 200`),
     tablePanel(24, 'Context and cache posture', 0, 23, 24, 4, `${q.runSummary} | project TimeGenerated, RunId, InputTokens, OutputTokens, ReasoningTokens, CacheReadTokens, CacheCreationTokens, ContextWindowPct, TokensRemoved, PermissionWaitMs, ContextState=case(ContextWindowPct >= 90 or TokensRemoved > 0, 'pressure', CacheReadTokens > 0, 'cache leverage', 'normal') | order by TimeGenerated desc | take 20`),
     tablePanel(28, 'Why this failed / next check', 0, 27, 24, 5, `${q.insights} | extend Priority=case(Severity == 'critical', 0, Severity == 'high', 1, Severity == 'medium', 2, 3) | order by Priority asc, TimeGenerated desc | project TimeGenerated, Severity, InsightType, Summary, SuggestedNextStep, RunId, TraceId, RepoHash, ModelActual, ToolName, BaselineValue, CurrentValue, ConfigHash | take 20`),
-    tablePanel(31, 'Latest recommendation', 0, 32, 24, 5, `${q.recommendations} | extend Priority=case(Severity == 'critical', 0, Severity == 'high', 1, Severity == 'medium', 2, 3), RecommendationCommand=strcat('agentops recommend ', RunId, ' --last $timeRange --json'), AskContextCommand=strcat('agentops ask-context ', RunId, ' --last $timeRange --json'), OpenReplay='Replay', OpenPattern=iff(isnotempty(PatternKey), 'Pattern', ''), ChangeAnnotationCount=array_length(ChangeAnnotations) | project TimeGenerated, RecommendationId, Severity, Action, ObservedPattern, NextAction, BenchmarkRunId, BenchmarkDecision, ChangeAnnotationCount, ChangeTargetRefs, RecommendationCommand, AskContextCommand, OpenReplay, OpenPattern | order by Priority asc, TimeGenerated desc | take 20`),
+    tablePanel(31, 'Latest recommendation', 0, 32, 24, 5, `${q.recommendations} | extend Priority=case(Severity == 'critical', 0, Severity == 'high', 1, Severity == 'medium', 2, 3), RecommendationCommand=strcat('agentops recommend ', RunId, ' --last $timeRange --json'), AskContextCommand=strcat('agentops ask-context ', RunId, ' --last $timeRange --json'), OpenReplay='Replay', OpenPattern=iff(isnotempty(PatternKey), 'Pattern', ''), ChangeAnnotationCount=array_length(ChangeAnnotations), AskAgentOpsSharedLaunch=iff(isnotempty(RecommendationId), strcat('$actioner_url', '/ask-agentops/shared/recommendation/', url_encode(RecommendationId), '?run_id=', url_encode(RunId), '&trace_id=', url_encode(TraceId), '&last=$timeRange'), ''), AskSharedContext=iff(isnotempty(RecommendationId), 'Ask shared', '') | project TimeGenerated, RecommendationId, Severity, Action, ObservedPattern, NextAction, BenchmarkRunId, BenchmarkDecision, ChangeAnnotationCount, ChangeTargetRefs, RecommendationCommand, AskContextCommand, AskSharedContext, AskAgentOpsSharedLaunch, OpenReplay, OpenPattern | order by Priority asc, TimeGenerated desc | take 20`),
     tablePanel(29, 'Ask AgentOps context', 0, 37, 24, 5, `${q.runSummary} | extend RunReplayUrl=strcat('/d/agentops-v2-run-replay?var-run_id=', RunId, '&var-session_id=', SessionId, '&var-trace_id=', TraceId, '&\${__url_time_range}'), InvestigationKql=strcat('AgentOpsRunSummary_CL | where TimeGenerated > ago($timeRange) | where RunId == "', RunId, '" or SessionId == "', SessionId, '" | project TimeGenerated, RunId, SessionId, TraceId, OutcomeStatus, OutcomeReason'), AskContextCommand=strcat('agentops ask-context ', RunId, ' --last $timeRange --json'), BundleCommand=strcat('agentops ask-context ', RunId, ' --last $timeRange --runs <AgentOpsRunSummary_CL.jsonl> --events <AgentOpsEvents_CL.jsonl> --tools <AgentOpsToolCalls_CL.jsonl> --privacy <AgentOpsPrivacy_CL.jsonl> --github <AgentOpsGitHubOutcome_CL.jsonl> --evals <AgentOpsEval_CL.jsonl> --insights <AgentOpsInsights_CL.jsonl> --recommendations <AgentOpsRecommendations_CL.jsonl> --json'), TriageCommand=strcat('agentops triage ', RunId, ' --runs <AgentOpsRunSummary_CL.jsonl> --events <AgentOpsEvents_CL.jsonl> --tools <AgentOpsToolCalls_CL.jsonl> --evals <AgentOpsEval_CL.jsonl> --insights <AgentOpsInsights_CL.jsonl>'), OpenReplay='Replay' | extend AskAgentOpsLaunch=strcat('$actioner_url', '/ask-agentops?run_id=', url_encode(RunId), '&session_id=', url_encode(SessionId), '&trace_id=', url_encode(TraceId), '&dashboard_url=', url_encode(RunReplayUrl), '&last=$timeRange') | extend AskPrompt=strcat('Use the telemetry-investigator or AgentOps triage skill. Investigate AgentOps run ', RunId, '. Session ', SessionId, '. Trace ', TraceId, '. Dashboard ', RunReplayUrl, '. Start with KQL: ', InvestigationKql, '. Use only metadata in the dashboard. Return what happened, why it matters, the likely failure/cost/safety/context pattern, and one evidence-backed next action. Do not request or enable prompt, response, source code, file content, tool argument, tool result, URL, request body, response body, or secret capture.') | project TimeGenerated, RunId, SessionId, TraceId, OutcomeStatus, OutcomeReason, RunReplayUrl, InvestigationKql, AskContextCommand, BundleCommand, AskPrompt, TriageCommand, AskAgentOpsLaunch, OpenReplay | order by TimeGenerated desc | take 20`),
     tablePanel(25, 'Transcript availability', 0, 42, 24, 4, `union isfuzzy=true (${q.runSummary} | summarize Runs=dcount(RunId), ContentSignalRuns=countif(ContentCaptureSignal == true), Modes=make_set(ContentCaptureMode, 10), LatestRunId=take_any(RunId), LatestSessionId=take_any(SessionId), LatestTraceId=take_any(TraceId)), (${q.content} | summarize ContentRows=count(), FullContentRows=countif(CaptureMode == 'full'), RedactedContentRows=countif(CaptureMode == 'redacted'), ContentModes=make_set(CaptureMode, 10), RedactionStates=make_set(RedactionStatus, 10), LatestRunId=take_any(RunId), LatestSessionId=take_any(SessionId), LatestTraceId=take_any(TraceId)) | summarize Runs=sum(Runs), ContentSignalRuns=sum(ContentSignalRuns), ContentRows=sum(ContentRows), FullContentRows=sum(FullContentRows), RedactedContentRows=sum(RedactedContentRows), Modes=make_set(Modes, 10), ContentModes=make_set(ContentModes, 10), RedactionStates=make_set(RedactionStates, 10), RunId=take_anyif(LatestRunId, isnotempty(LatestRunId)), SessionId=take_anyif(LatestSessionId, isnotempty(LatestSessionId)), TraceId=take_anyif(LatestTraceId, isnotempty(LatestTraceId)) | extend Status=case(ContentRows == 0, 'strict metadata only', FullContentRows > 0, 'content viewer enabled: full opt-in', 'content viewer enabled: redacted opt-in'), SafetyNote='Content rows require explicit opt-in and restricted access.', OpenTranscript='Open viewer' | project Status, SafetyNote, OpenTranscript, ContentRows, FullContentRows, RedactedContentRows, ContentSignalRuns, Runs, RunId, SessionId, TraceId, Modes, ContentModes, RedactionStates`),
     tablePanel(26, 'Prompt and response viewer (explicit opt-in)', 0, 46, 24, 8, `${q.content} | project TimeGenerated, TurnIndex, Role, ContentKind, MessageText, CaptureMode, RedactionStatus, ViewerNote, ModelActual, ToolName, ContentHash, ContentLength, RunId, SessionId, TraceId | order by TimeGenerated asc | take 200`),
@@ -734,16 +851,39 @@ const dashboards = {
     timeseriesPanel(21, 'Denied tools', 12, 14, 12, 8, `${q.tools} | summarize Denied=countif(Allowed == false) by TimeGenerated=bin(TimeGenerated, $__interval), ToolRisk | order by TimeGenerated asc`)
   ]),
 
-  '06-safety-privacy-policy.json': dashboard('agentops-v2-safety-privacy-policy', 'Safety, Privacy & Policy', [
-    textPanel(1, 'Trust screen', 0, 0, 24, 2, `## Safety, Privacy & Policy\nStrict privacy should be visible and reassuring. ${emptyState}`),
-    statPanel(2, 'Privacy drops', 0, 2, `${q.privacy} | summarize value=sum(DroppedCount) by bin(TimeGenerated, $__interval)`, 'short', 'yellow'),
-    statPanel(3, 'Secret-like drops', 4, 2, `${q.privacy} | where ContentKind == 'secret_like' | summarize value=sum(DroppedCount) by bin(TimeGenerated, $__interval)`, 'short', 'red'),
-    statPanel(4, 'Unsafe attempts', 8, 2, `${q.runSummary} | summarize value=countif(PrivacyMode == 'unsafe') by bin(TimeGenerated, $__interval)`, 'short', 'red'),
-    statPanel(5, 'Policy blocks', 12, 2, `${q.events} | where EventType == 'policy' | summarize value=countif(Status == 'denied' or Status == 'blocked') by bin(TimeGenerated, $__interval)`, 'short', 'red'),
-    statPanel(6, 'Poison tests OK', 16, 2, `${q.health} | where CheckName == 'privacy-poison' | summarize value=countif(Status == 'ok') by bin(TimeGenerated, $__interval)`, 'short', 'green'),
-    statPanel(7, 'Strict runs', 20, 2, `${q.runSummary} | summarize value=countif(PrivacyMode == 'strict') by bin(TimeGenerated, $__interval)`, 'short', 'green'),
-    tablePanel(10, 'Privacy drops by kind', 0, 6, 12, 9, `${q.privacy} | summarize Drops=sum(DroppedCount), Redactions=sum(RedactedCount), Runs=dcount(RunId) by ContentKind, Action, PrivacyMode | order by Drops desc`),
-    tablePanel(11, 'Runs with policy blocks or drops', 12, 6, 12, 9, `${q.runSummary} | where PrivacyMode == 'unsafe' or RiskScore > 0 or ToolDeniedCount > 0 | project TimeGenerated, RunId, RepoHash, PrivacyMode, ContentCaptureMode, ToolDeniedCount, OutcomeStatus, RiskScore | order by TimeGenerated desc | take 100`)
+  '06-safety-privacy-policy.json': dashboard('agentops-v2-safety-privacy-policy', 'Privacy', [
+    textPanel(1, 'Trust screen', 0, 0, 24, 3, `## Privacy\n**AgentOps default: strict metadata only · content capture off.** This screen describes AgentOps telemetry only. It does not prove what GitHub Copilot, an MCP server, or any other connected service stores. The capture posture below reflects the selected AgentOps runs. ${emptyState}`),
+    tablePanel(13, 'AgentOps capture posture', 0, 3, 24, 4, `${q.runSummary} | extend PrivacyMode=coalesce(PrivacyMode, 'unknown'), ContentCaptureMode=coalesce(ContentCaptureMode, 'unknown') | summarize Runs=count() by PrivacyMode, ContentCaptureMode, Coverage | extend Scope='AgentOps telemetry only', Meaning=case(PrivacyMode == 'strict' and ContentCaptureMode == 'off', 'metadata only; prompt, response, code, file content, tool arguments, and tool results are not recorded by AgentOps', PrivacyMode == 'strict', 'strict AgentOps telemetry; review the reported capture mode', 'review this AgentOps capture posture before sharing or broader use') | project Scope, PrivacyMode, ContentCaptureMode, Coverage, Runs, Meaning | order by PrivacyMode asc, ContentCaptureMode asc`),
+    statPanel(2, 'Content items blocked', 0, 7, `${q.privacy} | summarize value=sum(DroppedCount) by bin(TimeGenerated, $__interval)`, 'short', 'yellow'),
+    statPanel(3, 'Secret-like items blocked', 4, 7, `${q.privacy} | where ContentKind == 'secret_like' | summarize value=sum(DroppedCount) by bin(TimeGenerated, $__interval)`, 'short', 'red'),
+    statPanel(4, 'Runs reporting unsafe mode', 8, 7, `${q.runSummary} | summarize value=countif(PrivacyMode == 'unsafe') by bin(TimeGenerated, $__interval)`, 'short', 'red'),
+    statPanel(5, 'Policy blocks', 12, 7, `${q.events} | where EventType == 'policy' | summarize value=countif(Status == 'denied' or Status == 'blocked') by bin(TimeGenerated, $__interval)`, 'short', 'red'),
+    statPanel(6, 'Successful poison tests', 16, 7, `${q.health} | where CheckName == 'privacy-poison' | summarize value=countif(Status == 'ok') by bin(TimeGenerated, $__interval)`, 'short', 'green'),
+    statPanel(7, 'Strict-mode runs', 20, 7, `${q.runSummary} | summarize value=countif(PrivacyMode == 'strict') by bin(TimeGenerated, $__interval)`, 'short', 'green'),
+    tablePanel(10, 'Blocked or redacted items by kind', 0, 11, 12, 9, `${q.privacy} | summarize Drops=sum(DroppedCount), Redactions=sum(RedactedCount), Runs=dcount(RunId) by ContentKind, Action, PrivacyMode | order by Drops desc`),
+    tablePanel(11, 'Runs needing privacy or policy review', 12, 11, 12, 9, `${q.runSummary} | where PrivacyMode == 'unsafe' or RiskScore > 0 or ToolDeniedCount > 0 | project TimeGenerated, RunId, RepoHash, PrivacyMode, ContentCaptureMode, ToolDeniedCount, OutcomeStatus, RiskScore | order by TimeGenerated desc | take 100`),
+    withOverrides(tablePanel(12, 'Alert handoff review', 0, 20, 24, 8, `union isfuzzy=true (AgentOpsAlertHandoffs_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo())), (datatable(TimeGenerated:datetime, HandoffId:string, AlertRule:string, SessionId:string, Severity:string, Owner:string, State:string, Last:string, ConfigChangeCount:long, ChangeTargetRefs:dynamic) [])
+| extend HandoffId=coalesce(tostring(column_ifexists('HandoffId', '')), tostring(column_ifexists('AlertHandoffId', '')), tostring(column_ifexists('Id', '')), strcat(tostring(column_ifexists('AlertRule', '')), '-', tostring(column_ifexists('SessionId', ''))))
+| extend AlertRule=coalesce(tostring(column_ifexists('AlertRule', '')), tostring(column_ifexists('Rule', '')))
+| extend SessionId=coalesce(tostring(column_ifexists('SessionId', '')), tostring(column_ifexists('Session', '')))
+| extend Severity=coalesce(tostring(column_ifexists('Severity', '')), tostring(column_ifexists('AlertSeverity', '')))
+| extend Owner=coalesce(tostring(column_ifexists('Owner', '')), tostring(column_ifexists('AssignedOwner', '')))
+| extend State=coalesce(tostring(column_ifexists('State', '')), tostring(column_ifexists('Status', '')))
+| extend Last=coalesce(tostring(column_ifexists('Last', '')), tostring(column_ifexists('Lookback', '')))
+| extend ConfigChangeCount=tolong(column_ifexists('ConfigChangeCount', long(null)))
+| extend ChangeTargetRefs=column_ifexists('ChangeTargetRefs', dynamic([]))
+| where ('$session_id' == '__all' or SessionId == '$session_id')
+| where ('$outcome_status' == '__all' or State == '$outcome_status')
+| extend AskAgentOpsSharedLaunch=iff(isnotempty(HandoffId), strcat('$actioner_url', '/ask-agentops/shared/alert-handoff/', url_encode(HandoffId), '?session_id=', url_encode(SessionId), '&last=$timeRange'), '')
+| extend AskSharedContext=iff(isnotempty(HandoffId), 'Ask shared', '')
+| extend OpenReplay='Replay'
+| project TimeGenerated, Severity, AlertRule, SessionId, Owner, State, Last, ConfigChangeCount, ChangeTargetRefs, AskSharedContext, AskAgentOpsSharedLaunch, OpenReplay
+| order by TimeGenerated desc
+| take 50`), [
+      { matcher: { id: 'byName', options: 'SessionId' }, properties: [{ id: 'links', value: [{ title: 'Open Session Replay', url: '/d/agentops-v2-run-replay?var-session_id=${__data.fields.SessionId}&${__url_time_range}', targetBlank: false }] }] },
+      { matcher: { id: 'byName', options: 'OpenReplay' }, properties: [{ id: 'links', value: [{ title: 'Open Run Story', url: '/d/agentops-v2-run-replay?var-session_id=${__data.fields.SessionId}&${__url_time_range}', targetBlank: false }] }] },
+      { matcher: { id: 'byName', options: 'AskSharedContext' }, properties: [{ id: 'links', value: [{ title: 'Ask AgentOps with shared alert handoff', url: '${__data.fields.AskAgentOpsSharedLaunch}', targetBlank: true }] }] }
+    ])
   ]),
 
   '07-code-outcomes.json': dashboard('agentops-v2-code-outcomes', 'Code Outcomes', [
@@ -777,8 +917,8 @@ const dashboards = {
     tablePanel(11, 'Recurring patterns', 0, 12, 24, 8, `${q.insights} | where isnotempty(PatternId) or InsightType startswith 'recurring-' | extend OpenPattern='Pattern', OpenReplay='Replay' | project TimeGenerated, InsightType, Severity, PatternRuns, PatternDimension, PatternKey, Summary, SuggestedNextStep, OpenPattern, OpenReplay, RunId, RepoHash, ModelActual, ToolName, CurrentValue | order by PatternRuns desc, TimeGenerated desc | take 100`),
     timeseriesPanel(20, 'Insight volume', 0, 20, 12, 8, `${q.insights} | summarize Insights=count() by TimeGenerated=bin(TimeGenerated, $__interval), Severity | order by TimeGenerated asc`),
     tablePanel(21, 'Regression evidence', 12, 20, 12, 8, `${q.insights} | where InsightType has 'regression' or InsightType has 'anomaly' | project TimeGenerated, InsightType, Severity, RepoHash, ModelActual, ToolName, BaselineValue, CurrentValue, ConfigHash, Summary | order by TimeGenerated desc | take 100`),
-    tablePanel(23, 'Eval regression queue', 0, 28, 24, 8, `union isfuzzy=true (${q.insights} | where InsightType has_any ('eval', 'regression', 'anomaly') | project TimeGenerated, Source='insight', Severity, Action=InsightType, RunId, TraceId, RepoHash, ModelActual, TaskType, EvalOverall=real(null), EvalBucket='', BaselineValue, CurrentValue, PatternKey, Summary, NextAction=SuggestedNextStep), (${q.recommendations} | where EvalBucket in ('poor', 'review') or Action has 'regression' or ObservedPattern has 'eval' | project TimeGenerated, Source='recommendation', Severity, Action, RunId, TraceId, RepoHash='', ModelActual='', TaskType='', EvalOverall, EvalBucket, BaselineValue=real(null), CurrentValue=todouble(EvalOverall), PatternKey, Summary=ObservedPattern, NextAction) | extend OpenReplay='Replay', OpenPattern=iff(isnotempty(PatternKey), 'Pattern', '') | project TimeGenerated, Source, Severity, Action, EvalOverall, EvalBucket, BaselineValue, CurrentValue, Summary, NextAction, RunId, TraceId, RepoHash, ModelActual, TaskType, PatternKey, OpenReplay, OpenPattern | order by TimeGenerated desc | take 200`),
-    tablePanel(22, 'Recommendation artifacts', 0, 36, 24, 8, `${q.recommendations} | extend OpenReplay='Replay', OpenPattern=iff(isnotempty(PatternKey), 'Pattern', ''), ChangeAnnotationCount=array_length(ChangeAnnotations) | project TimeGenerated, RecommendationId, Severity, Action, ObservedPattern, NextAction, RunId, TraceId, PatternKey, PatternRuns, PatternDimension, EvalOverall, EvalBucket, BenchmarkRunId, BenchmarkDecision, BenchmarkPassRatePct, BenchmarkAverageScore, BenchmarkSafetyViolationCount, BenchmarkArtifactAdded, BenchmarkArtifactModified, BenchmarkArtifactDeleted, BenchmarkArtifactTotalChanged, BenchmarkArtifactFiles, BenchmarkHiddenChecksPassed, BenchmarkHiddenChecksFailed, BenchmarkHiddenCheckPacks, BenchmarkPolicyBlocks, BenchmarkPermissionProfiles, BenchmarkPolicyTasks, BenchmarkSemanticCheckCount, BenchmarkSemanticAverageScore, BenchmarkSemanticChecks, BenchmarkApprovalStatus, BenchmarkApprovalCount, BenchmarkRequiredApprovals, ChangeAnnotationCount, ChangeAnnotations, ChangeTargetRefs, DashboardCount, OpenReplay, OpenPattern | order by TimeGenerated desc | take 200`),
+    tablePanel(23, 'Eval regression queue', 0, 28, 24, 8, `union isfuzzy=true (${q.insights} | where InsightType has_any ('eval', 'regression', 'anomaly') | project TimeGenerated, Source='insight', Severity, Action=InsightType, RunId, TraceId, RepoHash, ModelActual, TaskType, EvalOverall=long(null), EvalBucket='', BaselineValue, CurrentValue, PatternKey, Summary, NextAction=SuggestedNextStep), (${q.recommendations} | where EvalBucket in ('poor', 'review') or Action has 'regression' or ObservedPattern has 'eval' | project TimeGenerated, Source='recommendation', Severity, Action, RunId, TraceId, RepoHash='', ModelActual='', TaskType='', EvalOverall, EvalBucket, BaselineValue=real(null), CurrentValue=todouble(EvalOverall), PatternKey, Summary=ObservedPattern, NextAction) | extend OpenReplay='Replay', OpenPattern=iff(isnotempty(PatternKey), 'Pattern', '') | project TimeGenerated, Source, Severity, Action, EvalOverall, EvalBucket, BaselineValue, CurrentValue, Summary, NextAction, RunId, TraceId, RepoHash, ModelActual, TaskType, PatternKey, OpenReplay, OpenPattern | order by TimeGenerated desc | take 200`),
+    tablePanel(22, 'Recommendation artifacts', 0, 36, 24, 8, `${q.recommendations} | extend OpenReplay='Replay', OpenPattern=iff(isnotempty(PatternKey), 'Pattern', ''), ChangeAnnotationCount=array_length(ChangeAnnotations), AskAgentOpsSharedLaunch=iff(isnotempty(RecommendationId), strcat('$actioner_url', '/ask-agentops/shared/recommendation/', url_encode(RecommendationId), '?run_id=', url_encode(RunId), '&trace_id=', url_encode(TraceId), '&last=$timeRange'), ''), AskSharedContext=iff(isnotempty(RecommendationId), 'Ask shared', '') | project TimeGenerated, RecommendationId, Severity, Action, ObservedPattern, NextAction, RunId, TraceId, PatternKey, PatternRuns, PatternDimension, EvalOverall, EvalBucket, BenchmarkRunId, BenchmarkDecision, BenchmarkPassRatePct, BenchmarkAverageScore, BenchmarkSafetyViolationCount, BenchmarkArtifactAdded, BenchmarkArtifactModified, BenchmarkArtifactDeleted, BenchmarkArtifactTotalChanged, BenchmarkArtifactFiles, BenchmarkHiddenChecksPassed, BenchmarkHiddenChecksFailed, BenchmarkHiddenCheckPacks, BenchmarkPolicyBlocks, BenchmarkPermissionProfiles, BenchmarkPolicyTasks, BenchmarkSemanticCheckCount, BenchmarkSemanticAverageScore, BenchmarkSemanticChecks, BenchmarkApprovalStatus, BenchmarkApprovalCount, BenchmarkRequiredApprovals, ChangeAnnotationCount, ChangeAnnotations, ChangeTargetRefs, DashboardCount, AskSharedContext, AskAgentOpsSharedLaunch, OpenReplay, OpenPattern | order by TimeGenerated desc | take 200`),
     tablePanel(24, 'Config change annotations', 0, 44, 24, 8, `${configAnnotationsQuery()} | order by TimeGenerated desc | take 200`)
   ]),
 
@@ -786,14 +926,35 @@ const dashboards = {
     textPanel(1, 'Supportability', 0, 0, 24, 2, `## Collector Health\nLocal collector, export, privacy poison, Azure, Grafana, schema, and dashboard version status. ${emptyState}`),
     tablePanel(10, 'Collector checks', 0, 2, 24, 12, `${q.health} | project TimeGenerated, CheckName, Status, Detail, PrivacyMode, CollectorMode, OtlpEndpoint, AzureConfigured, GrafanaConfigured, DashboardVersion, SchemaVersion | order by TimeGenerated desc | take 500`),
     timeseriesPanel(20, 'Export errors and drops', 0, 14, 12, 8, `${q.health} | summarize ExportErrors=sum(ExportErrors), DroppedContent=sum(DroppedContentCount) by TimeGenerated=bin(TimeGenerated, $__interval) | order by TimeGenerated asc`),
-    tablePanel(21, 'Last received/exported', 12, 14, 12, 8, `${q.health} | summarize LastSpanReceived=max(LastSpanReceived), LastExportSuccess=max(LastExportSuccess), LatestStatus=arg_max(TimeGenerated, Status) by CollectorMode, PrivacyMode, OtlpEndpoint | order by LastSpanReceived desc`)
+    tablePanel(21, 'Last received/exported', 12, 14, 12, 8, `${q.health} | summarize LastSpanReceived=max(LastSpanReceived), LastExportSuccess=max(LastExportSuccess), LatestStatus=arg_max(TimeGenerated, Status) by CollectorMode, PrivacyMode, OtlpEndpoint | order by LastSpanReceived desc`),
+    withOverrides(tablePanel(22, 'Schema version coverage', 0, 22, 24, 8, `let SchemaCoverageSeed = datatable(TimeGenerated:datetime, SchemaVersion:string)[datetime(null), '2']; union isfuzzy=true withsource=TableName SchemaCoverageSeed, AgentOpsRunSummary_CL, AgentOpsEvents_CL, AgentOpsToolCalls_CL, AgentOpsMcpCalls_CL, AgentOpsPrivacy_CL, AgentOpsEval_CL, AgentOpsGithubOutcomes_CL, AgentOpsInsights_CL, AgentOpsRecommendations_CL, AgentOpsSavedViews_CL, AgentOpsCollectorHealth_CL | where isnull(TimeGenerated) or TimeGenerated between ($__timeFrom() .. $__timeTo()) | extend SchemaVersion=tostring(column_ifexists('SchemaVersion', '')) | summarize Rows=count(), MissingSchemaVersion=countif(isempty(SchemaVersion)), MismatchedSchemaVersion=countif(isnotempty(SchemaVersion) and SchemaVersion != '2'), Versions=make_set(SchemaVersion), LastSeen=max(TimeGenerated) by TableName | where isnotnull(LastSeen) | extend ExpectedSchemaVersion='2' | extend SchemaStatus=case(MissingSchemaVersion > 0, 'missing-version', MismatchedSchemaVersion > 0, 'version-review', 'ok') | project TableName, SchemaStatus, Rows, MissingSchemaVersion, MismatchedSchemaVersion, Versions, ExpectedSchemaVersion, LastSeen | order by SchemaStatus asc, TableName asc`), []),
+    withOverrides(tablePanel(23, 'Exporter failure review', 0, 30, 24, 8, `${q.health.replace("Status=iff(SpanRows > 0, 'healthy', 'empty')", "Status=iff(ExportErrors > 0, 'degraded', iff(SpanRows > 0, 'healthy', 'empty'))")} | extend ExportErrors=tolong(column_ifexists('ExportErrors', 0)), LastExportSuccess=todatetime(column_ifexists('LastExportSuccess', datetime(null))), LastSpanReceived=todatetime(column_ifexists('LastSpanReceived', datetime(null))) | extend ExplicitExportFailureReason=tostring(column_ifexists('ExportFailureReason', '')), ExplicitExportFailureAction=tostring(column_ifexists('ExportFailureAction', '')) | extend ExportFailureReason=iff(ExplicitExportFailureReason != '', ExplicitExportFailureReason, case(ExportErrors > 0, 'export-error-count', isnotnull(LastSpanReceived) and isnull(LastExportSuccess), 'missing-export-success', tostring(Status) !in ('healthy', 'ok', 'empty'), strcat('collector-status-', tostring(Status)), '')) | extend ExportFailureAction=iff(ExplicitExportFailureAction != '', ExplicitExportFailureAction, case(ExportErrors > 0, 'Check collector exporter logs, Azure Monitor DCR/DCE routing, credentials, and network egress.', isnotnull(LastSpanReceived) and isnull(LastExportSuccess), 'Confirm the exporter is configured and can reach Azure Monitor.', tostring(Status) !in ('healthy', 'ok', 'empty'), 'Open collector health details and rerun agentops collector smoke --privacy strict --poison --json.', '')) | where ExportFailureReason != '' | project TimeGenerated, Component, Status, ExportErrors, ExportFailureReason, ExportFailureAction, LastSpanReceived, LastExportSuccess, OtlpEndpoint, CollectorMode, PrivacyMode | order by TimeGenerated desc | take 100`), [])
   ])
 };
 
+const checkOnly = process.argv.includes('--check');
+let driftCount = 0;
+
 fs.mkdirSync(outDir, { recursive: true });
 for (const [fileName, content] of Object.entries(dashboards)) {
-  fs.writeFileSync(path.join(outDir, fileName), `${JSON.stringify(content, null, 2)}\n`);
+  const dashboardPath = path.join(outDir, fileName);
+  const generated = `${JSON.stringify(content, null, 2)}\n`;
+  if (checkOnly) {
+    const current = fs.existsSync(dashboardPath) ? fs.readFileSync(dashboardPath, 'utf8') : '';
+    if (current !== generated) {
+      driftCount += 1;
+      console.error(`dashboard generator drift: grafana/dashboards/v2/${fileName}`);
+    }
+    continue;
+  }
+  fs.writeFileSync(dashboardPath, generated);
   console.log(`wrote grafana/dashboards/v2/${fileName}`);
+}
+
+if (checkOnly) {
+  if (driftCount > 0) process.exitCode = 1;
+  else console.log(`dashboard generator drift check passed (${Object.keys(dashboards).length} dashboards)`);
+  return;
 }
 
 fs.mkdirSync(provisioningDashboardsDir, { recursive: true });

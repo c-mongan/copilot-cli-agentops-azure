@@ -22,7 +22,7 @@ The poison smoke test injects synthetic `SECRET_*` fields and checks that strict
 
 ## Prompt And Response Viewer
 
-Run Replay includes a prompt/response viewer, but strict mode leaves it empty by design. It only renders rows from `AgentOpsContent_CL`, which must be explicitly produced and explicitly allowed for ingestion.
+Run Story includes a prompt/response viewer, but strict mode leaves it empty by design. It only renders rows from `AgentOpsContent_CL`, which must be explicitly produced and explicitly allowed for ingestion.
 
 Check the current state with:
 
@@ -54,4 +54,4 @@ The strict collector contract is represented as source-controlled fragments unde
 - `mcp-normalizer.yaml`
 - `span-to-run-summary.yaml`
 
-Poison fixtures live under `collector/tests/privacy-poison-fixtures/`. `agentops collector validate` includes an artifact check so missing processor fragments or leaking fixtures fail validation before export.
+Poison fixtures live under `collector/security-fixtures/privacy-poison-fixtures/`. `agentops collector validate` includes an artifact check so missing processor fragments or leaking fixtures fail validation before export.

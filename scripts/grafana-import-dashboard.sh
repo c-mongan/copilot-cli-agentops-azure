@@ -7,6 +7,7 @@
 # Required env (auto-resolved from azd env when run as an azd hook):
 #   AZURE_RESOURCE_GROUP   e.g. rg-agentops-dev
 #   GRAFANA_NAME           e.g. graf-agentops-dev
+#   GRAFANA_DEPLOYED       false skips this optional advanced path
 # Optional:
 #   GRAFANA_FOLDER         folder title (default: "AgentOps for Azure")
 #   DASHBOARD_JSON         path to one dashboard JSON (default: import the full dashboard pack)
@@ -18,6 +19,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+source "${SCRIPT_DIR}/lib/azure-subscription-guard.sh"
 
 if [[ "${AGENTOPS_V2_ONLY:-true}" == "true" ]]; then
   AGENTOPS_INCLUDE_V2="true"
@@ -38,9 +40,27 @@ fi
 # Pull from azd env if not set explicitly
 if [[ -z "${AZURE_RESOURCE_GROUP:-}" || -z "${GRAFANA_NAME:-}" ]]; then
   if command -v azd >/dev/null 2>&1 && azd env get-values >/dev/null 2>&1; then
-    eval "$(azd env get-values | grep -E '^(AZURE_RESOURCE_GROUP|GRAFANA_NAME)=' || true)"
+    eval "$(azd env get-values | grep -E '^(AZURE_RESOURCE_GROUP|GRAFANA_NAME|GRAFANA_DEPLOYED)=' || true)"
   fi
 fi
+
+if [[ -z "${GRAFANA_DEPLOYED:-}" ]]; then
+  # Keep the optional path fail-closed when deployment outputs are unavailable.
+  # An explicitly supplied Grafana name is enough to opt back in for legacy
+  # or manually configured environments.
+  if [[ -n "${GRAFANA_NAME:-}" ]]; then
+    GRAFANA_DEPLOYED="true"
+  else
+    GRAFANA_DEPLOYED="false"
+  fi
+fi
+
+if [[ "${GRAFANA_DEPLOYED}" == "false" ]]; then
+  echo "Azure Managed Grafana is disabled for this deployment; skipping optional dashboard import." >&2
+  exit 0
+fi
+
+agentops_require_azure_subscription
 
 if [[ -z "${AZURE_RESOURCE_GROUP:-}" ]]; then
   echo "ERROR: AZURE_RESOURCE_GROUP not set (and azd env has no value)." >&2
@@ -108,10 +128,7 @@ az grafana folder show -n "${GRAFANA_NAME}" --folder "${GRAFANA_FOLDER}" >/dev/n
 
 URL="$(az grafana show -n "${GRAFANA_NAME}" -g "${AZURE_RESOURCE_GROUP}" --query 'properties.endpoint' -o tsv)"
 
-SUBSCRIPTION_ID="${AGENTOPS_AZURE_SUBSCRIPTION_ID:-${AZURE_SUBSCRIPTION_ID:-}}"
-if [[ -z "${SUBSCRIPTION_ID}" ]]; then
-  SUBSCRIPTION_ID="$(az account show --query id -o tsv)"
-fi
+SUBSCRIPTION_ID="${AGENTOPS_AZURE_SUBSCRIPTION_ID:-}"
 
 WORKSPACE_RESOURCE_ID="${AGENTOPS_LOG_ANALYTICS_WORKSPACE_RESOURCE_ID:-}"
 WORKSPACE_NAME="${AGENTOPS_LOG_ANALYTICS_WORKSPACE_NAME:-${LOG_ANALYTICS_WORKSPACE_NAME:-}}"

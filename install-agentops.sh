@@ -2,7 +2,11 @@
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-shadow_copilot=true
+cli_entry="${script_dir}/agentops-cli/src/index.js"
+if [[ ! -f "${cli_entry}" ]]; then
+  cli_entry="${script_dir}/src/index.js"
+fi
+shadow_copilot=false
 install_collector=true
 install_plugin=false
 collector_force=false
@@ -17,8 +21,8 @@ Installs AgentOps shims and, by default, the tested local Collector binary.
 Docker is not required for the normal path.
 
 Options:
-  --no-shadow-copilot      Do not install the plain `copilot` shadow shim.
-  --shadow-copilot         Install the plain `copilot` shadow shim. This is the default.
+  --no-shadow-copilot      Do not install the plain `copilot` shadow shim (default).
+  --shadow-copilot         Opt in to routing plain `copilot` through AgentOps.
   --no-collector           Skip Collector binary installation.
   --collector-version VER  Collector version to install. Default: 0.151.0.
   --force-collector        Reinstall the Collector binary even if one exists.
@@ -78,19 +82,19 @@ if [[ "${install_collector}" == true ]]; then
   if [[ "${collector_force}" == true ]]; then
     collector_args+=(--force)
   fi
-  node "${script_dir}/agentops-cli/src/index.js" "${collector_args[@]}"
+  node "${cli_entry}" "${collector_args[@]}"
 fi
 
 shim_args=()
 if [[ "${shadow_copilot}" == true ]]; then
   shim_args+=(--shadow-copilot)
 fi
-"${script_dir}/scripts/install-copilot-agentops-shim.sh" "${shim_args[@]}"
+"${script_dir}/scripts/install-copilot-agentops-shim.sh" ${shim_args[@]+"${shim_args[@]}"}
 
 if [[ "${install_plugin}" == true ]]; then
   echo
   echo "Installing AgentOps plugin files into COPILOT_HOME. Remove with: agentops plugin uninstall"
-  node "${script_dir}/agentops-cli/src/index.js" plugin install
+  node "${cli_entry}" plugin install
 fi
 
 cat <<'MSG'
@@ -98,9 +102,12 @@ cat <<'MSG'
 Next:
   export PATH="$HOME/.local/bin:$PATH"
   agentops configure import-azd
-  agentops collector start --mode auto --privacy strict
-  copilot -p "Say AGENTOPS_READY in one short sentence."
+  agentops collector start --mode local --privacy strict
+  agentops copilot -p "Say AGENTOPS_READY in one short sentence."
+
+Plain `copilot` is unchanged. To route it through AgentOps too, reinstall with:
+  agentops install --shadow-copilot
 
 Remove later with:
-  ./uninstall-agentops.sh
+  agentops uninstall
 MSG

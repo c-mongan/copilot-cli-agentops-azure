@@ -4,7 +4,8 @@ const path = require('node:path');
 const { validateCollectorArtifacts, validateOwaspFixtures } = require('./collector-artifacts');
 const { validateDashboardContentGuardrails } = require('./dashboard-content-guardrails');
 const { poisonCheck } = require('./privacy');
-const { repoRoot } = require('./paths');
+const { collectorHome, repoRoot } = require('./paths');
+const { readJson } = require('./json');
 const { commandExists, run } = require('./shell');
 
 function finding(name, ok, detail = null, severity = 'error', evidence = []) {
@@ -31,7 +32,7 @@ function isSourceCheckout(root) {
 
 function isInstalledPackage(root) {
   try {
-    return JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).name === 'copilot-agentops-cli'
+    return readJson(path.join(root, 'package.json')).name === 'copilot-agentops-cli'
       && !isSourceCheckout(root);
   } catch {
     return false;
@@ -72,9 +73,9 @@ const postureControls = [
     status: 'covered',
     summary: 'Prompt-like content is dropped in strict mode and prompt-injection abuse fixtures must sanitize before export.',
     evidence: [
-      evidenceItem('collector/tests/owasp-abuse-fixtures/injected-tool-instructions.json', 'injected tool instruction fixture'),
-      evidenceItem('collector/tests/owasp-abuse-fixtures/mcp-prompt-injection.json', 'MCP prompt injection fixture'),
-      evidenceItem('collector/tests/owasp-abuse-fixtures/prompt-injection.json', 'prompt injection abuse fixture'),
+      evidenceItem('collector/security-fixtures/owasp-abuse-fixtures/injected-tool-instructions.json', 'injected tool instruction fixture'),
+      evidenceItem('collector/security-fixtures/owasp-abuse-fixtures/mcp-prompt-injection.json', 'MCP prompt injection fixture'),
+      evidenceItem('collector/security-fixtures/owasp-abuse-fixtures/prompt-injection.json', 'prompt injection abuse fixture'),
       evidenceItem('collector/processors/content-signal.yaml', 'content-signal processor'),
       evidenceItem('agentops-cli/src/lib/privacy.js', 'strict sanitizer')
     ]
@@ -86,8 +87,8 @@ const postureControls = [
     status: 'covered',
     summary: 'Strict privacy mode drops content-like and secret-like fields; optional transcript capture requires explicit restricted-workspace, short-retention, RBAC-style guardrails.',
     evidence: [
-      evidenceItem('collector/tests/privacy-poison-fixtures/content-poison.json', 'content poison fixture'),
-      evidenceItem('collector/tests/owasp-abuse-fixtures/secret-tool-result.json', 'secret-like tool result fixture'),
+      evidenceItem('collector/security-fixtures/privacy-poison-fixtures/content-poison.json', 'content poison fixture'),
+      evidenceItem('collector/security-fixtures/owasp-abuse-fixtures/secret-tool-result.json', 'secret-like tool result fixture'),
       evidenceItem('agentops-cli/src/lib/dashboard-content-guardrails.js', 'dashboard content guardrail'),
       evidenceItem('docs/privacy-modes.md', 'content capture restricted workspace guidance'),
       evidenceItem('docs/azure-production-hardening.md', 'retention and RBAC production hardening')
@@ -136,7 +137,7 @@ const postureControls = [
     status: 'covered',
     summary: 'Tool risk, denied calls, broad-permission modes, MCP metadata, and abuse fixtures are tracked without capturing raw tool content.',
     evidence: [
-      evidenceItem('collector/tests/owasp-abuse-fixtures/broad-tool-permissions.json', 'broad permission abuse fixture'),
+      evidenceItem('collector/security-fixtures/owasp-abuse-fixtures/broad-tool-permissions.json', 'broad permission abuse fixture'),
       evidenceItem('agentops-cli/src/lib/mcp/risk-classifier.js', 'MCP and tool risk classifier'),
       evidenceItem('grafana/dashboards/v2/05-tools-mcp-risk.json', 'tool and MCP risk dashboard')
     ]
@@ -182,7 +183,7 @@ const postureControls = [
     status: 'covered',
     summary: 'Cost, token, latency, runaway loop, and Azure budget/alert posture are tested and surfaced in dashboards.',
     evidence: [
-      evidenceItem('collector/tests/owasp-abuse-fixtures/runaway-tool-loop.json', 'runaway tool loop fixture'),
+      evidenceItem('collector/security-fixtures/owasp-abuse-fixtures/runaway-tool-loop.json', 'runaway tool loop fixture'),
       evidenceItem('grafana/dashboards/v2/04-models-cost-tokens.json', 'model cost and token dashboard'),
       evidenceItem('docs/azure-production-hardening.md', 'budget and alert hardening')
     ]
@@ -419,7 +420,7 @@ function contentCaptureOperationalGuardrailsCheck(options = {}) {
       terms: ['--allow-content', 'access-controlled workspace/dashboard']
     },
     {
-      file: 'agentops-cli/src/commands/content.js',
+      file: 'agentops-cli/src/lib/content-status.js',
       terms: ['restricted to approved viewers', 'AgentOpsContent_CL can contain sensitive text']
     }
   ];
@@ -463,6 +464,188 @@ function dashboardEvidenceDisclaimerCheck(options = {}) {
   );
 }
 
+const persistentQueueConfigs = [
+  'collector/otelcol.azuremonitor.strict.yaml',
+  'collector/otelcol.azuremonitor.compat.yaml',
+  'collector/otelcol.binary.strict.yaml',
+  'collector/otelcol.binary.compat.yaml'
+];
+
+function pipelineProcessors(body, signal) {
+  const list = body.match(new RegExp(`^    ${signal}:\\s*\\n(?:^      .+\\n)*?^      processors:\\s*\\[([^\\]]*)\\]`, 'm'))?.[1] || '';
+  return list.split(',').map(value => value.trim()).filter(Boolean);
+}
+
+function persistentCollectorQueueCheck(options = {}) {
+  const root = options.root || repoRoot;
+  const errors = [];
+  const evidence = [];
+
+  for (const file of persistentQueueConfigs) {
+    const resolved = sourceEvidencePath(root, file);
+    const absolute = path.join(root, resolved);
+    if (!fs.existsSync(absolute)) {
+      errors.push(`${resolved}: required persistent-queue config is missing`);
+      continue;
+    }
+    const body = fs.readFileSync(absolute, 'utf8').replace(/\r\n/g, '\n');
+    const fileStorage = body.match(/^  file_storage:\s*\n([\s\S]*?)(?=^processors:)/m)?.[1] || '';
+    const azureExporter = body.match(/^  azuremonitor:\s*\n([\s\S]*?)(?=^service:)/m)?.[1] || '';
+    const queue = azureExporter.match(/^    sending_queue:\s*\n((?:^      .+\n?)*)/m)?.[1] || '';
+    const size = Number(queue.match(/^      queue_size:\s*(\d+)\s*$/m)?.[1]);
+    const strict = file.includes('.strict.');
+
+    if (!/directory:\s*\$\{env:AGENTOPS_OTEL_STORAGE_DIR\}/.test(fileStorage)) errors.push(`${resolved}: file_storage must use AGENTOPS_OTEL_STORAGE_DIR`);
+    if (!/create_directory:\s*true/.test(fileStorage)) errors.push(`${resolved}: file_storage must create its configured directory`);
+    if (!/^  extensions:\s*\[[^\]]*file_storage[^\]]*\]/m.test(body)) errors.push(`${resolved}: service must enable file_storage`);
+    if (!/enabled:\s*true/.test(queue)) errors.push(`${resolved}: sending_queue must be enabled`);
+    if (!/storage:\s*file_storage/.test(queue)) errors.push(`${resolved}: sending_queue must persist through file_storage`);
+    if (!Number.isInteger(size) || size < 1 || size > 10000) errors.push(`${resolved}: sending_queue queue_size must be bounded between 1 and 10000`);
+
+    if (strict) {
+      for (const signal of ['traces', 'metrics', 'logs']) {
+        const processors = pipelineProcessors(body, signal);
+        const privacyIndex = processors.indexOf('transform/privacy_strict');
+        const batchIndex = processors.indexOf('batch');
+        if (privacyIndex < 0) errors.push(`${resolved}: ${signal} pipeline must include transform/privacy_strict before export`);
+        if (batchIndex >= 0 && privacyIndex > batchIndex) errors.push(`${resolved}: ${signal} pipeline must sanitize before batch/queue/export`);
+      }
+    }
+    evidence.push({ file: resolved, queue_size: size || null, strict });
+  }
+
+  const queueDir = options.collectorQueueDir || path.join(collectorHome, 'queue');
+  let runtime = { directory: queueDir, exists: false, permissions_checked: false };
+  if (fs.existsSync(queueDir)) {
+    const mode = fs.statSync(queueDir).mode & 0o777;
+    runtime = { directory: queueDir, exists: true, permissions_checked: process.platform !== 'win32', mode: mode.toString(8).padStart(3, '0') };
+    if (process.platform !== 'win32' && (mode & 0o077) !== 0) errors.push(`${queueDir}: persistent queue directory permissions must not grant group/other access`);
+  }
+  evidence.push(runtime);
+
+  return finding(
+    'collector-persistent-queue-security',
+    errors.length === 0,
+    errors.length === 0
+      ? `${persistentQueueConfigs.length} persistent queue configs are bounded, privacy-first, and runtime permissions are safe when present`
+      : errors.join('; '),
+    'error',
+    evidence
+  );
+}
+
+function localStrictCollectorSecurityCheck(options = {}) {
+  const root = options.root || repoRoot;
+  const file = sourceEvidencePath(root, 'collector/otelcol.local.strict.yaml');
+  const absolute = path.join(root, file);
+  if (!fs.existsSync(absolute)) {
+    return finding('collector-local-strict-security', false, `${file}: strict local Collector config is missing`, 'error', [{ file }]);
+  }
+
+  const body = fs.readFileSync(absolute, 'utf8').replace(/\r\n/g, '\n');
+  const errors = [];
+  const requirePattern = (pattern, message) => {
+    if (!pattern.test(body)) errors.push(message);
+  };
+
+  requirePattern(/directory:\s*\$\{env:AGENTOPS_OTEL_STORAGE_DIR\}/, `${file}: local durable storage must use AGENTOPS_OTEL_STORAGE_DIR`);
+  requirePattern(/create_directory:\s*true/, `${file}: local durable storage must create its configured directory`);
+  requirePattern(/fsync:\s*true/, `${file}: local durable storage must enable fsync`);
+  requirePattern(/^  extensions:\s*\[[^\]]*file_storage[^\]]*\]/m, `${file}: local service must enable file_storage`);
+  requirePattern(/^  otlp_http\/local_receipt:\s*\n[\s\S]*?sending_queue:\s*\n[\s\S]*?enabled:\s*true/m, `${file}: local receipt relay must have a durable sending queue`);
+  requirePattern(/storage:\s*file_storage/, `${file}: local receipt relay must persist through file_storage`);
+  requirePattern(/queue_size:\s*(?:[1-9]\d{0,3}|10000)\s*$/m, `${file}: local receipt queue must be bounded`);
+  requirePattern(/error_mode:\s*propagate/, `${file}: strict privacy transforms must fail closed`);
+  requirePattern(/endpoint:\s*127\.0\.0\.1:4319/, `${file}: local receipt relay must remain loopback-only`);
+
+  for (const signal of ['traces', 'metrics', 'logs']) {
+    const processors = pipelineProcessors(body, signal);
+    const privacyIndex = processors.indexOf('transform/privacy_strict');
+    const batchIndex = processors.indexOf('batch');
+    if (privacyIndex < 0) errors.push(`${file}: ${signal} pipeline must include transform/privacy_strict`);
+    if (batchIndex >= 0 && privacyIndex > batchIndex) errors.push(`${file}: ${signal} pipeline must sanitize before batch/queue/export`);
+  }
+
+  return finding(
+    'collector-local-strict-security',
+    errors.length === 0,
+    errors.length === 0
+      ? 'strict local Collector uses loopback receivers, fail-closed privacy filtering, and a bounded private receipt queue'
+      : errors.join('; '),
+    'error',
+    [{ file, controls: ['loopback-receivers', 'strict-transform', 'fail-closed-transform', 'private-file-storage', 'bounded-receipt-queue'] }]
+  );
+}
+
+function durableReceiptSecurityCheck(options = {}) {
+  const root = options.root || repoRoot;
+  const spoolFile = sourceEvidencePath(root, 'agentops-cli/src/lib/azure/durable-evidence-spool.js');
+  const uploadFile = sourceEvidencePath(root, 'agentops-cli/src/lib/azure/logs-ingestion-upload.js');
+  const subscriptionFile = sourceEvidencePath(root, 'agentops-cli/src/lib/azure/subscription-guard.js');
+  const errors = [];
+  const evidence = [];
+  const read = file => {
+    const absolute = path.join(root, file);
+    if (!fs.existsSync(absolute)) {
+      errors.push(`${file}: required durable receipt security evidence is missing`);
+      return '';
+    }
+    return fs.readFileSync(absolute, 'utf8');
+  };
+  const spool = read(spoolFile);
+  const upload = read(uploadFile);
+  const subscription = read(subscriptionFile);
+  const requirePattern = (body, pattern, message) => {
+    if (!pattern.test(body)) errors.push(message);
+  };
+
+  requirePattern(spool, /const allowedEvidenceTables = new Set\(\[\s*'AgentOpsEvents_CL'\s*\]\)/,
+    `${spoolFile}: durable receipts must target AgentOpsEvents_CL only`);
+  requirePattern(spool, /row\.PrivacyMode = 'strict'[\s\S]*row\.ContentCaptureMode = 'off'/,
+    `${spoolFile}: durable receipt canonicalizer must force strict privacy and content capture off`);
+  requirePattern(spool, /const maximumMaxBytes = \d+[\s\S]*const maximumTtlMs = \d+[\s\S]*const maximumRetryDelayMs = \d+[\s\S]*const maximumDrainAttempts = \d+/,
+    `${spoolFile}: bytes, TTL, retry delay, and attempt bounds must be explicit`);
+  requirePattern(spool, /boundedOption\(drainOptions\.maxAttempts, 3, maximumDrainAttempts/,
+    `${spoolFile}: drain attempts must use the bounded option validator`);
+  requirePattern(spool, /lstatSync\(directory\)[\s\S]*isSymbolicLink\(\)[\s\S]*lstatSync\(file\)[\s\S]*isSymbolicLink\(\)/,
+    `${spoolFile}: spool root and segments must reject symlinks`);
+  requirePattern(spool, /mkdirSync\(directory, \{ recursive: true, mode: 0o700 \}\)[\s\S]*openSync\(temporary, 'wx', 0o600\)/,
+    `${spoolFile}: spool directory and segments must be private`);
+  requirePattern(spool, /immutableEnvelopeHash[\s\S]*created_at[\s\S]*expires_at[\s\S]*row_hash/,
+    `${spoolFile}: immutable receipt envelope fields must be integrity checked`);
+  if (/['"](?:Reason|Error)['"]/.test(spool)) {
+    errors.push(`${spoolFile}: raw Reason/Error fields must never be allowlisted or persisted`);
+  }
+
+  requirePattern(upload, /new URL\([\s\S]*\.ingest\.monitor\.azure\.com[\s\S]*endpoint\.username[\s\S]*endpoint\.password[\s\S]*endpoint\.hash[\s\S]*endpoint\.search/,
+    `${uploadFile}: uploader must validate the Azure public Monitor hostname and reject URL credential/query/fragment injection`);
+  requirePattern(upload, /endpoint\.pathname !== '\/'/,
+    `${uploadFile}: uploader must reject non-root endpoint paths`);
+  requirePattern(upload, /\^dcr-\[A-Za-z0-9-\]\+\$/,
+    `${uploadFile}: uploader must validate the DCR immutable ID`);
+  requirePattern(upload, /maximumRequestTimeoutMs[\s\S]*requestTimeoutMs\(options\.timeoutMs\)[\s\S]*AbortSignal\.timeout\(timeoutMs\)/,
+    `${uploadFile}: HTTP requests must use a bounded timeout`);
+  requirePattern(upload, /checkAzureSubscription\([\s\S]*expectedSubscriptionId: options\.expectedSubscriptionId[\s\S]*subscriptionId: subscription\.expected/,
+    `${uploadFile}: uploader and token request must use the exact guarded subscription`);
+  requirePattern(subscription, /APPROVED_AZURE_SUBSCRIPTION_IDS[\s\S]*approved\.includes\(expected\)[\s\S]*refused the write/,
+    `${subscriptionFile}: subscription guard must fail closed against the approved enterprise subscription`);
+
+  evidence.push(
+    { file: spoolFile, controls: ['events-only-schema', 'strict-off', 'private-spool', 'symlink-rejection', 'bounded-storage-ttl-retries', 'envelope-integrity', 'no-raw-reason-error'] },
+    { file: uploadFile, controls: ['monitor-hostname', 'dcr-validation', 'exact-subscription', 'bounded-http-timeout-response'] },
+    { file: subscriptionFile, controls: ['enterprise-subscription-allowlist', 'fail-closed-write-guard'] }
+  );
+  return finding(
+    'durable-receipt-security',
+    errors.length === 0,
+    errors.length === 0
+      ? 'durable AgentOpsEvents receipts are metadata-only, bounded, private, integrity-checked, and pinned to the guarded Azure Monitor destination'
+      : errors.join('; '),
+    'error',
+    evidence
+  );
+}
+
 function securityAudit(options = {}) {
   const runGitleaksCheck = options.runGitleaks || runGitleaks;
   const runStatic = options.runStaticCheck || runStaticCheck;
@@ -476,7 +659,10 @@ function securityAudit(options = {}) {
     owaspFixtureCheck(options),
     dashboardContentGuardrailCheck(options),
     contentCaptureOperationalGuardrailsCheck(options),
-    dashboardEvidenceDisclaimerCheck(options)
+    dashboardEvidenceDisclaimerCheck(options),
+    localStrictCollectorSecurityCheck(options),
+    persistentCollectorQueueCheck(options),
+    durableReceiptSecurityCheck(options)
   ];
   const blocking = checks.filter(check => !check.ok && check.severity === 'error');
   const warnings = checks.filter(check => check.severity === 'warning');
@@ -504,8 +690,11 @@ module.exports = {
   dependencyAudit,
   dashboardEvidenceDisclaimerCheck,
   dashboardContentGuardrailCheck,
+  durableReceiptSecurityCheck,
+  localStrictCollectorSecurityCheck,
   owaspFixtureCheck,
   poisonRuntimeCheck,
+  persistentCollectorQueueCheck,
   runGitleaks,
   runStaticCheck,
   securityAudit,

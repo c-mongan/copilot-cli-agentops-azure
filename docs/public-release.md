@@ -78,10 +78,17 @@ Users should set their own environment values:
 
 ```bash
 export AZURE_SUBSCRIPTION_ID="<subscription-id>"
+export AGENTOPS_AZURE_SUBSCRIPTION_ID="<subscription-id>"
+export AGENTOPS_APPROVED_AZURE_SUBSCRIPTION_IDS="<subscription-id>"
 export AZURE_RESOURCE_GROUP="${AZURE_RESOURCE_GROUP:-rg-agentops-dev}"
 export AGENTOPS_LOG_ANALYTICS_WORKSPACE_ID="<workspace-id>"
+export AGENTOPS_AZURE_AGENTS_URL="<azure-monitor-agents-view-url>"
 export AGENTOPS_GRAFANA_BASE_URL="https://<your-grafana>.grafana.azure.com"
 ```
+
+The Azure Monitor Agents view is the primary investigation surface when
+`AGENTOPS_AZURE_AGENTS_URL` is configured. Managed Grafana remains an optional
+advanced pack for fleet, privacy, outcome, and cross-run dashboards.
 
 Do not commit `.env` files, connection strings, Grafana tokens, or raw telemetry exports.
 

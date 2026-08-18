@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+const { recordScriptExecution } = require('./script-observability');
+
 async function readStdin() {
   return new Promise((resolve) => {
     let data = '';
@@ -27,6 +29,11 @@ async function readStdin() {
     hints.push('Recovery hint: run `pwd`, list the relevant directory, and verify repo-relative paths before retrying.');
   }
 
+  recordScriptExecution(input, {
+    scriptName: 'post-tool-failure-hints',
+    hookType: 'postToolUseFailure',
+    outcome: hints.length === 0 ? 'observed' : 'recovery-hint'
+  });
   if (hints.length === 0) process.exit(0);
 
   process.stdout.write(hints.join('\n'));

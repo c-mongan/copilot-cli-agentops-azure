@@ -1,10 +1,4 @@
-const fs = require('node:fs');
-
-function readJsonl(filePath) {
-  if (!filePath) return [];
-  const text = fs.readFileSync(filePath, 'utf8');
-  return text.split(/\r?\n/).filter(Boolean).map(line => JSON.parse(line));
-}
+const { readJsonl } = require('../json');
 
 function latestByTime(rows) {
   return [...rows].sort((left, right) => String(right.TimeGenerated || '').localeCompare(String(left.TimeGenerated || '')))[0] || null;
@@ -34,7 +28,7 @@ function explainRun(run, evalRows = [], insightRows = []) {
     detail = topInsight.SuggestedNextStep || 'Open the linked dashboard and inspect the run timeline.';
   } else if (failed) {
     headline = `Run ended as ${run.OutcomeStatus}`;
-    detail = run.OutcomeReason || 'Inspect Run Replay for the failed span or tool call.';
+    detail = run.OutcomeReason || 'Inspect Run Story for the failed span or tool call.';
   } else if (score !== undefined && score < 60) {
     headline = `Eval score is low (${score})`;
     detail = evaluation.EvalReason || 'Review eval component scores before repeating this task.';

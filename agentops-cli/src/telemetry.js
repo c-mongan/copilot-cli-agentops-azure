@@ -1,5 +1,7 @@
 const path = require('node:path');
 
+const { sleep } = require('./lib/timing');
+
 function createTelemetry({
   optionValue,
   parseLastArg,
@@ -12,7 +14,9 @@ function createTelemetry({
   attributeValue,
   numberAttribute,
   isFailedRow,
+  isSpanTelemetryRow,
   sessionFromRow,
+  telemetryTime,
   numberValue,
   roundNumber
 }) {
@@ -46,15 +50,21 @@ function createTelemetry({
     const tool = row.ToolName || attributeValue(attrs, ['gen_ai.tool.name', 'tool']);
     const model = row.ModelActual || row.ModelRequested || attributeValue(attrs, ['gen_ai.request.model', 'gen_ai.response.model', 'model']);
     const error = attributeValue(attrs, ['error.type', 'exception.type', 'error']);
-    const message = `${row.Message || row.message || row.Name || row.name || ''} ${JSON.stringify(attrs)}`;
+    const eventName = String(row.EventName || row.event || row.Name || row.name || '');
     const failed = isFailedRow(row, attrs);
     const inputTokens = numberValue(row.InputTokens) || numberAttribute(attrs, ['gen_ai.usage.input_tokens', 'InputTokens', 'input_tokens']);
     const outputTokens = numberValue(row.OutputTokens) || numberAttribute(attrs, ['gen_ai.usage.output_tokens', 'OutputTokens', 'output_tokens']);
     const credits = numberAttribute(attrs, ['github.copilot.cost', 'Credits', 'credits']);
     const estUsd = numberValue(row.EstimatedCostUsd) || roundNumber(credits * 0.01, 4);
     const tokensRemoved = numberAttribute(attrs, ['github.copilot.tokens_removed', 'tokens_removed']);
-    const policy = /preToolUse|policy|blocked|denied/i.test(message);
-    const context = /truncation|compaction|too much context/i.test(message) || tokensRemoved > 0;
+    const explicitAllowed = attributeValue(attrs, ['agentops.mcp.allowed']);
+    const explicitBlocked = attributeValue(attrs, ['agentops.policy.blocked']);
+    const policy = /^(?:preToolUse|permissionRequest|policy)(?:\.|$)/i.test(eventName)
+      || explicitBlocked === true
+      || String(explicitBlocked).toLowerCase() === 'true'
+      || explicitAllowed === false
+      || String(explicitAllowed).toLowerCase() === 'false';
+    const context = /truncation|compaction|too much context/i.test(eventName) || tokensRemoved > 0;
 
     const eventType = policy
         ? 'policy'
@@ -71,7 +81,7 @@ function createTelemetry({
                   : 'span';
 
     return {
-      time: row.TimeGenerated || row.timestamp || row.time || row.startTime || null,
+      time: telemetryTime(row.TimeGenerated || row.timestamp || row.time || row.startTime),
       session: sessionFromRow(row, attrs),
       type: eventType,
       event: operation,
@@ -96,6 +106,7 @@ function createTelemetry({
     const sessionId = options.sessionId || null;
     let currentSessionId = null;
     const events = rows
+      .filter(isSpanTelemetryRow)
       .map(row => {
         const event = timelineEventFromRow(row);
         if (event.session === 'unknown-session' && currentSessionId) {
@@ -196,10 +207,6 @@ function createTelemetry({
     lines.push(`Source: ${view.source.mode}${view.source.last ? `, lookback ${view.source.last}` : ''}.`);
     lines.push(renderReplay(view.timeline, { limit: 20 }).trim());
     return `${lines.join('\n')}\n`;
-  }
-
-  function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   return {

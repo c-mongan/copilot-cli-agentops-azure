@@ -47,6 +47,20 @@ export AGENTOPS_LOGS_INGESTION_ENDPOINT="<AGENTOPS_LOGS_INGESTION_ENDPOINT outpu
 export AGENTOPS_DCR_IMMUTABLE_ID="<AGENTOPS_DCR_IMMUTABLE_ID output>"
 ```
 
+Or import/store the non-secret outputs once, then inspect the durable lifecycle
+queue before any write:
+
+```bash
+agentops configure import-azd
+agentops delivery status
+agentops delivery drain
+agentops delivery drain --yes
+```
+
+The drain command uploads only strict metadata-only `AgentOpsEvents_CL`
+lifecycle receipts. It does not make the complete native Copilot OTLP stream
+durable; that stream remains on the Collector/Application Insights path.
+
 3. Confirm one custom Log Analytics table per `AgentOps*_CL` table and one DCR stream per table exist.
 4. Send each JSONL row to the matching DCR stream.
 5. Import the V2 dashboard pack from `grafana/dashboards/v2/`.

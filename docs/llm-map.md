@@ -162,7 +162,7 @@ Next good targets:
 ```text
 Home
   -> Runs Explorer
-  -> Run Replay
+  -> Run Story
   -> Tools & MCP Risk
   -> Models, Cost & Tokens
   -> Safety, Privacy & Policy

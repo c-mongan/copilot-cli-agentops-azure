@@ -56,13 +56,21 @@ function checkCliPublish(options = {}) {
   if (pkg.name !== 'copilot-agentops-cli') failures.push('package name must stay copilot-agentops-cli');
   if (pkg.bin?.agentops !== 'src/index.js') failures.push('bin.agentops must point to src/index.js');
   const requiredPackageFiles = [
+    'LICENSE',
     'README.md',
-    '.azure',
+    'actioner',
+    'benchmark-judges',
+    'benchmark-runners',
     'azure.yaml',
     'collector',
     'copilot',
     'docs',
+    'examples',
+    'fixtures',
     'grafana',
+    'infra',
+    'kql',
+    'packages',
     'plugin',
     'scripts',
     'src'
@@ -96,18 +104,23 @@ function checkCliPublish(options = {}) {
   if (!pack.ok) failures.push(pack.error);
 
   const expectedFiles = [
+    'LICENSE',
     'README.md',
-    '.azure/deployment-plan.md',
+    'actioner/index.js',
     'azure.yaml',
     'collector/otelcol.binary.strict.yaml',
     'collector/processors/strict-allowlist.yaml',
-    'collector/tests/privacy-poison-fixtures/content-poison.json',
     'copilot/copilot-observe',
     'docs/release-distribution.md',
+    'docs/images/agentops-architecture-dataflow.png',
+    'fixtures/sample-otel/copilot-cli-wrapper-snapshot.ndjson.fixture',
     'grafana/dashboards/v2/01-agentops-home.json',
+    'infra/bicep/main.bicep',
+    'kql/00-discover-tables.kql',
     'package.json',
     'plugin/plugin.json',
     'plugin/hooks.json',
+    'packages/agentops-copilot-sdk/src/index.js',
     'scripts/copilot-agentops',
     'scripts/install-copilot-agentops-shim.sh',
     'src/index.js',
@@ -122,7 +135,11 @@ function checkCliPublish(options = {}) {
     'package-lock.json',
     'test/index.test.js',
     'test/commands.test.js',
-    'test/core-helpers.test.js'
+    'test/core-helpers.test.js',
+    'packages/agentops-copilot-sdk/package-lock.json',
+    'packages/agentops-copilot-sdk/test/adapter.test.js',
+    'packages/agentops-copilot-sdk/test/benchmark.test.js',
+    'benchmark-judges/hosted-judge/test/server.test.js'
   ];
   if (pack.ok && !options.skipPack) {
     const files = new Set(pack.files);
@@ -131,6 +148,11 @@ function checkCliPublish(options = {}) {
     }
     for (const file of forbiddenFiles) {
       if (files.has(file)) failures.push(`npm package should not include ${file}`);
+    }
+    for (const file of pack.files) {
+      const packagePath = String(file).replaceAll('\\', '/');
+      if (/(^|\/)tests?\//.test(packagePath)) failures.push(`npm package should not include test directory ${packagePath}`);
+      if (/raw[-_]telemetry|\.jsonl$/i.test(packagePath)) failures.push(`npm package should not include raw telemetry ${packagePath}`);
     }
   }
 

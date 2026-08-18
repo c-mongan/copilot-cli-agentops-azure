@@ -3,16 +3,28 @@
   "version": "0.1.0",
   "description": "Local utilities for Copilot CLI AgentOps for Azure.",
   "files": [
+    "LICENSE",
     "README.md",
-    ".azure",
+    "actioner",
+    "benchmark-judges",
+    "benchmark-runners",
     "azure.yaml",
     "collector",
     "copilot",
     "docs",
+    "examples",
+    "fixtures",
     "grafana",
+    "infra",
+    "kql",
+    "install-agentops.ps1",
+    "install-agentops.sh",
+    "packages",
     "plugin",
     "scripts",
-    "src"
+    "src",
+    "uninstall-agentops.ps1",
+    "uninstall-agentops.sh"
   ],
   "bin": {
     "agentops": "src/index.js"

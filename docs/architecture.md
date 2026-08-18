@@ -2,7 +2,9 @@
 
 Copilot AgentOps for Azure is a local-first observability loop for Copilot CLI, Copilot SDK apps, VS Code/MCP tools, and GitHub code outcomes.
 
-The default product path is V2: Agent Run tables plus the `AgentOps for Azure` Grafana dashboards.
+The default product path is the Azure Monitor Application Insights Agents
+view, with Agent Run tables and the `AgentOps for Azure` Grafana dashboards as
+the optional advanced evidence pack.
 
 ## One Screen
 
@@ -25,17 +27,18 @@ OpenTelemetry Collector
   drop/redact content-like fields
   normalize GenAI + MCP spans
   roll up Agent Run tables
+  bounded persistent sending queue
       |
       v
 Azure
-  Application Insights
+  Application Insights / Agents view
   Log Analytics custom tables
-  Azure Managed Grafana
+  optional Azure Managed Grafana / Workbooks
       |
       v
 Operator workflows
-  Home -> Runs -> Replay -> Tools -> Models
-  Privacy -> Outcomes -> Evals -> Insights -> Collector
+  Native Agents view -> Run Story -> Privacy receipt
+  optional Grafana: Today -> Runs -> Tools -> Models -> Outcomes
 ```
 
 Rendered architecture assets:
@@ -86,8 +89,22 @@ raw local event
   -> strict allowlist
   -> content-signal detector
   -> secret-like redaction
+  -> bounded persistent queue
   -> safe metadata export
 ```
+
+The persistent queue is deliberately downstream of the privacy processors, so
+queued records contain the same scrubbed metadata intended for Azure rather
+than raw prompts, responses, tool arguments, or tool results. Binary mode keeps
+the queue in the permission-restricted AgentOps collector home; Docker mode
+uses a dedicated named volume. The queue is bounded to 1,000 batches.
+
+Current durability evidence is narrower than full outage tolerance: an
+integration test proves byte-identical replay of an in-flight OTLP batch after
+a forced Collector process crash. The Azure Monitor exporter shipped in the
+validated Collector version does not accept the standard `retry_on_failure`
+configuration, so arbitrary Azure connection failures, long outages, queue
+expiry, corruption recovery, and disk-pressure behavior remain release gates.
 
 Strict mode does not export by default:
 
@@ -139,13 +156,13 @@ See [Agent run data model](agent-run-data-model.md) and [OTel GenAI and MCP sche
 ## Dashboard Product
 
 ```text
-AgentOps Home
+Today
   -> executive health and next actions
 
-Runs Explorer
+Runs
   -> trace-list style run search
 
-Agent Run Replay
+Run Story
   -> metadata-only timeline for one run
 
 Models, Cost & Tokens
@@ -154,7 +171,7 @@ Models, Cost & Tokens
 Tools & MCP Risk
   -> tool failure, denial, MCP, and risk analysis
 
-Safety, Privacy & Policy
+Privacy
   -> trust posture and strict-mode proof
 
 Code Outcomes

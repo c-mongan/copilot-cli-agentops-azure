@@ -1,12 +1,8 @@
-const crypto = require('node:crypto');
 const path = require('node:path');
 
 const { optionValue } = require('../args');
+const { prefixedHashOrEmpty: stableHash } = require('../hash');
 const { summarizeAllowedTools } = require('./tool-classifier');
-
-function stableHash(value, prefix = 'hash') {
-  return `${prefix}_${crypto.createHash('sha256').update(String(value || '')).digest('hex').slice(0, 16)}`;
-}
 
 function booleanFlag(args, name) {
   return args.includes(name);

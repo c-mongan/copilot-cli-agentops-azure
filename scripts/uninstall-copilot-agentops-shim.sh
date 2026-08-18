@@ -36,16 +36,33 @@ while [[ $# -gt 0 ]]; do
 done
 
 shadow_cmd="${install_dir}/copilot"
+shadow_backup="${install_dir}/copilot.agentops-original"
+shadow_marker="# AgentOps managed shadow shim"
 agentops_cli_cmd="${install_dir}/agentops"
 agentops_cmd="${install_dir}/copilot-agentops"
 agentops_codex_cmd="${install_dir}/agentops-codex"
 
 if [[ -e "${shadow_cmd}" || -L "${shadow_cmd}" ]]; then
-  rm -f "${shadow_cmd}"
-  echo "Removed plain copilot shadow shim:"
-  echo "  ${shadow_cmd}"
+  if grep -Fq "${shadow_marker}" "${shadow_cmd}" 2>/dev/null; then
+    rm -f "${shadow_cmd}"
+    echo "Removed plain copilot shadow shim:"
+    echo "  ${shadow_cmd}"
+  else
+    echo "Preserved non-AgentOps copilot command:"
+    echo "  ${shadow_cmd}"
+  fi
 else
   echo "No plain copilot shadow shim found at:"
+  echo "  ${shadow_cmd}"
+fi
+
+if [[ -e "${shadow_backup}" || -L "${shadow_backup}" ]]; then
+  if [[ -e "${shadow_cmd}" || -L "${shadow_cmd}" ]]; then
+    echo "ERROR: cannot restore the original Copilot command because ${shadow_cmd} is occupied. Original remains at ${shadow_backup}." >&2
+    exit 2
+  fi
+  mv "${shadow_backup}" "${shadow_cmd}"
+  echo "Restored original copilot command:"
   echo "  ${shadow_cmd}"
 fi
 

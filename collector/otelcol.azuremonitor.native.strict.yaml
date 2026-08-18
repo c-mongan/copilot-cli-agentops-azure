@@ -1,0 +1,48 @@
+# Native Azure Monitor OTLP preview overlay.
+#
+# This file is intentionally a partial Collector config. Run it together with
+# otelcol.local.strict.yaml so the single source of truth for the privacy
+# processor remains the local strict config:
+#
+#   otelcol-contrib \
+#     --config collector/otelcol.local.strict.yaml \
+#     --config collector/otelcol.azuremonitor.native.strict.yaml
+#
+# Endpoints must be copied from the selected Application Insights OTLP
+# Connection Info page. Do not hand-build or substitute arbitrary endpoints.
+
+extensions:
+  azure_auth:
+    use_default: true
+    scopes:
+      - https://monitor.azure.com/.default
+
+processors:
+  cumulativetodelta: {}
+
+exporters:
+  otlp_http/azuremonitor:
+    encoding: proto
+    traces_endpoint: ${env:AZURE_MONITOR_OTLP_TRACES_ENDPOINT}
+    logs_endpoint: ${env:AZURE_MONITOR_OTLP_LOGS_ENDPOINT}
+    metrics_endpoint: ${env:AZURE_MONITOR_OTLP_METRICS_ENDPOINT}
+    auth:
+      authenticator: azure_auth
+    retry_on_failure:
+      enabled: true
+    sending_queue:
+      enabled: true
+      storage: file_storage
+      queue_size: 1000
+      num_consumers: 1
+
+service:
+  extensions: [health_check, file_storage, azure_auth]
+  pipelines:
+    traces:
+      exporters: [otlp_http/azuremonitor, file/receipt]
+    metrics:
+      processors: [memory_limiter, transform/privacy_strict, cumulativetodelta, batch]
+      exporters: [otlp_http/azuremonitor, file/receipt]
+    logs:
+      exporters: [otlp_http/azuremonitor, file/receipt]

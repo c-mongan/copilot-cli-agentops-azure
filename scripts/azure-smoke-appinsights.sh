@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-subscription_id="${AZURE_SUBSCRIPTION_ID:-}"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${script_dir}/lib/azure-subscription-guard.sh"
+
 resource_group="${AZURE_RESOURCE_GROUP:-rg-agentops-dev}"
 app_insights_name="${APPLICATIONINSIGHTS_NAME:-appi-agentops-dev}"
 smoke_id="${AGENTOPS_SMOKE_ID:-agentops-$(date +%Y%m%d%H%M%S)}"
 
-if [[ -n "$subscription_id" ]]; then
-  az account set --subscription "$subscription_id"
-fi
+agentops_require_azure_subscription
 
 connection_string="$(az monitor app-insights component show \
   --resource-group "$resource_group" \
@@ -31,9 +31,7 @@ NODE
 
 instrumentation_key="$(printf '%s' "$parsed" | node -pe "JSON.parse(require('fs').readFileSync(0, 'utf8')).instrumentationKey")"
 ingestion_endpoint="$(printf '%s' "$parsed" | node -pe "JSON.parse(require('fs').readFileSync(0, 'utf8')).endpoint")"
-payload_file="/tmp/${smoke_id}.appinsights.json"
-
-SMOKE_ID="$smoke_id" INSTRUMENTATION_KEY="$instrumentation_key" node >"$payload_file" <<'NODE'
+SMOKE_ID="$smoke_id" INSTRUMENTATION_KEY="$instrumentation_key" node <<'NODE' |
 const smokeId = process.env.SMOKE_ID;
 const instrumentationKey = process.env.INSTRUMENTATION_KEY;
 process.stdout.write(JSON.stringify({
@@ -55,11 +53,10 @@ process.stdout.write(JSON.stringify({
   }
 }));
 NODE
-
-curl --fail --silent --show-error \
+  curl --fail --silent --show-error \
   --header 'Content-Type: application/json' \
-  --data-binary "@$payload_file" \
-  "${ingestion_endpoint}v2/track" >/tmp/${smoke_id}.appinsights.response
+  --data-binary @- \
+  "${ingestion_endpoint}v2/track" >/dev/null
 
 cat <<MSG
 Sent Application Insights smoke event.

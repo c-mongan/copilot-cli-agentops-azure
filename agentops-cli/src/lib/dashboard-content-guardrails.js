@@ -1,6 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
+const { readJson } = require('./json');
 const { repoRoot } = require('./paths');
 
 const explicitContentViewerTitle = 'Prompt and response viewer (explicit opt-in)';
@@ -36,7 +37,7 @@ function v2DashboardFiles(root = repoRoot) {
 function loadV2Dashboards(root = repoRoot) {
   return v2DashboardFiles(root).map(file => ({
     file,
-    body: JSON.parse(fs.readFileSync(file, 'utf8'))
+    body: readJson(file)
   }));
 }
 

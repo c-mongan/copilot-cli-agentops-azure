@@ -5,11 +5,14 @@
   "main": "src/index.js",
   "types": "src/index.d.ts",
   "files": [
+    "LICENSE",
     "src",
     "examples"
   ],
   "scripts": {
     "test": "node --test",
+    "benchmark": "node benchmark/metadata-benchmark.js",
+    "smoke:live": "node examples/live-metadata-smoke/index.js",
     "publish:check": "node ../../scripts/check-sdk-publish.js"
   },
   "peerDependencies": {

@@ -9,6 +9,12 @@ receivers:
 extensions:
   health_check:
     endpoint: 127.0.0.1:13133
+  file_storage:
+    directory: ${env:AGENTOPS_OTEL_STORAGE_DIR}
+    create_directory: true
+    compaction:
+      directory: ${env:AGENTOPS_OTEL_STORAGE_DIR}
+      on_start: true
 
 processors:
   memory_limiter:
@@ -48,6 +54,16 @@ processors:
       #   action: delete
       - key: code.filepath
         action: hash
+      - key: enduser.pseudo.id
+        action: hash
+      - key: github.copilot.git.repository
+        action: hash
+      - key: github.copilot.github.org
+        action: hash
+      - key: github.copilot.git.branch
+        action: hash
+      - key: github.copilot.git.commit_sha
+        action: hash
       - key: url.full
         action: delete
       - key: http.request.body.content
@@ -60,9 +76,13 @@ processors:
 exporters:
   azuremonitor:
     connection_string: ${env:APPLICATIONINSIGHTS_CONNECTION_STRING}
+    sending_queue:
+      enabled: true
+      storage: file_storage
+      queue_size: 1000
 
 service:
-  extensions: [health_check]
+  extensions: [health_check, file_storage]
   pipelines:
     traces:
       receivers: [otlp]

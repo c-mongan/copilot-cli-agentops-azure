@@ -2,6 +2,11 @@
 
 Use the dashboards in this order: start broad, then drill down only when you need more detail.
 
+This guide describes the dashboard contracts and expected empty states. No live
+Azure or Grafana screenshots are checked into the public repository. Local
+demo data and offline dashboard verification are not proof of live Azure
+ingestion, query-back, authentication, or production readiness.
+
 ```text
 Overview
    |
@@ -27,7 +32,6 @@ Use this as the front door. It answers: **is Copilot/agent activity flowing, how
 
 Good for daily health checks and quick demos. If this page is empty after setup, run the real quick-start Copilot check first.
 
-![AgentOps overview dashboard](screenshots/agentops-overview-live.png)
 
 ## Sessions
 
@@ -35,7 +39,6 @@ Use this when someone asks: **which run should I look at?**
 
 Each row is a session. Sort by failures, cost, token use, duration, or risk. This is usually the best place to start an incident or cost investigation.
 
-![AgentOps sessions dashboard](screenshots/agentops-sessions-live.png)
 
 ## Session Detail
 
@@ -45,7 +48,6 @@ You get span count, failures, token/cost summary, tool waterfall, runtime events
 
 Think of this as the first version of live session replay. For a simple agent, it shows one run timeline with LLM calls, tools, MCP calls, scripts/hooks, timings, cost, and errors. For an orchestrator agent, the same view can become a delegation tree when spans include parent/child IDs or optional `agentops.parent_agent.*` and `agentops.delegation.*` fields. No sub-agents are required.
 
-![AgentOps session detail dashboard](screenshots/agentops-session-detail-live.png)
 
 ## Live Replay
 
@@ -53,7 +55,6 @@ Use this when you want to watch a full run unfold. It answers: **which agent lan
 
 Single-agent runs show one lane. Orchestrator runs become a tree when spans include parent/child IDs or optional `agentops.parent_agent.name` and `agentops.delegation.id` fields. This keeps the dashboard generic: it works for Copilot CLI, Codex, VS Code, SDK agents, CI agents, and agents that never delegate.
 
-![AgentOps live replay dashboard](screenshots/agentops-live-replay-live.jpg)
 
 ## Traces / Spans
 
@@ -61,7 +62,6 @@ Use this when you need raw evidence. It answers: **what exact spans did Copilot 
 
 This page is intentionally lower-level: operation IDs, parent/child spans, durations, tool names, models, result codes, and errors.
 
-![AgentOps traces dashboard](screenshots/agentops-traces-live.png)
 
 ## Tools & MCP
 
@@ -69,7 +69,6 @@ Use this for tool reliability. It answers: **which tools or MCP servers are bein
 
 This is where Azure MCP, shell tools, custom tools, and likely MCP-provided tools show up. Tools are auto-detected from `gen_ai.tool.name`; MCP server/tool attribution is exact for names such as `mcp__server__tool` or `server/tool`, and inferred for known prefixes such as Azure MCP.
 
-![AgentOps tools and MCP dashboard](screenshots/agentops-tools-live.png)
 
 ## Attribution
 
@@ -77,7 +76,6 @@ Use this to understand ownership. It answers: **which custom agents, skills, MCP
 
 This is useful when teams share one Azure workspace but want to know what agent/plugin/workflow generated the traffic.
 
-![AgentOps attribution dashboard](screenshots/agentops-attribution-live.png)
 
 ## Runtime Events
 
@@ -94,7 +92,6 @@ agentops copilot --agent agentops-orchestrator \
   -p "Do not edit files. Use read-only shell commands: pwd and ls docs | head. Summarize what you saw."
 ```
 
-![AgentOps runtime events dashboard](screenshots/agentops-runtime-live.png)
 
 To generate lifecycle-style data for this page:
 
@@ -118,7 +115,6 @@ agentops copilot --agent agentops-orchestrator \
   -p "Use bash once to run: az keyvault secret show --vault-name agentops-nonexistent-vault --name agentops-nonexistent-secret. If AgentOps blocks it, do not retry."
 ```
 
-![AgentOps safety and policy dashboard](screenshots/agentops-safety-policy-live.png)
 
 ## Permission Friction
 
@@ -132,7 +128,6 @@ To create real policy-friction data for this page, run the safe policy-block che
 
 Retry-hint panels stay quiet unless a real post-tool-failure hook emits a recovery hint.
 
-![AgentOps permission friction dashboard](screenshots/agentops-permission-friction-live.png)
 
 ## Alert Tuning
 
@@ -146,7 +141,6 @@ The **Fired alert candidates** table includes dashboard links and an `agentops a
 
 This page needs enough history before it becomes visually interesting. On a fresh install, it may have little to recommend. Run real traffic, real custom lifecycle events, and the safe policy-block check over time, then use the recommendations here before turning on scheduled-query alerts.
 
-![AgentOps alert tuning dashboard](screenshots/agentops-alert-tuning-live.png)
 
 ## Quality
 
@@ -154,7 +148,6 @@ Use this for improvement work. It answers: **which sessions are slow, expensive,
 
 This page is where you find candidates for better prompts, safer tools, smaller context, cheaper models, or workflow changes.
 
-![AgentOps quality dashboard](screenshots/agentops-quality-live.png)
 
 ## Experiments
 
@@ -162,7 +155,6 @@ Use this for benchmark and variant comparisons. It answers: **did a change help 
 
 Run `agentops benchmark run ...` or label real runs with experiment metadata, then compare pass rate, score, token use, cost, safety issues, and failures.
 
-![AgentOps experiments dashboard](screenshots/agentops-experiments-live.png)
 
 ## Data Quality
 
@@ -170,7 +162,6 @@ Use this when something looks wrong. It answers: **are the fields, token rollups
 
 This is the troubleshooting dashboard for schema drift and ingestion issues.
 
-![AgentOps data quality dashboard](screenshots/agentops-data-quality-live.png)
 
 ## Expected Quiet Panels
 

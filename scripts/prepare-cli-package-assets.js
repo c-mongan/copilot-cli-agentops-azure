@@ -8,12 +8,36 @@ const root = path.resolve(__dirname, '..');
 const packageDir = path.join(root, 'agentops-cli');
 const lockDir = path.join(packageDir, '.package-assets.lock');
 
-const assetDirs = ['.azure', 'collector', 'copilot', 'docs', 'grafana', 'plugin', 'scripts'];
-const assetFiles = ['azure.yaml'];
-
+const assetDirs = [
+  'actioner',
+  'benchmark-judges',
+  'benchmark-runners',
+  'collector',
+  'copilot',
+  'docs',
+  'examples',
+  'fixtures',
+  'grafana',
+  'infra',
+  'kql',
+  'packages',
+  'plugin',
+  'scripts'
+];
+const assetFiles = [
+  'LICENSE',
+  'azure.yaml',
+  'install-agentops.ps1',
+  'install-agentops.sh',
+  'uninstall-agentops.ps1',
+  'uninstall-agentops.sh'
+];
 function shouldCopy(src) {
   const relative = path.relative(root, src).replaceAll('\\', '/');
-  if (relative.startsWith('docs/images/')) return false;
+  if (relative.split('/').includes('node_modules')) return false;
+  if (relative.split('/').some(segment => segment === 'test' || segment === 'tests') || path.basename(relative) === 'package-lock.json') return false;
+  if (relative.endsWith('.tgz')) return false;
+  if (relative.startsWith('docs/images/') && relative !== 'docs/images/agentops-architecture-dataflow.png') return false;
   if (relative.startsWith('docs/screenshots/')) return false;
   if (relative.startsWith('scripts/check-')) return false;
   if (relative === 'scripts/coverage-check.js' || relative === 'scripts/static-check.js') return false;
@@ -23,6 +47,7 @@ function shouldCopy(src) {
 function clean() {
   for (const dir of assetDirs) fs.rmSync(path.join(packageDir, dir), { recursive: true, force: true });
   for (const file of assetFiles) fs.rmSync(path.join(packageDir, file), { force: true });
+  fs.rmSync(path.join(packageDir, 'src', 'fixtures'), { recursive: true, force: true });
   return { ok: true, action: 'clean', removed: [...assetDirs, ...assetFiles] };
 }
 

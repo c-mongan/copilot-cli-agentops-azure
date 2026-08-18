@@ -48,6 +48,16 @@ processors:
         action: delete
       - key: code.filepath
         action: hash
+      - key: enduser.pseudo.id
+        action: hash
+      - key: github.copilot.git.repository
+        action: hash
+      - key: github.copilot.github.org
+        action: hash
+      - key: github.copilot.git.branch
+        action: hash
+      - key: github.copilot.git.commit_sha
+        action: hash
       - key: url.full
         action: delete
       - key: http.request.body.content

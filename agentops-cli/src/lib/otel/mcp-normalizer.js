@@ -1,7 +1,7 @@
-const crypto = require('node:crypto');
+const { hashText } = require('../hash');
 
 function hashJson(value) {
-  return crypto.createHash('sha256').update(JSON.stringify(value || {})).digest('hex');
+  return hashText(JSON.stringify(value || {}));
 }
 
 function classifyMcpToolRisk(toolName = '', metadata = {}) {

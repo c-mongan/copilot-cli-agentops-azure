@@ -1,0 +1,197 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentops.example/schemas/usability-study-evidence.schema.json",
+  "title": "AgentOps usability study evidence",
+  "description": "One metadata-only record from one real, consenting participant session. This schema is not participant evidence by itself.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "evidence_kind",
+    "human_participant",
+    "consent_confirmed",
+    "participant_ref",
+    "study_session_id",
+    "started_at",
+    "ended_at",
+    "environment",
+    "tasks",
+    "privacy_comprehension",
+    "critical_failures"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "evidence_kind": { "const": "observed_human_usability_session" },
+    "human_participant": { "const": true },
+    "consent_confirmed": { "const": true },
+    "participant_ref": { "type": "string", "pattern": "^participant-[a-f0-9]{8,64}$" },
+    "study_session_id": { "type": "string", "pattern": "^study-[A-Za-z0-9_-]{8,80}$" },
+    "started_at": { "type": "string", "format": "date-time" },
+    "ended_at": { "type": "string", "format": "date-time" },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["os_family", "install_route", "copilot_surface", "privacy_mode", "content_capture", "assistive_technology"],
+      "properties": {
+        "os_family": { "enum": ["macos", "windows", "linux", "wsl"] },
+        "install_route": { "enum": ["package", "source_checkout", "managed_internal"] },
+        "copilot_surface": { "enum": ["interactive_cli", "headless_cli"] },
+        "privacy_mode": { "const": "strict" },
+        "content_capture": { "const": "off" },
+        "assistive_technology": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "enum": ["none", "keyboard_only", "screen_reader", "screen_magnifier", "voice_control", "other_declared"] }
+        }
+      }
+    },
+    "tasks": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "prefixItems": [
+        { "$ref": "#/$defs/previewSetupTask" },
+        { "$ref": "#/$defs/applySetupTask" },
+        { "$ref": "#/$defs/observedRunTask" },
+        { "$ref": "#/$defs/todayTask" },
+        { "$ref": "#/$defs/runsTask" },
+        { "$ref": "#/$defs/runStoryTask" },
+        { "$ref": "#/$defs/privacyTask" }
+      ],
+      "items": false
+    },
+    "privacy_comprehension": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "prefixItems": [
+        { "$ref": "#/$defs/promptsAnswer" },
+        { "$ref": "#/$defs/codeFilesAnswer" },
+        { "$ref": "#/$defs/toolPayloadsAnswer" },
+        { "$ref": "#/$defs/strictMetadataAnswer" },
+        { "$ref": "#/$defs/agentopsScopeAnswer" },
+        { "$ref": "#/$defs/privacyWarningActionAnswer" }
+      ],
+      "items": false
+    },
+    "sus_style": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["completed", "answers"],
+      "properties": {
+        "completed": { "type": "boolean" },
+        "answers": {
+          "type": "array",
+          "maxItems": 10,
+          "items": { "type": "integer", "minimum": 1, "maximum": 5 }
+        },
+        "score": { "type": ["number", "null"], "minimum": 0, "maximum": 100 },
+        "missing_items": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "integer", "minimum": 1, "maximum": 10 }
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "completed": { "const": true } } },
+          "then": {
+            "required": ["score", "missing_items"],
+            "properties": {
+              "answers": { "minItems": 10, "maxItems": 10 },
+              "missing_items": { "maxItems": 0 }
+            }
+          },
+          "else": {
+            "properties": {
+              "answers": { "maxItems": 0 },
+              "score": { "type": "null" }
+            }
+          }
+        }
+      ]
+    },
+    "critical_failures": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "unexpected_subscription_apply",
+          "unintended_transparent_routing",
+          "secret_or_content_exposure",
+          "false_setup_success",
+          "privacy_scope_misunderstood",
+          "wrong_run_not_detected"
+        ]
+      }
+    },
+    "issue_refs": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^[A-Za-z0-9_-]{3,80}$" }
+    }
+  },
+  "$defs": {
+    "task": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["task_id", "surface", "started_at", "ended_at", "elapsed_ms", "outcome", "help_requests", "recovered_without_help", "error_categories"],
+      "properties": {
+        "task_id": { "enum": ["preview_setup", "apply_setup", "observed_run", "today", "runs", "run_story", "privacy"] },
+        "surface": { "enum": ["terminal", "today", "runs", "run_story", "privacy"] },
+        "started_at": { "type": "string", "format": "date-time" },
+        "ended_at": { "type": "string", "format": "date-time" },
+        "elapsed_ms": { "type": "integer", "minimum": 0 },
+        "outcome": { "enum": ["success", "partial", "failed", "not_attempted"] },
+        "help_requests": { "type": "integer", "minimum": 0 },
+        "recovered_without_help": { "type": "boolean" },
+        "error_categories": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "could_not_find_start",
+              "command_unclear",
+              "subscription_unclear",
+              "routing_unclear",
+              "setup_error",
+              "receipt_not_found",
+              "navigation_error",
+              "filter_error",
+              "wrong_run",
+              "event_order_misread",
+              "unknown_treated_as_zero",
+              "inference_treated_as_fact",
+              "privacy_scope_unclear",
+              "accessibility_barrier",
+              "timeout",
+              "other_coded"
+            ]
+          }
+        }
+      }
+    },
+    "previewSetupTask": { "allOf": [{ "$ref": "#/$defs/task" }, { "properties": { "task_id": { "const": "preview_setup" }, "surface": { "const": "terminal" } } }] },
+    "applySetupTask": { "allOf": [{ "$ref": "#/$defs/task" }, { "properties": { "task_id": { "const": "apply_setup" }, "surface": { "const": "terminal" } } }] },
+    "observedRunTask": { "allOf": [{ "$ref": "#/$defs/task" }, { "properties": { "task_id": { "const": "observed_run" }, "surface": { "const": "terminal" } } }] },
+    "todayTask": { "allOf": [{ "$ref": "#/$defs/task" }, { "properties": { "task_id": { "const": "today" }, "surface": { "const": "today" } } }] },
+    "runsTask": { "allOf": [{ "$ref": "#/$defs/task" }, { "properties": { "task_id": { "const": "runs" }, "surface": { "const": "runs" } } }] },
+    "runStoryTask": { "allOf": [{ "$ref": "#/$defs/task" }, { "properties": { "task_id": { "const": "run_story" }, "surface": { "const": "run_story" } } }] },
+    "privacyTask": { "allOf": [{ "$ref": "#/$defs/task" }, { "properties": { "task_id": { "const": "privacy" }, "surface": { "const": "privacy" } } }] },
+    "privacyAnswer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["question_id", "result"],
+      "properties": {
+        "question_id": { "enum": ["prompts", "code_files", "tool_payloads", "strict_metadata", "agentops_scope", "privacy_warning_action"] },
+        "result": { "enum": ["correct", "incorrect", "not_answered"] }
+      }
+    },
+    "promptsAnswer": { "allOf": [{ "$ref": "#/$defs/privacyAnswer" }, { "properties": { "question_id": { "const": "prompts" } } }] },
+    "codeFilesAnswer": { "allOf": [{ "$ref": "#/$defs/privacyAnswer" }, { "properties": { "question_id": { "const": "code_files" } } }] },
+    "toolPayloadsAnswer": { "allOf": [{ "$ref": "#/$defs/privacyAnswer" }, { "properties": { "question_id": { "const": "tool_payloads" } } }] },
+    "strictMetadataAnswer": { "allOf": [{ "$ref": "#/$defs/privacyAnswer" }, { "properties": { "question_id": { "const": "strict_metadata" } } }] },
+    "agentopsScopeAnswer": { "allOf": [{ "$ref": "#/$defs/privacyAnswer" }, { "properties": { "question_id": { "const": "agentops_scope" } } }] },
+    "privacyWarningActionAnswer": { "allOf": [{ "$ref": "#/$defs/privacyAnswer" }, { "properties": { "question_id": { "const": "privacy_warning_action" } } }] }
+  }
+}

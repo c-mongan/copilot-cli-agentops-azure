@@ -4,40 +4,119 @@
 
 > Independent personal OSS project. Not an official Microsoft, GitHub, OpenAI, Azure, or Grafana product.
 
-Privacy-first Datadog/Lapdog-style observability for GitHub Copilot CLI runs, Copilot SDK sessions, MCP tools, and code outcomes in Azure Monitor and Grafana. AgentOps records run/session metadata, tool names, failures, latency, token usage, estimated cost, privacy signals, evals, and GitHub outcomes without recording prompts, code, file contents, tool arguments, or tool results by default.
+The checked-in dev deployment is a personal development/demo environment. Keep it metadata-only; it is not approved for Microsoft confidential, customer, or production data. `agentops validate-azure` defaults to this non-blocking `personal` posture. Use `--profile team` or `--profile internal` for readiness gates that fail when Log Analytics ingestion is uncapped or the resource group has no Azure Consumption budget. `--production` implies the stricter `internal` profile and retains the wider production security checks.
+
+Privacy-first observability for GitHub Copilot CLI runs, Copilot SDK sessions, MCP tools, and code outcomes using Azure Monitor. AgentOps records run/session metadata, tool names, failures, latency, token usage, estimated cost, privacy signals, evals, and GitHub outcomes without recording prompts, code, file contents, tool arguments, or tool results by default. Azure Monitor's native Application Insights Agents view is the primary investigation surface; Managed Grafana is optional for advanced operators.
 
 ```text
 GitHub Copilot CLI
   -> local OTLP endpoint on 127.0.0.1
   -> local OpenTelemetry Collector privacy boundary
-  -> Azure Monitor / Application Insights / Log Analytics
-  -> Azure Managed Grafana dashboards
+  -> Azure Monitor / Application Insights Agents view
+  -> optional Log Analytics custom receipts and Managed Grafana dashboards
 ```
+
+See the [simplified Azure-native design](docs/simplified-azure-design.md) for
+the minimum service footprint, first-value flow, and live-evidence states.
+
+If you are new to the project, start with the [junior quickstart](docs/junior-quickstart.md).
+It gets you from zero to a local privacy-safe Copilot receipt, then shows the
+short Azure-native path without making you copy OTLP URLs by hand.
+
+For the public release checklist, including packaging, privacy review,
+rollback, and the boundary between preview and production, see
+the [public release checklist](docs/public-release.md).
 
 ## Quick Start
 
-Prerequisites:
+Prerequisites for local value:
 
-- Azure CLI logged in.
-- Azure Developer CLI (`azd`) for the Bicep deployment.
+- Node.js.
 - GitHub Copilot CLI installed and authenticated.
-- No Docker required: `./setup-agentops.sh` installs the tested local OpenTelemetry Collector binary. Docker is only an optional fallback.
+- Azure CLI, `azd`, Docker, Grafana, and an Azure resource are optional.
+
+The native path keeps Copilot as the execution command. The local Collector is
+the privacy boundary; no Copilot wrapper is required:
+
+```bash
+./setup-agentops.sh
+export PATH="$HOME/.local/bin:$PATH"
+agentops setup --json
+eval "$(agentops init --local-only --yes --shell zsh)"
+agentops smoke --local
+copilot -p "Reply with exactly: AGENTOPS_READY."
+agentops open latest --json
+```
+
+`agentops setup` is read-only. `agentops init --local-only` applies only
+AgentOps-owned local files and shell exports; `agentops smoke --local` starts
+or health-checks the strict loopback Collector and reads back a metadata-only
+native receipt. Prompts, responses, code, tool arguments, and tool results stay
+off by default.
+
+Setup installs the `agentops` and `copilot-agentops` utility commands. It leaves
+the existing plain `copilot` command unchanged. The compatibility command
+`agentops copilot ...` remains available, but is not required for native OTel.
+Opt in to transparent routing only when you want it:
+
+```bash
+./setup-agentops.sh --shadow-copilot
+```
+
+Plain `copilot ...` is the native observed-session path after the local OTel
+exports are applied. Use `agentops copilot ...` only for compatibility with the
+older wrapper-based workflow, or opt in to transparent routing when required.
+
+Azure is a separate, gated pilot. Start with read-only discovery:
 
 ```bash
 az login
-azd provision
-./setup-agentops.sh
-export PATH="$HOME/.local/bin:$PATH"
-agentops configure import-azd
-agentops setup
-agentops collector smoke --privacy strict --poison --json
-agentops collector start --mode auto --privacy strict
-agentops smoke --real-copilot --wait 2m --poll 10s --open-browser
-agentops latest --last 2h
-agentops open latest --last 2h
+agentops setup --json
+agentops validate-azure --last 24h
 ```
 
-`agentops setup` is read-only. It prints the current Azure/Grafana binding state, recommends `agentops init --full` as the guided first-run path, and keeps fallback commands for privacy smoke testing, running a safe no-edit Copilot smoke, opening the newest run, and verifying dashboards. `agentops smoke --real-copilot --open-browser` waits for the latest Copilot run to appear before opening the V2 Run Replay link.
+Do not run a cloud provisioning flow until the exact subscription, resource
+group, region, and native OTLP onboarding path have been approved in
+[the Azure-native design](docs/simplified-azure-design.md). Azure writes fail
+closed unless the expected subscription is also present in an explicit public-
+build allowlist:
+
+```bash
+export AGENTOPS_AZURE_SUBSCRIPTION_ID="<approved-subscription-id>"
+export AGENTOPS_APPROVED_AZURE_SUBSCRIPTION_IDS="<approved-subscription-id>"
+az account show --query '{name:name,id:id}' -o table
+```
+
+The repository contains no owner subscription ID. Separate expected and
+approved values make an accidental write fail before an Azure command runs.
+
+For the reviewed native Azure preview lane, see
+[docs/azure-native-otlp-preview.md](docs/azure-native-otlp-preview.md). It uses
+`agentops collector --mode azure-native` with the Application Insights OTLP
+Connection Info endpoints and Entra authentication; it does not require a
+Copilot wrapper. The readiness script is read-only and the Collector start is
+explicitly gated by `AGENTOPS_APPROVE_NATIVE_OTLP=yes`.
+
+For an already-approved legacy cloud binding, the compatibility workflow is
+still available: `agentops init --full` previews it, and
+`agentops init --full --yes` applies the reviewed cloud stages. Existing
+`agentops copilot ...` and `agentops open latest` remain supported while the
+native pilot reaches parity.
+
+If you want a safe native Copilot value loop after local setup, use:
+
+```bash
+copilot -p "Do not edit files. Reply with exactly: agentops smoke."
+agentops open latest --json
+```
+
+The local receipt reports what native telemetry was observed. It does not infer
+task success from a span ending or an `agentStop` hook.
+
+`agentops setup` is read-only. It prints separate local/cloud readiness, recommends
+the native local init path, and keeps the older `init --full` cloud workflow as
+an explicit advanced option. `agentops smoke --real-copilot --open-browser`
+remains available for a cloud-bound environment.
 
 If `collector start --mode auto` cannot find a collector binary and Docker is not running, it fails with setup instructions. It does not silently run Copilot without the local privacy boundary. Install the binary any time with:
 
@@ -112,9 +191,14 @@ To populate a local demo dataset without live Copilot traffic:
 ```bash
 agentops demo generate --runs 50 --with-failures --with-privacy-drops --with-github-outcomes --json
 agentops demo verify --runs 50 --json
+# To persist verification artifacts under .agentops, add --write.
+# agentops demo verify --runs 50 --write --json
 ```
 
-This writes metadata-only `AgentOps*_CL.jsonl` files under `.agentops/demo/latest`.
+`demo generate` writes metadata-only `AgentOps*_CL.jsonl` files under
+`.agentops/demo/latest`. `demo verify` is workspace-read-only by default and
+uses temporary artifacts; add `--write` when persistent verification files are
+needed.
 
 To audit the local control-room contract:
 
@@ -143,7 +227,7 @@ If you generate dashboard screenshots with another authenticated browser harness
 To roll up a raw local span export into the same V2 table shape:
 
 ```bash
-agentops run-summary generate --file tests/sample-otel/tool-failure.jsonl --json
+agentops run-summary generate --file fixtures/sample-otel/tool-failure.ndjson.fixture --json
 ```
 
 To check whether local V2 table files are ready for Azure Log Analytics custom-table ingestion:
@@ -161,7 +245,7 @@ agentops azure-ingest plan --dir .agentops/demo/latest --allow-content --json
 agentops open latest --runs .agentops/demo/latest/AgentOpsRunSummary_CL.jsonl
 ```
 
-`agentops content status` shows whether transcript rows exist and whether ingestion is deliberately allowed. `agentops open` prints a Run Replay link plus a dedicated prompt/response viewer link. The viewer stays empty in strict mode and only shows `AgentOpsContent_CL` rows after explicit content-capture opt-in.
+`agentops content status` shows whether transcript rows exist and whether ingestion is deliberately allowed. `agentops open` prints a Run Story link plus a dedicated prompt/response viewer link. The viewer stays empty in strict mode and only shows `AgentOpsContent_CL` rows after explicit content-capture opt-in.
 
 To observe a stdio MCP server without storing tool arguments/results:
 
@@ -187,7 +271,7 @@ const client = createAgentOpsCopilotClient(CopilotClient, {
   captureContent: false
 });
 
-const session = await client.createSession(client.createAgentOpsSessionConfig());
+const session = await client.createAgentOpsSession();
 ```
 
 To generate deterministic eval and insight rows from V2 tables:
@@ -237,9 +321,9 @@ agentops ask-context latest \
 After installing the bundled skills, the memorable Copilot prompt is:
 
 ```text
-Use agentops-setup to install AgentOps, run the guided init --full path, report the Run Replay link, and recommend one next action.
+Use agentops-setup to install AgentOps, run the guided init --full path, report the Run Story link, and recommend one next action.
 
-Use agentops-latest-run to find my latest AgentOps run, open the Run Replay link, explain it, and recommend one next action.
+Use agentops-latest-run to find my latest AgentOps run, open the Run Story link, explain it, and recommend one next action.
 ```
 
 To preview the Azure Managed Grafana import command:
@@ -298,7 +382,11 @@ See [Privacy modes](docs/privacy-modes.md).
 
 ## Plugin And Hooks
 
-`agentops install` installs local shims and the tested Collector binary. It also installs a plain `copilot` shim by default so normal Copilot CLI runs are observed when `~/.local/bin` is first on `PATH`. Plugin files are explicit and reversible:
+`agentops install` installs the local AgentOps utility and tested Collector
+binary. It leaves plain `copilot` unchanged by default; native observation uses
+Copilot's OTel environment, while `agentops copilot ...` remains a compatibility
+path. Explicit transparent routing is still available with `--shadow-copilot`.
+Plugin files are explicit and reversible:
 
 ```bash
 agentops plugin install

@@ -8,7 +8,7 @@
   "id": null,
   "links": [
     {
-      "title": "Home",
+      "title": "Today",
       "uid": "agentops-v2-home",
       "type": "link",
       "icon": "dashboard",
@@ -28,7 +28,7 @@
       "includeVars": true
     },
     {
-      "title": "Replay",
+      "title": "Run Story",
       "uid": "agentops-v2-run-replay",
       "type": "link",
       "icon": "dashboard",
@@ -160,7 +160,7 @@
                 "id": "links",
                 "value": [
                   {
-                    "title": "Open Run Replay",
+                    "title": "Open Run Story",
                     "url": "/d/agentops-v2-run-replay?var-run_id=${__data.fields.RunId}&${__url_time_range}",
                     "targetBlank": false
                   }
@@ -466,7 +466,7 @@
                 "id": "links",
                 "value": [
                   {
-                    "title": "Open Run Replay",
+                    "title": "Open Run Story",
                     "url": "/d/agentops-v2-run-replay?var-run_id=${__data.fields.RunId}&var-session_id=${__data.fields.SessionId}&var-trace_id=${__data.fields.TraceId}&${__url_time_range}",
                     "targetBlank": false
                   }
@@ -679,7 +679,7 @@
                 "id": "links",
                 "value": [
                   {
-                    "title": "Open Run Replay",
+                    "title": "Open Run Story",
                     "url": "/d/agentops-v2-run-replay?var-run_id=${__data.fields.RunId}&${__url_time_range}",
                     "targetBlank": false
                   }
@@ -985,7 +985,7 @@
                 "id": "links",
                 "value": [
                   {
-                    "title": "Open Run Replay",
+                    "title": "Open Run Story",
                     "url": "/d/agentops-v2-run-replay?var-run_id=${__data.fields.RunId}&var-session_id=${__data.fields.SessionId}&var-trace_id=${__data.fields.TraceId}&${__url_time_range}",
                     "targetBlank": false
                   }
@@ -1229,6 +1229,7 @@
         "name": "datasource",
         "type": "custom",
         "label": "datasource",
+        "hide": 2,
         "query": "azure-monitor-oob",
         "current": {
           "selected": true,
@@ -1240,6 +1241,7 @@
         "name": "workspace",
         "type": "custom",
         "label": "workspace",
+        "hide": 2,
         "query": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev",
         "current": {
           "selected": true,
@@ -1250,7 +1252,8 @@
       {
         "name": "timeRange",
         "type": "custom",
-        "label": "timeRange",
+        "label": "Lookback",
+        "hide": 0,
         "query": "24h",
         "current": {
           "selected": true,
@@ -1262,6 +1265,7 @@
         "name": "actioner_url",
         "type": "custom",
         "label": "actioner url",
+        "hide": 2,
         "query": "/api",
         "current": {
           "selected": true,
@@ -1272,7 +1276,8 @@
       {
         "name": "run_id",
         "type": "custom",
-        "label": "run id",
+        "label": "Run",
+        "hide": 2,
         "query": "__all",
         "current": {
           "selected": true,
@@ -1283,7 +1288,8 @@
       {
         "name": "session_id",
         "type": "custom",
-        "label": "session id",
+        "label": "Session",
+        "hide": 2,
         "query": "__all",
         "current": {
           "selected": true,
@@ -1294,7 +1300,8 @@
       {
         "name": "trace_id",
         "type": "custom",
-        "label": "trace id",
+        "label": "Trace",
+        "hide": 2,
         "query": "__all",
         "current": {
           "selected": true,
@@ -1306,6 +1313,7 @@
         "name": "surface",
         "type": "custom",
         "label": "surface",
+        "hide": 0,
         "query": "__all,cli,sdk,vscode_mcp,github_action,cloud_agent,custom",
         "current": {
           "selected": true,
@@ -1316,7 +1324,8 @@
       {
         "name": "repo_hash",
         "type": "custom",
-        "label": "repo hash",
+        "label": "Repository",
+        "hide": 2,
         "query": "__all",
         "current": {
           "selected": true,
@@ -1328,6 +1337,7 @@
         "name": "branch_hash",
         "type": "custom",
         "label": "branch hash",
+        "hide": 2,
         "query": "__all",
         "current": {
           "selected": true,
@@ -1339,6 +1349,7 @@
         "name": "model",
         "type": "custom",
         "label": "model",
+        "hide": 2,
         "query": "__all",
         "current": {
           "selected": true,
@@ -1349,7 +1360,8 @@
       {
         "name": "agent_name",
         "type": "custom",
-        "label": "agent name",
+        "label": "Agent",
+        "hide": 2,
         "query": "__all",
         "current": {
           "selected": true,
@@ -1360,7 +1372,8 @@
       {
         "name": "skill_name",
         "type": "custom",
-        "label": "skill name",
+        "label": "Skill",
+        "hide": 2,
         "query": "__all",
         "current": {
           "selected": true,
@@ -1371,7 +1384,8 @@
       {
         "name": "mcp_server",
         "type": "custom",
-        "label": "mcp server",
+        "label": "MCP server",
+        "hide": 2,
         "query": "__all",
         "current": {
           "selected": true,
@@ -1383,6 +1397,7 @@
         "name": "sub_agent",
         "type": "custom",
         "label": "sub agent",
+        "hide": 2,
         "query": "__all",
         "current": {
           "selected": true,
@@ -1393,7 +1408,8 @@
       {
         "name": "task_type",
         "type": "custom",
-        "label": "task type",
+        "label": "Task type",
+        "hide": 2,
         "query": "__all,explain,review,test,fix,refactor,docs,debug_ci,unknown",
         "current": {
           "selected": true,
@@ -1404,7 +1420,8 @@
       {
         "name": "tool_name",
         "type": "custom",
-        "label": "tool name",
+        "label": "Tool",
+        "hide": 2,
         "query": "__all",
         "current": {
           "selected": true,
@@ -1415,7 +1432,8 @@
       {
         "name": "tool_risk",
         "type": "custom",
-        "label": "tool risk",
+        "label": "Tool risk",
+        "hide": 2,
         "query": "__all,read-only,write-file,shell,network,secret-access,browser-control,destructive,privileged",
         "current": {
           "selected": true,
@@ -1426,7 +1444,8 @@
       {
         "name": "pattern_key",
         "type": "custom",
-        "label": "pattern key",
+        "label": "Pattern",
+        "hide": 2,
         "query": "__all",
         "current": {
           "selected": true,
@@ -1437,7 +1456,8 @@
       {
         "name": "privacy_mode",
         "type": "custom",
-        "label": "privacy mode",
+        "label": "Privacy",
+        "hide": 0,
         "query": "__all,strict,compat,unsafe",
         "current": {
           "selected": true,
@@ -1448,7 +1468,8 @@
       {
         "name": "outcome_status",
         "type": "custom",
-        "label": "outcome status",
+        "label": "Outcome",
+        "hide": 2,
         "query": "__all,success,failed,cancelled,blocked,unknown",
         "current": {
           "selected": true,
@@ -1459,7 +1480,8 @@
       {
         "name": "eval_bucket",
         "type": "custom",
-        "label": "eval bucket",
+        "label": "Eval result",
+        "hide": 2,
         "query": "__all,ok,review,poor",
         "current": {
           "selected": true,

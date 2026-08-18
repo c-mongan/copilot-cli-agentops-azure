@@ -67,7 +67,7 @@ function checkHomebrewFormula(options = {}) {
   failures.push(...validateTemplate(template).map(term => `formula template missing ${term}`));
 
   const outDir = options.outDir || fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-homebrew-'));
-  const distribution = checkReleaseDistribution({ outDir, skipDocs: options.skipDocs });
+  const distribution = checkReleaseDistribution({ outDir, skipDocs: options.skipDocs, requireGitIdentity: false });
   const artifact = distribution.artifacts.find(item => item.package === 'cli' && item.ok);
   if (!distribution.ok) failures.push(...distribution.failures);
   if (!artifact) failures.push('CLI release artifact was not generated');
