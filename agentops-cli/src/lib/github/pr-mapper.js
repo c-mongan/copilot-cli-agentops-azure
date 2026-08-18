@@ -1,11 +1,6 @@
-const crypto = require('node:crypto');
-
+const { prefixedHashOrEmpty: stableHash } = require('../hash');
 const { ciStatusFromChecks } = require('./actions-mapper');
 const { isRevertPullRequest } = require('./revert-detector');
-
-function stableHash(value, prefix = 'h') {
-  return `${prefix}_${crypto.createHash('sha256').update(String(value || '')).digest('hex').slice(0, 16)}`;
-}
 
 function minutesBetween(start, end) {
   if (!start || !end) return null;

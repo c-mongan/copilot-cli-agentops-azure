@@ -2,6 +2,10 @@
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cli_entry="${script_dir}/agentops-cli/src/index.js"
+if [[ ! -f "${cli_entry}" ]]; then
+  cli_entry="${script_dir}/src/index.js"
+fi
 remove_plugin=true
 stop_collector=true
 remove_binary=true
@@ -61,11 +65,11 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ "${remove_plugin}" == true ]]; then
-  node "${script_dir}/agentops-cli/src/index.js" plugin uninstall || true
+  node "${cli_entry}" plugin uninstall || true
 fi
 
 if [[ "${stop_collector}" == true ]]; then
-  node "${script_dir}/agentops-cli/src/index.js" collector stop --mode auto --json || true
+  node "${cli_entry}" collector stop --mode auto --json || true
 fi
 
 if [[ "${remove_binary}" == true ]]; then
@@ -73,14 +77,14 @@ if [[ "${remove_binary}" == true ]]; then
   if [[ "${purge}" == true ]]; then
     binary_args+=(--purge)
   fi
-  node "${script_dir}/agentops-cli/src/index.js" "${binary_args[@]}" || true
+  node "${cli_entry}" "${binary_args[@]}" || true
 fi
 
-"${script_dir}/scripts/uninstall-copilot-agentops-shim.sh" "${shim_args[@]}"
+"${script_dir}/scripts/uninstall-copilot-agentops-shim.sh" ${shim_args[@]+"${shim_args[@]}"}
 
 cat <<'MSG'
 
 AgentOps uninstall finished.
 Reinstall later with:
-  ./setup-agentops.sh
+  agentops install
 MSG

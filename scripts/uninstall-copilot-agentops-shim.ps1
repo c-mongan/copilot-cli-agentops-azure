@@ -6,16 +6,33 @@ param(
 $ErrorActionPreference = "Stop"
 
 $shadowCmd = Join-Path $InstallDir "copilot.cmd"
+$shadowBackup = Join-Path $InstallDir "copilot.cmd.agentops-original"
+$shadowMarker = "REM AgentOps managed shadow shim"
 $agentopsCliCmd = Join-Path $InstallDir "agentops.cmd"
 $agentopsCmd = Join-Path $InstallDir "copilot-agentops.cmd"
 $agentopsCodexCmd = Join-Path $InstallDir "agentops-codex.cmd"
 
 if (Test-Path $shadowCmd) {
-  Remove-Item $shadowCmd -Force
-  Write-Host "Removed plain copilot shadow shim:"
-  Write-Host "  $shadowCmd"
+  [string]$existingShadow = Get-Content -Raw -Path $shadowCmd
+  if ($existingShadow.Contains($shadowMarker)) {
+    Remove-Item -LiteralPath $shadowCmd -Force
+    Write-Host "Removed plain copilot shadow shim:"
+    Write-Host "  $shadowCmd"
+  } else {
+    Write-Host "Preserved non-AgentOps copilot command:"
+    Write-Host "  $shadowCmd"
+  }
 } else {
   Write-Host "No plain copilot shadow shim found at:"
+  Write-Host "  $shadowCmd"
+}
+
+if (Test-Path $shadowBackup) {
+  if (Test-Path $shadowCmd) {
+    throw "Cannot restore the original Copilot command because $shadowCmd is occupied. Original remains at $shadowBackup."
+  }
+  Move-Item -LiteralPath $shadowBackup -Destination $shadowCmd
+  Write-Host "Restored original copilot command:"
   Write-Host "  $shadowCmd"
 }
 

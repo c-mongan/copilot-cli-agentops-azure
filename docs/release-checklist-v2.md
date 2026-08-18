@@ -10,6 +10,7 @@ npm --prefix agentops-cli run publish:check -- --json
 npm --prefix packages/agentops-copilot-sdk run publish:check -- --json
 node scripts/check-release-distribution.js --json
 node scripts/check-install-smoke.js --json
+node scripts/check-packaged-lifecycle.js --json
 node scripts/check-homebrew-formula.js --json
 node agentops-cli/src/index.js security audit --json
 node agentops-cli/src/index.js security posture --json
@@ -32,7 +33,7 @@ node agentops-cli/src/index.js demo generate --runs 10 --with-content --out .age
 node agentops-cli/src/index.js content status --dir .agentops/demo/content-preview --allow-content --json
 node agentops-cli/src/index.js content opt-in --json
 node agentops-cli/src/index.js azure-ingest plan --dir .agentops/demo/content-preview --allow-content --json
-node agentops-cli/src/index.js run-summary generate --file tests/sample-otel/tool-failure.jsonl --json
+node agentops-cli/src/index.js run-summary generate --file fixtures/sample-otel/tool-failure.ndjson.fixture --json
 node agentops-cli/src/index.js insights generate --runs .agentops/demo/latest/AgentOpsRunSummary_CL.jsonl --tools .agentops/demo/latest/AgentOpsToolCalls_CL.jsonl --privacy .agentops/demo/latest/AgentOpsPrivacy_CL.jsonl --github .agentops/demo/latest/AgentOpsGithubOutcomes_CL.jsonl --json
 node agentops-cli/src/index.js insights patterns --insights .agentops/insights/latest/AgentOpsInsights_CL.jsonl --json
 node agentops-cli/src/index.js explain latest --runs .agentops/demo/latest/AgentOpsRunSummary_CL.jsonl --evals .agentops/insights/latest/AgentOpsEval_CL.jsonl --insights .agentops/insights/latest/AgentOpsInsights_CL.jsonl
@@ -46,6 +47,7 @@ npm --prefix packages/agentops-copilot-sdk test
 npm --prefix packages/agentops-copilot-sdk run publish:check -- --json
 node scripts/check-release-distribution.js --json
 node scripts/check-install-smoke.js --json
+node scripts/check-packaged-lifecycle.js --json
 node scripts/check-homebrew-formula.js --json
 node --test --test-name-pattern github agentops-cli/test/index.test.js
 node --test --test-name-pattern mcp-proxy agentops-cli/test/index.test.js

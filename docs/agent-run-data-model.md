@@ -112,7 +112,7 @@ Use a separate restricted workspace/dashboard when this table contains real prom
 Convert a raw span JSONL export into the V2 custom-table shape with:
 
 ```bash
-agentops run-summary generate --file tests/sample-otel/tool-failure.jsonl --json
+agentops run-summary generate --file fixtures/sample-otel/tool-failure.ndjson.fixture --json
 ```
 
 The command writes metadata-only `AgentOps*_CL.jsonl` files under `.agentops/run-summary/latest` by default. It drops content-like attributes from exported rows and records privacy-signal counts in `AgentOpsPrivacy_CL`.

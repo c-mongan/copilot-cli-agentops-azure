@@ -1,8 +1,9 @@
 const childProcess = require('node:child_process');
-const fs = require('node:fs');
 const path = require('node:path');
 
 const { ciStatusFromChecks } = require('./actions-mapper');
+const { writeJsonFile, writeJsonlFile } = require('../command-output');
+const { readJsonl } = require('../json');
 const { rowFromPullRequest, stableHash } = require('./pr-mapper');
 
 function parseJson(text, fallback) {
@@ -25,11 +26,6 @@ function runGh(args, options = {}) {
     return { ok: false, error: (result.stderr || result.stdout || `gh exited ${result.status}`).trim(), value: null };
   }
   return { ok: true, error: null, value: result.stdout };
-}
-
-function readJsonl(filePath) {
-  if (!filePath) return [];
-  return fs.readFileSync(filePath, 'utf8').split(/\r?\n/).filter(Boolean).map(line => JSON.parse(line));
 }
 
 function runMapFromRows(rows = []) {
@@ -87,15 +83,14 @@ function enrichGithubOutcomes(options = {}) {
 }
 
 function writeGithubOutcomes(rows, outDir) {
-  fs.mkdirSync(outDir, { recursive: true });
   const file = path.join(outDir, 'AgentOpsGithubOutcomes_CL.jsonl');
-  fs.writeFileSync(file, `${rows.map(row => JSON.stringify(row)).join('\n')}${rows.length ? '\n' : ''}`);
+  writeJsonlFile(file, rows);
   const manifest = path.join(outDir, 'manifest.json');
-  fs.writeFileSync(manifest, `${JSON.stringify({
+  writeJsonFile(manifest, {
     generated_at: new Date().toISOString(),
     table_counts: { AgentOpsGithubOutcomes_CL: rows.length },
     files: { AgentOpsGithubOutcomes_CL: file }
-  }, null, 2)}\n`);
+  });
   return { out_dir: outDir, manifest, file };
 }
 

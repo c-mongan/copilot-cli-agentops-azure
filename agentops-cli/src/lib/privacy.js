@@ -52,6 +52,9 @@ const safeAttributeKeys = [
   'agentops.parent_agent.name',
   'agentops.sub_agent.name',
   'agentops.delegation.id',
+  'agentops.subagent.duration_ms',
+  'agentops.subagent.total_tokens',
+  'agentops.subagent.tool_count',
   'agentops.skill.name',
   'agentops.skill.hash',
   'agentops.workflow.name',
@@ -143,7 +146,7 @@ function makePoisonAttributes(id = `agentops-poison-${crypto.randomBytes(4).toSt
     'http.request.body.content': 'SECRET_BODY_SHOULD_NOT_LEAVE',
     'http.response.body.content': 'SECRET_BODY_SHOULD_NOT_LEAVE',
     'url.full': 'https://example.test/path?token=SECRET_URL_SHOULD_NOT_LEAVE',
-    'code.filepath': '/Users/conor/private/customer/repo/file.ts',
+    'code.filepath': '/workspace/example/repository/file.ts',
     'unknown.future.content.field': 'SECRET_UNKNOWN_SHOULD_NOT_LEAVE'
   };
 }

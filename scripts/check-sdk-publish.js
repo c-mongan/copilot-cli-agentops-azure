@@ -59,8 +59,8 @@ function checkSdkPublish(options = {}) {
   if (pkg.name !== '@agentops/copilot-sdk') failures.push('package name must stay @agentops/copilot-sdk');
   if (pkg.main !== 'src/index.js') failures.push('main must point to src/index.js');
   if (pkg.types !== 'src/index.d.ts') failures.push('types must point to src/index.d.ts');
-  if (!Array.isArray(pkg.files) || !pkg.files.includes('src') || !pkg.files.includes('examples')) {
-    failures.push('files must include src and examples');
+  if (!Array.isArray(pkg.files) || !pkg.files.includes('LICENSE') || !pkg.files.includes('src') || !pkg.files.includes('examples')) {
+    failures.push('files must include LICENSE, src, and examples');
   }
   if (!String(pkg.engines?.node || '').includes('>=20')) failures.push('engines.node must require Node >=20');
 
@@ -79,6 +79,7 @@ function checkSdkPublish(options = {}) {
   if (!pack.ok) failures.push(pack.error);
 
   const expectedFiles = [
+    'LICENSE',
     'package.json',
     'src/index.js',
     'src/index.d.ts',

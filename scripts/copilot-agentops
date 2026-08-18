@@ -13,5 +13,9 @@ while [[ -L "${script_source}" ]]; do
 done
 script_dir="$(cd "$(dirname "${script_source}")" && pwd)"
 repo_root="$(cd "${script_dir}/.." && pwd)"
+cli_entry="${repo_root}/agentops-cli/src/index.js"
+if [[ ! -f "${cli_entry}" ]]; then
+  cli_entry="${repo_root}/src/index.js"
+fi
 
-exec node "${repo_root}/agentops-cli/src/index.js" copilot "$@"
+exec node "${cli_entry}" copilot "$@"

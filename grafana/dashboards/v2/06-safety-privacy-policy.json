@@ -8,7 +8,7 @@
   "id": null,
   "links": [
     {
-      "title": "Home",
+      "title": "Today",
       "uid": "agentops-v2-home",
       "type": "link",
       "icon": "dashboard",
@@ -28,7 +28,7 @@
       "includeVars": true
     },
     {
-      "title": "Replay",
+      "title": "Run Story",
       "uid": "agentops-v2-run-replay",
       "type": "link",
       "icon": "dashboard",
@@ -114,19 +114,487 @@
       "title": "Trust screen",
       "type": "text",
       "gridPos": {
-        "h": 2,
+        "h": 3,
         "w": 24,
         "x": 0,
         "y": 0
       },
       "options": {
         "mode": "markdown",
-        "content": "## Safety, Privacy & Policy\nStrict privacy should be visible and reassuring. Uses AgentOps V2 custom tables when present and falls back to existing Copilot OpenTelemetry in Application Insights. If every panel is empty, run `agentops collector smoke --privacy strict --poison --json`; for local demos run `agentops demo generate --runs 50 --with-failures --with-privacy-drops --json`."
+        "content": "## Privacy\n**AgentOps default: strict metadata only · content capture off.** This screen describes AgentOps telemetry only. It does not prove what GitHub Copilot, an MCP server, or any other connected service stores. The capture posture below reflects the selected AgentOps runs. Uses AgentOps V2 custom tables when present and falls back to existing Copilot OpenTelemetry in Application Insights. If every panel is empty, run `agentops collector smoke --privacy strict --poison --json`; for local demos run `agentops demo generate --runs 50 --with-failures --with-privacy-drops --json`."
       }
     },
     {
+      "id": 13,
+      "title": "AgentOps capture posture",
+      "type": "table",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "azure-monitor-oob"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 24,
+        "x": 0,
+        "y": 3
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "links": []
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "RunId"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Run Story",
+                    "url": "/d/agentops-v2-run-replay?var-run_id=${__data.fields.RunId}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "SessionId"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Session Replay",
+                    "url": "/d/agentops-v2-run-replay?var-session_id=${__data.fields.SessionId}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "TraceId"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Trace Replay",
+                    "url": "/d/agentops-v2-run-replay?var-trace_id=${__data.fields.TraceId}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "ToolName"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Tools Risk",
+                    "url": "/d/agentops-v2-tools-mcp-risk?var-tool_name=${__data.fields.ToolName}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "McpServerName"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open MCP Server",
+                    "url": "/d/agentops-v2-tools-mcp-risk?var-mcp_server=${__data.fields.McpServerName}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "McpServer"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open MCP Server",
+                    "url": "/d/agentops-v2-tools-mcp-risk?var-mcp_server=${__data.fields.McpServer}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "ModelActual"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Models",
+                    "url": "/d/agentops-v2-models-cost-tokens?var-model=${__data.fields.ModelActual}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "AgentName"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Agent Runs",
+                    "url": "/d/agentops-v2-runs-explorer?var-agent_name=${__data.fields.AgentName}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "SkillName"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Skill Runs",
+                    "url": "/d/agentops-v2-runs-explorer?var-skill_name=${__data.fields.SkillName}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "SubAgentName"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Sub-agent Replay",
+                    "url": "/d/agentops-v2-run-replay?var-sub_agent=${__data.fields.SubAgentName}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "ParentAgentName"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Parent Agent Runs",
+                    "url": "/d/agentops-v2-runs-explorer?var-agent_name=${__data.fields.ParentAgentName}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "RepoHash"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Runs for Repo",
+                    "url": "/d/agentops-v2-runs-explorer?var-repo_hash=${__data.fields.RepoHash}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "PrNumberHash"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Code Outcomes",
+                    "url": "/d/agentops-v2-code-outcomes?var-repo_hash=${__data.fields.RepoHash}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "CiStatus"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Code Outcomes",
+                    "url": "/d/agentops-v2-code-outcomes?var-outcome_status=${__data.fields.CiStatus}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "EvalOverall"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Evals",
+                    "url": "/d/agentops-v2-evals-quality?var-run_id=${__data.fields.RunId}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "PatternKey"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Pattern",
+                    "url": "/d/agentops-v2-insights-regressions?var-pattern_key=${__data.fields.PatternKey}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "OpenTranscript"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open prompt/response viewer",
+                    "url": "/d/agentops-v2-run-replay?viewPanel=26&var-run_id=${__data.fields.RunId}&var-session_id=${__data.fields.SessionId}&var-trace_id=${__data.fields.TraceId}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "OpenReplay"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Run Story",
+                    "url": "/d/agentops-v2-run-replay?var-run_id=${__data.fields.RunId}&var-session_id=${__data.fields.SessionId}&var-trace_id=${__data.fields.TraceId}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "AskAgentOpsLaunch"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Ask AgentOps",
+                    "url": "${__data.fields.AskAgentOpsLaunch}",
+                    "targetBlank": true
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "OpenTrace"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Trace Replay",
+                    "url": "/d/agentops-v2-run-replay?var-trace_id=${__data.fields.TraceId}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "OpenGithub"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open GitHub Outcome",
+                    "url": "/d/agentops-v2-code-outcomes?var-run_id=${__data.fields.RunId}&var-repo_hash=${__data.fields.RepoHash}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "OpenPattern"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Pattern",
+                    "url": "/d/agentops-v2-insights-regressions?var-pattern_key=${__data.fields.PatternKey}&${__url_time_range}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "OpenSavedView"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open saved view",
+                    "url": "${__data.fields.Url}",
+                    "targetBlank": true
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "cellHeight": "sm",
+        "showHeader": true,
+        "footer": {
+          "show": false
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "azure-monitor-oob"
+          },
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "resources": [
+              "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
+            ],
+            "resultFormat": "table",
+            "query": "union isfuzzy=true (AgentOpsRunSummary_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo()) | extend DurationMs=todouble(DurationMs), InputTokens=todouble(InputTokens), OutputTokens=todouble(OutputTokens), ReasoningTokens=todouble(ReasoningTokens), CacheReadTokens=todouble(CacheReadTokens), CacheCreationTokens=todouble(CacheCreationTokens), EstimatedCostUsd=todouble(EstimatedCostUsd), ToolCount=tolong(ToolCount), ToolFailureCount=tolong(ToolFailureCount), ToolDeniedCount=tolong(ToolDeniedCount) | extend Delivery='Visible in Azure', Coverage='AgentOps managed'), (AppDependencies | where TimeGenerated between ($__timeFrom() .. $__timeTo()) | where tostring(Properties) has_any ('github.copilot', 'gen_ai.operation.name', 'agentops.', 'codex') or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') | extend SessionId=case(isnotempty(tostring(Properties['agentops.session.id'])), tostring(Properties['agentops.session.id']), isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(coalesce(AppRoleName, 'agent'), '_', coalesce(OperationId, 'session'), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMddHH'))) | extend RunId=case(isnotempty(tostring(Properties['agentops.run.id'])), tostring(Properties['agentops.run.id']), strcat('compat_', SessionId)) | extend TraceId=coalesce(OperationId, tostring(Properties['trace_id']), RunId) | extend Operation=tostring(Properties['gen_ai.operation.name']) | extend ToolName=tostring(Properties['gen_ai.tool.name']) | extend ModelActual=case(isnotempty(tostring(Properties['agentops.model.actual'])), tostring(Properties['agentops.model.actual']), isnotempty(tostring(Properties['gen_ai.response.model'])), tostring(Properties['gen_ai.response.model']), tostring(Properties['gen_ai.request.model'])) | extend AgentName=case(isnotempty(tostring(Properties['agentops.agent.name'])), tostring(Properties['agentops.agent.name']), isnotempty(tostring(Properties['agentops.cli.agent'])), tostring(Properties['agentops.cli.agent']), isnotempty(tostring(Properties['gen_ai.agent.name'])), tostring(Properties['gen_ai.agent.name']), coalesce(AppRoleName, 'agent')) | extend SkillName=coalesce(tostring(Properties['agentops.skill.name']), tostring(Properties['github.copilot.skill.name'])) | extend ParentAgentName=tostring(Properties['agentops.parent_agent.name']) | extend SubAgentName=case(isnotempty(tostring(Properties['agentops.sub_agent.name'])), tostring(Properties['agentops.sub_agent.name']), isnotempty(tostring(Properties['agentops.child_agent.name'])), tostring(Properties['agentops.child_agent.name']), isnotempty(ParentAgentName) and isnotempty(AgentName) and AgentName != ParentAgentName, AgentName, '') | extend DelegationId=tostring(Properties['agentops.delegation.id']) | extend BranchDurationMs=todouble(Properties['agentops.subagent.duration_ms']), BranchTokens=todouble(Properties['agentops.subagent.total_tokens']), BranchToolCount=tolong(Properties['agentops.subagent.tool_count']) | extend Surface=case(isnotempty(tostring(Properties['agentops.surface'])), tostring(Properties['agentops.surface']), AppRoleName has 'codex', 'custom', AppRoleName has 'copilot', 'cli', 'cli') | extend RepoHash=tostring(Properties['agentops.repo.hash']) | extend BranchHash=tostring(Properties['agentops.branch.hash']) | extend TaskType=case(isnotempty(tostring(Properties['agentops.task.type'])), tostring(Properties['agentops.task.type']), 'unknown') | extend PrivacyMode=case(isnotempty(tostring(Properties['agentops.privacy.mode'])), tostring(Properties['agentops.privacy.mode']), 'strict') | extend ContentCaptureSignal=tostring(Properties['agentops.content_capture.signal']) =~ 'true' or tostring(Properties) has_any ('gen_ai.input.messages', 'gen_ai.output.messages', 'gen_ai.prompt', 'gen_ai.completion') | extend InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), OutputTokens=todouble(Properties['gen_ai.usage.output_tokens']), ReasoningTokens=todouble(Properties['gen_ai.usage.reasoning.output_tokens']) | extend CacheReadTokens=todouble(Properties['gen_ai.usage.cache_read.input_tokens']), CacheCreationTokens=todouble(Properties['gen_ai.usage.cache_creation.input_tokens']), ContextWindowPct=todouble(Properties['agentops.context.window_pct']), TokensRemoved=todouble(Properties['github.copilot.tokens_removed']), PermissionWaitMs=todouble(Properties['agentops.permission.wait_ms']) | extend EstimatedCostUsd=coalesce(todouble(Properties['agentops.cost.estimated_usd']), todouble(Properties['github.copilot.cost']) * 0.01, 0.0) | extend ErrorType=coalesce(tostring(Properties['error.type']), tostring(ResultCode)) | extend Failed=Success == false or tostring(Success) =~ 'false' or isnotempty(tostring(Properties['error.type'])) | summarize TimeGenerated=max(TimeGenerated), Started=min(TimeGenerated), TraceId=take_any(TraceId), Surface=take_any(Surface), RepoHash=take_any(RepoHash), BranchHash=take_any(BranchHash), TaskType=take_any(TaskType), AgentName=take_any(AgentName), SkillName=take_any(SkillName), ParentAgentName=take_any(ParentAgentName), SubAgentName=take_any(SubAgentName), DelegationId=take_any(DelegationId), ModelActual=take_any(ModelActual), PrivacyMode=take_any(PrivacyMode), ContentCaptureSignal=max(toint(ContentCaptureSignal)), InputTokens=sum(InputTokens), OutputTokens=sum(OutputTokens), ReasoningTokens=sum(ReasoningTokens), CacheReadTokens=sum(CacheReadTokens), CacheCreationTokens=sum(CacheCreationTokens), ContextWindowPct=max(ContextWindowPct), TokensRemoved=sum(TokensRemoved), PermissionWaitMs=sum(PermissionWaitMs), EstimatedCostUsd=sum(EstimatedCostUsd), ToolCount=countif(Operation == 'execute_tool' or isnotempty(ToolName)), ToolFailureCount=countif((Operation == 'execute_tool' or isnotempty(ToolName)) and Failed), Failures=countif(Failed), ToolDeniedCount=countif(tostring(Properties['agentops.mcp.allowed']) =~ 'false'), FilesReadCount=countif(ToolName has 'read'), FilesEditedCount=countif(ToolName has_any ('edit', 'write', 'patch')), TestsRan=countif(ToolName has_any ('test', 'lint', 'typecheck')) > 0 by RunId, SessionId | extend DurationMs=todouble(datetime_diff('millisecond', TimeGenerated, Started)) | extend ModelRequested=ModelActual, ContentCaptureMode=iff(ContentCaptureSignal > 0, 'signal_only', 'off'), OutcomeStatus=iff(Failures > 0, 'failed', 'success'), OutcomeReason=iff(Failures > 0, 'span_failure', 'completed'), TestsPassed=TestsRan and ToolFailureCount == 0, PrOpened=false, PrNumberHash='', CiStatus='not_run', EvalOverall=tolong(iff(Failures > 0, 50, 85)), RiskScore=ToolFailureCount * 20 + ToolDeniedCount * 30 + ContentCaptureSignal * 15 | project TimeGenerated, RunId, SessionId, TraceId, Surface, RepoHash, BranchHash, TaskType, AgentName, SkillName, ParentAgentName, SubAgentName, DelegationId, ModelRequested, ModelActual, PrivacyMode, ContentCaptureMode, ContentCaptureSignal=ContentCaptureSignal > 0, OutcomeStatus, OutcomeReason, DurationMs, InputTokens, OutputTokens, ReasoningTokens, CacheReadTokens, CacheCreationTokens, ContextWindowPct, TokensRemoved, PermissionWaitMs, EstimatedCostUsd, ToolCount, ToolFailureCount, ToolDeniedCount, TestsRan, TestsPassed, FilesReadCount, FilesEditedCount, PrOpened, PrNumberHash, CiStatus, EvalOverall, RiskScore, Delivery='Visible in Azure', Coverage='Native best effort') | extend SkillName=tostring(column_ifexists('SkillName', '')) | extend ParentAgentName=tostring(column_ifexists('ParentAgentName', '')) | extend SubAgentName=case(isnotempty(tostring(column_ifexists('SubAgentName', ''))), tostring(column_ifexists('SubAgentName', '')), isnotempty(ParentAgentName) and isnotempty(tostring(column_ifexists('AgentName', ''))) and tostring(column_ifexists('AgentName', '')) != ParentAgentName, tostring(column_ifexists('AgentName', '')), '') | extend DelegationId=tostring(column_ifexists('DelegationId', '')) | extend BranchDurationMs=todouble(column_ifexists('BranchDurationMs', 0.0)) | extend BranchTokens=todouble(column_ifexists('BranchTokens', 0.0)) | extend BranchToolCount=tolong(column_ifexists('BranchToolCount', 0)) | extend CacheReadTokens=todouble(column_ifexists('CacheReadTokens', 0.0)) | extend CacheCreationTokens=todouble(column_ifexists('CacheCreationTokens', 0.0)) | extend ContextWindowPct=todouble(column_ifexists('ContextWindowPct', 0.0)) | extend TokensRemoved=todouble(column_ifexists('TokensRemoved', 0.0)) | extend PermissionWaitMs=todouble(column_ifexists('PermissionWaitMs', 0.0)) | where ('$run_id' == '__all' or tostring(column_ifexists('RunId', '')) == '$run_id') | where ('$session_id' == '__all' or tostring(column_ifexists('SessionId', '')) == '$session_id') | where ('$trace_id' == '__all' or tostring(column_ifexists('TraceId', '')) == '$trace_id') | where ('$surface' == '__all' or tostring(column_ifexists('Surface', '')) == '$surface') | where ('$repo_hash' == '__all' or tostring(column_ifexists('RepoHash', '')) == '$repo_hash') | where ('$branch_hash' == '__all' or tostring(column_ifexists('BranchHash', '')) == '$branch_hash') | where ('$model' == '__all' or tostring(column_ifexists('ModelActual', '')) == '$model') | where ('$agent_name' == '__all' or tostring(column_ifexists('AgentName', '')) == '$agent_name') | where ('$skill_name' == '__all' or tostring(column_ifexists('SkillName', '')) == '$skill_name') | where ('$sub_agent' == '__all' or tostring(column_ifexists('SubAgentName', '')) == '$sub_agent') | where ('$task_type' == '__all' or tostring(column_ifexists('TaskType', '')) == '$task_type') | where ('$privacy_mode' == '__all' or tostring(column_ifexists('PrivacyMode', '')) == '$privacy_mode') | where ('$outcome_status' == '__all' or tostring(column_ifexists('OutcomeStatus', '')) == '$outcome_status') | extend EvalBucket=case(EvalOverall >= 80, 'good', EvalOverall >= 60, 'review', 'poor') | where ('$eval_bucket' == '__all' or tostring(column_ifexists('EvalBucket', '')) == iff('$eval_bucket' == 'ok', 'good', '$eval_bucket')) | extend PrivacyMode=coalesce(PrivacyMode, 'unknown'), ContentCaptureMode=coalesce(ContentCaptureMode, 'unknown') | summarize Runs=count() by PrivacyMode, ContentCaptureMode, Coverage | extend Scope='AgentOps telemetry only', Meaning=case(PrivacyMode == 'strict' and ContentCaptureMode == 'off', 'metadata only; prompt, response, code, file content, tool arguments, and tool results are not recorded by AgentOps', PrivacyMode == 'strict', 'strict AgentOps telemetry; review the reported capture mode', 'review this AgentOps capture posture before sharing or broader use') | project Scope, PrivacyMode, ContentCaptureMode, Coverage, Runs, Meaning | order by PrivacyMode asc, ContentCaptureMode asc"
+          }
+        }
+      ],
+      "description": "AgentOps telemetry scope, privacy mode, content-capture mode, coverage, run count, and a plain-language meaning. Unknown or non-strict rows require review."
+    },
+    {
       "id": 2,
-      "title": "Privacy drops",
+      "title": "Content items blocked",
       "type": "stat",
       "datasource": {
         "type": "grafana-azure-monitor-datasource",
@@ -136,7 +604,7 @@
         "h": 4,
         "w": 4,
         "x": 0,
-        "y": 2
+        "y": 7
       },
       "fieldConfig": {
         "defaults": {
@@ -182,14 +650,15 @@
               "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
             ],
             "resultFormat": "time_series",
-            "query": "union isfuzzy=true (AgentOpsPrivacy_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo())), (AppDependencies | where TimeGenerated between ($__timeFrom() .. $__timeTo()) | where tostring(Properties) has_any ('github.copilot', 'gen_ai.operation.name', 'agentops.', 'codex') or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') | extend SessionId=case(isnotempty(tostring(Properties['agentops.session.id'])), tostring(Properties['agentops.session.id']), isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(coalesce(AppRoleName, 'agent'), '_', coalesce(OperationId, 'session'), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMddHH'))) | extend RunId=case(isnotempty(tostring(Properties['agentops.run.id'])), tostring(Properties['agentops.run.id']), strcat('compat_', SessionId)) | extend TraceId=coalesce(OperationId, tostring(Properties['trace_id']), RunId) | extend Operation=tostring(Properties['gen_ai.operation.name']) | extend ToolName=tostring(Properties['gen_ai.tool.name']) | extend ModelActual=case(isnotempty(tostring(Properties['agentops.model.actual'])), tostring(Properties['agentops.model.actual']), isnotempty(tostring(Properties['gen_ai.response.model'])), tostring(Properties['gen_ai.response.model']), tostring(Properties['gen_ai.request.model'])) | extend AgentName=case(isnotempty(tostring(Properties['agentops.agent.name'])), tostring(Properties['agentops.agent.name']), isnotempty(tostring(Properties['agentops.cli.agent'])), tostring(Properties['agentops.cli.agent']), isnotempty(tostring(Properties['gen_ai.agent.name'])), tostring(Properties['gen_ai.agent.name']), coalesce(AppRoleName, 'agent')) | extend SkillName=coalesce(tostring(Properties['agentops.skill.name']), tostring(Properties['github.copilot.skill.name'])) | extend ParentAgentName=tostring(Properties['agentops.parent_agent.name']) | extend SubAgentName=case(isnotempty(tostring(Properties['agentops.sub_agent.name'])), tostring(Properties['agentops.sub_agent.name']), isnotempty(tostring(Properties['agentops.child_agent.name'])), tostring(Properties['agentops.child_agent.name']), isnotempty(ParentAgentName) and isnotempty(AgentName) and AgentName != ParentAgentName, AgentName, '') | extend DelegationId=tostring(Properties['agentops.delegation.id']) | extend Surface=case(isnotempty(tostring(Properties['agentops.surface'])), tostring(Properties['agentops.surface']), AppRoleName has 'codex', 'custom', AppRoleName has 'copilot', 'cli', 'cli') | extend RepoHash=tostring(Properties['agentops.repo.hash']) | extend BranchHash=tostring(Properties['agentops.branch.hash']) | extend TaskType=case(isnotempty(tostring(Properties['agentops.task.type'])), tostring(Properties['agentops.task.type']), 'unknown') | extend PrivacyMode=case(isnotempty(tostring(Properties['agentops.privacy.mode'])), tostring(Properties['agentops.privacy.mode']), 'strict') | extend ContentCaptureSignal=tostring(Properties['agentops.content_capture.signal']) =~ 'true' or tostring(Properties) has_any ('gen_ai.input.messages', 'gen_ai.output.messages', 'gen_ai.prompt', 'gen_ai.completion') | extend InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), OutputTokens=todouble(Properties['gen_ai.usage.output_tokens']), ReasoningTokens=todouble(Properties['gen_ai.usage.reasoning.output_tokens']) | extend CacheReadTokens=todouble(Properties['gen_ai.usage.cache_read.input_tokens']), CacheCreationTokens=todouble(Properties['gen_ai.usage.cache_creation.input_tokens']), ContextWindowPct=todouble(Properties['agentops.context.window_pct']), TokensRemoved=todouble(Properties['github.copilot.tokens_removed']), PermissionWaitMs=todouble(Properties['agentops.permission.wait_ms']) | extend EstimatedCostUsd=coalesce(todouble(Properties['agentops.cost.estimated_usd']), todouble(Properties['github.copilot.cost']) * 0.01, 0.0) | extend ErrorType=coalesce(tostring(Properties['error.type']), tostring(ResultCode)) | extend Failed=Success == false or tostring(Success) =~ 'false' or isnotempty(tostring(Properties['error.type'])) | where ContentCaptureSignal | extend ContentKind=case(tostring(Properties) has_any ('secret', 'token', 'credential', 'api_key'), 'secret_like', tostring(Properties) has_any ('gen_ai.output.messages', 'gen_ai.completion'), 'output', tostring(Properties) has_any ('tool.call.arguments', 'tool_args'), 'tool_args', 'prompt') | project TimeGenerated, RunId, TraceId, PrivacyMode, ContentKind, Observed=true, Action='dropped', DroppedCount=1, RedactedCount=0, LeakDetected=false) | where ('$run_id' == '__all' or tostring(column_ifexists('RunId', '')) == '$run_id') | where ('$trace_id' == '__all' or tostring(column_ifexists('TraceId', '')) == '$trace_id') | where ('$privacy_mode' == '__all' or tostring(column_ifexists('PrivacyMode', '')) == '$privacy_mode') | summarize value=sum(DroppedCount) by bin(TimeGenerated, $__interval)"
+            "query": "union isfuzzy=true (AgentOpsPrivacy_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo())), (AppDependencies | where TimeGenerated between ($__timeFrom() .. $__timeTo()) | where tostring(Properties) has_any ('github.copilot', 'gen_ai.operation.name', 'agentops.', 'codex') or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') | extend SessionId=case(isnotempty(tostring(Properties['agentops.session.id'])), tostring(Properties['agentops.session.id']), isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(coalesce(AppRoleName, 'agent'), '_', coalesce(OperationId, 'session'), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMddHH'))) | extend RunId=case(isnotempty(tostring(Properties['agentops.run.id'])), tostring(Properties['agentops.run.id']), strcat('compat_', SessionId)) | extend TraceId=coalesce(OperationId, tostring(Properties['trace_id']), RunId) | extend Operation=tostring(Properties['gen_ai.operation.name']) | extend ToolName=tostring(Properties['gen_ai.tool.name']) | extend ModelActual=case(isnotempty(tostring(Properties['agentops.model.actual'])), tostring(Properties['agentops.model.actual']), isnotempty(tostring(Properties['gen_ai.response.model'])), tostring(Properties['gen_ai.response.model']), tostring(Properties['gen_ai.request.model'])) | extend AgentName=case(isnotempty(tostring(Properties['agentops.agent.name'])), tostring(Properties['agentops.agent.name']), isnotempty(tostring(Properties['agentops.cli.agent'])), tostring(Properties['agentops.cli.agent']), isnotempty(tostring(Properties['gen_ai.agent.name'])), tostring(Properties['gen_ai.agent.name']), coalesce(AppRoleName, 'agent')) | extend SkillName=coalesce(tostring(Properties['agentops.skill.name']), tostring(Properties['github.copilot.skill.name'])) | extend ParentAgentName=tostring(Properties['agentops.parent_agent.name']) | extend SubAgentName=case(isnotempty(tostring(Properties['agentops.sub_agent.name'])), tostring(Properties['agentops.sub_agent.name']), isnotempty(tostring(Properties['agentops.child_agent.name'])), tostring(Properties['agentops.child_agent.name']), isnotempty(ParentAgentName) and isnotempty(AgentName) and AgentName != ParentAgentName, AgentName, '') | extend DelegationId=tostring(Properties['agentops.delegation.id']) | extend BranchDurationMs=todouble(Properties['agentops.subagent.duration_ms']), BranchTokens=todouble(Properties['agentops.subagent.total_tokens']), BranchToolCount=tolong(Properties['agentops.subagent.tool_count']) | extend Surface=case(isnotempty(tostring(Properties['agentops.surface'])), tostring(Properties['agentops.surface']), AppRoleName has 'codex', 'custom', AppRoleName has 'copilot', 'cli', 'cli') | extend RepoHash=tostring(Properties['agentops.repo.hash']) | extend BranchHash=tostring(Properties['agentops.branch.hash']) | extend TaskType=case(isnotempty(tostring(Properties['agentops.task.type'])), tostring(Properties['agentops.task.type']), 'unknown') | extend PrivacyMode=case(isnotempty(tostring(Properties['agentops.privacy.mode'])), tostring(Properties['agentops.privacy.mode']), 'strict') | extend ContentCaptureSignal=tostring(Properties['agentops.content_capture.signal']) =~ 'true' or tostring(Properties) has_any ('gen_ai.input.messages', 'gen_ai.output.messages', 'gen_ai.prompt', 'gen_ai.completion') | extend InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), OutputTokens=todouble(Properties['gen_ai.usage.output_tokens']), ReasoningTokens=todouble(Properties['gen_ai.usage.reasoning.output_tokens']) | extend CacheReadTokens=todouble(Properties['gen_ai.usage.cache_read.input_tokens']), CacheCreationTokens=todouble(Properties['gen_ai.usage.cache_creation.input_tokens']), ContextWindowPct=todouble(Properties['agentops.context.window_pct']), TokensRemoved=todouble(Properties['github.copilot.tokens_removed']), PermissionWaitMs=todouble(Properties['agentops.permission.wait_ms']) | extend EstimatedCostUsd=coalesce(todouble(Properties['agentops.cost.estimated_usd']), todouble(Properties['github.copilot.cost']) * 0.01, 0.0) | extend ErrorType=coalesce(tostring(Properties['error.type']), tostring(ResultCode)) | extend Failed=Success == false or tostring(Success) =~ 'false' or isnotempty(tostring(Properties['error.type'])) | where ContentCaptureSignal | extend ContentKind=case(tostring(Properties) has_any ('secret', 'token', 'credential', 'api_key'), 'secret_like', tostring(Properties) has_any ('gen_ai.output.messages', 'gen_ai.completion'), 'output', tostring(Properties) has_any ('tool.call.arguments', 'tool_args'), 'tool_args', 'prompt') | project TimeGenerated, RunId, TraceId, PrivacyMode, ContentKind, Observed=true, Action='dropped', DroppedCount=1, RedactedCount=0, LeakDetected=false) | where ('$run_id' == '__all' or tostring(column_ifexists('RunId', '')) == '$run_id') | where ('$trace_id' == '__all' or tostring(column_ifexists('TraceId', '')) == '$trace_id') | where ('$privacy_mode' == '__all' or tostring(column_ifexists('PrivacyMode', '')) == '$privacy_mode') | summarize value=sum(DroppedCount) by bin(TimeGenerated, $__interval)"
           }
         }
-      ]
+      ],
+      "description": "Content items AgentOps reports dropping. This indicates a privacy action, not successful storage."
     },
     {
       "id": 3,
-      "title": "Secret-like drops",
+      "title": "Secret-like items blocked",
       "type": "stat",
       "datasource": {
         "type": "grafana-azure-monitor-datasource",
@@ -199,7 +668,7 @@
         "h": 4,
         "w": 4,
         "x": 4,
-        "y": 2
+        "y": 7
       },
       "fieldConfig": {
         "defaults": {
@@ -245,14 +714,15 @@
               "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
             ],
             "resultFormat": "time_series",
-            "query": "union isfuzzy=true (AgentOpsPrivacy_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo())), (AppDependencies | where TimeGenerated between ($__timeFrom() .. $__timeTo()) | where tostring(Properties) has_any ('github.copilot', 'gen_ai.operation.name', 'agentops.', 'codex') or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') | extend SessionId=case(isnotempty(tostring(Properties['agentops.session.id'])), tostring(Properties['agentops.session.id']), isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(coalesce(AppRoleName, 'agent'), '_', coalesce(OperationId, 'session'), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMddHH'))) | extend RunId=case(isnotempty(tostring(Properties['agentops.run.id'])), tostring(Properties['agentops.run.id']), strcat('compat_', SessionId)) | extend TraceId=coalesce(OperationId, tostring(Properties['trace_id']), RunId) | extend Operation=tostring(Properties['gen_ai.operation.name']) | extend ToolName=tostring(Properties['gen_ai.tool.name']) | extend ModelActual=case(isnotempty(tostring(Properties['agentops.model.actual'])), tostring(Properties['agentops.model.actual']), isnotempty(tostring(Properties['gen_ai.response.model'])), tostring(Properties['gen_ai.response.model']), tostring(Properties['gen_ai.request.model'])) | extend AgentName=case(isnotempty(tostring(Properties['agentops.agent.name'])), tostring(Properties['agentops.agent.name']), isnotempty(tostring(Properties['agentops.cli.agent'])), tostring(Properties['agentops.cli.agent']), isnotempty(tostring(Properties['gen_ai.agent.name'])), tostring(Properties['gen_ai.agent.name']), coalesce(AppRoleName, 'agent')) | extend SkillName=coalesce(tostring(Properties['agentops.skill.name']), tostring(Properties['github.copilot.skill.name'])) | extend ParentAgentName=tostring(Properties['agentops.parent_agent.name']) | extend SubAgentName=case(isnotempty(tostring(Properties['agentops.sub_agent.name'])), tostring(Properties['agentops.sub_agent.name']), isnotempty(tostring(Properties['agentops.child_agent.name'])), tostring(Properties['agentops.child_agent.name']), isnotempty(ParentAgentName) and isnotempty(AgentName) and AgentName != ParentAgentName, AgentName, '') | extend DelegationId=tostring(Properties['agentops.delegation.id']) | extend Surface=case(isnotempty(tostring(Properties['agentops.surface'])), tostring(Properties['agentops.surface']), AppRoleName has 'codex', 'custom', AppRoleName has 'copilot', 'cli', 'cli') | extend RepoHash=tostring(Properties['agentops.repo.hash']) | extend BranchHash=tostring(Properties['agentops.branch.hash']) | extend TaskType=case(isnotempty(tostring(Properties['agentops.task.type'])), tostring(Properties['agentops.task.type']), 'unknown') | extend PrivacyMode=case(isnotempty(tostring(Properties['agentops.privacy.mode'])), tostring(Properties['agentops.privacy.mode']), 'strict') | extend ContentCaptureSignal=tostring(Properties['agentops.content_capture.signal']) =~ 'true' or tostring(Properties) has_any ('gen_ai.input.messages', 'gen_ai.output.messages', 'gen_ai.prompt', 'gen_ai.completion') | extend InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), OutputTokens=todouble(Properties['gen_ai.usage.output_tokens']), ReasoningTokens=todouble(Properties['gen_ai.usage.reasoning.output_tokens']) | extend CacheReadTokens=todouble(Properties['gen_ai.usage.cache_read.input_tokens']), CacheCreationTokens=todouble(Properties['gen_ai.usage.cache_creation.input_tokens']), ContextWindowPct=todouble(Properties['agentops.context.window_pct']), TokensRemoved=todouble(Properties['github.copilot.tokens_removed']), PermissionWaitMs=todouble(Properties['agentops.permission.wait_ms']) | extend EstimatedCostUsd=coalesce(todouble(Properties['agentops.cost.estimated_usd']), todouble(Properties['github.copilot.cost']) * 0.01, 0.0) | extend ErrorType=coalesce(tostring(Properties['error.type']), tostring(ResultCode)) | extend Failed=Success == false or tostring(Success) =~ 'false' or isnotempty(tostring(Properties['error.type'])) | where ContentCaptureSignal | extend ContentKind=case(tostring(Properties) has_any ('secret', 'token', 'credential', 'api_key'), 'secret_like', tostring(Properties) has_any ('gen_ai.output.messages', 'gen_ai.completion'), 'output', tostring(Properties) has_any ('tool.call.arguments', 'tool_args'), 'tool_args', 'prompt') | project TimeGenerated, RunId, TraceId, PrivacyMode, ContentKind, Observed=true, Action='dropped', DroppedCount=1, RedactedCount=0, LeakDetected=false) | where ('$run_id' == '__all' or tostring(column_ifexists('RunId', '')) == '$run_id') | where ('$trace_id' == '__all' or tostring(column_ifexists('TraceId', '')) == '$trace_id') | where ('$privacy_mode' == '__all' or tostring(column_ifexists('PrivacyMode', '')) == '$privacy_mode') | where ContentKind == 'secret_like' | summarize value=sum(DroppedCount) by bin(TimeGenerated, $__interval)"
+            "query": "union isfuzzy=true (AgentOpsPrivacy_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo())), (AppDependencies | where TimeGenerated between ($__timeFrom() .. $__timeTo()) | where tostring(Properties) has_any ('github.copilot', 'gen_ai.operation.name', 'agentops.', 'codex') or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') | extend SessionId=case(isnotempty(tostring(Properties['agentops.session.id'])), tostring(Properties['agentops.session.id']), isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(coalesce(AppRoleName, 'agent'), '_', coalesce(OperationId, 'session'), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMddHH'))) | extend RunId=case(isnotempty(tostring(Properties['agentops.run.id'])), tostring(Properties['agentops.run.id']), strcat('compat_', SessionId)) | extend TraceId=coalesce(OperationId, tostring(Properties['trace_id']), RunId) | extend Operation=tostring(Properties['gen_ai.operation.name']) | extend ToolName=tostring(Properties['gen_ai.tool.name']) | extend ModelActual=case(isnotempty(tostring(Properties['agentops.model.actual'])), tostring(Properties['agentops.model.actual']), isnotempty(tostring(Properties['gen_ai.response.model'])), tostring(Properties['gen_ai.response.model']), tostring(Properties['gen_ai.request.model'])) | extend AgentName=case(isnotempty(tostring(Properties['agentops.agent.name'])), tostring(Properties['agentops.agent.name']), isnotempty(tostring(Properties['agentops.cli.agent'])), tostring(Properties['agentops.cli.agent']), isnotempty(tostring(Properties['gen_ai.agent.name'])), tostring(Properties['gen_ai.agent.name']), coalesce(AppRoleName, 'agent')) | extend SkillName=coalesce(tostring(Properties['agentops.skill.name']), tostring(Properties['github.copilot.skill.name'])) | extend ParentAgentName=tostring(Properties['agentops.parent_agent.name']) | extend SubAgentName=case(isnotempty(tostring(Properties['agentops.sub_agent.name'])), tostring(Properties['agentops.sub_agent.name']), isnotempty(tostring(Properties['agentops.child_agent.name'])), tostring(Properties['agentops.child_agent.name']), isnotempty(ParentAgentName) and isnotempty(AgentName) and AgentName != ParentAgentName, AgentName, '') | extend DelegationId=tostring(Properties['agentops.delegation.id']) | extend BranchDurationMs=todouble(Properties['agentops.subagent.duration_ms']), BranchTokens=todouble(Properties['agentops.subagent.total_tokens']), BranchToolCount=tolong(Properties['agentops.subagent.tool_count']) | extend Surface=case(isnotempty(tostring(Properties['agentops.surface'])), tostring(Properties['agentops.surface']), AppRoleName has 'codex', 'custom', AppRoleName has 'copilot', 'cli', 'cli') | extend RepoHash=tostring(Properties['agentops.repo.hash']) | extend BranchHash=tostring(Properties['agentops.branch.hash']) | extend TaskType=case(isnotempty(tostring(Properties['agentops.task.type'])), tostring(Properties['agentops.task.type']), 'unknown') | extend PrivacyMode=case(isnotempty(tostring(Properties['agentops.privacy.mode'])), tostring(Properties['agentops.privacy.mode']), 'strict') | extend ContentCaptureSignal=tostring(Properties['agentops.content_capture.signal']) =~ 'true' or tostring(Properties) has_any ('gen_ai.input.messages', 'gen_ai.output.messages', 'gen_ai.prompt', 'gen_ai.completion') | extend InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), OutputTokens=todouble(Properties['gen_ai.usage.output_tokens']), ReasoningTokens=todouble(Properties['gen_ai.usage.reasoning.output_tokens']) | extend CacheReadTokens=todouble(Properties['gen_ai.usage.cache_read.input_tokens']), CacheCreationTokens=todouble(Properties['gen_ai.usage.cache_creation.input_tokens']), ContextWindowPct=todouble(Properties['agentops.context.window_pct']), TokensRemoved=todouble(Properties['github.copilot.tokens_removed']), PermissionWaitMs=todouble(Properties['agentops.permission.wait_ms']) | extend EstimatedCostUsd=coalesce(todouble(Properties['agentops.cost.estimated_usd']), todouble(Properties['github.copilot.cost']) * 0.01, 0.0) | extend ErrorType=coalesce(tostring(Properties['error.type']), tostring(ResultCode)) | extend Failed=Success == false or tostring(Success) =~ 'false' or isnotempty(tostring(Properties['error.type'])) | where ContentCaptureSignal | extend ContentKind=case(tostring(Properties) has_any ('secret', 'token', 'credential', 'api_key'), 'secret_like', tostring(Properties) has_any ('gen_ai.output.messages', 'gen_ai.completion'), 'output', tostring(Properties) has_any ('tool.call.arguments', 'tool_args'), 'tool_args', 'prompt') | project TimeGenerated, RunId, TraceId, PrivacyMode, ContentKind, Observed=true, Action='dropped', DroppedCount=1, RedactedCount=0, LeakDetected=false) | where ('$run_id' == '__all' or tostring(column_ifexists('RunId', '')) == '$run_id') | where ('$trace_id' == '__all' or tostring(column_ifexists('TraceId', '')) == '$trace_id') | where ('$privacy_mode' == '__all' or tostring(column_ifexists('PrivacyMode', '')) == '$privacy_mode') | where ContentKind == 'secret_like' | summarize value=sum(DroppedCount) by bin(TimeGenerated, $__interval)"
           }
         }
-      ]
+      ],
+      "description": "Secret-like items AgentOps reports dropping. The written label and value carry meaning; colour is supplementary."
     },
     {
       "id": 4,
-      "title": "Unsafe attempts",
+      "title": "Runs reporting unsafe mode",
       "type": "stat",
       "datasource": {
         "type": "grafana-azure-monitor-datasource",
@@ -262,7 +732,7 @@
         "h": 4,
         "w": 4,
         "x": 8,
-        "y": 2
+        "y": 7
       },
       "fieldConfig": {
         "defaults": {
@@ -308,10 +778,11 @@
               "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
             ],
             "resultFormat": "time_series",
-            "query": "union isfuzzy=true (AgentOpsRunSummary_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo()) | extend DurationMs=todouble(DurationMs), InputTokens=todouble(InputTokens), OutputTokens=todouble(OutputTokens), ReasoningTokens=todouble(ReasoningTokens), CacheReadTokens=todouble(CacheReadTokens), CacheCreationTokens=todouble(CacheCreationTokens), EstimatedCostUsd=todouble(EstimatedCostUsd), ToolCount=tolong(ToolCount), ToolFailureCount=tolong(ToolFailureCount), ToolDeniedCount=tolong(ToolDeniedCount)), (AppDependencies | where TimeGenerated between ($__timeFrom() .. $__timeTo()) | where tostring(Properties) has_any ('github.copilot', 'gen_ai.operation.name', 'agentops.', 'codex') or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') | extend SessionId=case(isnotempty(tostring(Properties['agentops.session.id'])), tostring(Properties['agentops.session.id']), isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(coalesce(AppRoleName, 'agent'), '_', coalesce(OperationId, 'session'), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMddHH'))) | extend RunId=case(isnotempty(tostring(Properties['agentops.run.id'])), tostring(Properties['agentops.run.id']), strcat('compat_', SessionId)) | extend TraceId=coalesce(OperationId, tostring(Properties['trace_id']), RunId) | extend Operation=tostring(Properties['gen_ai.operation.name']) | extend ToolName=tostring(Properties['gen_ai.tool.name']) | extend ModelActual=case(isnotempty(tostring(Properties['agentops.model.actual'])), tostring(Properties['agentops.model.actual']), isnotempty(tostring(Properties['gen_ai.response.model'])), tostring(Properties['gen_ai.response.model']), tostring(Properties['gen_ai.request.model'])) | extend AgentName=case(isnotempty(tostring(Properties['agentops.agent.name'])), tostring(Properties['agentops.agent.name']), isnotempty(tostring(Properties['agentops.cli.agent'])), tostring(Properties['agentops.cli.agent']), isnotempty(tostring(Properties['gen_ai.agent.name'])), tostring(Properties['gen_ai.agent.name']), coalesce(AppRoleName, 'agent')) | extend SkillName=coalesce(tostring(Properties['agentops.skill.name']), tostring(Properties['github.copilot.skill.name'])) | extend ParentAgentName=tostring(Properties['agentops.parent_agent.name']) | extend SubAgentName=case(isnotempty(tostring(Properties['agentops.sub_agent.name'])), tostring(Properties['agentops.sub_agent.name']), isnotempty(tostring(Properties['agentops.child_agent.name'])), tostring(Properties['agentops.child_agent.name']), isnotempty(ParentAgentName) and isnotempty(AgentName) and AgentName != ParentAgentName, AgentName, '') | extend DelegationId=tostring(Properties['agentops.delegation.id']) | extend Surface=case(isnotempty(tostring(Properties['agentops.surface'])), tostring(Properties['agentops.surface']), AppRoleName has 'codex', 'custom', AppRoleName has 'copilot', 'cli', 'cli') | extend RepoHash=tostring(Properties['agentops.repo.hash']) | extend BranchHash=tostring(Properties['agentops.branch.hash']) | extend TaskType=case(isnotempty(tostring(Properties['agentops.task.type'])), tostring(Properties['agentops.task.type']), 'unknown') | extend PrivacyMode=case(isnotempty(tostring(Properties['agentops.privacy.mode'])), tostring(Properties['agentops.privacy.mode']), 'strict') | extend ContentCaptureSignal=tostring(Properties['agentops.content_capture.signal']) =~ 'true' or tostring(Properties) has_any ('gen_ai.input.messages', 'gen_ai.output.messages', 'gen_ai.prompt', 'gen_ai.completion') | extend InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), OutputTokens=todouble(Properties['gen_ai.usage.output_tokens']), ReasoningTokens=todouble(Properties['gen_ai.usage.reasoning.output_tokens']) | extend CacheReadTokens=todouble(Properties['gen_ai.usage.cache_read.input_tokens']), CacheCreationTokens=todouble(Properties['gen_ai.usage.cache_creation.input_tokens']), ContextWindowPct=todouble(Properties['agentops.context.window_pct']), TokensRemoved=todouble(Properties['github.copilot.tokens_removed']), PermissionWaitMs=todouble(Properties['agentops.permission.wait_ms']) | extend EstimatedCostUsd=coalesce(todouble(Properties['agentops.cost.estimated_usd']), todouble(Properties['github.copilot.cost']) * 0.01, 0.0) | extend ErrorType=coalesce(tostring(Properties['error.type']), tostring(ResultCode)) | extend Failed=Success == false or tostring(Success) =~ 'false' or isnotempty(tostring(Properties['error.type'])) | summarize TimeGenerated=max(TimeGenerated), Started=min(TimeGenerated), TraceId=take_any(TraceId), Surface=take_any(Surface), RepoHash=take_any(RepoHash), BranchHash=take_any(BranchHash), TaskType=take_any(TaskType), AgentName=take_any(AgentName), SkillName=take_any(SkillName), ParentAgentName=take_any(ParentAgentName), SubAgentName=take_any(SubAgentName), DelegationId=take_any(DelegationId), ModelActual=take_any(ModelActual), PrivacyMode=take_any(PrivacyMode), ContentCaptureSignal=max(toint(ContentCaptureSignal)), InputTokens=sum(InputTokens), OutputTokens=sum(OutputTokens), ReasoningTokens=sum(ReasoningTokens), CacheReadTokens=sum(CacheReadTokens), CacheCreationTokens=sum(CacheCreationTokens), ContextWindowPct=max(ContextWindowPct), TokensRemoved=sum(TokensRemoved), PermissionWaitMs=sum(PermissionWaitMs), EstimatedCostUsd=sum(EstimatedCostUsd), ToolCount=countif(Operation == 'execute_tool' or isnotempty(ToolName)), ToolFailureCount=countif((Operation == 'execute_tool' or isnotempty(ToolName)) and Failed), Failures=countif(Failed), ToolDeniedCount=countif(tostring(Properties['agentops.mcp.allowed']) =~ 'false'), FilesReadCount=countif(ToolName has 'read'), FilesEditedCount=countif(ToolName has_any ('edit', 'write', 'patch')), TestsRan=countif(ToolName has_any ('test', 'lint', 'typecheck')) > 0 by RunId, SessionId | extend DurationMs=todouble(datetime_diff('millisecond', TimeGenerated, Started)) | extend ModelRequested=ModelActual, ContentCaptureMode=iff(ContentCaptureSignal > 0, 'signal_only', 'off'), OutcomeStatus=iff(Failures > 0, 'failed', 'success'), OutcomeReason=iff(Failures > 0, 'span_failure', 'completed'), TestsPassed=TestsRan and ToolFailureCount == 0, PrOpened=false, PrNumberHash='', CiStatus='not_run', EvalOverall=tolong(iff(Failures > 0, 50, 85)), RiskScore=ToolFailureCount * 20 + ToolDeniedCount * 30 + ContentCaptureSignal * 15 | project TimeGenerated, RunId, SessionId, TraceId, Surface, RepoHash, BranchHash, TaskType, AgentName, SkillName, ParentAgentName, SubAgentName, DelegationId, ModelRequested, ModelActual, PrivacyMode, ContentCaptureMode, ContentCaptureSignal=ContentCaptureSignal > 0, OutcomeStatus, OutcomeReason, DurationMs, InputTokens, OutputTokens, ReasoningTokens, CacheReadTokens, CacheCreationTokens, ContextWindowPct, TokensRemoved, PermissionWaitMs, EstimatedCostUsd, ToolCount, ToolFailureCount, ToolDeniedCount, TestsRan, TestsPassed, FilesReadCount, FilesEditedCount, PrOpened, PrNumberHash, CiStatus, EvalOverall, RiskScore) | extend SkillName=tostring(column_ifexists('SkillName', '')) | extend ParentAgentName=tostring(column_ifexists('ParentAgentName', '')) | extend SubAgentName=case(isnotempty(tostring(column_ifexists('SubAgentName', ''))), tostring(column_ifexists('SubAgentName', '')), isnotempty(ParentAgentName) and isnotempty(tostring(column_ifexists('AgentName', ''))) and tostring(column_ifexists('AgentName', '')) != ParentAgentName, tostring(column_ifexists('AgentName', '')), '') | extend DelegationId=tostring(column_ifexists('DelegationId', '')) | extend CacheReadTokens=todouble(column_ifexists('CacheReadTokens', 0.0)) | extend CacheCreationTokens=todouble(column_ifexists('CacheCreationTokens', 0.0)) | extend ContextWindowPct=todouble(column_ifexists('ContextWindowPct', 0.0)) | extend TokensRemoved=todouble(column_ifexists('TokensRemoved', 0.0)) | extend PermissionWaitMs=todouble(column_ifexists('PermissionWaitMs', 0.0)) | where ('$run_id' == '__all' or tostring(column_ifexists('RunId', '')) == '$run_id') | where ('$session_id' == '__all' or tostring(column_ifexists('SessionId', '')) == '$session_id') | where ('$trace_id' == '__all' or tostring(column_ifexists('TraceId', '')) == '$trace_id') | where ('$surface' == '__all' or tostring(column_ifexists('Surface', '')) == '$surface') | where ('$repo_hash' == '__all' or tostring(column_ifexists('RepoHash', '')) == '$repo_hash') | where ('$branch_hash' == '__all' or tostring(column_ifexists('BranchHash', '')) == '$branch_hash') | where ('$model' == '__all' or tostring(column_ifexists('ModelActual', '')) == '$model') | where ('$agent_name' == '__all' or tostring(column_ifexists('AgentName', '')) == '$agent_name') | where ('$skill_name' == '__all' or tostring(column_ifexists('SkillName', '')) == '$skill_name') | where ('$sub_agent' == '__all' or tostring(column_ifexists('SubAgentName', '')) == '$sub_agent') | where ('$task_type' == '__all' or tostring(column_ifexists('TaskType', '')) == '$task_type') | where ('$privacy_mode' == '__all' or tostring(column_ifexists('PrivacyMode', '')) == '$privacy_mode') | where ('$outcome_status' == '__all' or tostring(column_ifexists('OutcomeStatus', '')) == '$outcome_status') | extend EvalBucket=case(EvalOverall >= 80, 'good', EvalOverall >= 60, 'review', 'poor') | where ('$eval_bucket' == '__all' or tostring(column_ifexists('EvalBucket', '')) == iff('$eval_bucket' == 'ok', 'good', '$eval_bucket')) | summarize value=countif(PrivacyMode == 'unsafe') by bin(TimeGenerated, $__interval)"
+            "query": "union isfuzzy=true (AgentOpsRunSummary_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo()) | extend DurationMs=todouble(DurationMs), InputTokens=todouble(InputTokens), OutputTokens=todouble(OutputTokens), ReasoningTokens=todouble(ReasoningTokens), CacheReadTokens=todouble(CacheReadTokens), CacheCreationTokens=todouble(CacheCreationTokens), EstimatedCostUsd=todouble(EstimatedCostUsd), ToolCount=tolong(ToolCount), ToolFailureCount=tolong(ToolFailureCount), ToolDeniedCount=tolong(ToolDeniedCount) | extend Delivery='Visible in Azure', Coverage='AgentOps managed'), (AppDependencies | where TimeGenerated between ($__timeFrom() .. $__timeTo()) | where tostring(Properties) has_any ('github.copilot', 'gen_ai.operation.name', 'agentops.', 'codex') or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') | extend SessionId=case(isnotempty(tostring(Properties['agentops.session.id'])), tostring(Properties['agentops.session.id']), isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(coalesce(AppRoleName, 'agent'), '_', coalesce(OperationId, 'session'), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMddHH'))) | extend RunId=case(isnotempty(tostring(Properties['agentops.run.id'])), tostring(Properties['agentops.run.id']), strcat('compat_', SessionId)) | extend TraceId=coalesce(OperationId, tostring(Properties['trace_id']), RunId) | extend Operation=tostring(Properties['gen_ai.operation.name']) | extend ToolName=tostring(Properties['gen_ai.tool.name']) | extend ModelActual=case(isnotempty(tostring(Properties['agentops.model.actual'])), tostring(Properties['agentops.model.actual']), isnotempty(tostring(Properties['gen_ai.response.model'])), tostring(Properties['gen_ai.response.model']), tostring(Properties['gen_ai.request.model'])) | extend AgentName=case(isnotempty(tostring(Properties['agentops.agent.name'])), tostring(Properties['agentops.agent.name']), isnotempty(tostring(Properties['agentops.cli.agent'])), tostring(Properties['agentops.cli.agent']), isnotempty(tostring(Properties['gen_ai.agent.name'])), tostring(Properties['gen_ai.agent.name']), coalesce(AppRoleName, 'agent')) | extend SkillName=coalesce(tostring(Properties['agentops.skill.name']), tostring(Properties['github.copilot.skill.name'])) | extend ParentAgentName=tostring(Properties['agentops.parent_agent.name']) | extend SubAgentName=case(isnotempty(tostring(Properties['agentops.sub_agent.name'])), tostring(Properties['agentops.sub_agent.name']), isnotempty(tostring(Properties['agentops.child_agent.name'])), tostring(Properties['agentops.child_agent.name']), isnotempty(ParentAgentName) and isnotempty(AgentName) and AgentName != ParentAgentName, AgentName, '') | extend DelegationId=tostring(Properties['agentops.delegation.id']) | extend BranchDurationMs=todouble(Properties['agentops.subagent.duration_ms']), BranchTokens=todouble(Properties['agentops.subagent.total_tokens']), BranchToolCount=tolong(Properties['agentops.subagent.tool_count']) | extend Surface=case(isnotempty(tostring(Properties['agentops.surface'])), tostring(Properties['agentops.surface']), AppRoleName has 'codex', 'custom', AppRoleName has 'copilot', 'cli', 'cli') | extend RepoHash=tostring(Properties['agentops.repo.hash']) | extend BranchHash=tostring(Properties['agentops.branch.hash']) | extend TaskType=case(isnotempty(tostring(Properties['agentops.task.type'])), tostring(Properties['agentops.task.type']), 'unknown') | extend PrivacyMode=case(isnotempty(tostring(Properties['agentops.privacy.mode'])), tostring(Properties['agentops.privacy.mode']), 'strict') | extend ContentCaptureSignal=tostring(Properties['agentops.content_capture.signal']) =~ 'true' or tostring(Properties) has_any ('gen_ai.input.messages', 'gen_ai.output.messages', 'gen_ai.prompt', 'gen_ai.completion') | extend InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), OutputTokens=todouble(Properties['gen_ai.usage.output_tokens']), ReasoningTokens=todouble(Properties['gen_ai.usage.reasoning.output_tokens']) | extend CacheReadTokens=todouble(Properties['gen_ai.usage.cache_read.input_tokens']), CacheCreationTokens=todouble(Properties['gen_ai.usage.cache_creation.input_tokens']), ContextWindowPct=todouble(Properties['agentops.context.window_pct']), TokensRemoved=todouble(Properties['github.copilot.tokens_removed']), PermissionWaitMs=todouble(Properties['agentops.permission.wait_ms']) | extend EstimatedCostUsd=coalesce(todouble(Properties['agentops.cost.estimated_usd']), todouble(Properties['github.copilot.cost']) * 0.01, 0.0) | extend ErrorType=coalesce(tostring(Properties['error.type']), tostring(ResultCode)) | extend Failed=Success == false or tostring(Success) =~ 'false' or isnotempty(tostring(Properties['error.type'])) | summarize TimeGenerated=max(TimeGenerated), Started=min(TimeGenerated), TraceId=take_any(TraceId), Surface=take_any(Surface), RepoHash=take_any(RepoHash), BranchHash=take_any(BranchHash), TaskType=take_any(TaskType), AgentName=take_any(AgentName), SkillName=take_any(SkillName), ParentAgentName=take_any(ParentAgentName), SubAgentName=take_any(SubAgentName), DelegationId=take_any(DelegationId), ModelActual=take_any(ModelActual), PrivacyMode=take_any(PrivacyMode), ContentCaptureSignal=max(toint(ContentCaptureSignal)), InputTokens=sum(InputTokens), OutputTokens=sum(OutputTokens), ReasoningTokens=sum(ReasoningTokens), CacheReadTokens=sum(CacheReadTokens), CacheCreationTokens=sum(CacheCreationTokens), ContextWindowPct=max(ContextWindowPct), TokensRemoved=sum(TokensRemoved), PermissionWaitMs=sum(PermissionWaitMs), EstimatedCostUsd=sum(EstimatedCostUsd), ToolCount=countif(Operation == 'execute_tool' or isnotempty(ToolName)), ToolFailureCount=countif((Operation == 'execute_tool' or isnotempty(ToolName)) and Failed), Failures=countif(Failed), ToolDeniedCount=countif(tostring(Properties['agentops.mcp.allowed']) =~ 'false'), FilesReadCount=countif(ToolName has 'read'), FilesEditedCount=countif(ToolName has_any ('edit', 'write', 'patch')), TestsRan=countif(ToolName has_any ('test', 'lint', 'typecheck')) > 0 by RunId, SessionId | extend DurationMs=todouble(datetime_diff('millisecond', TimeGenerated, Started)) | extend ModelRequested=ModelActual, ContentCaptureMode=iff(ContentCaptureSignal > 0, 'signal_only', 'off'), OutcomeStatus=iff(Failures > 0, 'failed', 'success'), OutcomeReason=iff(Failures > 0, 'span_failure', 'completed'), TestsPassed=TestsRan and ToolFailureCount == 0, PrOpened=false, PrNumberHash='', CiStatus='not_run', EvalOverall=tolong(iff(Failures > 0, 50, 85)), RiskScore=ToolFailureCount * 20 + ToolDeniedCount * 30 + ContentCaptureSignal * 15 | project TimeGenerated, RunId, SessionId, TraceId, Surface, RepoHash, BranchHash, TaskType, AgentName, SkillName, ParentAgentName, SubAgentName, DelegationId, ModelRequested, ModelActual, PrivacyMode, ContentCaptureMode, ContentCaptureSignal=ContentCaptureSignal > 0, OutcomeStatus, OutcomeReason, DurationMs, InputTokens, OutputTokens, ReasoningTokens, CacheReadTokens, CacheCreationTokens, ContextWindowPct, TokensRemoved, PermissionWaitMs, EstimatedCostUsd, ToolCount, ToolFailureCount, ToolDeniedCount, TestsRan, TestsPassed, FilesReadCount, FilesEditedCount, PrOpened, PrNumberHash, CiStatus, EvalOverall, RiskScore, Delivery='Visible in Azure', Coverage='Native best effort') | extend SkillName=tostring(column_ifexists('SkillName', '')) | extend ParentAgentName=tostring(column_ifexists('ParentAgentName', '')) | extend SubAgentName=case(isnotempty(tostring(column_ifexists('SubAgentName', ''))), tostring(column_ifexists('SubAgentName', '')), isnotempty(ParentAgentName) and isnotempty(tostring(column_ifexists('AgentName', ''))) and tostring(column_ifexists('AgentName', '')) != ParentAgentName, tostring(column_ifexists('AgentName', '')), '') | extend DelegationId=tostring(column_ifexists('DelegationId', '')) | extend BranchDurationMs=todouble(column_ifexists('BranchDurationMs', 0.0)) | extend BranchTokens=todouble(column_ifexists('BranchTokens', 0.0)) | extend BranchToolCount=tolong(column_ifexists('BranchToolCount', 0)) | extend CacheReadTokens=todouble(column_ifexists('CacheReadTokens', 0.0)) | extend CacheCreationTokens=todouble(column_ifexists('CacheCreationTokens', 0.0)) | extend ContextWindowPct=todouble(column_ifexists('ContextWindowPct', 0.0)) | extend TokensRemoved=todouble(column_ifexists('TokensRemoved', 0.0)) | extend PermissionWaitMs=todouble(column_ifexists('PermissionWaitMs', 0.0)) | where ('$run_id' == '__all' or tostring(column_ifexists('RunId', '')) == '$run_id') | where ('$session_id' == '__all' or tostring(column_ifexists('SessionId', '')) == '$session_id') | where ('$trace_id' == '__all' or tostring(column_ifexists('TraceId', '')) == '$trace_id') | where ('$surface' == '__all' or tostring(column_ifexists('Surface', '')) == '$surface') | where ('$repo_hash' == '__all' or tostring(column_ifexists('RepoHash', '')) == '$repo_hash') | where ('$branch_hash' == '__all' or tostring(column_ifexists('BranchHash', '')) == '$branch_hash') | where ('$model' == '__all' or tostring(column_ifexists('ModelActual', '')) == '$model') | where ('$agent_name' == '__all' or tostring(column_ifexists('AgentName', '')) == '$agent_name') | where ('$skill_name' == '__all' or tostring(column_ifexists('SkillName', '')) == '$skill_name') | where ('$sub_agent' == '__all' or tostring(column_ifexists('SubAgentName', '')) == '$sub_agent') | where ('$task_type' == '__all' or tostring(column_ifexists('TaskType', '')) == '$task_type') | where ('$privacy_mode' == '__all' or tostring(column_ifexists('PrivacyMode', '')) == '$privacy_mode') | where ('$outcome_status' == '__all' or tostring(column_ifexists('OutcomeStatus', '')) == '$outcome_status') | extend EvalBucket=case(EvalOverall >= 80, 'good', EvalOverall >= 60, 'review', 'poor') | where ('$eval_bucket' == '__all' or tostring(column_ifexists('EvalBucket', '')) == iff('$eval_bucket' == 'ok', 'good', '$eval_bucket')) | summarize value=countif(PrivacyMode == 'unsafe') by bin(TimeGenerated, $__interval)"
           }
         }
-      ]
+      ],
+      "description": "Runs whose AgentOps privacy mode is explicitly reported as unsafe. Review every non-zero result."
     },
     {
       "id": 5,
@@ -325,7 +796,7 @@
         "h": 4,
         "w": 4,
         "x": 12,
-        "y": 2
+        "y": 7
       },
       "fieldConfig": {
         "defaults": {
@@ -371,14 +842,15 @@
               "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
             ],
             "resultFormat": "time_series",
-            "query": "union isfuzzy=true (AgentOpsEvents_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo()) | extend DurationMs=todouble(DurationMs), InputTokens=todouble(InputTokens), OutputTokens=todouble(OutputTokens), EstimatedCostUsd=todouble(EstimatedCostUsd)), (AppDependencies | where TimeGenerated between ($__timeFrom() .. $__timeTo()) | where tostring(Properties) has_any ('github.copilot', 'gen_ai.operation.name', 'agentops.', 'codex') or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') | extend SessionId=case(isnotempty(tostring(Properties['agentops.session.id'])), tostring(Properties['agentops.session.id']), isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(coalesce(AppRoleName, 'agent'), '_', coalesce(OperationId, 'session'), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMddHH'))) | extend RunId=case(isnotempty(tostring(Properties['agentops.run.id'])), tostring(Properties['agentops.run.id']), strcat('compat_', SessionId)) | extend TraceId=coalesce(OperationId, tostring(Properties['trace_id']), RunId) | extend Operation=tostring(Properties['gen_ai.operation.name']) | extend ToolName=tostring(Properties['gen_ai.tool.name']) | extend ModelActual=case(isnotempty(tostring(Properties['agentops.model.actual'])), tostring(Properties['agentops.model.actual']), isnotempty(tostring(Properties['gen_ai.response.model'])), tostring(Properties['gen_ai.response.model']), tostring(Properties['gen_ai.request.model'])) | extend AgentName=case(isnotempty(tostring(Properties['agentops.agent.name'])), tostring(Properties['agentops.agent.name']), isnotempty(tostring(Properties['agentops.cli.agent'])), tostring(Properties['agentops.cli.agent']), isnotempty(tostring(Properties['gen_ai.agent.name'])), tostring(Properties['gen_ai.agent.name']), coalesce(AppRoleName, 'agent')) | extend SkillName=coalesce(tostring(Properties['agentops.skill.name']), tostring(Properties['github.copilot.skill.name'])) | extend ParentAgentName=tostring(Properties['agentops.parent_agent.name']) | extend SubAgentName=case(isnotempty(tostring(Properties['agentops.sub_agent.name'])), tostring(Properties['agentops.sub_agent.name']), isnotempty(tostring(Properties['agentops.child_agent.name'])), tostring(Properties['agentops.child_agent.name']), isnotempty(ParentAgentName) and isnotempty(AgentName) and AgentName != ParentAgentName, AgentName, '') | extend DelegationId=tostring(Properties['agentops.delegation.id']) | extend Surface=case(isnotempty(tostring(Properties['agentops.surface'])), tostring(Properties['agentops.surface']), AppRoleName has 'codex', 'custom', AppRoleName has 'copilot', 'cli', 'cli') | extend RepoHash=tostring(Properties['agentops.repo.hash']) | extend BranchHash=tostring(Properties['agentops.branch.hash']) | extend TaskType=case(isnotempty(tostring(Properties['agentops.task.type'])), tostring(Properties['agentops.task.type']), 'unknown') | extend PrivacyMode=case(isnotempty(tostring(Properties['agentops.privacy.mode'])), tostring(Properties['agentops.privacy.mode']), 'strict') | extend ContentCaptureSignal=tostring(Properties['agentops.content_capture.signal']) =~ 'true' or tostring(Properties) has_any ('gen_ai.input.messages', 'gen_ai.output.messages', 'gen_ai.prompt', 'gen_ai.completion') | extend InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), OutputTokens=todouble(Properties['gen_ai.usage.output_tokens']), ReasoningTokens=todouble(Properties['gen_ai.usage.reasoning.output_tokens']) | extend CacheReadTokens=todouble(Properties['gen_ai.usage.cache_read.input_tokens']), CacheCreationTokens=todouble(Properties['gen_ai.usage.cache_creation.input_tokens']), ContextWindowPct=todouble(Properties['agentops.context.window_pct']), TokensRemoved=todouble(Properties['github.copilot.tokens_removed']), PermissionWaitMs=todouble(Properties['agentops.permission.wait_ms']) | extend EstimatedCostUsd=coalesce(todouble(Properties['agentops.cost.estimated_usd']), todouble(Properties['github.copilot.cost']) * 0.01, 0.0) | extend ErrorType=coalesce(tostring(Properties['error.type']), tostring(ResultCode)) | extend Failed=Success == false or tostring(Success) =~ 'false' or isnotempty(tostring(Properties['error.type'])) | extend EventName=case(isnotempty(Operation), Operation, isnotempty(Name), Name, 'span') | extend EventType=case(Operation == 'chat', 'llm', Operation == 'execute_tool' or isnotempty(ToolName), 'tool', ContentCaptureSignal, 'content', Failed, 'error', 'span') | extend Status=iff(Failed, 'failed', 'success') | extend McpServer=case(ToolName startswith 'mcp__', extract('^mcp__([^_]+)__', 1, ToolName), ToolName contains '/', tostring(split(ToolName, '/')[0]), ToolName startswith 'azure-mcp-', 'azure-mcp', '') | project TimeGenerated, RunId, SessionId, TraceId, SpanId=Id, EventName, EventType, AgentName, SkillName, ParentAgentName, SubAgentName, DelegationId, McpServer, ToolName, ModelActual, Status, DurationMs, ErrorType, OutcomeStatus=Status, Details=ResultCode, Surface, PrivacyMode, ContentCaptureSignal) | extend SkillName=tostring(column_ifexists('SkillName', '')) | extend ParentAgentName=tostring(column_ifexists('ParentAgentName', '')) | extend SubAgentName=case(isnotempty(tostring(column_ifexists('SubAgentName', ''))), tostring(column_ifexists('SubAgentName', '')), isnotempty(ParentAgentName) and isnotempty(tostring(column_ifexists('AgentName', ''))) and tostring(column_ifexists('AgentName', '')) != ParentAgentName, tostring(column_ifexists('AgentName', '')), '') | extend DelegationId=tostring(column_ifexists('DelegationId', '')) | extend McpServer=case(isnotempty(tostring(column_ifexists('McpServer', ''))), tostring(column_ifexists('McpServer', '')), isnotempty(tostring(column_ifexists('McpServerName', ''))), tostring(column_ifexists('McpServerName', '')), tostring(column_ifexists('ServerName', ''))) | where ('$run_id' == '__all' or tostring(column_ifexists('RunId', '')) == '$run_id') | where ('$session_id' == '__all' or tostring(column_ifexists('SessionId', '')) == '$session_id') | where ('$trace_id' == '__all' or tostring(column_ifexists('TraceId', '')) == '$trace_id') | where ('$surface' == '__all' or tostring(column_ifexists('Surface', '')) == '$surface') | where ('$agent_name' == '__all' or tostring(column_ifexists('AgentName', '')) == '$agent_name') | where ('$skill_name' == '__all' or tostring(column_ifexists('SkillName', '')) == '$skill_name') | where ('$sub_agent' == '__all' or tostring(column_ifexists('SubAgentName', '')) == '$sub_agent') | where ('$tool_name' == '__all' or tostring(column_ifexists('ToolName', '')) == '$tool_name') | where EventType == 'policy' | summarize value=countif(Status == 'denied' or Status == 'blocked') by bin(TimeGenerated, $__interval)"
+            "query": "union isfuzzy=true (AgentOpsEvents_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo()) | extend DurationMs=todouble(DurationMs), InputTokens=todouble(InputTokens), OutputTokens=todouble(OutputTokens), EstimatedCostUsd=todouble(EstimatedCostUsd), Delivery='Visible in Azure', Coverage='AgentOps managed', AttributionConfidence='exact'), (AppDependencies | where TimeGenerated between ($__timeFrom() .. $__timeTo()) | where tostring(Properties) has_any ('github.copilot', 'gen_ai.operation.name', 'agentops.', 'codex') or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') | extend SessionId=case(isnotempty(tostring(Properties['agentops.session.id'])), tostring(Properties['agentops.session.id']), isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(coalesce(AppRoleName, 'agent'), '_', coalesce(OperationId, 'session'), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMddHH'))) | extend RunId=case(isnotempty(tostring(Properties['agentops.run.id'])), tostring(Properties['agentops.run.id']), strcat('compat_', SessionId)) | extend TraceId=coalesce(OperationId, tostring(Properties['trace_id']), RunId) | extend Operation=tostring(Properties['gen_ai.operation.name']) | extend ToolName=tostring(Properties['gen_ai.tool.name']) | extend ModelActual=case(isnotempty(tostring(Properties['agentops.model.actual'])), tostring(Properties['agentops.model.actual']), isnotempty(tostring(Properties['gen_ai.response.model'])), tostring(Properties['gen_ai.response.model']), tostring(Properties['gen_ai.request.model'])) | extend AgentName=case(isnotempty(tostring(Properties['agentops.agent.name'])), tostring(Properties['agentops.agent.name']), isnotempty(tostring(Properties['agentops.cli.agent'])), tostring(Properties['agentops.cli.agent']), isnotempty(tostring(Properties['gen_ai.agent.name'])), tostring(Properties['gen_ai.agent.name']), coalesce(AppRoleName, 'agent')) | extend SkillName=coalesce(tostring(Properties['agentops.skill.name']), tostring(Properties['github.copilot.skill.name'])) | extend ParentAgentName=tostring(Properties['agentops.parent_agent.name']) | extend SubAgentName=case(isnotempty(tostring(Properties['agentops.sub_agent.name'])), tostring(Properties['agentops.sub_agent.name']), isnotempty(tostring(Properties['agentops.child_agent.name'])), tostring(Properties['agentops.child_agent.name']), isnotempty(ParentAgentName) and isnotempty(AgentName) and AgentName != ParentAgentName, AgentName, '') | extend DelegationId=tostring(Properties['agentops.delegation.id']) | extend BranchDurationMs=todouble(Properties['agentops.subagent.duration_ms']), BranchTokens=todouble(Properties['agentops.subagent.total_tokens']), BranchToolCount=tolong(Properties['agentops.subagent.tool_count']) | extend Surface=case(isnotempty(tostring(Properties['agentops.surface'])), tostring(Properties['agentops.surface']), AppRoleName has 'codex', 'custom', AppRoleName has 'copilot', 'cli', 'cli') | extend RepoHash=tostring(Properties['agentops.repo.hash']) | extend BranchHash=tostring(Properties['agentops.branch.hash']) | extend TaskType=case(isnotempty(tostring(Properties['agentops.task.type'])), tostring(Properties['agentops.task.type']), 'unknown') | extend PrivacyMode=case(isnotempty(tostring(Properties['agentops.privacy.mode'])), tostring(Properties['agentops.privacy.mode']), 'strict') | extend ContentCaptureSignal=tostring(Properties['agentops.content_capture.signal']) =~ 'true' or tostring(Properties) has_any ('gen_ai.input.messages', 'gen_ai.output.messages', 'gen_ai.prompt', 'gen_ai.completion') | extend InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), OutputTokens=todouble(Properties['gen_ai.usage.output_tokens']), ReasoningTokens=todouble(Properties['gen_ai.usage.reasoning.output_tokens']) | extend CacheReadTokens=todouble(Properties['gen_ai.usage.cache_read.input_tokens']), CacheCreationTokens=todouble(Properties['gen_ai.usage.cache_creation.input_tokens']), ContextWindowPct=todouble(Properties['agentops.context.window_pct']), TokensRemoved=todouble(Properties['github.copilot.tokens_removed']), PermissionWaitMs=todouble(Properties['agentops.permission.wait_ms']) | extend EstimatedCostUsd=coalesce(todouble(Properties['agentops.cost.estimated_usd']), todouble(Properties['github.copilot.cost']) * 0.01, 0.0) | extend ErrorType=coalesce(tostring(Properties['error.type']), tostring(ResultCode)) | extend Failed=Success == false or tostring(Success) =~ 'false' or isnotempty(tostring(Properties['error.type'])) | extend EventName=case(isnotempty(Operation), Operation, isnotempty(Name), Name, 'span') | extend EventType=case(Operation == 'chat', 'llm', Operation == 'execute_tool' or isnotempty(ToolName), 'tool', ContentCaptureSignal, 'content', Failed, 'error', 'span') | extend Status=iff(Failed, 'failed', 'success') | extend McpServer=case(ToolName startswith 'mcp__', extract('^mcp__([^_]+)__', 1, ToolName), ToolName contains '/', tostring(split(ToolName, '/')[0]), ToolName startswith 'azure-mcp-', 'azure-mcp', '') | extend Sequence=long(null), EventId='', ParentEventId='', CommandName='', ScriptName='', McpToolName='', TotalTokens=InputTokens + OutputTokens + ReasoningTokens, PermissionKind='', PermissionDecision='', ContentCaptureMode=iff(ContentCaptureSignal, 'signal only', 'off'), ContentAction=iff(ContentCaptureSignal, 'dropped', ''), ContentDroppedBytes=long(null), SecretLike=false, Delivery='Visible in Azure', Coverage='Native best effort', AttributionConfidence='inferred' | project TimeGenerated, Sequence, EventId, ParentEventId, RunId, SessionId, TraceId, SpanId=Id, EventName, EventType, AgentName, SkillName, ParentAgentName, SubAgentName, DelegationId, BranchDurationMs, BranchTokens, BranchToolCount, McpServer, McpToolName, ToolName, CommandName, ScriptName, ModelActual, Status, DurationMs, InputTokens, OutputTokens, ReasoningTokens, TotalTokens, EstimatedCostUsd, PermissionKind, PermissionDecision, ErrorType, OutcomeStatus=Status, Details=ResultCode, Surface, PrivacyMode, ContentCaptureMode, ContentCaptureSignal, ContentAction, ContentDroppedBytes, SecretLike, Delivery, Coverage, AttributionConfidence) | extend Sequence=tolong(column_ifexists('Sequence', long(null))), EventId=tostring(column_ifexists('EventId', '')), ParentEventId=tostring(column_ifexists('ParentEventId', '')) | extend EventType=tostring(column_ifexists('EventType', '')), CommandName=tostring(column_ifexists('CommandName', '')), ScriptName=tostring(column_ifexists('ScriptName', '')), McpToolName=tostring(column_ifexists('McpToolName', '')) | extend InputTokens=todouble(column_ifexists('InputTokens', real(null))), OutputTokens=todouble(column_ifexists('OutputTokens', real(null))), ReasoningTokens=todouble(column_ifexists('ReasoningTokens', real(null))), TotalTokens=todouble(column_ifexists('TotalTokens', real(null))), EstimatedCostUsd=todouble(column_ifexists('EstimatedCostUsd', real(null))) | extend PermissionKind=tostring(column_ifexists('PermissionKind', '')), PermissionDecision=tostring(column_ifexists('PermissionDecision', '')), PrivacyMode=tostring(column_ifexists('PrivacyMode', '')), ContentCaptureMode=tostring(column_ifexists('ContentCaptureMode', '')), ContentCaptureSignal=tobool(column_ifexists('ContentCaptureSignal', false)), ContentAction=tostring(column_ifexists('ContentAction', '')), ContentDroppedBytes=tolong(column_ifexists('ContentDroppedBytes', long(null))), SecretLike=tobool(column_ifexists('SecretLike', false)) | extend SkillName=tostring(column_ifexists('SkillName', '')) | extend ParentAgentName=tostring(column_ifexists('ParentAgentName', '')) | extend SubAgentName=case(isnotempty(tostring(column_ifexists('SubAgentName', ''))), tostring(column_ifexists('SubAgentName', '')), isnotempty(ParentAgentName) and isnotempty(tostring(column_ifexists('AgentName', ''))) and tostring(column_ifexists('AgentName', '')) != ParentAgentName, tostring(column_ifexists('AgentName', '')), '') | extend DelegationId=tostring(column_ifexists('DelegationId', '')) | extend BranchDurationMs=todouble(column_ifexists('BranchDurationMs', 0.0)) | extend BranchTokens=todouble(column_ifexists('BranchTokens', 0.0)) | extend BranchToolCount=tolong(column_ifexists('BranchToolCount', 0)) | extend McpServer=case(isnotempty(tostring(column_ifexists('McpServer', ''))), tostring(column_ifexists('McpServer', '')), isnotempty(tostring(column_ifexists('McpServerName', ''))), tostring(column_ifexists('McpServerName', '')), tostring(column_ifexists('ServerName', '')))  | extend EventType=case(isnotempty(EventType), EventType, EventName startswith 'agentops.run.' or EventName startswith 'agentops.wrapper.' or EventName startswith 'agentops.collector.', 'lifecycle', isnotempty(McpToolName) or isnotempty(McpServer) or EventName has 'mcp', 'mcp_tool', EventName == 'execute_tool' or EventName has 'tool' or isnotempty(ToolName), 'tool', EventName has 'skill' or isnotempty(SkillName), 'skill', EventName has 'subagent' or isnotempty(SubAgentName), 'subagent', EventName has 'agent', 'agent', isnotempty(CommandName), 'cli', isnotempty(ScriptName), 'script', EventName == 'chat' or isnotempty(ModelActual), 'llm', 'span') | extend AttributionGap=case(EventType in ('agent', 'subagent') and isempty(AgentName) and isempty(SubAgentName), 'agent identity missing', EventType == 'skill' and isempty(SkillName), 'skill identity missing', EventType in ('tool', 'mcp_tool') and isempty(ToolName), 'tool identity missing', EventType == 'mcp_tool' and isempty(McpServer) and isempty(McpToolName), 'MCP attribution missing', EventType in ('command', 'cli') and isempty(CommandName), 'command identity missing', EventType == 'script' and isempty(ScriptName), 'script identity missing', EventType == 'llm' and isempty(ModelActual), 'model identity missing', '') | extend AttributionConfidence=case(isnotempty(AttributionGap), 'missing', isnotempty(EventId) and isnotnull(Sequence), 'exact', tostring(column_ifexists('AttributionConfidence', '')) == 'inferred', 'inferred', 'best effort') | where ('$run_id' == '__all' or tostring(column_ifexists('RunId', '')) == '$run_id') | where ('$session_id' == '__all' or tostring(column_ifexists('SessionId', '')) == '$session_id') | where ('$trace_id' == '__all' or tostring(column_ifexists('TraceId', '')) == '$trace_id') | where ('$surface' == '__all' or tostring(column_ifexists('Surface', '')) == '$surface') | where ('$agent_name' == '__all' or tostring(column_ifexists('AgentName', '')) == '$agent_name') | where ('$skill_name' == '__all' or tostring(column_ifexists('SkillName', '')) == '$skill_name') | where ('$sub_agent' == '__all' or tostring(column_ifexists('SubAgentName', '')) == '$sub_agent') | where ('$tool_name' == '__all' or tostring(column_ifexists('ToolName', '')) == '$tool_name') | where EventType == 'policy' | summarize value=countif(Status == 'denied' or Status == 'blocked') by bin(TimeGenerated, $__interval)"
           }
         }
-      ]
+      ],
+      "description": "Policy events explicitly reporting denied or blocked status."
     },
     {
       "id": 6,
-      "title": "Poison tests OK",
+      "title": "Successful poison tests",
       "type": "stat",
       "datasource": {
         "type": "grafana-azure-monitor-datasource",
@@ -388,7 +860,7 @@
         "h": 4,
         "w": 4,
         "x": 16,
-        "y": 2
+        "y": 7
       },
       "fieldConfig": {
         "defaults": {
@@ -437,11 +909,12 @@
             "query": "union isfuzzy=true (AgentOpsCollectorHealth_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo())), (AppDependencies | where TimeGenerated between ($__timeFrom() .. $__timeTo()) | where tostring(Properties) has_any ('github.copilot', 'gen_ai.operation.name', 'agentops.', 'codex') or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') | summarize LastSpanReceived=max(TimeGenerated), SpanRows=count(), ExportErrors=countif(Success == false or tostring(Success) =~ 'false') | extend TimeGenerated=now(), Component='appinsights-compat', CheckName='live-ingestion', Status=iff(SpanRows > 0, 'healthy', 'empty'), Detail=strcat('Existing Application Insights telemetry rows: ', tostring(SpanRows)), PrivacyMode='strict', CollectorMode='compat', OtlpEndpoint='application-insights', AzureConfigured=true, GrafanaConfigured=true, DashboardVersion='v2', SchemaVersion='2', DroppedContentCount=0, LastExportSuccess=LastSpanReceived | project TimeGenerated, Component, CheckName, Status, Detail, PrivacyMode, CollectorMode, OtlpEndpoint, AzureConfigured, GrafanaConfigured, DashboardVersion, SchemaVersion, LastSpanReceived, LastExportSuccess, ExportErrors, DroppedContentCount) | where ('$privacy_mode' == '__all' or tostring(column_ifexists('PrivacyMode', '')) == '$privacy_mode') | where CheckName == 'privacy-poison' | summarize value=countif(Status == 'ok') by bin(TimeGenerated, $__interval)"
           }
         }
-      ]
+      ],
+      "description": "Privacy poison checks explicitly reporting OK. A zero or empty result is not proof of privacy safety."
     },
     {
       "id": 7,
-      "title": "Strict runs",
+      "title": "Strict-mode runs",
       "type": "stat",
       "datasource": {
         "type": "grafana-azure-monitor-datasource",
@@ -451,7 +924,7 @@
         "h": 4,
         "w": 4,
         "x": 20,
-        "y": 2
+        "y": 7
       },
       "fieldConfig": {
         "defaults": {
@@ -497,14 +970,15 @@
               "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
             ],
             "resultFormat": "time_series",
-            "query": "union isfuzzy=true (AgentOpsRunSummary_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo()) | extend DurationMs=todouble(DurationMs), InputTokens=todouble(InputTokens), OutputTokens=todouble(OutputTokens), ReasoningTokens=todouble(ReasoningTokens), CacheReadTokens=todouble(CacheReadTokens), CacheCreationTokens=todouble(CacheCreationTokens), EstimatedCostUsd=todouble(EstimatedCostUsd), ToolCount=tolong(ToolCount), ToolFailureCount=tolong(ToolFailureCount), ToolDeniedCount=tolong(ToolDeniedCount)), (AppDependencies | where TimeGenerated between ($__timeFrom() .. $__timeTo()) | where tostring(Properties) has_any ('github.copilot', 'gen_ai.operation.name', 'agentops.', 'codex') or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') | extend SessionId=case(isnotempty(tostring(Properties['agentops.session.id'])), tostring(Properties['agentops.session.id']), isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(coalesce(AppRoleName, 'agent'), '_', coalesce(OperationId, 'session'), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMddHH'))) | extend RunId=case(isnotempty(tostring(Properties['agentops.run.id'])), tostring(Properties['agentops.run.id']), strcat('compat_', SessionId)) | extend TraceId=coalesce(OperationId, tostring(Properties['trace_id']), RunId) | extend Operation=tostring(Properties['gen_ai.operation.name']) | extend ToolName=tostring(Properties['gen_ai.tool.name']) | extend ModelActual=case(isnotempty(tostring(Properties['agentops.model.actual'])), tostring(Properties['agentops.model.actual']), isnotempty(tostring(Properties['gen_ai.response.model'])), tostring(Properties['gen_ai.response.model']), tostring(Properties['gen_ai.request.model'])) | extend AgentName=case(isnotempty(tostring(Properties['agentops.agent.name'])), tostring(Properties['agentops.agent.name']), isnotempty(tostring(Properties['agentops.cli.agent'])), tostring(Properties['agentops.cli.agent']), isnotempty(tostring(Properties['gen_ai.agent.name'])), tostring(Properties['gen_ai.agent.name']), coalesce(AppRoleName, 'agent')) | extend SkillName=coalesce(tostring(Properties['agentops.skill.name']), tostring(Properties['github.copilot.skill.name'])) | extend ParentAgentName=tostring(Properties['agentops.parent_agent.name']) | extend SubAgentName=case(isnotempty(tostring(Properties['agentops.sub_agent.name'])), tostring(Properties['agentops.sub_agent.name']), isnotempty(tostring(Properties['agentops.child_agent.name'])), tostring(Properties['agentops.child_agent.name']), isnotempty(ParentAgentName) and isnotempty(AgentName) and AgentName != ParentAgentName, AgentName, '') | extend DelegationId=tostring(Properties['agentops.delegation.id']) | extend Surface=case(isnotempty(tostring(Properties['agentops.surface'])), tostring(Properties['agentops.surface']), AppRoleName has 'codex', 'custom', AppRoleName has 'copilot', 'cli', 'cli') | extend RepoHash=tostring(Properties['agentops.repo.hash']) | extend BranchHash=tostring(Properties['agentops.branch.hash']) | extend TaskType=case(isnotempty(tostring(Properties['agentops.task.type'])), tostring(Properties['agentops.task.type']), 'unknown') | extend PrivacyMode=case(isnotempty(tostring(Properties['agentops.privacy.mode'])), tostring(Properties['agentops.privacy.mode']), 'strict') | extend ContentCaptureSignal=tostring(Properties['agentops.content_capture.signal']) =~ 'true' or tostring(Properties) has_any ('gen_ai.input.messages', 'gen_ai.output.messages', 'gen_ai.prompt', 'gen_ai.completion') | extend InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), OutputTokens=todouble(Properties['gen_ai.usage.output_tokens']), ReasoningTokens=todouble(Properties['gen_ai.usage.reasoning.output_tokens']) | extend CacheReadTokens=todouble(Properties['gen_ai.usage.cache_read.input_tokens']), CacheCreationTokens=todouble(Properties['gen_ai.usage.cache_creation.input_tokens']), ContextWindowPct=todouble(Properties['agentops.context.window_pct']), TokensRemoved=todouble(Properties['github.copilot.tokens_removed']), PermissionWaitMs=todouble(Properties['agentops.permission.wait_ms']) | extend EstimatedCostUsd=coalesce(todouble(Properties['agentops.cost.estimated_usd']), todouble(Properties['github.copilot.cost']) * 0.01, 0.0) | extend ErrorType=coalesce(tostring(Properties['error.type']), tostring(ResultCode)) | extend Failed=Success == false or tostring(Success) =~ 'false' or isnotempty(tostring(Properties['error.type'])) | summarize TimeGenerated=max(TimeGenerated), Started=min(TimeGenerated), TraceId=take_any(TraceId), Surface=take_any(Surface), RepoHash=take_any(RepoHash), BranchHash=take_any(BranchHash), TaskType=take_any(TaskType), AgentName=take_any(AgentName), SkillName=take_any(SkillName), ParentAgentName=take_any(ParentAgentName), SubAgentName=take_any(SubAgentName), DelegationId=take_any(DelegationId), ModelActual=take_any(ModelActual), PrivacyMode=take_any(PrivacyMode), ContentCaptureSignal=max(toint(ContentCaptureSignal)), InputTokens=sum(InputTokens), OutputTokens=sum(OutputTokens), ReasoningTokens=sum(ReasoningTokens), CacheReadTokens=sum(CacheReadTokens), CacheCreationTokens=sum(CacheCreationTokens), ContextWindowPct=max(ContextWindowPct), TokensRemoved=sum(TokensRemoved), PermissionWaitMs=sum(PermissionWaitMs), EstimatedCostUsd=sum(EstimatedCostUsd), ToolCount=countif(Operation == 'execute_tool' or isnotempty(ToolName)), ToolFailureCount=countif((Operation == 'execute_tool' or isnotempty(ToolName)) and Failed), Failures=countif(Failed), ToolDeniedCount=countif(tostring(Properties['agentops.mcp.allowed']) =~ 'false'), FilesReadCount=countif(ToolName has 'read'), FilesEditedCount=countif(ToolName has_any ('edit', 'write', 'patch')), TestsRan=countif(ToolName has_any ('test', 'lint', 'typecheck')) > 0 by RunId, SessionId | extend DurationMs=todouble(datetime_diff('millisecond', TimeGenerated, Started)) | extend ModelRequested=ModelActual, ContentCaptureMode=iff(ContentCaptureSignal > 0, 'signal_only', 'off'), OutcomeStatus=iff(Failures > 0, 'failed', 'success'), OutcomeReason=iff(Failures > 0, 'span_failure', 'completed'), TestsPassed=TestsRan and ToolFailureCount == 0, PrOpened=false, PrNumberHash='', CiStatus='not_run', EvalOverall=tolong(iff(Failures > 0, 50, 85)), RiskScore=ToolFailureCount * 20 + ToolDeniedCount * 30 + ContentCaptureSignal * 15 | project TimeGenerated, RunId, SessionId, TraceId, Surface, RepoHash, BranchHash, TaskType, AgentName, SkillName, ParentAgentName, SubAgentName, DelegationId, ModelRequested, ModelActual, PrivacyMode, ContentCaptureMode, ContentCaptureSignal=ContentCaptureSignal > 0, OutcomeStatus, OutcomeReason, DurationMs, InputTokens, OutputTokens, ReasoningTokens, CacheReadTokens, CacheCreationTokens, ContextWindowPct, TokensRemoved, PermissionWaitMs, EstimatedCostUsd, ToolCount, ToolFailureCount, ToolDeniedCount, TestsRan, TestsPassed, FilesReadCount, FilesEditedCount, PrOpened, PrNumberHash, CiStatus, EvalOverall, RiskScore) | extend SkillName=tostring(column_ifexists('SkillName', '')) | extend ParentAgentName=tostring(column_ifexists('ParentAgentName', '')) | extend SubAgentName=case(isnotempty(tostring(column_ifexists('SubAgentName', ''))), tostring(column_ifexists('SubAgentName', '')), isnotempty(ParentAgentName) and isnotempty(tostring(column_ifexists('AgentName', ''))) and tostring(column_ifexists('AgentName', '')) != ParentAgentName, tostring(column_ifexists('AgentName', '')), '') | extend DelegationId=tostring(column_ifexists('DelegationId', '')) | extend CacheReadTokens=todouble(column_ifexists('CacheReadTokens', 0.0)) | extend CacheCreationTokens=todouble(column_ifexists('CacheCreationTokens', 0.0)) | extend ContextWindowPct=todouble(column_ifexists('ContextWindowPct', 0.0)) | extend TokensRemoved=todouble(column_ifexists('TokensRemoved', 0.0)) | extend PermissionWaitMs=todouble(column_ifexists('PermissionWaitMs', 0.0)) | where ('$run_id' == '__all' or tostring(column_ifexists('RunId', '')) == '$run_id') | where ('$session_id' == '__all' or tostring(column_ifexists('SessionId', '')) == '$session_id') | where ('$trace_id' == '__all' or tostring(column_ifexists('TraceId', '')) == '$trace_id') | where ('$surface' == '__all' or tostring(column_ifexists('Surface', '')) == '$surface') | where ('$repo_hash' == '__all' or tostring(column_ifexists('RepoHash', '')) == '$repo_hash') | where ('$branch_hash' == '__all' or tostring(column_ifexists('BranchHash', '')) == '$branch_hash') | where ('$model' == '__all' or tostring(column_ifexists('ModelActual', '')) == '$model') | where ('$agent_name' == '__all' or tostring(column_ifexists('AgentName', '')) == '$agent_name') | where ('$skill_name' == '__all' or tostring(column_ifexists('SkillName', '')) == '$skill_name') | where ('$sub_agent' == '__all' or tostring(column_ifexists('SubAgentName', '')) == '$sub_agent') | where ('$task_type' == '__all' or tostring(column_ifexists('TaskType', '')) == '$task_type') | where ('$privacy_mode' == '__all' or tostring(column_ifexists('PrivacyMode', '')) == '$privacy_mode') | where ('$outcome_status' == '__all' or tostring(column_ifexists('OutcomeStatus', '')) == '$outcome_status') | extend EvalBucket=case(EvalOverall >= 80, 'good', EvalOverall >= 60, 'review', 'poor') | where ('$eval_bucket' == '__all' or tostring(column_ifexists('EvalBucket', '')) == iff('$eval_bucket' == 'ok', 'good', '$eval_bucket')) | summarize value=countif(PrivacyMode == 'strict') by bin(TimeGenerated, $__interval)"
+            "query": "union isfuzzy=true (AgentOpsRunSummary_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo()) | extend DurationMs=todouble(DurationMs), InputTokens=todouble(InputTokens), OutputTokens=todouble(OutputTokens), ReasoningTokens=todouble(ReasoningTokens), CacheReadTokens=todouble(CacheReadTokens), CacheCreationTokens=todouble(CacheCreationTokens), EstimatedCostUsd=todouble(EstimatedCostUsd), ToolCount=tolong(ToolCount), ToolFailureCount=tolong(ToolFailureCount), ToolDeniedCount=tolong(ToolDeniedCount) | extend Delivery='Visible in Azure', Coverage='AgentOps managed'), (AppDependencies | where TimeGenerated between ($__timeFrom() .. $__timeTo()) | where tostring(Properties) has_any ('github.copilot', 'gen_ai.operation.name', 'agentops.', 'codex') or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') | extend SessionId=case(isnotempty(tostring(Properties['agentops.session.id'])), tostring(Properties['agentops.session.id']), isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(coalesce(AppRoleName, 'agent'), '_', coalesce(OperationId, 'session'), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMddHH'))) | extend RunId=case(isnotempty(tostring(Properties['agentops.run.id'])), tostring(Properties['agentops.run.id']), strcat('compat_', SessionId)) | extend TraceId=coalesce(OperationId, tostring(Properties['trace_id']), RunId) | extend Operation=tostring(Properties['gen_ai.operation.name']) | extend ToolName=tostring(Properties['gen_ai.tool.name']) | extend ModelActual=case(isnotempty(tostring(Properties['agentops.model.actual'])), tostring(Properties['agentops.model.actual']), isnotempty(tostring(Properties['gen_ai.response.model'])), tostring(Properties['gen_ai.response.model']), tostring(Properties['gen_ai.request.model'])) | extend AgentName=case(isnotempty(tostring(Properties['agentops.agent.name'])), tostring(Properties['agentops.agent.name']), isnotempty(tostring(Properties['agentops.cli.agent'])), tostring(Properties['agentops.cli.agent']), isnotempty(tostring(Properties['gen_ai.agent.name'])), tostring(Properties['gen_ai.agent.name']), coalesce(AppRoleName, 'agent')) | extend SkillName=coalesce(tostring(Properties['agentops.skill.name']), tostring(Properties['github.copilot.skill.name'])) | extend ParentAgentName=tostring(Properties['agentops.parent_agent.name']) | extend SubAgentName=case(isnotempty(tostring(Properties['agentops.sub_agent.name'])), tostring(Properties['agentops.sub_agent.name']), isnotempty(tostring(Properties['agentops.child_agent.name'])), tostring(Properties['agentops.child_agent.name']), isnotempty(ParentAgentName) and isnotempty(AgentName) and AgentName != ParentAgentName, AgentName, '') | extend DelegationId=tostring(Properties['agentops.delegation.id']) | extend BranchDurationMs=todouble(Properties['agentops.subagent.duration_ms']), BranchTokens=todouble(Properties['agentops.subagent.total_tokens']), BranchToolCount=tolong(Properties['agentops.subagent.tool_count']) | extend Surface=case(isnotempty(tostring(Properties['agentops.surface'])), tostring(Properties['agentops.surface']), AppRoleName has 'codex', 'custom', AppRoleName has 'copilot', 'cli', 'cli') | extend RepoHash=tostring(Properties['agentops.repo.hash']) | extend BranchHash=tostring(Properties['agentops.branch.hash']) | extend TaskType=case(isnotempty(tostring(Properties['agentops.task.type'])), tostring(Properties['agentops.task.type']), 'unknown') | extend PrivacyMode=case(isnotempty(tostring(Properties['agentops.privacy.mode'])), tostring(Properties['agentops.privacy.mode']), 'strict') | extend ContentCaptureSignal=tostring(Properties['agentops.content_capture.signal']) =~ 'true' or tostring(Properties) has_any ('gen_ai.input.messages', 'gen_ai.output.messages', 'gen_ai.prompt', 'gen_ai.completion') | extend InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), OutputTokens=todouble(Properties['gen_ai.usage.output_tokens']), ReasoningTokens=todouble(Properties['gen_ai.usage.reasoning.output_tokens']) | extend CacheReadTokens=todouble(Properties['gen_ai.usage.cache_read.input_tokens']), CacheCreationTokens=todouble(Properties['gen_ai.usage.cache_creation.input_tokens']), ContextWindowPct=todouble(Properties['agentops.context.window_pct']), TokensRemoved=todouble(Properties['github.copilot.tokens_removed']), PermissionWaitMs=todouble(Properties['agentops.permission.wait_ms']) | extend EstimatedCostUsd=coalesce(todouble(Properties['agentops.cost.estimated_usd']), todouble(Properties['github.copilot.cost']) * 0.01, 0.0) | extend ErrorType=coalesce(tostring(Properties['error.type']), tostring(ResultCode)) | extend Failed=Success == false or tostring(Success) =~ 'false' or isnotempty(tostring(Properties['error.type'])) | summarize TimeGenerated=max(TimeGenerated), Started=min(TimeGenerated), TraceId=take_any(TraceId), Surface=take_any(Surface), RepoHash=take_any(RepoHash), BranchHash=take_any(BranchHash), TaskType=take_any(TaskType), AgentName=take_any(AgentName), SkillName=take_any(SkillName), ParentAgentName=take_any(ParentAgentName), SubAgentName=take_any(SubAgentName), DelegationId=take_any(DelegationId), ModelActual=take_any(ModelActual), PrivacyMode=take_any(PrivacyMode), ContentCaptureSignal=max(toint(ContentCaptureSignal)), InputTokens=sum(InputTokens), OutputTokens=sum(OutputTokens), ReasoningTokens=sum(ReasoningTokens), CacheReadTokens=sum(CacheReadTokens), CacheCreationTokens=sum(CacheCreationTokens), ContextWindowPct=max(ContextWindowPct), TokensRemoved=sum(TokensRemoved), PermissionWaitMs=sum(PermissionWaitMs), EstimatedCostUsd=sum(EstimatedCostUsd), ToolCount=countif(Operation == 'execute_tool' or isnotempty(ToolName)), ToolFailureCount=countif((Operation == 'execute_tool' or isnotempty(ToolName)) and Failed), Failures=countif(Failed), ToolDeniedCount=countif(tostring(Properties['agentops.mcp.allowed']) =~ 'false'), FilesReadCount=countif(ToolName has 'read'), FilesEditedCount=countif(ToolName has_any ('edit', 'write', 'patch')), TestsRan=countif(ToolName has_any ('test', 'lint', 'typecheck')) > 0 by RunId, SessionId | extend DurationMs=todouble(datetime_diff('millisecond', TimeGenerated, Started)) | extend ModelRequested=ModelActual, ContentCaptureMode=iff(ContentCaptureSignal > 0, 'signal_only', 'off'), OutcomeStatus=iff(Failures > 0, 'failed', 'success'), OutcomeReason=iff(Failures > 0, 'span_failure', 'completed'), TestsPassed=TestsRan and ToolFailureCount == 0, PrOpened=false, PrNumberHash='', CiStatus='not_run', EvalOverall=tolong(iff(Failures > 0, 50, 85)), RiskScore=ToolFailureCount * 20 + ToolDeniedCount * 30 + ContentCaptureSignal * 15 | project TimeGenerated, RunId, SessionId, TraceId, Surface, RepoHash, BranchHash, TaskType, AgentName, SkillName, ParentAgentName, SubAgentName, DelegationId, ModelRequested, ModelActual, PrivacyMode, ContentCaptureMode, ContentCaptureSignal=ContentCaptureSignal > 0, OutcomeStatus, OutcomeReason, DurationMs, InputTokens, OutputTokens, ReasoningTokens, CacheReadTokens, CacheCreationTokens, ContextWindowPct, TokensRemoved, PermissionWaitMs, EstimatedCostUsd, ToolCount, ToolFailureCount, ToolDeniedCount, TestsRan, TestsPassed, FilesReadCount, FilesEditedCount, PrOpened, PrNumberHash, CiStatus, EvalOverall, RiskScore, Delivery='Visible in Azure', Coverage='Native best effort') | extend SkillName=tostring(column_ifexists('SkillName', '')) | extend ParentAgentName=tostring(column_ifexists('ParentAgentName', '')) | extend SubAgentName=case(isnotempty(tostring(column_ifexists('SubAgentName', ''))), tostring(column_ifexists('SubAgentName', '')), isnotempty(ParentAgentName) and isnotempty(tostring(column_ifexists('AgentName', ''))) and tostring(column_ifexists('AgentName', '')) != ParentAgentName, tostring(column_ifexists('AgentName', '')), '') | extend DelegationId=tostring(column_ifexists('DelegationId', '')) | extend BranchDurationMs=todouble(column_ifexists('BranchDurationMs', 0.0)) | extend BranchTokens=todouble(column_ifexists('BranchTokens', 0.0)) | extend BranchToolCount=tolong(column_ifexists('BranchToolCount', 0)) | extend CacheReadTokens=todouble(column_ifexists('CacheReadTokens', 0.0)) | extend CacheCreationTokens=todouble(column_ifexists('CacheCreationTokens', 0.0)) | extend ContextWindowPct=todouble(column_ifexists('ContextWindowPct', 0.0)) | extend TokensRemoved=todouble(column_ifexists('TokensRemoved', 0.0)) | extend PermissionWaitMs=todouble(column_ifexists('PermissionWaitMs', 0.0)) | where ('$run_id' == '__all' or tostring(column_ifexists('RunId', '')) == '$run_id') | where ('$session_id' == '__all' or tostring(column_ifexists('SessionId', '')) == '$session_id') | where ('$trace_id' == '__all' or tostring(column_ifexists('TraceId', '')) == '$trace_id') | where ('$surface' == '__all' or tostring(column_ifexists('Surface', '')) == '$surface') | where ('$repo_hash' == '__all' or tostring(column_ifexists('RepoHash', '')) == '$repo_hash') | where ('$branch_hash' == '__all' or tostring(column_ifexists('BranchHash', '')) == '$branch_hash') | where ('$model' == '__all' or tostring(column_ifexists('ModelActual', '')) == '$model') | where ('$agent_name' == '__all' or tostring(column_ifexists('AgentName', '')) == '$agent_name') | where ('$skill_name' == '__all' or tostring(column_ifexists('SkillName', '')) == '$skill_name') | where ('$sub_agent' == '__all' or tostring(column_ifexists('SubAgentName', '')) == '$sub_agent') | where ('$task_type' == '__all' or tostring(column_ifexists('TaskType', '')) == '$task_type') | where ('$privacy_mode' == '__all' or tostring(column_ifexists('PrivacyMode', '')) == '$privacy_mode') | where ('$outcome_status' == '__all' or tostring(column_ifexists('OutcomeStatus', '')) == '$outcome_status') | extend EvalBucket=case(EvalOverall >= 80, 'good', EvalOverall >= 60, 'review', 'poor') | where ('$eval_bucket' == '__all' or tostring(column_ifexists('EvalBucket', '')) == iff('$eval_bucket' == 'ok', 'good', '$eval_bucket')) | summarize value=countif(PrivacyMode == 'strict') by bin(TimeGenerated, $__interval)"
           }
         }
-      ]
+      ],
+      "description": "Runs explicitly reporting strict AgentOps privacy mode."
     },
     {
       "id": 10,
-      "title": "Privacy drops by kind",
+      "title": "Blocked or redacted items by kind",
       "type": "table",
       "datasource": {
         "type": "grafana-azure-monitor-datasource",
@@ -514,7 +988,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 6
+        "y": 11
       },
       "fieldConfig": {
         "defaults": {
@@ -538,7 +1012,7 @@
                 "id": "links",
                 "value": [
                   {
-                    "title": "Open Run Replay",
+                    "title": "Open Run Story",
                     "url": "/d/agentops-v2-run-replay?var-run_id=${__data.fields.RunId}&${__url_time_range}",
                     "targetBlank": false
                   }
@@ -844,7 +1318,7 @@
                 "id": "links",
                 "value": [
                   {
-                    "title": "Open Run Replay",
+                    "title": "Open Run Story",
                     "url": "/d/agentops-v2-run-replay?var-run_id=${__data.fields.RunId}&var-session_id=${__data.fields.SessionId}&var-trace_id=${__data.fields.TraceId}&${__url_time_range}",
                     "targetBlank": false
                   }
@@ -964,14 +1438,15 @@
               "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
             ],
             "resultFormat": "table",
-            "query": "union isfuzzy=true (AgentOpsPrivacy_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo())), (AppDependencies | where TimeGenerated between ($__timeFrom() .. $__timeTo()) | where tostring(Properties) has_any ('github.copilot', 'gen_ai.operation.name', 'agentops.', 'codex') or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') | extend SessionId=case(isnotempty(tostring(Properties['agentops.session.id'])), tostring(Properties['agentops.session.id']), isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(coalesce(AppRoleName, 'agent'), '_', coalesce(OperationId, 'session'), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMddHH'))) | extend RunId=case(isnotempty(tostring(Properties['agentops.run.id'])), tostring(Properties['agentops.run.id']), strcat('compat_', SessionId)) | extend TraceId=coalesce(OperationId, tostring(Properties['trace_id']), RunId) | extend Operation=tostring(Properties['gen_ai.operation.name']) | extend ToolName=tostring(Properties['gen_ai.tool.name']) | extend ModelActual=case(isnotempty(tostring(Properties['agentops.model.actual'])), tostring(Properties['agentops.model.actual']), isnotempty(tostring(Properties['gen_ai.response.model'])), tostring(Properties['gen_ai.response.model']), tostring(Properties['gen_ai.request.model'])) | extend AgentName=case(isnotempty(tostring(Properties['agentops.agent.name'])), tostring(Properties['agentops.agent.name']), isnotempty(tostring(Properties['agentops.cli.agent'])), tostring(Properties['agentops.cli.agent']), isnotempty(tostring(Properties['gen_ai.agent.name'])), tostring(Properties['gen_ai.agent.name']), coalesce(AppRoleName, 'agent')) | extend SkillName=coalesce(tostring(Properties['agentops.skill.name']), tostring(Properties['github.copilot.skill.name'])) | extend ParentAgentName=tostring(Properties['agentops.parent_agent.name']) | extend SubAgentName=case(isnotempty(tostring(Properties['agentops.sub_agent.name'])), tostring(Properties['agentops.sub_agent.name']), isnotempty(tostring(Properties['agentops.child_agent.name'])), tostring(Properties['agentops.child_agent.name']), isnotempty(ParentAgentName) and isnotempty(AgentName) and AgentName != ParentAgentName, AgentName, '') | extend DelegationId=tostring(Properties['agentops.delegation.id']) | extend Surface=case(isnotempty(tostring(Properties['agentops.surface'])), tostring(Properties['agentops.surface']), AppRoleName has 'codex', 'custom', AppRoleName has 'copilot', 'cli', 'cli') | extend RepoHash=tostring(Properties['agentops.repo.hash']) | extend BranchHash=tostring(Properties['agentops.branch.hash']) | extend TaskType=case(isnotempty(tostring(Properties['agentops.task.type'])), tostring(Properties['agentops.task.type']), 'unknown') | extend PrivacyMode=case(isnotempty(tostring(Properties['agentops.privacy.mode'])), tostring(Properties['agentops.privacy.mode']), 'strict') | extend ContentCaptureSignal=tostring(Properties['agentops.content_capture.signal']) =~ 'true' or tostring(Properties) has_any ('gen_ai.input.messages', 'gen_ai.output.messages', 'gen_ai.prompt', 'gen_ai.completion') | extend InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), OutputTokens=todouble(Properties['gen_ai.usage.output_tokens']), ReasoningTokens=todouble(Properties['gen_ai.usage.reasoning.output_tokens']) | extend CacheReadTokens=todouble(Properties['gen_ai.usage.cache_read.input_tokens']), CacheCreationTokens=todouble(Properties['gen_ai.usage.cache_creation.input_tokens']), ContextWindowPct=todouble(Properties['agentops.context.window_pct']), TokensRemoved=todouble(Properties['github.copilot.tokens_removed']), PermissionWaitMs=todouble(Properties['agentops.permission.wait_ms']) | extend EstimatedCostUsd=coalesce(todouble(Properties['agentops.cost.estimated_usd']), todouble(Properties['github.copilot.cost']) * 0.01, 0.0) | extend ErrorType=coalesce(tostring(Properties['error.type']), tostring(ResultCode)) | extend Failed=Success == false or tostring(Success) =~ 'false' or isnotempty(tostring(Properties['error.type'])) | where ContentCaptureSignal | extend ContentKind=case(tostring(Properties) has_any ('secret', 'token', 'credential', 'api_key'), 'secret_like', tostring(Properties) has_any ('gen_ai.output.messages', 'gen_ai.completion'), 'output', tostring(Properties) has_any ('tool.call.arguments', 'tool_args'), 'tool_args', 'prompt') | project TimeGenerated, RunId, TraceId, PrivacyMode, ContentKind, Observed=true, Action='dropped', DroppedCount=1, RedactedCount=0, LeakDetected=false) | where ('$run_id' == '__all' or tostring(column_ifexists('RunId', '')) == '$run_id') | where ('$trace_id' == '__all' or tostring(column_ifexists('TraceId', '')) == '$trace_id') | where ('$privacy_mode' == '__all' or tostring(column_ifexists('PrivacyMode', '')) == '$privacy_mode') | summarize Drops=sum(DroppedCount), Redactions=sum(RedactedCount), Runs=dcount(RunId) by ContentKind, Action, PrivacyMode | order by Drops desc"
+            "query": "union isfuzzy=true (AgentOpsPrivacy_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo())), (AppDependencies | where TimeGenerated between ($__timeFrom() .. $__timeTo()) | where tostring(Properties) has_any ('github.copilot', 'gen_ai.operation.name', 'agentops.', 'codex') or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') | extend SessionId=case(isnotempty(tostring(Properties['agentops.session.id'])), tostring(Properties['agentops.session.id']), isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(coalesce(AppRoleName, 'agent'), '_', coalesce(OperationId, 'session'), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMddHH'))) | extend RunId=case(isnotempty(tostring(Properties['agentops.run.id'])), tostring(Properties['agentops.run.id']), strcat('compat_', SessionId)) | extend TraceId=coalesce(OperationId, tostring(Properties['trace_id']), RunId) | extend Operation=tostring(Properties['gen_ai.operation.name']) | extend ToolName=tostring(Properties['gen_ai.tool.name']) | extend ModelActual=case(isnotempty(tostring(Properties['agentops.model.actual'])), tostring(Properties['agentops.model.actual']), isnotempty(tostring(Properties['gen_ai.response.model'])), tostring(Properties['gen_ai.response.model']), tostring(Properties['gen_ai.request.model'])) | extend AgentName=case(isnotempty(tostring(Properties['agentops.agent.name'])), tostring(Properties['agentops.agent.name']), isnotempty(tostring(Properties['agentops.cli.agent'])), tostring(Properties['agentops.cli.agent']), isnotempty(tostring(Properties['gen_ai.agent.name'])), tostring(Properties['gen_ai.agent.name']), coalesce(AppRoleName, 'agent')) | extend SkillName=coalesce(tostring(Properties['agentops.skill.name']), tostring(Properties['github.copilot.skill.name'])) | extend ParentAgentName=tostring(Properties['agentops.parent_agent.name']) | extend SubAgentName=case(isnotempty(tostring(Properties['agentops.sub_agent.name'])), tostring(Properties['agentops.sub_agent.name']), isnotempty(tostring(Properties['agentops.child_agent.name'])), tostring(Properties['agentops.child_agent.name']), isnotempty(ParentAgentName) and isnotempty(AgentName) and AgentName != ParentAgentName, AgentName, '') | extend DelegationId=tostring(Properties['agentops.delegation.id']) | extend BranchDurationMs=todouble(Properties['agentops.subagent.duration_ms']), BranchTokens=todouble(Properties['agentops.subagent.total_tokens']), BranchToolCount=tolong(Properties['agentops.subagent.tool_count']) | extend Surface=case(isnotempty(tostring(Properties['agentops.surface'])), tostring(Properties['agentops.surface']), AppRoleName has 'codex', 'custom', AppRoleName has 'copilot', 'cli', 'cli') | extend RepoHash=tostring(Properties['agentops.repo.hash']) | extend BranchHash=tostring(Properties['agentops.branch.hash']) | extend TaskType=case(isnotempty(tostring(Properties['agentops.task.type'])), tostring(Properties['agentops.task.type']), 'unknown') | extend PrivacyMode=case(isnotempty(tostring(Properties['agentops.privacy.mode'])), tostring(Properties['agentops.privacy.mode']), 'strict') | extend ContentCaptureSignal=tostring(Properties['agentops.content_capture.signal']) =~ 'true' or tostring(Properties) has_any ('gen_ai.input.messages', 'gen_ai.output.messages', 'gen_ai.prompt', 'gen_ai.completion') | extend InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), OutputTokens=todouble(Properties['gen_ai.usage.output_tokens']), ReasoningTokens=todouble(Properties['gen_ai.usage.reasoning.output_tokens']) | extend CacheReadTokens=todouble(Properties['gen_ai.usage.cache_read.input_tokens']), CacheCreationTokens=todouble(Properties['gen_ai.usage.cache_creation.input_tokens']), ContextWindowPct=todouble(Properties['agentops.context.window_pct']), TokensRemoved=todouble(Properties['github.copilot.tokens_removed']), PermissionWaitMs=todouble(Properties['agentops.permission.wait_ms']) | extend EstimatedCostUsd=coalesce(todouble(Properties['agentops.cost.estimated_usd']), todouble(Properties['github.copilot.cost']) * 0.01, 0.0) | extend ErrorType=coalesce(tostring(Properties['error.type']), tostring(ResultCode)) | extend Failed=Success == false or tostring(Success) =~ 'false' or isnotempty(tostring(Properties['error.type'])) | where ContentCaptureSignal | extend ContentKind=case(tostring(Properties) has_any ('secret', 'token', 'credential', 'api_key'), 'secret_like', tostring(Properties) has_any ('gen_ai.output.messages', 'gen_ai.completion'), 'output', tostring(Properties) has_any ('tool.call.arguments', 'tool_args'), 'tool_args', 'prompt') | project TimeGenerated, RunId, TraceId, PrivacyMode, ContentKind, Observed=true, Action='dropped', DroppedCount=1, RedactedCount=0, LeakDetected=false) | where ('$run_id' == '__all' or tostring(column_ifexists('RunId', '')) == '$run_id') | where ('$trace_id' == '__all' or tostring(column_ifexists('TraceId', '')) == '$trace_id') | where ('$privacy_mode' == '__all' or tostring(column_ifexists('PrivacyMode', '')) == '$privacy_mode') | summarize Drops=sum(DroppedCount), Redactions=sum(RedactedCount), Runs=dcount(RunId) by ContentKind, Action, PrivacyMode | order by Drops desc"
           }
         }
-      ]
+      ],
+      "description": "AgentOps privacy actions grouped by content kind, action, and privacy mode."
     },
     {
       "id": 11,
-      "title": "Runs with policy blocks or drops",
+      "title": "Runs needing privacy or policy review",
       "type": "table",
       "datasource": {
         "type": "grafana-azure-monitor-datasource",
@@ -981,7 +1456,7 @@
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 6
+        "y": 11
       },
       "fieldConfig": {
         "defaults": {
@@ -1005,7 +1480,7 @@
                 "id": "links",
                 "value": [
                   {
-                    "title": "Open Run Replay",
+                    "title": "Open Run Story",
                     "url": "/d/agentops-v2-run-replay?var-run_id=${__data.fields.RunId}&${__url_time_range}",
                     "targetBlank": false
                   }
@@ -1311,7 +1786,7 @@
                 "id": "links",
                 "value": [
                   {
-                    "title": "Open Run Replay",
+                    "title": "Open Run Story",
                     "url": "/d/agentops-v2-run-replay?var-run_id=${__data.fields.RunId}&var-session_id=${__data.fields.SessionId}&var-trace_id=${__data.fields.TraceId}&${__url_time_range}",
                     "targetBlank": false
                   }
@@ -1431,10 +1906,11 @@
               "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev"
             ],
             "resultFormat": "table",
-            "query": "union isfuzzy=true (AgentOpsRunSummary_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo()) | extend DurationMs=todouble(DurationMs), InputTokens=todouble(InputTokens), OutputTokens=todouble(OutputTokens), ReasoningTokens=todouble(ReasoningTokens), CacheReadTokens=todouble(CacheReadTokens), CacheCreationTokens=todouble(CacheCreationTokens), EstimatedCostUsd=todouble(EstimatedCostUsd), ToolCount=tolong(ToolCount), ToolFailureCount=tolong(ToolFailureCount), ToolDeniedCount=tolong(ToolDeniedCount)), (AppDependencies | where TimeGenerated between ($__timeFrom() .. $__timeTo()) | where tostring(Properties) has_any ('github.copilot', 'gen_ai.operation.name', 'agentops.', 'codex') or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') | extend SessionId=case(isnotempty(tostring(Properties['agentops.session.id'])), tostring(Properties['agentops.session.id']), isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(coalesce(AppRoleName, 'agent'), '_', coalesce(OperationId, 'session'), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMddHH'))) | extend RunId=case(isnotempty(tostring(Properties['agentops.run.id'])), tostring(Properties['agentops.run.id']), strcat('compat_', SessionId)) | extend TraceId=coalesce(OperationId, tostring(Properties['trace_id']), RunId) | extend Operation=tostring(Properties['gen_ai.operation.name']) | extend ToolName=tostring(Properties['gen_ai.tool.name']) | extend ModelActual=case(isnotempty(tostring(Properties['agentops.model.actual'])), tostring(Properties['agentops.model.actual']), isnotempty(tostring(Properties['gen_ai.response.model'])), tostring(Properties['gen_ai.response.model']), tostring(Properties['gen_ai.request.model'])) | extend AgentName=case(isnotempty(tostring(Properties['agentops.agent.name'])), tostring(Properties['agentops.agent.name']), isnotempty(tostring(Properties['agentops.cli.agent'])), tostring(Properties['agentops.cli.agent']), isnotempty(tostring(Properties['gen_ai.agent.name'])), tostring(Properties['gen_ai.agent.name']), coalesce(AppRoleName, 'agent')) | extend SkillName=coalesce(tostring(Properties['agentops.skill.name']), tostring(Properties['github.copilot.skill.name'])) | extend ParentAgentName=tostring(Properties['agentops.parent_agent.name']) | extend SubAgentName=case(isnotempty(tostring(Properties['agentops.sub_agent.name'])), tostring(Properties['agentops.sub_agent.name']), isnotempty(tostring(Properties['agentops.child_agent.name'])), tostring(Properties['agentops.child_agent.name']), isnotempty(ParentAgentName) and isnotempty(AgentName) and AgentName != ParentAgentName, AgentName, '') | extend DelegationId=tostring(Properties['agentops.delegation.id']) | extend Surface=case(isnotempty(tostring(Properties['agentops.surface'])), tostring(Properties['agentops.surface']), AppRoleName has 'codex', 'custom', AppRoleName has 'copilot', 'cli', 'cli') | extend RepoHash=tostring(Properties['agentops.repo.hash']) | extend BranchHash=tostring(Properties['agentops.branch.hash']) | extend TaskType=case(isnotempty(tostring(Properties['agentops.task.type'])), tostring(Properties['agentops.task.type']), 'unknown') | extend PrivacyMode=case(isnotempty(tostring(Properties['agentops.privacy.mode'])), tostring(Properties['agentops.privacy.mode']), 'strict') | extend ContentCaptureSignal=tostring(Properties['agentops.content_capture.signal']) =~ 'true' or tostring(Properties) has_any ('gen_ai.input.messages', 'gen_ai.output.messages', 'gen_ai.prompt', 'gen_ai.completion') | extend InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), OutputTokens=todouble(Properties['gen_ai.usage.output_tokens']), ReasoningTokens=todouble(Properties['gen_ai.usage.reasoning.output_tokens']) | extend CacheReadTokens=todouble(Properties['gen_ai.usage.cache_read.input_tokens']), CacheCreationTokens=todouble(Properties['gen_ai.usage.cache_creation.input_tokens']), ContextWindowPct=todouble(Properties['agentops.context.window_pct']), TokensRemoved=todouble(Properties['github.copilot.tokens_removed']), PermissionWaitMs=todouble(Properties['agentops.permission.wait_ms']) | extend EstimatedCostUsd=coalesce(todouble(Properties['agentops.cost.estimated_usd']), todouble(Properties['github.copilot.cost']) * 0.01, 0.0) | extend ErrorType=coalesce(tostring(Properties['error.type']), tostring(ResultCode)) | extend Failed=Success == false or tostring(Success) =~ 'false' or isnotempty(tostring(Properties['error.type'])) | summarize TimeGenerated=max(TimeGenerated), Started=min(TimeGenerated), TraceId=take_any(TraceId), Surface=take_any(Surface), RepoHash=take_any(RepoHash), BranchHash=take_any(BranchHash), TaskType=take_any(TaskType), AgentName=take_any(AgentName), SkillName=take_any(SkillName), ParentAgentName=take_any(ParentAgentName), SubAgentName=take_any(SubAgentName), DelegationId=take_any(DelegationId), ModelActual=take_any(ModelActual), PrivacyMode=take_any(PrivacyMode), ContentCaptureSignal=max(toint(ContentCaptureSignal)), InputTokens=sum(InputTokens), OutputTokens=sum(OutputTokens), ReasoningTokens=sum(ReasoningTokens), CacheReadTokens=sum(CacheReadTokens), CacheCreationTokens=sum(CacheCreationTokens), ContextWindowPct=max(ContextWindowPct), TokensRemoved=sum(TokensRemoved), PermissionWaitMs=sum(PermissionWaitMs), EstimatedCostUsd=sum(EstimatedCostUsd), ToolCount=countif(Operation == 'execute_tool' or isnotempty(ToolName)), ToolFailureCount=countif((Operation == 'execute_tool' or isnotempty(ToolName)) and Failed), Failures=countif(Failed), ToolDeniedCount=countif(tostring(Properties['agentops.mcp.allowed']) =~ 'false'), FilesReadCount=countif(ToolName has 'read'), FilesEditedCount=countif(ToolName has_any ('edit', 'write', 'patch')), TestsRan=countif(ToolName has_any ('test', 'lint', 'typecheck')) > 0 by RunId, SessionId | extend DurationMs=todouble(datetime_diff('millisecond', TimeGenerated, Started)) | extend ModelRequested=ModelActual, ContentCaptureMode=iff(ContentCaptureSignal > 0, 'signal_only', 'off'), OutcomeStatus=iff(Failures > 0, 'failed', 'success'), OutcomeReason=iff(Failures > 0, 'span_failure', 'completed'), TestsPassed=TestsRan and ToolFailureCount == 0, PrOpened=false, PrNumberHash='', CiStatus='not_run', EvalOverall=tolong(iff(Failures > 0, 50, 85)), RiskScore=ToolFailureCount * 20 + ToolDeniedCount * 30 + ContentCaptureSignal * 15 | project TimeGenerated, RunId, SessionId, TraceId, Surface, RepoHash, BranchHash, TaskType, AgentName, SkillName, ParentAgentName, SubAgentName, DelegationId, ModelRequested, ModelActual, PrivacyMode, ContentCaptureMode, ContentCaptureSignal=ContentCaptureSignal > 0, OutcomeStatus, OutcomeReason, DurationMs, InputTokens, OutputTokens, ReasoningTokens, CacheReadTokens, CacheCreationTokens, ContextWindowPct, TokensRemoved, PermissionWaitMs, EstimatedCostUsd, ToolCount, ToolFailureCount, ToolDeniedCount, TestsRan, TestsPassed, FilesReadCount, FilesEditedCount, PrOpened, PrNumberHash, CiStatus, EvalOverall, RiskScore) | extend SkillName=tostring(column_ifexists('SkillName', '')) | extend ParentAgentName=tostring(column_ifexists('ParentAgentName', '')) | extend SubAgentName=case(isnotempty(tostring(column_ifexists('SubAgentName', ''))), tostring(column_ifexists('SubAgentName', '')), isnotempty(ParentAgentName) and isnotempty(tostring(column_ifexists('AgentName', ''))) and tostring(column_ifexists('AgentName', '')) != ParentAgentName, tostring(column_ifexists('AgentName', '')), '') | extend DelegationId=tostring(column_ifexists('DelegationId', '')) | extend CacheReadTokens=todouble(column_ifexists('CacheReadTokens', 0.0)) | extend CacheCreationTokens=todouble(column_ifexists('CacheCreationTokens', 0.0)) | extend ContextWindowPct=todouble(column_ifexists('ContextWindowPct', 0.0)) | extend TokensRemoved=todouble(column_ifexists('TokensRemoved', 0.0)) | extend PermissionWaitMs=todouble(column_ifexists('PermissionWaitMs', 0.0)) | where ('$run_id' == '__all' or tostring(column_ifexists('RunId', '')) == '$run_id') | where ('$session_id' == '__all' or tostring(column_ifexists('SessionId', '')) == '$session_id') | where ('$trace_id' == '__all' or tostring(column_ifexists('TraceId', '')) == '$trace_id') | where ('$surface' == '__all' or tostring(column_ifexists('Surface', '')) == '$surface') | where ('$repo_hash' == '__all' or tostring(column_ifexists('RepoHash', '')) == '$repo_hash') | where ('$branch_hash' == '__all' or tostring(column_ifexists('BranchHash', '')) == '$branch_hash') | where ('$model' == '__all' or tostring(column_ifexists('ModelActual', '')) == '$model') | where ('$agent_name' == '__all' or tostring(column_ifexists('AgentName', '')) == '$agent_name') | where ('$skill_name' == '__all' or tostring(column_ifexists('SkillName', '')) == '$skill_name') | where ('$sub_agent' == '__all' or tostring(column_ifexists('SubAgentName', '')) == '$sub_agent') | where ('$task_type' == '__all' or tostring(column_ifexists('TaskType', '')) == '$task_type') | where ('$privacy_mode' == '__all' or tostring(column_ifexists('PrivacyMode', '')) == '$privacy_mode') | where ('$outcome_status' == '__all' or tostring(column_ifexists('OutcomeStatus', '')) == '$outcome_status') | extend EvalBucket=case(EvalOverall >= 80, 'good', EvalOverall >= 60, 'review', 'poor') | where ('$eval_bucket' == '__all' or tostring(column_ifexists('EvalBucket', '')) == iff('$eval_bucket' == 'ok', 'good', '$eval_bucket')) | where PrivacyMode == 'unsafe' or RiskScore > 0 or ToolDeniedCount > 0 | project TimeGenerated, RunId, RepoHash, PrivacyMode, ContentCaptureMode, ToolDeniedCount, OutcomeStatus, RiskScore | order by TimeGenerated desc | take 100"
+            "query": "union isfuzzy=true (AgentOpsRunSummary_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo()) | extend DurationMs=todouble(DurationMs), InputTokens=todouble(InputTokens), OutputTokens=todouble(OutputTokens), ReasoningTokens=todouble(ReasoningTokens), CacheReadTokens=todouble(CacheReadTokens), CacheCreationTokens=todouble(CacheCreationTokens), EstimatedCostUsd=todouble(EstimatedCostUsd), ToolCount=tolong(ToolCount), ToolFailureCount=tolong(ToolFailureCount), ToolDeniedCount=tolong(ToolDeniedCount) | extend Delivery='Visible in Azure', Coverage='AgentOps managed'), (AppDependencies | where TimeGenerated between ($__timeFrom() .. $__timeTo()) | where tostring(Properties) has_any ('github.copilot', 'gen_ai.operation.name', 'agentops.', 'codex') or AppRoleName in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') or tostring(Properties['service.name']) in ('github-copilot', 'copilot-chat', 'github-copilot-cli', 'codex', 'openai-codex', 'openai-codex-cli') | extend SessionId=case(isnotempty(tostring(Properties['agentops.session.id'])), tostring(Properties['agentops.session.id']), isnotempty(tostring(Properties['gen_ai.conversation.id'])), tostring(Properties['gen_ai.conversation.id']), isnotempty(tostring(Properties['github.copilot.interaction_id'])), tostring(Properties['github.copilot.interaction_id']), strcat(coalesce(AppRoleName, 'agent'), '_', coalesce(OperationId, 'session'), '_', format_datetime(bin(TimeGenerated, 1h), 'yyyyMMddHH'))) | extend RunId=case(isnotempty(tostring(Properties['agentops.run.id'])), tostring(Properties['agentops.run.id']), strcat('compat_', SessionId)) | extend TraceId=coalesce(OperationId, tostring(Properties['trace_id']), RunId) | extend Operation=tostring(Properties['gen_ai.operation.name']) | extend ToolName=tostring(Properties['gen_ai.tool.name']) | extend ModelActual=case(isnotempty(tostring(Properties['agentops.model.actual'])), tostring(Properties['agentops.model.actual']), isnotempty(tostring(Properties['gen_ai.response.model'])), tostring(Properties['gen_ai.response.model']), tostring(Properties['gen_ai.request.model'])) | extend AgentName=case(isnotempty(tostring(Properties['agentops.agent.name'])), tostring(Properties['agentops.agent.name']), isnotempty(tostring(Properties['agentops.cli.agent'])), tostring(Properties['agentops.cli.agent']), isnotempty(tostring(Properties['gen_ai.agent.name'])), tostring(Properties['gen_ai.agent.name']), coalesce(AppRoleName, 'agent')) | extend SkillName=coalesce(tostring(Properties['agentops.skill.name']), tostring(Properties['github.copilot.skill.name'])) | extend ParentAgentName=tostring(Properties['agentops.parent_agent.name']) | extend SubAgentName=case(isnotempty(tostring(Properties['agentops.sub_agent.name'])), tostring(Properties['agentops.sub_agent.name']), isnotempty(tostring(Properties['agentops.child_agent.name'])), tostring(Properties['agentops.child_agent.name']), isnotempty(ParentAgentName) and isnotempty(AgentName) and AgentName != ParentAgentName, AgentName, '') | extend DelegationId=tostring(Properties['agentops.delegation.id']) | extend BranchDurationMs=todouble(Properties['agentops.subagent.duration_ms']), BranchTokens=todouble(Properties['agentops.subagent.total_tokens']), BranchToolCount=tolong(Properties['agentops.subagent.tool_count']) | extend Surface=case(isnotempty(tostring(Properties['agentops.surface'])), tostring(Properties['agentops.surface']), AppRoleName has 'codex', 'custom', AppRoleName has 'copilot', 'cli', 'cli') | extend RepoHash=tostring(Properties['agentops.repo.hash']) | extend BranchHash=tostring(Properties['agentops.branch.hash']) | extend TaskType=case(isnotempty(tostring(Properties['agentops.task.type'])), tostring(Properties['agentops.task.type']), 'unknown') | extend PrivacyMode=case(isnotempty(tostring(Properties['agentops.privacy.mode'])), tostring(Properties['agentops.privacy.mode']), 'strict') | extend ContentCaptureSignal=tostring(Properties['agentops.content_capture.signal']) =~ 'true' or tostring(Properties) has_any ('gen_ai.input.messages', 'gen_ai.output.messages', 'gen_ai.prompt', 'gen_ai.completion') | extend InputTokens=todouble(Properties['gen_ai.usage.input_tokens']), OutputTokens=todouble(Properties['gen_ai.usage.output_tokens']), ReasoningTokens=todouble(Properties['gen_ai.usage.reasoning.output_tokens']) | extend CacheReadTokens=todouble(Properties['gen_ai.usage.cache_read.input_tokens']), CacheCreationTokens=todouble(Properties['gen_ai.usage.cache_creation.input_tokens']), ContextWindowPct=todouble(Properties['agentops.context.window_pct']), TokensRemoved=todouble(Properties['github.copilot.tokens_removed']), PermissionWaitMs=todouble(Properties['agentops.permission.wait_ms']) | extend EstimatedCostUsd=coalesce(todouble(Properties['agentops.cost.estimated_usd']), todouble(Properties['github.copilot.cost']) * 0.01, 0.0) | extend ErrorType=coalesce(tostring(Properties['error.type']), tostring(ResultCode)) | extend Failed=Success == false or tostring(Success) =~ 'false' or isnotempty(tostring(Properties['error.type'])) | summarize TimeGenerated=max(TimeGenerated), Started=min(TimeGenerated), TraceId=take_any(TraceId), Surface=take_any(Surface), RepoHash=take_any(RepoHash), BranchHash=take_any(BranchHash), TaskType=take_any(TaskType), AgentName=take_any(AgentName), SkillName=take_any(SkillName), ParentAgentName=take_any(ParentAgentName), SubAgentName=take_any(SubAgentName), DelegationId=take_any(DelegationId), ModelActual=take_any(ModelActual), PrivacyMode=take_any(PrivacyMode), ContentCaptureSignal=max(toint(ContentCaptureSignal)), InputTokens=sum(InputTokens), OutputTokens=sum(OutputTokens), ReasoningTokens=sum(ReasoningTokens), CacheReadTokens=sum(CacheReadTokens), CacheCreationTokens=sum(CacheCreationTokens), ContextWindowPct=max(ContextWindowPct), TokensRemoved=sum(TokensRemoved), PermissionWaitMs=sum(PermissionWaitMs), EstimatedCostUsd=sum(EstimatedCostUsd), ToolCount=countif(Operation == 'execute_tool' or isnotempty(ToolName)), ToolFailureCount=countif((Operation == 'execute_tool' or isnotempty(ToolName)) and Failed), Failures=countif(Failed), ToolDeniedCount=countif(tostring(Properties['agentops.mcp.allowed']) =~ 'false'), FilesReadCount=countif(ToolName has 'read'), FilesEditedCount=countif(ToolName has_any ('edit', 'write', 'patch')), TestsRan=countif(ToolName has_any ('test', 'lint', 'typecheck')) > 0 by RunId, SessionId | extend DurationMs=todouble(datetime_diff('millisecond', TimeGenerated, Started)) | extend ModelRequested=ModelActual, ContentCaptureMode=iff(ContentCaptureSignal > 0, 'signal_only', 'off'), OutcomeStatus=iff(Failures > 0, 'failed', 'success'), OutcomeReason=iff(Failures > 0, 'span_failure', 'completed'), TestsPassed=TestsRan and ToolFailureCount == 0, PrOpened=false, PrNumberHash='', CiStatus='not_run', EvalOverall=tolong(iff(Failures > 0, 50, 85)), RiskScore=ToolFailureCount * 20 + ToolDeniedCount * 30 + ContentCaptureSignal * 15 | project TimeGenerated, RunId, SessionId, TraceId, Surface, RepoHash, BranchHash, TaskType, AgentName, SkillName, ParentAgentName, SubAgentName, DelegationId, ModelRequested, ModelActual, PrivacyMode, ContentCaptureMode, ContentCaptureSignal=ContentCaptureSignal > 0, OutcomeStatus, OutcomeReason, DurationMs, InputTokens, OutputTokens, ReasoningTokens, CacheReadTokens, CacheCreationTokens, ContextWindowPct, TokensRemoved, PermissionWaitMs, EstimatedCostUsd, ToolCount, ToolFailureCount, ToolDeniedCount, TestsRan, TestsPassed, FilesReadCount, FilesEditedCount, PrOpened, PrNumberHash, CiStatus, EvalOverall, RiskScore, Delivery='Visible in Azure', Coverage='Native best effort') | extend SkillName=tostring(column_ifexists('SkillName', '')) | extend ParentAgentName=tostring(column_ifexists('ParentAgentName', '')) | extend SubAgentName=case(isnotempty(tostring(column_ifexists('SubAgentName', ''))), tostring(column_ifexists('SubAgentName', '')), isnotempty(ParentAgentName) and isnotempty(tostring(column_ifexists('AgentName', ''))) and tostring(column_ifexists('AgentName', '')) != ParentAgentName, tostring(column_ifexists('AgentName', '')), '') | extend DelegationId=tostring(column_ifexists('DelegationId', '')) | extend BranchDurationMs=todouble(column_ifexists('BranchDurationMs', 0.0)) | extend BranchTokens=todouble(column_ifexists('BranchTokens', 0.0)) | extend BranchToolCount=tolong(column_ifexists('BranchToolCount', 0)) | extend CacheReadTokens=todouble(column_ifexists('CacheReadTokens', 0.0)) | extend CacheCreationTokens=todouble(column_ifexists('CacheCreationTokens', 0.0)) | extend ContextWindowPct=todouble(column_ifexists('ContextWindowPct', 0.0)) | extend TokensRemoved=todouble(column_ifexists('TokensRemoved', 0.0)) | extend PermissionWaitMs=todouble(column_ifexists('PermissionWaitMs', 0.0)) | where ('$run_id' == '__all' or tostring(column_ifexists('RunId', '')) == '$run_id') | where ('$session_id' == '__all' or tostring(column_ifexists('SessionId', '')) == '$session_id') | where ('$trace_id' == '__all' or tostring(column_ifexists('TraceId', '')) == '$trace_id') | where ('$surface' == '__all' or tostring(column_ifexists('Surface', '')) == '$surface') | where ('$repo_hash' == '__all' or tostring(column_ifexists('RepoHash', '')) == '$repo_hash') | where ('$branch_hash' == '__all' or tostring(column_ifexists('BranchHash', '')) == '$branch_hash') | where ('$model' == '__all' or tostring(column_ifexists('ModelActual', '')) == '$model') | where ('$agent_name' == '__all' or tostring(column_ifexists('AgentName', '')) == '$agent_name') | where ('$skill_name' == '__all' or tostring(column_ifexists('SkillName', '')) == '$skill_name') | where ('$sub_agent' == '__all' or tostring(column_ifexists('SubAgentName', '')) == '$sub_agent') | where ('$task_type' == '__all' or tostring(column_ifexists('TaskType', '')) == '$task_type') | where ('$privacy_mode' == '__all' or tostring(column_ifexists('PrivacyMode', '')) == '$privacy_mode') | where ('$outcome_status' == '__all' or tostring(column_ifexists('OutcomeStatus', '')) == '$outcome_status') | extend EvalBucket=case(EvalOverall >= 80, 'good', EvalOverall >= 60, 'review', 'poor') | where ('$eval_bucket' == '__all' or tostring(column_ifexists('EvalBucket', '')) == iff('$eval_bucket' == 'ok', 'good', '$eval_bucket')) | where PrivacyMode == 'unsafe' or RiskScore > 0 or ToolDeniedCount > 0 | project TimeGenerated, RunId, RepoHash, PrivacyMode, ContentCaptureMode, ToolDeniedCount, OutcomeStatus, RiskScore | order by TimeGenerated desc | take 100"
           }
         }
-      ]
+      ],
+      "description": "Runs reporting unsafe mode, risk, or denied tools. An empty table means no matching rows were found; it is not a universal safety guarantee."
     },
     {
       "id": 12,
@@ -1448,7 +1924,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 15
+        "y": 20
       },
       "fieldConfig": {
         "defaults": {
@@ -1490,7 +1966,7 @@
                 "id": "links",
                 "value": [
                   {
-                    "title": "Open Run Replay",
+                    "title": "Open Run Story",
                     "url": "/d/agentops-v2-run-replay?var-session_id=${__data.fields.SessionId}&${__url_time_range}",
                     "targetBlank": false
                   }
@@ -1541,7 +2017,8 @@
             "query": "union isfuzzy=true (AgentOpsAlertHandoffs_CL | where TimeGenerated between ($__timeFrom() .. $__timeTo())), (datatable(TimeGenerated:datetime, HandoffId:string, AlertRule:string, SessionId:string, Severity:string, Owner:string, State:string, Last:string, ConfigChangeCount:long, ChangeTargetRefs:dynamic) [])\n| extend HandoffId=coalesce(tostring(column_ifexists('HandoffId', '')), tostring(column_ifexists('AlertHandoffId', '')), tostring(column_ifexists('Id', '')), strcat(tostring(column_ifexists('AlertRule', '')), '-', tostring(column_ifexists('SessionId', ''))))\n| extend AlertRule=coalesce(tostring(column_ifexists('AlertRule', '')), tostring(column_ifexists('Rule', '')))\n| extend SessionId=coalesce(tostring(column_ifexists('SessionId', '')), tostring(column_ifexists('Session', '')))\n| extend Severity=coalesce(tostring(column_ifexists('Severity', '')), tostring(column_ifexists('AlertSeverity', '')))\n| extend Owner=coalesce(tostring(column_ifexists('Owner', '')), tostring(column_ifexists('AssignedOwner', '')))\n| extend State=coalesce(tostring(column_ifexists('State', '')), tostring(column_ifexists('Status', '')))\n| extend Last=coalesce(tostring(column_ifexists('Last', '')), tostring(column_ifexists('Lookback', '')))\n| extend ConfigChangeCount=tolong(column_ifexists('ConfigChangeCount', long(null)))\n| extend ChangeTargetRefs=column_ifexists('ChangeTargetRefs', dynamic([]))\n| where ('$session_id' == '__all' or SessionId == '$session_id')\n| where ('$outcome_status' == '__all' or State == '$outcome_status')\n| extend AskAgentOpsSharedLaunch=iff(isnotempty(HandoffId), strcat('$actioner_url', '/ask-agentops/shared/alert-handoff/', url_encode(HandoffId), '?session_id=', url_encode(SessionId), '&last=$timeRange'), '')\n| extend AskSharedContext=iff(isnotempty(HandoffId), 'Ask shared', '')\n| extend OpenReplay='Replay'\n| project TimeGenerated, Severity, AlertRule, SessionId, Owner, State, Last, ConfigChangeCount, ChangeTargetRefs, AskSharedContext, AskAgentOpsSharedLaunch, OpenReplay\n| order by TimeGenerated desc\n| take 50"
           }
         }
-      ]
+      ],
+      "description": "Privacy-related alert handoffs with written severity, owner, state, and evidence links."
     }
   ],
   "refresh": "1m",
@@ -1558,6 +2035,7 @@
         "name": "datasource",
         "type": "custom",
         "label": "datasource",
+        "hide": 2,
         "query": "azure-monitor-oob",
         "current": {
           "selected": true,
@@ -1569,6 +2047,7 @@
         "name": "workspace",
         "type": "custom",
         "label": "workspace",
+        "hide": 2,
         "query": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev",
         "current": {
           "selected": true,
@@ -1579,7 +2058,8 @@
       {
         "name": "timeRange",
         "type": "custom",
-        "label": "timeRange",
+        "label": "Lookback",
+        "hide": 0,
         "query": "24h",
         "current": {
           "selected": true,
@@ -1591,6 +2071,7 @@
         "name": "actioner_url",
         "type": "custom",
         "label": "actioner url",
+        "hide": 2,
         "query": "/api",
         "current": {
           "selected": true,
@@ -1601,7 +2082,8 @@
       {
         "name": "run_id",
         "type": "custom",
-        "label": "run id",
+        "label": "Run",
+        "hide": 2,
         "query": "__all",
         "current": {
           "selected": true,
@@ -1612,7 +2094,8 @@
       {
         "name": "session_id",
         "type": "custom",
-        "label": "session id",
+        "label": "Session",
+        "hide": 2,
         "query": "__all",
         "current": {
           "selected": true,
@@ -1623,7 +2106,8 @@
       {
         "name": "trace_id",
         "type": "custom",
-        "label": "trace id",
+        "label": "Trace",
+        "hide": 2,
         "query": "__all",
         "current": {
           "selected": true,
@@ -1635,6 +2119,7 @@
         "name": "surface",
         "type": "custom",
         "label": "surface",
+        "hide": 2,
         "query": "__all,cli,sdk,vscode_mcp,github_action,cloud_agent,custom",
         "current": {
           "selected": true,
@@ -1645,7 +2130,8 @@
       {
         "name": "repo_hash",
         "type": "custom",
-        "label": "repo hash",
+        "label": "Repository",
+        "hide": 2,
         "query": "__all",
         "current": {
           "selected": true,
@@ -1657,6 +2143,7 @@
         "name": "branch_hash",
         "type": "custom",
         "label": "branch hash",
+        "hide": 2,
         "query": "__all",
         "current": {
           "selected": true,
@@ -1668,6 +2155,7 @@
         "name": "model",
         "type": "custom",
         "label": "model",
+        "hide": 2,
         "query": "__all",
         "current": {
           "selected": true,
@@ -1678,7 +2166,8 @@
       {
         "name": "agent_name",
         "type": "custom",
-        "label": "agent name",
+        "label": "Agent",
+        "hide": 2,
         "query": "__all",
         "current": {
           "selected": true,
@@ -1689,7 +2178,8 @@
       {
         "name": "skill_name",
         "type": "custom",
-        "label": "skill name",
+        "label": "Skill",
+        "hide": 2,
         "query": "__all",
         "current": {
           "selected": true,
@@ -1700,7 +2190,8 @@
       {
         "name": "mcp_server",
         "type": "custom",
-        "label": "mcp server",
+        "label": "MCP server",
+        "hide": 2,
         "query": "__all",
         "current": {
           "selected": true,
@@ -1712,6 +2203,7 @@
         "name": "sub_agent",
         "type": "custom",
         "label": "sub agent",
+        "hide": 2,
         "query": "__all",
         "current": {
           "selected": true,
@@ -1722,7 +2214,8 @@
       {
         "name": "task_type",
         "type": "custom",
-        "label": "task type",
+        "label": "Task type",
+        "hide": 2,
         "query": "__all,explain,review,test,fix,refactor,docs,debug_ci,unknown",
         "current": {
           "selected": true,
@@ -1733,7 +2226,8 @@
       {
         "name": "tool_name",
         "type": "custom",
-        "label": "tool name",
+        "label": "Tool",
+        "hide": 2,
         "query": "__all",
         "current": {
           "selected": true,
@@ -1744,7 +2238,8 @@
       {
         "name": "tool_risk",
         "type": "custom",
-        "label": "tool risk",
+        "label": "Tool risk",
+        "hide": 0,
         "query": "__all,read-only,write-file,shell,network,secret-access,browser-control,destructive,privileged",
         "current": {
           "selected": true,
@@ -1755,7 +2250,8 @@
       {
         "name": "pattern_key",
         "type": "custom",
-        "label": "pattern key",
+        "label": "Pattern",
+        "hide": 2,
         "query": "__all",
         "current": {
           "selected": true,
@@ -1766,7 +2262,8 @@
       {
         "name": "privacy_mode",
         "type": "custom",
-        "label": "privacy mode",
+        "label": "Privacy",
+        "hide": 0,
         "query": "__all,strict,compat,unsafe",
         "current": {
           "selected": true,
@@ -1777,7 +2274,8 @@
       {
         "name": "outcome_status",
         "type": "custom",
-        "label": "outcome status",
+        "label": "Outcome",
+        "hide": 0,
         "query": "__all,success,failed,cancelled,blocked,unknown",
         "current": {
           "selected": true,
@@ -1788,7 +2286,8 @@
       {
         "name": "eval_bucket",
         "type": "custom",
-        "label": "eval bucket",
+        "label": "Eval result",
+        "hide": 2,
         "query": "__all,ok,review,poor",
         "current": {
           "selected": true,
@@ -1804,7 +2303,7 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "Safety, Privacy & Policy",
+  "title": "Privacy",
   "uid": "agentops-v2-safety-privacy-policy",
   "version": 1,
   "weekStart": ""

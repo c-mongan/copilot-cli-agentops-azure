@@ -3,6 +3,7 @@
 const childProcess = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
+const { validateAgentOpsEventsBicepMigration } = require('../agentops-cli/src/lib/azure/v2-ingestion-schema-safety');
 
 const repoRoot = path.resolve(__dirname, '..');
 const skipDirs = new Set([
@@ -11,18 +12,48 @@ const skipDirs = new Set([
   '.git',
   'node_modules'
 ]);
+const generatedCliAssetDirs = new Set([
+  '.azure',
+  '.package-assets.lock',
+  'actioner',
+  'benchmark-judges',
+  'benchmark-runners',
+  'collector',
+  'copilot',
+  'docs',
+  'examples',
+  'grafana',
+  'infra',
+  'packages',
+  'plugin',
+  'scripts',
+  'tests'
+]);
 const generatedOrBinaryExts = new Set([
   '.jpg',
   '.jpeg',
   '.png',
   '.svg'
 ]);
+const requiredNonEmptyFiles = [
+  'agentops-cli/src/alerts.js',
+  'agentops-cli/src/primitives.js',
+  'docs/release-distribution.md',
+  'kql/20-copilot-primitives-inventory.kql',
+  'plugin/agents/agentops-orchestrator.agent.md',
+  'plugin/skills/agentops-attribution/SKILL.md',
+  'plugin/skills/agentops-live-triage/SKILL.md',
+  'plugin/skills/agentops-mcp-tool-triage/SKILL.md'
+];
 
-function walk(dir, files = []) {
+function walk(dir, files = [], root = repoRoot) {
+  const relativeDir = path.relative(root, dir).replaceAll('\\', '/');
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     if (skipDirs.has(entry.name)) continue;
+    if (relativeDir === 'agentops-cli' && generatedCliAssetDirs.has(entry.name)) continue;
+    if (relativeDir === 'agentops-cli/src' && entry.name === 'fixtures') continue;
     const fullPath = path.join(dir, entry.name);
-    if (entry.isDirectory()) walk(fullPath, files);
+    if (entry.isDirectory()) walk(fullPath, files, root);
     else files.push(fullPath);
   }
   return files;
@@ -145,6 +176,36 @@ function checkTextFiles(files) {
   return failures;
 }
 
+function checkRequiredNonEmptyFiles(root = repoRoot, required = requiredNonEmptyFiles) {
+  const failures = [];
+  for (const file of required) {
+    const fullPath = path.join(root, file);
+    if (!fs.existsSync(fullPath)) {
+      failures.push({ file, error: 'required file is missing' });
+      continue;
+    }
+    if (!fs.readFileSync(fullPath, 'utf8').trim()) {
+      failures.push({ file, error: 'required file is empty' });
+    }
+  }
+  return failures;
+}
+
+function checkV2IngestionSchema(root = repoRoot) {
+  const file = path.join(root, 'infra', 'bicep', 'v2-ingestion.bicep');
+  try {
+    const result = validateAgentOpsEventsBicepMigration(fs.readFileSync(file, 'utf8'), [
+      { name: 'EstimatedCostUsd', type: 'long' }
+    ]);
+    return result.ok ? [] : [{ file: 'infra/bicep/v2-ingestion.bicep', error: JSON.stringify({
+      violations: result.violations,
+      contract_violations: result.contract_violations
+    }) }];
+  } catch (error) {
+    return [{ file: 'infra/bicep/v2-ingestion.bicep', error: error.message }];
+  }
+}
+
 function main() {
   const files = walk(repoRoot);
   const shell = checkShellSyntax(files);
@@ -153,7 +214,9 @@ function main() {
     json: checkJson(files),
     shell: shell.failures,
     markdown: checkMarkdownLinks(files),
-    text: checkTextFiles(files)
+    text: checkTextFiles(files),
+    required: checkRequiredNonEmptyFiles(),
+    v2_ingestion_schema: checkV2IngestionSchema()
   };
   const failures = Object.values(results).flat();
   const summary = {
@@ -182,4 +245,11 @@ function main() {
   process.exitCode = summary.ok ? 0 : 1;
 }
 
-main();
+if (require.main === module) main();
+
+module.exports = {
+  checkRequiredNonEmptyFiles,
+  checkV2IngestionSchema,
+  requiredNonEmptyFiles,
+  walk
+};

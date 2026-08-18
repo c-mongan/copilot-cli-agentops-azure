@@ -38,8 +38,9 @@ if ($ShadowCopilot) {
   $commands = Get-Command copilot -All -ErrorAction SilentlyContinue
   $realCopilot = $commands |
     Where-Object {
-      $_.Source -and
-      (-not [System.IO.Path]::GetFullPath($_.Source).StartsWith($installDirFull, [System.StringComparison]::OrdinalIgnoreCase))
+      if (-not $_.Source) { return $false }
+      $candidateDir = [System.IO.Path]::GetDirectoryName([System.IO.Path]::GetFullPath($_.Source)).TrimEnd([System.IO.Path]::DirectorySeparatorChar)
+      -not $candidateDir.Equals($installDirFull, [System.StringComparison]::OrdinalIgnoreCase)
     } |
     Select-Object -First 1
 
@@ -48,8 +49,22 @@ if ($ShadowCopilot) {
   }
 
   $shadowCmd = Join-Path $InstallDir "copilot.cmd"
+  $shadowBackup = Join-Path $InstallDir "copilot.cmd.agentops-original"
+  $shadowMarker = "REM AgentOps managed shadow shim"
+
+  if (Test-Path $shadowCmd) {
+    [string]$existingShadow = Get-Content -Raw -Path $shadowCmd
+    if (-not $existingShadow.Contains($shadowMarker)) {
+      if (Test-Path $shadowBackup) {
+        throw "Refusing to overwrite $shadowCmd because the AgentOps backup already exists at $shadowBackup."
+      }
+      Move-Item -LiteralPath $shadowCmd -Destination $shadowBackup
+    }
+  }
+
   @"
 @echo off
+$shadowMarker
 set "COPILOT_CLI_BIN=$($realCopilot.Source)"
 "$powershell" -NoProfile -ExecutionPolicy Bypass -File "$agentopsScript" %*
 "@ | Set-Content -Path $shadowCmd -Encoding ASCII

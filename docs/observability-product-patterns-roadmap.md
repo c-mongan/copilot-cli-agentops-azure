@@ -58,7 +58,7 @@ Implementation surface:
 - `agentops-cli/src/index.js`
 - `agentops-cli/test/index.test.js`
 - `README.md`
-- `docs/testing-and-next-steps.md`
+- `docs/public-release.md`
 
 ### 3. Shareable Deep Links
 
@@ -200,7 +200,7 @@ Implementation surface:
 
 - `agentops-cli/src/index.js`
 - `infra/bicep/alerts.bicep`
-- `docs/testing-and-next-steps.md`
+- `docs/public-release.md`
 
 ### 9. AgentOps Assistant With Explicit Page Context
 
@@ -222,7 +222,7 @@ Implementation surface:
 
 - `plugin/agents/telemetry-investigator.agent.md`
 - `plugin/agents/agent-optimizer.agent.md`
-- `docs/testing-and-next-steps.md`
+- `docs/public-release.md`
 - `scripts/build-grafana-dashboard-pack.js`
 
 ### 10. Funnel Analysis For Agent Workflows

@@ -1,7 +1,8 @@
-const crypto = require('node:crypto');
-const fs = require('node:fs');
 const path = require('node:path');
 
+const { baseScenarios, chooseScenarios, contextProfile } = require('./agentops-demo-scenarios');
+const { writeJsonFile, writeJsonlFile } = require('../command-output');
+const { prefixedHash: stableHash } = require('../hash');
 const { validateAgentRun } = require('../schema/agent-run-schema');
 const { AGENTOPS_SCHEMA_VERSION } = require('../schema/agentops-attributes');
 
@@ -20,294 +21,8 @@ const tableNames = [
   'AgentOpsContent_CL'
 ];
 
-const baseScenarios = [
-  {
-    name: 'successful-test-writing-run',
-    taskType: 'test',
-    model: 'claude-opus-4.7',
-    status: 'success',
-    reason: 'tests_passed',
-    duration: 78000,
-    input: 92000,
-    output: 18000,
-    reasoning: 5200,
-    cost: 0.48,
-    tools: 8,
-    failures: 0,
-    denied: 0,
-    testsRan: true,
-    testsPassed: true,
-    filesRead: 12,
-    filesEdited: 3,
-    risk: 18,
-    eval: 92,
-    github: { opened: false, merged: false, closed: false, reverted: false, ci: 'not_run' }
-  },
-  {
-    name: 'expensive-failed-run',
-    taskType: 'review',
-    model: 'gpt-5.5',
-    status: 'failed',
-    reason: 'tool_timeout',
-    duration: 214000,
-    input: 420000,
-    output: 61000,
-    reasoning: 42000,
-    cost: 4.92,
-    tools: 27,
-    failures: 5,
-    denied: 0,
-    testsRan: true,
-    testsPassed: false,
-    filesRead: 38,
-    filesEdited: 2,
-    risk: 64,
-    eval: 41,
-    github: { opened: false, merged: false, closed: false, reverted: false, ci: 'failed' }
-  },
-  {
-    name: 'policy-denied-secret-read',
-    taskType: 'debug_ci',
-    model: 'copilot-default',
-    status: 'blocked',
-    reason: 'policy_denied_secret_access',
-    duration: 36000,
-    input: 51000,
-    output: 6000,
-    reasoning: 1200,
-    cost: 0.12,
-    tools: 5,
-    failures: 1,
-    denied: 1,
-    testsRan: false,
-    testsPassed: false,
-    filesRead: 4,
-    filesEdited: 0,
-    risk: 91,
-    eval: 37,
-    privacyDrops: 2,
-    privacyKind: 'secret_like',
-    github: { opened: false, merged: false, closed: false, reverted: false, ci: 'not_run' }
-  },
-  {
-    name: 'mcp-tool-failure',
-    taskType: 'fix',
-    model: 'claude-sonnet-4.5',
-    status: 'failed',
-    reason: 'mcp_tool_error',
-    duration: 97000,
-    input: 88000,
-    output: 15000,
-    reasoning: 3200,
-    cost: 0.36,
-    tools: 12,
-    failures: 3,
-    denied: 0,
-    testsRan: false,
-    testsPassed: false,
-    filesRead: 18,
-    filesEdited: 1,
-    risk: 58,
-    eval: 48,
-    mcp: { server: 'playwright', tool: 'browser-control', risk: 'browser-control', status: 'failed' },
-    github: { opened: false, merged: false, closed: false, reverted: false, ci: 'not_run' }
-  },
-  {
-    name: 'edited-files-no-tests',
-    taskType: 'refactor',
-    model: 'copilot-default',
-    status: 'success',
-    reason: 'completed_without_tests',
-    duration: 64000,
-    input: 67000,
-    output: 13000,
-    reasoning: 1600,
-    cost: 0.22,
-    tools: 10,
-    failures: 0,
-    denied: 0,
-    testsRan: false,
-    testsPassed: false,
-    filesRead: 14,
-    filesEdited: 4,
-    risk: 52,
-    eval: 55,
-    github: { opened: false, merged: false, closed: false, reverted: false, ci: 'not_run' }
-  },
-  {
-    name: 'pr-opened-ci-failed',
-    taskType: 'fix',
-    model: 'claude-opus-4.7',
-    status: 'success',
-    reason: 'pr_opened_ci_failed',
-    duration: 143000,
-    input: 180000,
-    output: 32000,
-    reasoning: 11000,
-    cost: 1.28,
-    tools: 22,
-    failures: 1,
-    denied: 0,
-    testsRan: true,
-    testsPassed: false,
-    filesRead: 29,
-    filesEdited: 6,
-    risk: 47,
-    eval: 62,
-    github: { opened: true, merged: false, closed: false, reverted: false, ci: 'failed' }
-  },
-  {
-    name: 'pr-opened-and-merged',
-    taskType: 'fix',
-    model: 'claude-sonnet-4.5',
-    status: 'success',
-    reason: 'merged',
-    duration: 126000,
-    input: 132000,
-    output: 28000,
-    reasoning: 7200,
-    cost: 0.82,
-    tools: 19,
-    failures: 0,
-    denied: 0,
-    testsRan: true,
-    testsPassed: true,
-    filesRead: 24,
-    filesEdited: 5,
-    risk: 22,
-    eval: 95,
-    github: { opened: true, merged: true, closed: false, reverted: false, ci: 'passed' }
-  },
-  {
-    name: 'model-cost-regression',
-    taskType: 'review',
-    model: 'gpt-5.5',
-    status: 'success',
-    reason: 'cost_regression',
-    duration: 158000,
-    input: 310000,
-    output: 49000,
-    reasoning: 36000,
-    cost: 3.74,
-    tools: 15,
-    failures: 0,
-    denied: 0,
-    testsRan: false,
-    testsPassed: false,
-    filesRead: 41,
-    filesEdited: 0,
-    risk: 44,
-    eval: 70,
-    insight: 'cost-anomaly',
-    github: { opened: false, merged: false, closed: false, reverted: false, ci: 'not_run' }
-  },
-  {
-    name: 'instruction-hash-regression',
-    taskType: 'docs',
-    model: 'copilot-default',
-    status: 'success',
-    reason: 'eval_regression_after_instruction_change',
-    duration: 58000,
-    input: 73000,
-    output: 9000,
-    reasoning: 1100,
-    cost: 0.18,
-    tools: 7,
-    failures: 0,
-    denied: 0,
-    testsRan: false,
-    testsPassed: false,
-    filesRead: 10,
-    filesEdited: 2,
-    risk: 39,
-    eval: 49,
-    insight: 'instruction-regression',
-    github: { opened: false, merged: false, closed: false, reverted: false, ci: 'not_run' }
-  },
-  {
-    name: 'privacy-drop-success',
-    taskType: 'explain',
-    model: 'copilot-default',
-    status: 'success',
-    reason: 'content_dropped_before_export',
-    duration: 31000,
-    input: 44000,
-    output: 7000,
-    reasoning: 900,
-    cost: 0.09,
-    tools: 4,
-    failures: 0,
-    denied: 0,
-    testsRan: false,
-    testsPassed: false,
-    filesRead: 7,
-    filesEdited: 0,
-    risk: 28,
-    eval: 82,
-    privacyDrops: 6,
-    privacyKind: 'prompt',
-    github: { opened: false, merged: false, closed: false, reverted: false, ci: 'not_run' }
-  },
-  {
-    name: 'collector-export-issue',
-    taskType: 'unknown',
-    model: 'copilot-default',
-    status: 'failed',
-    reason: 'collector_export_error',
-    duration: 45000,
-    input: 21000,
-    output: 3000,
-    reasoning: 300,
-    cost: 0.05,
-    tools: 2,
-    failures: 1,
-    denied: 0,
-    testsRan: false,
-    testsPassed: false,
-    filesRead: 3,
-    filesEdited: 0,
-    risk: 67,
-    eval: 44,
-    collectorError: true,
-    github: { opened: false, merged: false, closed: false, reverted: false, ci: 'not_run' }
-  }
-];
-
-function stableHash(value, prefix = 'h') {
-  return `${prefix}_${crypto.createHash('sha256').update(String(value)).digest('hex').slice(0, 16)}`;
-}
-
 function isoMinutesAgo(minutes) {
   return new Date(Date.now() - minutes * 60 * 1000).toISOString();
-}
-
-function chooseScenarios(options = {}) {
-  return baseScenarios.filter(scenario => {
-    if (!options.withFailures && scenario.status === 'failed') return false;
-    if (!options.withPrivacyDrops && scenario.privacyDrops) return false;
-    if (!options.withGithubOutcomes && scenario.github.opened) return false;
-    return true;
-  });
-}
-
-function contextProfile(scenario, index) {
-  const profiles = {
-    'expensive-failed-run': { contextPct: 94, cacheRead: 25000, cacheCreation: 16000, tokensRemoved: 36000, permissionWait: 18000 },
-    'model-cost-regression': { contextPct: 89, cacheRead: 12000, cacheCreation: 22000, tokensRemoved: 18000, permissionWait: 3000 },
-    'pr-opened-ci-failed': { contextPct: 81, cacheRead: 21000, cacheCreation: 6400, tokensRemoved: 4000, permissionWait: 7200 },
-    'pr-opened-and-merged': { contextPct: 74, cacheRead: 29000, cacheCreation: 4500, tokensRemoved: 0, permissionWait: 2400 },
-    'policy-denied-secret-read': { contextPct: 38, cacheRead: 2000, cacheCreation: 800, tokensRemoved: 0, permissionWait: 9000 },
-    'mcp-tool-failure': { contextPct: 61, cacheRead: 9000, cacheCreation: 1800, tokensRemoved: 0, permissionWait: 5400 },
-    'instruction-hash-regression': { contextPct: 68, cacheRead: 6000, cacheCreation: 900, tokensRemoved: 3500, permissionWait: 1100 }
-  };
-  const base = profiles[scenario.name] || { contextPct: 42, cacheRead: 3500, cacheCreation: 700, tokensRemoved: 0, permissionWait: 900 };
-  return {
-    ContextWindowPct: Math.min(100, base.contextPct + (index % 4) * 2),
-    CacheReadTokens: base.cacheRead + index * 113,
-    CacheCreationTokens: base.cacheCreation + index * 29,
-    TokensRemoved: base.tokensRemoved,
-    PermissionWaitMs: base.permissionWait
-  };
 }
 
 function runAttributes(row) {
@@ -341,8 +56,14 @@ function runAttributes(row) {
 }
 
 function addEvent(tables, time, run, eventName, fields = {}) {
+  const previous = tables.AgentOpsEvents_CL.filter(event => event.RunId === run.RunId).at(-1);
+  const sequence = (previous?.Sequence || 0) + 1;
+  const eventId = stableHash(`${run.RunId}:${sequence}:${eventName}`, 'event');
   tables.AgentOpsEvents_CL.push({
     TimeGenerated: time,
+    Sequence: sequence,
+    EventId: eventId,
+    ParentEventId: previous?.EventId || '',
     RunId: run.RunId,
     SessionId: run.SessionId,
     TraceId: run.TraceId,
@@ -621,7 +342,7 @@ function generateDemoData(options = {}) {
             : scenario.collectorError
               ? 'Collector export health should be checked before relying on live data.'
               : 'A risky tool request was blocked by policy metadata.',
-        SuggestedNextStep: scenario.collectorError ? 'Run agentops collector smoke --privacy strict --poison --json' : 'Open Run Replay and inspect the linked spans.'
+        SuggestedNextStep: scenario.collectorError ? 'Run agentops collector smoke --privacy strict --poison --json' : 'Open Run Story and inspect the linked spans.'
       });
     }
 
@@ -669,22 +390,21 @@ function generateDemoData(options = {}) {
 }
 
 function writeDemoData(result, outDir) {
-  fs.mkdirSync(outDir, { recursive: true });
   const files = {};
   for (const table of tableNames) {
     const file = path.join(outDir, `${table}.jsonl`);
-    fs.writeFileSync(file, `${result.tables[table].map(row => JSON.stringify(row)).join('\n')}\n`);
+    writeJsonlFile(file, result.tables[table], { trailingNewline: true });
     files[table] = file;
   }
   const manifest = path.join(outDir, 'manifest.json');
-  fs.writeFileSync(manifest, `${JSON.stringify({
+  writeJsonFile(manifest, {
     generated_at: result.generated_at,
     runs: result.runs,
     table_counts: result.table_counts,
     scenarios: result.scenarios,
     scenario_names: result.scenario_names,
     files
-  }, null, 2)}\n`);
+  });
   return { out_dir: outDir, manifest, files };
 }
 

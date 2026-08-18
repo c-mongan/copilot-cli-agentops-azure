@@ -1,7 +1,8 @@
-const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+
+const { prefixedHash: stableHash } = require('../hash');
 
 const builtinTools = new Set(['bash', 'skill', 'report_intent', 'read_file', 'run_in_terminal', 'glob']);
 
@@ -9,10 +10,6 @@ function safeName(value, fallback = '') {
   if (typeof value !== 'string') return fallback;
   const trimmed = value.trim();
   return /^[A-Za-z0-9_.:/@*-]+$/.test(trimmed) ? trimmed : fallback;
-}
-
-function stableHash(value, prefix = 'hash') {
-  return `${prefix}_${crypto.createHash('sha256').update(String(value)).digest('hex').slice(0, 16)}`;
 }
 
 function defaultSessionEventsPath(sessionId, home = os.homedir()) {
@@ -26,6 +23,14 @@ function readCopilotSessionEvents(filePath) {
   return text.split(/\r?\n/)
     .filter(Boolean)
     .map(line => JSON.parse(line));
+}
+
+function readScriptSidecarEvents(filePath, sessionId) {
+  if (!filePath || !fs.existsSync(filePath)) return [];
+  return fs.readFileSync(filePath, 'utf8').split(/\r?\n/)
+    .filter(Boolean)
+    .map(line => JSON.parse(line))
+    .filter(entry => entry?.type === 'agentops.script.executed' && safeName(entry?.data?.sessionId) === sessionId);
 }
 
 function toolRisk(toolName = '', mcpServer = '') {
@@ -85,6 +90,63 @@ function enrichCopilotSessionEvents(events = [], options = {}) {
   events.forEach((entry, index) => {
     const type = entry.type || '';
     const data = entry.data || {};
+
+    if (type === 'agentops.script.executed') {
+      const scriptName = safeName(data.scriptName || '');
+      const hookType = safeName(data.hookType || 'hook');
+      if (!scriptName) return;
+      rows.push({
+        ...eventBase(entry, activeAgent, sessionId, index),
+        event: 'script.executed',
+        workflow: 'copilot-cli-session',
+        step: hookType,
+        outcome: safeName(data.outcome || 'observed'),
+        attributes: {
+          ...eventBase(entry, activeAgent, sessionId, index).attributes,
+          'agentops.script.name': scriptName,
+          'github.copilot.hook.type': hookType,
+          'gen_ai.operation.name': 'script.executed'
+        }
+      });
+      return;
+    }
+
+    if (['subagent.started', 'subagent.completed', 'subagent.failed'].includes(type)) {
+      const subAgent = safeName(data.agentName || data.agentDisplayName || data.agentId || '', 'copilot-subagent');
+      const parentAgent = activeAgent || 'github-copilot-cli';
+      const correlationSeed = safeName(data.toolCallId || entry.id || `${sessionId}-${index}`);
+      const delegationId = stableHash(correlationSeed, 'delegation');
+      const outcome = type === 'subagent.started' ? 'started' : type === 'subagent.completed' ? 'completed' : 'failed';
+      rows.push({
+        ...eventBase(entry, subAgent, sessionId, index),
+        event: type,
+        agent: subAgent,
+        parentAgent,
+        delegationId,
+        workflow: 'copilot-cli-fleet',
+        step: 'delegate',
+        outcome,
+        custom: {
+          ...eventBase(entry, subAgent, sessionId, index).custom,
+          'agentops.custom.duration_ms': Number(data.durationMs || 0),
+          'agentops.custom.total_tokens': Number(data.totalTokens || 0),
+          'agentops.custom.tool_count': Number(data.totalToolCalls || 0)
+        },
+        attributes: {
+          ...eventBase(entry, subAgent, sessionId, index).attributes,
+          'agentops.parent_agent.name': parentAgent,
+          'agentops.sub_agent.name': subAgent,
+          'agentops.delegation.id': delegationId,
+          'agentops.subagent.duration_ms': Number(data.durationMs || 0),
+          'agentops.subagent.total_tokens': Number(data.totalTokens || 0),
+          'agentops.subagent.tool_count': Number(data.totalToolCalls || 0),
+          'gen_ai.agent.name': subAgent,
+          ...(safeName(data.model || '') ? { 'gen_ai.request.model': safeName(data.model) } : {}),
+          ...(type === 'subagent.failed' ? { 'error.type': 'subagent_failed' } : {})
+        }
+      });
+      return;
+    }
 
     if (type === 'subagent.selected') {
       const agentName = safeName(data.agentName || data.agentDisplayName || '', activeAgent || 'copilot-agent');
@@ -224,6 +286,7 @@ module.exports = {
   enrichCopilotSessionEvents,
   inferMcpServer,
   inferMcpTool,
+  readScriptSidecarEvents,
   readCopilotSessionEvents,
   safeName,
   toolRisk

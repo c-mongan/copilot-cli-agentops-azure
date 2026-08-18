@@ -2,6 +2,39 @@
 
 Small local utility for the Copilot CLI AgentOps for Azure scaffold.
 
+AgentOps records run metadata, tool names, failures, latency, token usage,
+estimated cost, privacy signals, and outcomes without recording prompts, code,
+file contents, tool arguments, or tool results by default. Prompt/response rows
+remain opt-in and isolated in `AgentOpsContent_CL`; check the current policy with
+`agentops content status`.
+
+The shortest native first-value loop is:
+
+```bash
+agentops setup --json
+eval "$(agentops init --local-only --yes --shell zsh)"
+agentops smoke --local
+copilot -p "Reply with exactly: agentops smoke."
+agentops open latest
+```
+
+The local init command applies only AgentOps-owned files and native Copilot OTel
+environment exports. The local smoke starts or health-checks the strict
+loopback Collector and reads back a metadata-only receipt. For native everyday
+sessions, plain `copilot ...` is the execution command; `agentops copilot ...`
+remains a compatibility path, and transparent routing is still opt-in with
+`--shadow-copilot`.
+
+For a beginner-friendly end-to-end walkthrough, use the
+[junior quickstart](https://github.com/c-mongan/copilot-cli-agentops-azure/blob/main/docs/junior-quickstart.md). The Azure-native
+helper discovers the approved DCR and signal endpoints from Application
+Insights, so operators do not have to transcribe long URLs.
+
+For an already-approved legacy cloud binding, `agentops init --full` remains a
+preview and `agentops init --full --yes` applies the reviewed stages. The
+compatibility command `agentops copilot ...` and `agentops open latest` remain
+available during the native migration.
+
 ## Commands
 
 ```bash
@@ -19,12 +52,13 @@ node src/index.js otel-setup --shell powershell
 node src/index.js compat-check --last 2h
 node src/index.js init --dry-run
 node src/index.js init --full
+node src/index.js init --full --yes
 node src/index.js init --import-dashboards
 node src/index.js init --run-smoke
 node src/index.js init --triage-latest
 node src/index.js scan
 node src/index.js primitives --last 7d
-node src/index.js import-jsonl ../tests/sample-otel/tool-failure.jsonl
+node src/index.js import-jsonl ../fixtures/sample-otel/tool-failure.ndjson.fixture
 node src/index.js validate-collector
 node src/index.js validate-azure
 node src/index.js smoke --dry-run
@@ -62,7 +96,28 @@ node src/index.js saved-view add latest-risk --session <conversation>
 
 `start` and `stop` are short aliases for `collector start` and `collector stop`.
 
-`copilot` starts the collector if needed and runs the real Copilot CLI through the AgentOps shim.
+`copilot` starts the collector if needed and runs the real Copilot CLI through
+the AgentOps shim. After the run it prints an immediate metadata-only receipt
+using the changed local Copilot event stream: actual Copilot session ID, model,
+input/output tokens, AI credits, wall/API time, safe tool names/count, and code
+change counts when present. Prompts, answers, tool arguments/results, paths and
+file names are never copied into the receipt. Ordered wrapper lifecycle receipts
+are fsynced into a bounded private queue. The receipt labels that evidence
+`waiting for Azure` until the configured ingestion endpoint accepts the exact
+event; native Copilot detail is labelled separately as best-effort collector
+coverage.
+
+Inspect the queue at any time:
+
+```bash
+agentops delivery status
+agentops delivery drain                 # preview only
+agentops delivery drain --yes           # requires configured endpoint + DCR
+```
+
+`delivery drain` fails closed unless the exact approved subscription, Azure
+Monitor ingestion hostname, and DCR identifier pass validation. Endpoint `2xx`
+means accepted for ingestion, not yet visible in Log Analytics.
 
 `codex` starts the collector if needed, sets privacy-safe OTLP environment defaults, and runs the local Codex CLI. Add Azure Monitor MCP with `codex mcp add azure-mcp -- npx -y @azure/mcp@latest server start --read-only --namespace monitor`.
 
@@ -71,17 +126,19 @@ Dashboard verification path:
 ```bash
 node src/index.js validate-azure --last 2h
 copilot plugin install c-mongan/copilot-cli-agentops-azure:plugin
-node src/index.js copilot --agent agentops-orchestrator --allow-tool=bash --add-dir . --no-ask-user --no-remote -p "Do not edit files. Use read-only shell commands: pwd and ls docs | head."
+node src/index.js copilot --agent agentops-orchestrator --allow-tool=bash --add-dir . --no-ask-user --no-remote --no-remote-export -p "Do not edit files. Use read-only shell commands: pwd and ls docs | head."
 node src/index.js custom emit --event agent.delegation.started --agent investigator --parent-agent agentops-orchestrator --delegation-id real-delegation --workflow investigation --step delegate --outcome started
 node src/index.js custom emit --event agent.policy.blocked --agent policy-reviewer --workflow safety-review --step pre-tool --outcome blocked --risk policy --attribute github.copilot.policy.decision=blocked
 node src/index.js open
 ```
 
-Open **Overview** first, then **Sessions**, **Traces / Spans**, and **Tools & MCP**. Empty Safety/Policy or Runtime Events panels are normal until matching policy, hook, skill, truncation, or content-capture signals exist. Use a real observed Copilot run when you want to seed those quieter pages.
+`agentops open` prints the configured Azure Monitor Agents view first when one is available. Use the native view for the normal investigation flow; the Run Story link is the local/metadata fallback and the V2 Grafana pages are an optional advanced operator pack. Use a real observed Copilot run when you want to seed quieter pages.
 
 `configure` stores non-secret Azure/Grafana identifiers in `~/.agentops/config.json` so users do not need to export terminal environment variables for every shell. Environment variables still override saved config for CI and advanced workflows.
 
 `otel-setup` prints copyable VS Code Copilot Chat settings, Copilot CLI terminal environment variables, and a Copilot SDK TypeScript snippet that point native Copilot OTel at the AgentOps collector. This is the no-wrapper path: users can emit OTLP directly without installing `copilot-agentops`.
+
+The optional native Azure preview uses `agentops collector validate --mode azure-native --privacy strict` and `agentops collector start --mode azure-native --privacy strict`. It merges the strict local privacy config with the Azure `otlp_http`/Entra `azure_auth` overlay; provide only the signal-specific endpoints copied from Application Insights OTLP Connection Info, then set `AGENTOPS_APPROVE_NATIVE_OTLP=yes`. See `docs/azure-native-otlp-preview.md` for the read-only readiness gate.
 
 `compat-check` prints a Log Analytics query that checks whether recent Copilot/GenAI OTel has the fields dashboards and evals need: operation, session, model, tool, token usage, and cost or AIU signals.
 

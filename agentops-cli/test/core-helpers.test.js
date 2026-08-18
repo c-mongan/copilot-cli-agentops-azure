@@ -10,6 +10,7 @@ const {
   inferMcpServer,
   inferMcpTool,
   readCopilotSessionEvents,
+  readScriptSidecarEvents,
   safeName,
   toolRisk
 } = require('../src/lib/copilot/session-enricher');
@@ -35,6 +36,7 @@ const {
   validateProcessorFragment
 } = require('../src/lib/collector-artifacts');
 const shell = require('../src/lib/shell');
+const { writeJsonlFixture } = require('./support/json-fixtures');
 
 function withTempDir(fn) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-core-helpers-'));
@@ -43,10 +45,6 @@ function withTempDir(fn) {
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
-}
-
-function writeJsonl(filePath, rows) {
-  fs.writeFileSync(filePath, rows.map(row => JSON.stringify(row)).join('\n') + '\n');
 }
 
 test('copilot session paths reject unsafe session ids and preserve safe ids', () => {
@@ -65,7 +63,7 @@ test('copilot session paths reject unsafe session ids and preserve safe ids', ()
 test('copilot session reader parses jsonl and surfaces invalid file/json paths', () => {
   withTempDir((dir) => {
     const file = path.join(dir, 'events.jsonl');
-    writeJsonl(file, [{ type: 'skill.invoked', data: { name: 'review' } }]);
+    writeJsonlFixture(file, [{ type: 'skill.invoked', data: { name: 'review' } }]);
     assert.deepEqual(readCopilotSessionEvents(file), [
       { type: 'skill.invoked', data: { name: 'review' } }
     ]);
@@ -73,6 +71,40 @@ test('copilot session reader parses jsonl and surfaces invalid file/json paths',
     assert.throws(() => readCopilotSessionEvents(path.join(dir, 'missing.jsonl')), /ENOENT/);
     fs.writeFileSync(file, '{"type":');
     assert.throws(() => readCopilotSessionEvents(file), /JSON/);
+  });
+});
+
+test('script sidecar reader keeps only safe exact-session execution metadata', () => {
+  withTempDir((dir) => {
+    const file = path.join(dir, 'sidecar-events.jsonl');
+    writeJsonlFixture(file, [
+      {
+        timestamp: '2026-08-03T17:30:00.000Z',
+        type: 'agentops.script.executed',
+        data: {
+          sessionId: 'session-one',
+          scriptName: 'pre-tool-policy',
+          hookType: 'preToolUse',
+          outcome: 'allowed',
+          contentCapture: false
+        }
+      },
+      { type: 'agentops.script.executed', data: { sessionId: 'session-two', scriptName: 'other' } },
+      { type: 'unrelated', data: { sessionId: 'session-one' } }
+    ]);
+
+    const events = readScriptSidecarEvents(file, 'session-one');
+    assert.equal(events.length, 1);
+    assert.equal(events[0].data.scriptName, 'pre-tool-policy');
+    assert.deepEqual(readScriptSidecarEvents(path.join(dir, 'missing.jsonl'), 'session-one'), []);
+
+    const rows = enrichCopilotSessionEvents(events, { sessionId: 'session-one' });
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].event, 'script.executed');
+    assert.equal(rows[0].attributes['agentops.script.name'], 'pre-tool-policy');
+    assert.equal(rows[0].attributes['github.copilot.hook.type'], 'preToolUse');
+    assert.equal(rows[0].attributes['content.capture.enabled'], false);
+    assert.doesNotMatch(JSON.stringify(rows), /prompt|toolArgs|command/);
   });
 });
 
@@ -114,6 +146,34 @@ test('copilot session enrichment emits MCP metadata, skill requests, and failed 
   assert.equal(rows[4].outcome, 'failed');
   assert.equal(rows[4].attributes['error.type'], 'tool_failed');
   assert.equal(rows[5].event, 'hook.started');
+});
+
+test('copilot session enrichment preserves ordered fleet subagent lifecycle metadata', () => {
+  const rows = enrichCopilotSessionEvents([
+    { id: 'start-1', type: 'subagent.started', data: { agentName: 'explore', model: 'claude-haiku-4.5', toolCallId: 'call-one' } },
+    { id: 'start-2', type: 'subagent.started', data: { agentName: 'explore', model: 'claude-haiku-4.5', toolCallId: 'call-two' } },
+    { id: 'done-1', type: 'subagent.completed', data: { agentName: 'explore', model: 'claude-haiku-4.5', toolCallId: 'call-one', durationMs: 4000, totalTokens: 1234, totalToolCalls: 1 } },
+    { id: 'done-2', type: 'subagent.completed', data: { agentName: 'explore', model: 'claude-haiku-4.5', toolCallId: 'call-two', durationMs: 7000, totalTokens: 2345, totalToolCalls: 1 } }
+  ], { sessionId: 'fleet-session' });
+
+  assert.deepEqual(rows.map(row => row.event), [
+    'subagent.started',
+    'subagent.started',
+    'subagent.completed',
+    'subagent.completed'
+  ]);
+  assert.equal(rows[0].parentAgent, 'github-copilot-cli');
+  assert.equal(rows[0].attributes['agentops.sub_agent.name'], 'explore');
+  assert.equal(rows[0].attributes['gen_ai.request.model'], 'claude-haiku-4.5');
+  assert.equal(rows[0].delegationId, rows[2].delegationId);
+  assert.equal(rows[1].delegationId, rows[3].delegationId);
+  assert.notEqual(rows[0].delegationId, rows[1].delegationId);
+  assert.equal(rows[2].custom['agentops.custom.duration_ms'], 4000);
+  assert.equal(rows[2].custom['agentops.custom.total_tokens'], 1234);
+  assert.equal(rows[2].attributes['agentops.subagent.duration_ms'], 4000);
+  assert.equal(rows[2].attributes['agentops.subagent.total_tokens'], 1234);
+  assert.equal(rows[2].attributes['agentops.subagent.tool_count'], 1);
+  assert.doesNotMatch(JSON.stringify(rows), /call-one|call-two/);
 });
 
 test('tool risk classifies edge cases without content capture', () => {
@@ -179,9 +239,9 @@ test('explain helpers pick latest runs and handle missing or invalid file inputs
     const runsFile = path.join(dir, 'runs.jsonl');
     const evalsFile = path.join(dir, 'evals.jsonl');
     const insightsFile = path.join(dir, 'insights.jsonl');
-    writeJsonl(runsFile, [older, newer]);
-    writeJsonl(evalsFile, [{ RunId: 'new', EvalOverall: 55, EvalBucket: 'weak', EvalReason: 'low score' }]);
-    writeJsonl(insightsFile, [{ RunId: 'new', Severity: 'high', InsightType: 'failure', Summary: 'High risk', SuggestedNextStep: 'Fix it' }]);
+    writeJsonlFixture(runsFile, [older, newer]);
+    writeJsonlFixture(evalsFile, [{ RunId: 'new', EvalOverall: 55, EvalBucket: 'weak', EvalReason: 'low score' }]);
+    writeJsonlFixture(insightsFile, [{ RunId: 'new', Severity: 'high', InsightType: 'failure', Summary: 'High risk', SuggestedNextStep: 'Fix it' }]);
 
     const latest = explainFromFiles({ runsFile, evalsFile, insightsFile, runId: 'latest' });
     assert.equal(latest.run.RunId, 'new');
@@ -205,7 +265,7 @@ test('privacy helpers redact secret-like env values and drop unsafe content attr
     AZURE_CLIENT_SECRET: 'secret-value',
     GITHUB_TOKEN: 'token-value',
     OPENAI_API_KEY: 'key-value',
-    HOME: '/Users/example'
+    HOME: '/home/example'
   });
 
   assert.deepEqual(summary, {
@@ -255,6 +315,31 @@ test('collector artifact helpers validate processor fragments and poison fixture
     assert.equal(result.content_signal, true);
     assert.deepEqual(result.leaked, []);
   });
+});
+
+test('collector compatibility configs hash Copilot identity and repository metadata', () => {
+  const repoRoot = path.resolve(__dirname, '../..');
+  const configNames = [
+    'otelcol.local.compat.yaml',
+    'otelcol.azuremonitor.compat.yaml',
+    'otelcol.local.yaml',
+    'otelcol.azuremonitor.yaml',
+    'otelcol.binary.compat.yaml'
+  ];
+  const sensitiveMetadata = [
+    'enduser.pseudo.id',
+    'github.copilot.git.repository',
+    'github.copilot.github.org',
+    'github.copilot.git.branch',
+    'github.copilot.git.commit_sha'
+  ];
+
+  for (const configName of configNames) {
+    const body = fs.readFileSync(path.join(repoRoot, 'collector', configName), 'utf8').replace(/\r\n/g, '\n');
+    for (const key of sensitiveMetadata) {
+      assert.ok(body.includes(`- key: ${key}\n        action: hash`));
+    }
+  }
 });
 
 test('shell helpers find candidates, check executability, and merge env for local commands', () => {

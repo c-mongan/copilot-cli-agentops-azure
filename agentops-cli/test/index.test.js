@@ -7,6 +7,7 @@ const path = require('node:path');
 const test = require('node:test');
 
 process.env.AGENTOPS_CONFIG_PATH = path.join(os.tmpdir(), `agentops-test-config-${process.pid}.json`);
+const TEST_APPROVED_SUBSCRIPTION_ID = '11111111-1111-4111-8111-111111111111';
 const collectorManager = require('../src/lib/collector-manager');
 const copilotResolver = require('../src/lib/copilot-resolver');
 const { createRunMetadata } = require('../src/lib/copilot/run-metadata');
@@ -63,10 +64,12 @@ const { securityAudit, securityPosture } = require('../src/lib/security-audit');
 const { checkCliPublish } = require('../../scripts/check-cli-publish');
 const { checkHomebrewFormula, releaseUrl, renderFormula } = require('../../scripts/check-homebrew-formula');
 const { checkInstallSmoke } = require('../../scripts/check-install-smoke');
+const { checkPackagedLifecycle } = require('../../scripts/check-packaged-lifecycle');
 const { checkReleaseDistribution } = require('../../scripts/check-release-distribution');
 const { checkSdkPublish, isWildcardRange } = require('../../scripts/check-sdk-publish');
 const { shouldCopy } = require('../../scripts/prepare-cli-package-assets');
 const { askAgentOps, buildActionerReview, buildAskAgentOpsLaunch, buildAskAgentOpsResponse, buildGuardedRecommendationApply, buildRecommendationReview, buildSharedStoreEditor, buildSharedStoreWrite, sharedStoreEditor, sharedStoreWrite } = require('../../actioner');
+const { writeJsonlFixture } = require('./support/json-fixtures');
 
 const {
   agentopsAttributionSmoke,
@@ -220,6 +223,20 @@ test('CLI help exposes small core surface and hides experimental commands', () =
   assert.match(result.stdout, /agentops experimental <old-command>/);
   assert.doesNotMatch(result.stdout, /benchmark list/);
   assert.doesNotMatch(result.stdout, /saved-view add/);
+  assert.match(result.stdout, /Next:\n  agentops init --full/);
+  assert.match(result.stdout, /agentops help <command>/);
+});
+
+test('CLI offers focused per-command help with a path back to the full reference', () => {
+  const result = spawnSync(process.execPath, [path.join(root, 'agentops-cli', 'src', 'index.js'), 'help', 'delivery'], {
+    cwd: root,
+    encoding: 'utf8'
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /^agentops delivery status\|drain/);
+  assert.match(result.stdout, /agentops --help/);
+  assert.doesNotMatch(result.stdout, /dashboard validate/);
 });
 
 test('init is a core command without experimental migration warning', () => {
@@ -378,6 +395,7 @@ test('security audit combines static, privacy, OWASP, and CI gates', () => {
   assert.equal(byName['dashboard-content-guardrails'].ok, true);
   assert.equal(byName['content-capture-operational-guardrails'].ok, true);
   assert.equal(byName['dashboard-evidence-disclaimer'].ok, true);
+  assert.equal(byName['collector-persistent-queue-security'].ok, true);
 });
 
 test('security posture maps OWASP LLM and ASVS controls to repo evidence', () => {
@@ -404,6 +422,8 @@ test('CLI publish check validates package metadata', () => {
   assert.equal(result.package.bin, 'src/index.js');
   assert.ok(result.checks.expected_files.includes('src/index.js'));
   assert.ok(result.checks.expected_files.includes('src/commands/collector.js'));
+  assert.ok(result.checks.expected_files.includes('docs/images/agentops-architecture-dataflow.png'));
+  assert.ok(result.checks.expected_files.includes('kql/00-discover-tables.kql'));
   assert.ok(result.checks.forbidden_files.includes('test/index.test.js'));
 });
 
@@ -428,13 +448,30 @@ test('SDK publish check validates package metadata', () => {
 test('release distribution check builds artifacts with checksums', () => {
   const result = checkReleaseDistribution({ skipDocs: false });
 
-  assert.equal(result.ok, true, JSON.stringify(result, null, 2));
+  if (result.source.git_available) {
+    assert.equal(result.ok, true, JSON.stringify(result, null, 2));
+  } else {
+    assert.equal(result.ok, false, JSON.stringify(result, null, 2));
+    assert.ok(result.failures.some(failure => failure.includes('Git identity is unavailable')));
+  }
   assert.equal(result.artifacts.length, 2);
+  assert.equal(result.sboms.length, 2);
+  assert.equal(result.publish_authorized, false);
+  assert.equal(typeof result.source.worktree_dirty, 'boolean');
+  assert.equal(result.manifest.publish_authorized, false);
+  assert.equal(result.manifest.artifacts.length, 2);
+  assert.equal(result.manifest.sboms.length, 2);
   assert.ok(result.artifacts.some(artifact => artifact.filename.startsWith('copilot-agentops-cli-')));
   assert.ok(result.artifacts.some(artifact => artifact.filename.startsWith('agentops-copilot-sdk-')));
   for (const artifact of result.artifacts) {
     assert.equal(artifact.sha256.length, 64);
     assert.ok(artifact.size > 0);
+  }
+  for (const sbom of result.sboms) {
+    assert.equal(sbom.format, 'CycloneDX');
+    assert.equal(sbom.spec_version, '1.5');
+    assert.equal(sbom.sha256.length, 64);
+    assert.ok(sbom.size > 0);
   }
 });
 
@@ -470,6 +507,8 @@ test('CLI package asset copier excludes heavyweight and local-only files', () =>
   assert.equal(shouldCopy(path.join(root, 'docs', 'images', 'agentops-banner.png')), false);
   assert.equal(shouldCopy(path.join(root, 'scripts', 'install-copilot-agentops-shim.sh')), true);
   assert.equal(shouldCopy(path.join(root, 'scripts', 'check-install-smoke.js')), false);
+  assert.equal(shouldCopy(path.join(root, 'packages', 'agentops-copilot-sdk', 'node_modules', 'copilot', 'index.js')), false);
+  assert.equal(shouldCopy(path.join(root, 'packages', 'agentops-copilot-sdk', 'agentops-copilot-sdk-0.1.0.tgz')), false);
 });
 
 test('packed CLI install smoke runs installed command from clean prefix', () => {
@@ -479,8 +518,30 @@ test('packed CLI install smoke runs installed command from clean prefix', () => 
   assert.ok(result.artifact.filename.startsWith('copilot-agentops-cli-'));
   assert.equal(result.artifact.sha256.length, 64);
   assert.ok(result.commands.some(command => command.name === 'agentops doctor --local-only --json' && command.ok));
+  assert.ok(result.commands.some(command => command.name === 'agentops product audit --json' && command.ok));
   assert.ok(result.commands.some(command => command.name === 'agentops dashboard verify' && command.ok));
   assert.ok(result.commands.some(command => command.name === 'agentops collector validate --mode none --json' && command.ok));
+});
+
+test('packed CLI POSIX lifecycle preserves privacy and restores Copilot byte-for-byte', {
+  skip: process.platform === 'win32' ? 'POSIX lifecycle is separate from the Windows PowerShell lane' : false
+}, () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-packaged-lifecycle-test-'));
+  try {
+    const result = checkPackagedLifecycle({ tempDir });
+    assert.equal(result.ok, true, JSON.stringify(result, null, 2));
+    assert.equal(result.privacy.mode, 'strict');
+    assert.equal(result.privacy.content_capture, false);
+    assert.equal(result.privacy.poison_persisted, false);
+    assert.equal(result.restoration.restored_sha256, result.restoration.original_sha256);
+    assert.equal(result.versions.downgrade, result.versions.baseline);
+    assert.notEqual(result.versions.upgrade, result.versions.baseline);
+    assert.ok(result.steps.some(step => step.name === 'normal copilot strict metadata-only receipt' && step.ok));
+    assert.ok(result.steps.some(step => step.name === 'restored Copilot runs without AgentOps interception' && step.ok));
+    assert.ok(result.unproven_lanes.includes('Windows PowerShell live lifecycle'));
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
 });
 
 test('strict collector allowlist preserves V2 hierarchy metadata', () => {
@@ -602,12 +663,14 @@ test('demo verify runs the local V2 control-room proof', () => {
       output += String(chunk);
       return true;
     };
-    demoVerifyCommand(['--runs', '12', '--out', path.join(tempDir, 'demo'), '--insights-out', path.join(tempDir, 'insights'), '--json']);
+    demoVerifyCommand(['--runs', '12', '--out', path.join(tempDir, 'demo'), '--insights-out', path.join(tempDir, 'insights'), '--write', '--json']);
   } finally {
     process.stdout.write = originalWrite;
   }
   const result = JSON.parse(output);
   assert.equal(result.ok, true);
+  assert.equal(result.artifact_mode, 'persistent');
+  assert.equal(result.write_intent, true);
   assert.equal(result.demo.runs, 12);
   assert.equal(result.insights.table_counts.AgentOpsEval_CL, 12);
   assert.equal(result.dashboard.ok, true);
@@ -681,6 +744,7 @@ test('azure-ingest logs-upload plans reviewed Logs Ingestion API calls', () => {
 test('azure-ingest logs-upload executes az rest only after a ready plan', () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-logs-upload-run-'));
   const calls = [];
+  const uploadedBodies = [];
   try {
     const demo = generateDemoData({ runs: 1 });
     writeDemoData(demo, tempDir);
@@ -691,8 +755,14 @@ test('azure-ingest logs-upload executes az rest only after a ready plan', () => 
     });
 
     const result = runLogsIngestionUpload(plan, {
+      expectedSubscriptionId: '11111111-1111-4111-8111-111111111111',
+      approvedSubscriptionIds: ['11111111-1111-4111-8111-111111111111'],
       spawnSync: (command, args) => {
         calls.push({ command, args });
+        if (args[0] === 'account') {
+          return { status: 0, stdout: '11111111-1111-4111-8111-111111111111\n', stderr: '' };
+        }
+        uploadedBodies.push(JSON.parse(fs.readFileSync(args.at(-1).slice(1), 'utf8')));
         return { status: 0, stdout: '', stderr: '' };
       }
     });
@@ -700,11 +770,14 @@ test('azure-ingest logs-upload executes az rest only after a ready plan', () => 
     assert.equal(result.ok, true);
     assert.equal(result.executed, true);
     assert.equal(calls[0].command, 'az');
-    assert.deepEqual(calls[0].args.slice(0, 4), ['rest', '--method', 'post', '--uri']);
-    assert.equal(calls[0].args[calls[0].args.indexOf('--resource') + 1], 'https://monitor.azure.com/');
-    assert.ok(calls[0].args.includes('Content-Type=application/json'));
-    assert.ok(calls[0].args.some(arg => /^@.*AgentOpsRunSummary_CL\.json$/.test(arg)));
-    assert.equal(JSON.parse(fs.readFileSync(calls[0].args.at(-1).slice(1), 'utf8')).length, 1);
+    assert.deepEqual(calls[0].args, ['account', 'show', '--query', 'id', '-o', 'tsv']);
+    assert.deepEqual(calls[1].args.slice(0, 4), ['rest', '--method', 'post', '--uri']);
+    assert.equal(calls[1].args[calls[1].args.indexOf('--resource') + 1], 'https://monitor.azure.com/');
+    assert.ok(calls[1].args.includes('Content-Type=application/json'));
+    assert.ok(calls[1].args.some(arg => /^@.*AgentOpsRunSummary_CL\.json$/.test(arg)));
+    assert.equal(uploadedBodies[0].length, 1);
+    assert.equal(fs.existsSync(calls[1].args.at(-1).slice(1)), false);
+    assert.equal(result.temporary_payloads_cleaned, true);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
@@ -724,7 +797,7 @@ test('azure-ingest plan warns on missing or mismatched schema versions', () => {
       .map(line => JSON.parse(line));
     delete rows[0].SchemaVersion;
     rows[1].SchemaVersion = '1';
-    fs.writeFileSync(runFile, `${rows.map(row => JSON.stringify(row)).join('\n')}\n`);
+    writeJsonlFixture(runFile, rows);
 
     const result = buildAzureIngestPlan({ dir: tempDir });
     assert.equal(result.ok, true, result.errors.join('\n'));
@@ -757,7 +830,7 @@ test('azure-ingest plan blocks unsupported newer schema versions', () => {
       .split('\n')
       .map(line => JSON.parse(line));
     rows[0].SchemaVersion = '3';
-    fs.writeFileSync(runFile, `${rows.map(row => JSON.stringify(row)).join('\n')}\n`);
+    writeJsonlFixture(runFile, rows);
 
     const result = buildAzureIngestPlan({ dir: tempDir });
     assert.equal(result.ok, false);
@@ -857,7 +930,7 @@ test('shared storage upload plan covers metadata-only saved views recommendation
       Action: 'reduce_context',
       Severity: 'medium',
       ObservedPattern: 'context pressure',
-      NextAction: 'Open Run Replay'
+      NextAction: 'Open Run Story'
     })}\n`);
     fs.writeFileSync(path.join(tempDir, 'AgentOpsSavedViews_CL.jsonl'), `${JSON.stringify({
       TimeGenerated: '2026-06-03T12:01:00.000Z',
@@ -994,9 +1067,13 @@ test('span rollup converts raw OTel JSONL rows into V2 AgentOps tables', () => {
   assert.equal(result.tables.AgentOpsGithubOutcomes_CL[0].FilesChangedCount, 4);
   assert.equal(result.tables.AgentOpsPrivacy_CL[0].Action, 'dropped');
   assert.equal(result.tables.AgentOpsEvents_CL[0].InputTokens, 100);
+  assert.deepEqual(result.tables.AgentOpsEvents_CL.map(event => event.Sequence), [1, 2, 3, 4]);
+  assert.ok(result.tables.AgentOpsEvents_CL.every(event => /^event_/.test(event.EventId)));
+  assert.ok(result.tables.AgentOpsEvents_CL.every(event => event.ParentEventId === ''));
   assert.equal(result.tables.AgentOpsRunSummary_CL[0].CacheReadTokens, 25);
   assert.equal(result.tables.AgentOpsRunSummary_CL[0].ContextWindowPct, 92);
   assert.equal(result.tables.AgentOpsRunSummary_CL[0].TokensRemoved, 11);
+  assert.ok(Object.values(result.tables).flat().every(row => row.SchemaVersion === '2'));
   assert.doesNotMatch(JSON.stringify(result.tables), /must be dropped|gen_ai\.input\.messages/);
 });
 
@@ -1544,7 +1621,7 @@ test('V2 recommend persists local recommendation store and exports table rows', 
       observed_pattern: 'A tool failure repeated for this run.',
       next_action: 'Open Tools & MCP Risk and validate the tool policy.',
       evidence: {
-        dashboards: [{ title: 'Run Replay', url: 'https://graf.example/d/agentops-v2-run-replay?var-run_id=run-store' }],
+        dashboards: [{ title: 'Run Story', url: 'https://graf.example/d/agentops-v2-run-replay?var-run_id=run-store' }],
         eval: null,
         pattern: null,
         benchmark: null,
@@ -2003,7 +2080,7 @@ test('V2 open builds run-scoped control-room links from run table rows', () => {
     assert.match(result.links.runs, /var-repo_hash=repo_hash/);
     assert.match(result.links.models, /var-model=gpt-5\.5/);
     assert.match(result.links.insights, /agentops-v2-insights-regressions/);
-    assert.match(renderOpenV2(result), /Run Replay:/);
+    assert.match(renderOpenV2(result), /Run Story:/);
     assert.match(renderOpenV2(result), /Prompt\/response viewer \(explicit opt-in\):/);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
@@ -2037,7 +2114,7 @@ test('V2 ask-context builds a metadata-only investigation bundle', () => {
       Severity: 'medium',
       ObservedPattern: 'validation missing after config change',
       NextAction: 'Run the benchmark gate before keeping the change.',
-      DashboardTitles: ['Run Replay'],
+      DashboardTitles: ['Run Story'],
       DashboardCount: 1,
       Validation: ['agentops benchmark run starter --variant candidate --repeat 1'],
       RollbackCondition: 'Revert the config change if validation regresses.',
@@ -2433,7 +2510,7 @@ test('workflows map README goals to invocable skills and commands', () => {
   assert.ok(byName['science-mode'].commands.includes('node agentops-cli/src/index.js benchmark judge-provider'));
   assert.equal(byName['judge-provider'].skill, 'agentops-benchmark-gate');
   assert.ok(byName['judge-provider'].commands.includes('node agentops-cli/src/index.js benchmark judge-provider --json'));
-  assert.ok(byName['offline-test'].commands.includes('node agentops-cli/src/index.js live --file tests/sample-otel/tool-failure.jsonl'));
+  assert.ok(byName['offline-test'].commands.includes('node agentops-cli/src/index.js live --file fixtures/sample-otel/tool-failure.ndjson.fixture'));
   assert.ok(byName['analyst-mode'].commands.includes('node agentops-cli/src/index.js alert recommend --last 14d'));
   assert.ok(byName.operations.commands.includes('node agentops-cli/src/index.js plugin uninstall'));
   assert.ok(byName.operations.commands.includes('node agentops-cli/src/index.js uninstall'));
@@ -2493,7 +2570,8 @@ test('configure stores non-secret Azure and Grafana settings once', () => {
         resourceGroup: 'rg-agentops-dev',
         workspaceId: 'workspace-123',
         grafanaBaseUrl: 'https://grafana.example',
-        grafanaName: 'graf-agentops-dev'
+        grafanaName: 'graf-agentops-dev',
+        agentsViewUrl: 'https://portal.azure.com/#agents'
       }
     });
     const output = renderConfigure(result);
@@ -2501,6 +2579,7 @@ test('configure stores non-secret Azure and Grafana settings once', () => {
 
     assert.equal(result.values.resourceGroup, 'rg-agentops-dev');
     assert.equal(stored.values.workspaceId, 'workspace-123');
+    assert.equal(stored.values.agentsViewUrl, 'https://portal.azure.com/#agents');
     assert.match(output, /agentops validate-azure/);
     assert.match(fs.readFileSync(configPath, 'utf8'), /graf-agentops-dev/);
   } finally {
@@ -2523,7 +2602,10 @@ test('configure import-azd maps azd env values into AgentOps config', () => {
           'AGENTOPS_LOG_ANALYTICS_WORKSPACE_ID="workspace-123"',
           'AGENTOPS_GRAFANA_BASE_URL="https://grafana.example"',
           'GRAFANA_NAME="graf-agentops-dev"',
-          'APPLICATIONINSIGHTS_NAME="appi-agentops-dev"'
+          'APPLICATIONINSIGHTS_NAME="appi-agentops-dev"',
+          'AGENTOPS_AZURE_AGENTS_URL="https://portal.azure.com/#agents"',
+          'AGENTOPS_LOGS_INGESTION_ENDPOINT="https://ingest.example"',
+          'AGENTOPS_DCR_IMMUTABLE_ID="dcr-safe"'
         ].join('\n'),
         stderr: ''
       })
@@ -2532,21 +2614,27 @@ test('configure import-azd maps azd env values into AgentOps config', () => {
     assert.equal(result.ok, true);
     assert.equal(result.values.subscriptionId, 'sub-123');
     assert.equal(result.values.grafanaBaseUrl, 'https://grafana.example');
+    assert.equal(result.values.agentsViewUrl, 'https://portal.azure.com/#agents');
     assert.equal(result.values.appInsightsName, 'appi-agentops-dev');
+    assert.equal(result.values.logsIngestionEndpoint, 'https://ingest.example');
+    assert.equal(result.values.dcrImmutableId, 'dcr-safe');
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
 });
 
 test('configure parsers normalize env assignment values and CLI flags', () => {
-  const envValues = parseEnvAssignments('AZURE_RESOURCE_GROUP="rg-a"\nGRAFANA_ENDPOINT=https://grafana.example\nAPPLICATIONINSIGHTS_NAME=appi-a\n');
+  const envValues = parseEnvAssignments('AZURE_RESOURCE_GROUP="rg-a"\nGRAFANA_ENDPOINT=https://grafana.example\nAPPLICATIONINSIGHTS_NAME=appi-a\nAGENTOPS_AZURE_AGENTS_URL=https://portal.azure.com/#agents\nAGENTOPS_LOGS_INGESTION_ENDPOINT=https://ingest.example\nAGENTOPS_DCR_IMMUTABLE_ID=dcr-safe\n');
   const configValues = configFromEnvValues(envValues);
-  const parsed = parseConfigureArgs(['set', '--resource-group', 'rg-b', '--workspace-id', 'workspace-b']);
+  const parsed = parseConfigureArgs(['set', '--resource-group', 'rg-b', '--workspace-id', 'workspace-b', '--agents-url', 'https://portal.azure.com/#agents']);
 
   assert.equal(configValues.resourceGroup, 'rg-a');
   assert.equal(configValues.grafanaBaseUrl, 'https://grafana.example');
   assert.equal(configValues.appInsightsName, 'appi-a');
-  assert.deepEqual(parsed.values, { resourceGroup: 'rg-b', workspaceId: 'workspace-b' });
+  assert.equal(configValues.agentsViewUrl, 'https://portal.azure.com/#agents');
+  assert.equal(configValues.logsIngestionEndpoint, 'https://ingest.example');
+  assert.equal(configValues.dcrImmutableId, 'dcr-safe');
+  assert.deepEqual(parsed.values, { resourceGroup: 'rg-b', workspaceId: 'workspace-b', agentsViewUrl: 'https://portal.azure.com/#agents' });
   assert.deepEqual(compactConfig({ resourceGroup: 'rg-c', workspaceId: '' }), { resourceGroup: 'rg-c' });
 });
 
@@ -2556,7 +2644,8 @@ test('setup guide recommends the shortest non-mutating setup path', () => {
     const result = agentopsSetupGuide({
       installDir: tempDir,
       config: {},
-      env: {},
+      env: { AGENTOPS_AZURE_SUBSCRIPTION_ID: TEST_APPROVED_SUBSCRIPTION_ID, AGENTOPS_APPROVED_AZURE_SUBSCRIPTION_IDS: TEST_APPROVED_SUBSCRIPTION_ID },
+      azureAccount: { id: TEST_APPROVED_SUBSCRIPTION_ID, name: 'Visual Studio Enterprise Subscription' },
       commandAvailability: { az: true, azd: true, docker: true, copilot: true },
       commandPaths: {
         az: '/usr/local/bin/az',
@@ -2579,6 +2668,9 @@ test('setup guide recommends the shortest non-mutating setup path', () => {
     assert.equal(result.azd.ok, true);
     assert.equal(result.first_run.read_only, true);
     assert.equal(result.first_run.guided_command, 'agentops init --full');
+    assert.equal(result.cloud.expected_subscription_id, TEST_APPROVED_SUBSCRIPTION_ID);
+    assert.equal(result.cloud.active_subscription_id, TEST_APPROVED_SUBSCRIPTION_ID);
+    assert.equal(result.cloud.subscription_match, true);
     assert.equal(result.first_run.bind_command, 'agentops configure import-azd');
     assert.match(result.first_run.privacy_smoke_command, /collector smoke --privacy strict --poison/);
     assert.match(result.first_run.smoke_command, /smoke --real-copilot/);
@@ -2589,13 +2681,18 @@ test('setup guide recommends the shortest non-mutating setup path', () => {
     assert.match(output, /This command is read-only/);
     assert.match(output, /One-minute first run/);
     assert.match(output, /Guided path: agentops init --full/);
+    assert.match(output, /Visual Studio Enterprise Subscription/);
+    assert.match(output, /match=yes/);
     assert.match(output, /Privacy smoke fallback: agentops collector smoke --privacy strict --poison --json/);
     assert.match(output, /Real smoke fallback: agentops smoke --real-copilot --wait 2m --poll 10s --open-browser/);
-    assert.match(output, /the smoke opens Run Replay/);
+    assert.match(output, /zero-write preview/);
+    assert.match(output, /agentops init --full --yes/);
+    assert.match(output, /the smoke opens Run Story/);
     assert.match(output, /agentops dashboard import --yes --resource-group rg-agentops-dev --grafana-name graf-agentops-dev/);
     assert.match(output, /Fastest path/);
     assert.ok(result.next.includes('agentops init --full'));
     assert.match(output, /agentops collector smoke --privacy strict --poison/);
+    assert.match(output, /more fallback commands are available in: agentops setup --json/);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
@@ -2610,6 +2707,9 @@ test('enterprise validation confirms local guardrails', () => {
   const output = renderValidateEnterprise(result);
 
   assert.equal(result.ok, true);
+  assert.equal(result.score_kind, 'local-blueprint');
+  assert.equal(result.live_environment_checked, false);
+  assert.equal(result.enterprise_pilot_ready, false);
   assert.ok(result.score >= 88);
   assert.ok(result.checks.some(check => check.name === 'daily-ingestion-cap' && check.ok));
   assert.ok(result.checks.some(check => check.name === 'least-privilege-rbac-module' && check.ok));
@@ -2623,7 +2723,10 @@ test('enterprise validation confirms local guardrails', () => {
   assert.ok(result.checks.some(check => check.name === 'grafana-managed-identity' && check.ok));
   assert.ok(result.checks.some(check => check.name === 'grafana-network-posture-params' && check.ok));
   assert.ok(result.checks.some(check => check.name === 'alert-action-groups-parameter' && check.ok));
-  assert.match(output, /Enterprise guardrails passed/);
+  assert.match(output, /Local enterprise guardrails passed/);
+  assert.match(output, /Enterprise pilot ready: not proven/);
+  assert.match(output, /does not prove the deployed Azure environment/);
+  assert.ok(result.next.some(item => item.includes('validate-azure --profile internal')));
 });
 
 test('enterprise validation blocks content capture env overrides', () => {
@@ -2710,22 +2813,23 @@ test('init workflow installs skills in dry-run mode and returns first-run next s
     assert.equal(result.dashboard_import.requested, false);
     assert.equal(result.real_smoke.requested, false);
     assert.equal(result.triage_latest.requested, false);
-    assert.equal(result.summary.status, 'needs_action');
-    assert.equal(result.summary.next_action, './install-agentops.sh');
+    assert.equal(result.summary.status, 'preview');
+    assert.equal(result.summary.next_action, 'agentops install');
+    assert.equal(result.summary.next_action, 'agentops install');
     assert.ok(result.next.includes('agentops init --provision-cloud'));
-    assert.ok(result.next.includes('node agentops-cli/src/index.js validate-azure --import-dashboards --last 24h'));
-    assert.ok(result.next.includes('node agentops-cli/src/index.js smoke --real-copilot --wait 2m --poll 10s'));
-    assert.ok(result.next.includes('node agentops-cli/src/index.js open latest --last 2h'));
-    assert.ok(result.next.includes('node agentops-cli/src/index.js triage latest --out .agentops/triage/latest --json'));
-    assert.ok(result.next.includes('node agentops-cli/src/index.js plugin uninstall'));
+    assert.ok(result.next.includes('agentops validate-azure --import-dashboards --last 24h'));
+    assert.ok(result.next.includes('agentops smoke --real-copilot --wait 2m --poll 10s'));
+    assert.ok(result.next.includes('agentops open latest --last 2h'));
+    assert.ok(result.next.includes('agentops triage latest --out .agentops/triage/latest --json'));
+    assert.ok(result.next.includes('agentops plugin uninstall'));
     assert.ok(result.next.every(command => !command.includes('experimental')));
     assert.match(output, /AgentOps init/);
     assert.match(output, /Agents:/);
     assert.match(output, /Skills:/);
-    assert.match(output, /Cloud config: workspace=missing, grafana=missing/);
+    assert.match(output, /Cloud config: workspace=missing, Azure Monitor Agents view=missing, Grafana advanced=missing/);
     assert.match(output, /azd environment:/);
-    assert.match(output, /Summary: needs_action\. Run next: \.\/install-agentops\.sh/);
-    assert.match(output, /First value: run the real smoke/);
+    assert.match(output, /Summary: preview\. No cloud or workflow writes were made/);
+    assert.match(output, /Everyday observed use: agentops copilot/);
     assert.match(output, /agentops plugin uninstall/);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
@@ -2758,17 +2862,18 @@ test('init --full dry run requests every first-run stage from the CLI parser', (
     assert.equal(parsed.dashboard_import.requested, true);
     assert.equal(parsed.real_smoke.requested, true);
     assert.equal(parsed.triage_latest.requested, true);
-    assert.equal(parsed.summary.status, 'needs_action');
+    assert.equal(parsed.summary.status, 'preview');
     assert.equal(parsed.summary.stages.length, 4);
-    assert.ok(parsed.summary.stages.every(stage => stage.status === 'ready'));
+    assert.ok(parsed.summary.stages.every(stage => stage.status === 'planned'));
+    assert.equal(parsed.summary.next_action, 'agentops init --full --yes');
     assert.equal(parsed.cloud_provision.dry_run, true);
     assert.equal(parsed.dashboard_import.dry_run, true);
     assert.equal(parsed.real_smoke.dry_run, true);
     assert.equal(parsed.triage_latest.dry_run, true);
     assert.equal(parsed.next.includes('agentops init --provision-cloud'), false);
-    assert.equal(parsed.next.includes('node agentops-cli/src/index.js validate-azure --import-dashboards --last 24h'), false);
-    assert.equal(parsed.next.includes('node agentops-cli/src/index.js smoke --real-copilot --wait 2m --poll 10s'), false);
-    assert.equal(parsed.next.includes('node agentops-cli/src/index.js triage latest --out .agentops/triage/latest --json'), false);
+    assert.equal(parsed.next.includes('agentops validate-azure --import-dashboards --last 24h'), false);
+    assert.equal(parsed.next.includes('agentops smoke --real-copilot --wait 2m --poll 10s'), false);
+    assert.equal(parsed.next.includes('agentops triage latest --out .agentops/triage/latest --json'), false);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
@@ -2792,7 +2897,7 @@ test('init triage-latest dry run plans explicit latest triage stage', () => {
     assert.equal(result.triage_latest.dry_run, true);
     assert.equal(result.triage_latest.ok, true);
     assert.deepEqual(result.summary.stages.map(stage => stage.name), ['triage_latest']);
-    assert.equal(result.next.includes('node agentops-cli/src/index.js triage latest --out .agentops/triage/latest --json'), false);
+    assert.equal(result.next.includes('agentops triage latest --out .agentops/triage/latest --json'), false);
     assert.match(output, /Latest triage: ready/);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
@@ -2823,7 +2928,7 @@ test('init triage-latest invokes the latest triage command when explicit', () =>
     assert.ok(triageCall[1].includes('latest'));
     assert.ok(triageCall[1].includes('--out'));
     assert.ok(triageCall[1].includes('.agentops/triage/latest'));
-    assert.equal(result.next.includes('node agentops-cli/src/index.js triage latest --out .agentops/triage/latest --json'), false);
+    assert.equal(result.next.includes('agentops triage latest --out .agentops/triage/latest --json'), false);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
@@ -2845,7 +2950,7 @@ test('init triage-latest reports failed triage next steps', () => {
 
     assert.equal(result.triage_latest.ok, false);
     assert.ok(result.next.includes('agentops triage latest --out .agentops/triage/latest --json'));
-    assert.ok(result.next.includes('node agentops-cli/src/index.js latest --last 2h'));
+    assert.ok(result.next.includes('agentops latest --last 2h'));
     assert.match(output, /Latest triage: needs review/);
     assert.match(output, /Latest triage next:/);
   } finally {
@@ -2870,7 +2975,7 @@ test('init run-smoke dry run plans explicit real smoke stage', () => {
     assert.equal(result.real_smoke.requested, true);
     assert.equal(result.real_smoke.dry_run, true);
     assert.equal(result.real_smoke.ok, true);
-    assert.equal(result.next.includes('node agentops-cli/src/index.js smoke --real-copilot --wait 2m --poll 10s'), false);
+    assert.equal(result.next.includes('agentops smoke --real-copilot --wait 2m --poll 10s'), false);
     assert.match(output, /Real smoke: ready/);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
@@ -2900,8 +3005,8 @@ test('init run-smoke invokes the real smoke command when explicit', () => {
     assert.ok(smokeCall);
     assert.ok(smokeCall[1].includes('--real-copilot'));
     assert.ok(smokeCall[1].includes('--open-browser'));
-    assert.equal(result.next.includes('node agentops-cli/src/index.js smoke --real-copilot --wait 2m --poll 10s'), false);
-    assert.ok(result.next.includes('node agentops-cli/src/index.js open latest --last 2h'));
+    assert.equal(result.next.includes('agentops smoke --real-copilot --wait 2m --poll 10s'), false);
+    assert.ok(result.next.includes('agentops open latest --last 2h'));
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
@@ -2923,7 +3028,7 @@ test('init run-smoke reports failed smoke next steps', () => {
 
     assert.equal(result.real_smoke.ok, false);
     assert.ok(result.next.includes('agentops smoke --real-copilot --wait 2m --poll 10s --open-browser --json'));
-    assert.ok(result.next.includes('node agentops-cli/src/index.js latest --last 2h'));
+    assert.ok(result.next.includes('agentops latest --last 2h'));
     assert.match(output, /Real smoke: needs review/);
     assert.match(output, /Real smoke next:/);
   } finally {
@@ -2948,7 +3053,7 @@ test('init import-dashboards dry run plans explicit dashboard remediation', () =
     assert.equal(result.dashboard_import.requested, true);
     assert.equal(result.dashboard_import.dry_run, true);
     assert.equal(result.dashboard_import.ok, true);
-    assert.equal(result.next.includes('node agentops-cli/src/index.js validate-azure --import-dashboards --last 24h'), false);
+    assert.equal(result.next.includes('agentops validate-azure --import-dashboards --last 24h'), false);
     assert.match(output, /Dashboard import: ready/);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
@@ -2977,8 +3082,8 @@ test('init import-dashboards runs validate-azure remediation when explicit', () 
     assert.equal(calls.length, 1);
     assert.equal(calls[0].importDashboards, true);
     assert.equal(calls[0].last, '24h');
-    assert.equal(result.next.includes('node agentops-cli/src/index.js validate-azure --import-dashboards --last 24h'), false);
-    assert.ok(result.next.includes('node agentops-cli/src/index.js collector smoke --privacy strict --poison --json'));
+    assert.equal(result.next.includes('agentops validate-azure --import-dashboards --last 24h'), false);
+    assert.ok(result.next.includes('agentops collector smoke --privacy strict --poison --json'));
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
@@ -3047,7 +3152,7 @@ test('init provision-cloud can run azd provision then import outputs explicitly'
     const result = agentopsInit({
       provisionCloud: true,
       noSkills: true,
-      env: {},
+      env: { AGENTOPS_AZURE_SUBSCRIPTION_ID: TEST_APPROVED_SUBSCRIPTION_ID, AGENTOPS_APPROVED_AZURE_SUBSCRIPTION_IDS: TEST_APPROVED_SUBSCRIPTION_ID },
       workspaceId: '',
       grafanaBaseUrl: '',
       configPath,
@@ -3056,6 +3161,7 @@ test('init provision-cloud can run azd provision then import outputs explicitly'
       commandPaths: { azd: '/usr/local/bin/azd' },
       spawnSync: (command, args) => {
         calls.push([command, args]);
+        if (command === 'az') return { status: 0, stdout: `${TEST_APPROVED_SUBSCRIPTION_ID}\n`, stderr: '' };
         if (args[0] === 'provision') return { status: 0, stdout: 'provisioned\n', stderr: '' };
         if (args[0] === 'env' && args[1] === 'get-values') {
           return {
@@ -3084,19 +3190,120 @@ test('init provision-cloud can run azd provision then import outputs explicitly'
   }
 });
 
+test('init mutating workflows preview until the user explicitly confirms with yes', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-init-confirmation-'));
+  try {
+    const result = spawnSync(process.execPath, [
+      path.join(__dirname, '..', 'src', 'index.js'),
+      'init',
+      '--full',
+      '--no-skills',
+      '--json'
+    ], {
+      cwd: path.join(__dirname, '..', '..'),
+      env: { ...process.env, AGENTOPS_CONFIG_PATH: path.join(tempDir, 'config.json') },
+      encoding: 'utf8'
+    });
+    assert.equal(result.status, 0, result.stderr);
+    const preview = JSON.parse(result.stdout);
+
+    assert.equal(preview.mode, 'preview-awaiting-confirmation');
+    assert.equal(preview.confirmation_required, true);
+    assert.equal(preview.confirmation_command, 'agentops init --full --yes');
+    assert.equal(preview.summary.status, 'preview');
+    assert.match(preview.summary.detail, /No cloud or workflow writes were made/);
+    assert.ok(preview.summary.stages.every(stage => stage.status === 'planned'));
+    assert.equal(preview.cloud_provision.dry_run, true);
+    assert.equal(preview.dashboard_import.dry_run, true);
+    assert.equal(preview.real_smoke.dry_run, true);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('init full reuses an existing cloud binding unless reprovision is explicit', () => {
+  const common = {
+    provisionCloud: true,
+    dryRun: true,
+    noSkills: true,
+    workspaceId: 'workspace-123',
+    grafanaBaseUrl: 'https://grafana.example',
+    commandAvailability: { azd: true },
+    azdValues: ''
+  };
+  const reused = agentopsInit({ ...common, forceProvisionCloud: false });
+  const explicit = agentopsInit({ ...common, forceProvisionCloud: true });
+
+  assert.equal(reused.cloud_provision.requested, false);
+  assert.equal(reused.cloud_provision.skipped_reason, 'cloud_already_configured');
+  assert.equal(explicit.cloud_provision.requested, true);
+  assert.equal(explicit.cloud_provision.command, 'azd provision');
+});
+
+test('init blocks a configured but missing Azure target and offers explicit recovery', () => {
+  const result = agentopsInit({
+    full: true,
+    confirmationRequired: true,
+    noSkills: true,
+    workspaceId: 'workspace-123',
+    grafanaBaseUrl: 'https://grafana.example',
+    resourceGroup: 'rg-missing',
+    subscriptionId: TEST_APPROVED_SUBSCRIPTION_ID,
+    resourceGroupExists: false,
+    azureAccount: {
+      id: TEST_APPROVED_SUBSCRIPTION_ID,
+      name: 'Approved subscription'
+    },
+    commandAvailability: { az: true, azd: false },
+    azdValues: ''
+  });
+
+  assert.equal(result.cloud.binding_status, 'configured-but-target-missing-or-unverified');
+  assert.equal(result.summary.status, 'blocked');
+  assert.equal(result.summary.next_action, 'agentops init --dry-run --provision-cloud');
+  assert.ok(result.summary.detail.includes('AgentOps will not redirect'));
+  assert.ok(result.summary.stages.every(stage => stage.status === 'blocked'));
+  assert.ok(result.next.includes('agentops init --dry-run --provision-cloud'));
+  assert.ok(result.next.includes('agentops init --provision-cloud --yes'));
+});
+
+test('init provision-cloud refuses azd writes when the active subscription differs', () => {
+  const calls = [];
+  const result = agentopsInit({
+    provisionCloud: true,
+    noSkills: true,
+    env: { AGENTOPS_AZURE_SUBSCRIPTION_ID: TEST_APPROVED_SUBSCRIPTION_ID, AGENTOPS_APPROVED_AZURE_SUBSCRIPTION_IDS: TEST_APPROVED_SUBSCRIPTION_ID },
+    workspaceId: '',
+    grafanaBaseUrl: '',
+    commandAvailability: { azd: true },
+    spawnSync: (command, args) => {
+      calls.push([command, args]);
+      if (command === 'az') return { status: 0, stdout: 'payg-test-sub\n', stderr: '' };
+      return { status: 0, stdout: 'must not run', stderr: '' };
+    }
+  });
+
+  assert.equal(result.cloud_provision.ok, false);
+  assert.equal(result.cloud_provision.failing_stage, 'subscription guard');
+  assert.match(result.cloud_provision.subscription_guard.error, /refused the write/);
+  assert.equal(calls.some(([command, args]) => command === 'azd' && args[0] === 'provision'), false);
+});
+
 test('init provision-cloud reports azd provision failure with remediation', () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-init-provision-fail-'));
   try {
     const result = agentopsInit({
       provisionCloud: true,
       noSkills: true,
-      env: {},
+      env: { AGENTOPS_AZURE_SUBSCRIPTION_ID: TEST_APPROVED_SUBSCRIPTION_ID, AGENTOPS_APPROVED_AZURE_SUBSCRIPTION_IDS: TEST_APPROVED_SUBSCRIPTION_ID },
       workspaceId: '',
       grafanaBaseUrl: '',
       installDir: path.join(tempDir, 'bin'),
       commandAvailability: { azd: true },
       commandPaths: { azd: '/usr/local/bin/azd' },
-      spawnSync: () => ({ status: 1, stdout: '', stderr: 'not logged in' })
+      spawnSync: command => command === 'az'
+        ? { status: 0, stdout: `${TEST_APPROVED_SUBSCRIPTION_ID}\n`, stderr: '' }
+        : { status: 1, stdout: '', stderr: 'not logged in' }
     });
     const output = renderInit(result);
 
@@ -3118,7 +3325,7 @@ test('init provision-cloud reports azd import failure with manual binding remedi
     const result = agentopsInit({
       provisionCloud: true,
       noSkills: true,
-      env: {},
+      env: { AGENTOPS_AZURE_SUBSCRIPTION_ID: TEST_APPROVED_SUBSCRIPTION_ID, AGENTOPS_APPROVED_AZURE_SUBSCRIPTION_IDS: TEST_APPROVED_SUBSCRIPTION_ID },
       workspaceId: '',
       grafanaBaseUrl: '',
       configPath: path.join(tempDir, 'config.json'),
@@ -3126,6 +3333,7 @@ test('init provision-cloud reports azd import failure with manual binding remedi
       commandAvailability: { azd: true },
       commandPaths: { azd: '/usr/local/bin/azd' },
       spawnSync: (command, args) => {
+        if (command === 'az') return { status: 0, stdout: `${TEST_APPROVED_SUBSCRIPTION_ID}\n`, stderr: '' };
         if (args[0] === 'provision') return { status: 0, stdout: 'provisioned\n', stderr: '' };
         if (args[0] === 'env' && args[1] === 'get-values') return { status: 1, stdout: '', stderr: 'no env selected' };
         return { status: 1, stdout: '', stderr: 'unexpected command' };
@@ -3246,7 +3454,7 @@ test('smoke live mode verifies synthetic telemetry in Azure', async () => {
   assert.match(output, /Azure verification: found 1 row/);
 });
 
-test('smoke real-copilot mode runs safe prompt and prints Run Replay link', async () => {
+test('smoke real-copilot mode runs safe prompt and prints Run Story link', async () => {
   let copilotCall = null;
   let openedUrl = null;
   let latestCalls = 0;
@@ -3301,8 +3509,8 @@ test('smoke real-copilot mode runs safe prompt and prints Run Replay link', asyn
   assert.equal(openedUrl, result.links.v2_replay_url);
   assert.match(output, /Real Copilot smoke: completed/);
   assert.match(output, /Latest Copilot run: visible after 2 attempts/);
-  assert.match(output, /V2 Run Replay:/);
-  assert.match(output, /Browser open: opened Run Replay/);
+  assert.match(output, /Run Story:/);
+  assert.match(output, /Browser open: opened Run Story/);
 });
 
 test('smoke live mode fails closed when Azure ingestion is not observed', async () => {
@@ -3595,9 +3803,11 @@ test('validateAzure runs read-only Azure checks with mocked az output', () => {
   const calls = [];
   const expectedDashboards = [
     { uid: 'copilot-agentops', title: 'Overview' },
-    { uid: 'agentops-sessions', title: 'Sessions' }
+    { uid: 'agentops-sessions', title: 'Sessions' },
+    { uid: 'agentops-v2-run-replay', title: 'Run Story' }
   ];
   const result = validateAzure({
+    verifyDashboardContent: true,
     workspaceId: 'workspace-123',
     resourceGroup: 'rg-agentops-dev',
     grafanaBaseUrl: 'https://grafana.example',
@@ -3623,6 +3833,13 @@ test('validateAzure runs read-only Azure checks with mocked az output', () => {
           workspaceCapping: { dailyQuotaGb: 2 },
           features: { enableLogAccessUsingOnlyResourcePermissions: true }
         }), stderr: '' };
+      }
+      if (args[0] === 'grafana' && args[1] === 'dashboard' && args[2] === 'show') {
+        return { status: 0, stdout: JSON.stringify({ dashboard: {
+          uid: 'agentops-v2-run-replay',
+          title: 'Run Story',
+          panels: [{ title: 'Run Story timeline' }]
+        } }), stderr: '' };
       }
       if (args[0] === 'grafana' && args[1] === 'show') {
         return { status: 0, stdout: JSON.stringify({
@@ -3677,6 +3894,8 @@ test('validateAzure runs read-only Azure checks with mocked az output', () => {
   assert.equal(byName['azure-account'].ok, true);
   assert.equal(byName['resource-group'].ok, true);
   assert.equal(byName['log-analytics-query'].rows, 3);
+  assert.equal(byName['durable-receipt-live-schema'].ok, true);
+  assert.equal(byName['durable-receipt-live-schema'].skipped, true);
   assert.equal(byName['log-analytics-posture'].ok, true);
   assert.equal(byName['application-insights'].ok, true);
   assert.equal(byName['grafana-resource'].ok, true);
@@ -3686,6 +3905,9 @@ test('validateAzure runs read-only Azure checks with mocked az output', () => {
   assert.equal(byName['access-rbac-posture'].ok, true);
   assert.equal(byName['grafana-datasource'].ok, true);
   assert.equal(byName['grafana-dashboards'].ok, true);
+  assert.equal(byName['grafana-dashboard-content'].ok, true);
+  assert.equal(byName['grafana-dashboard-content'].checked, 1);
+  assert.equal(byName['grafana-dashboard-content'].stale_run_replay_mentions, 0);
   assert.equal(byName['alert-routing-posture'].ok, true);
   assert.ok(calls.some(([, args]) => args.includes('log-analytics') && args.includes('query')));
   assert.ok(result.next.includes('node agentops-cli/src/index.js smoke --real-copilot --wait 2m --poll 10s --open-browser'));
@@ -4193,6 +4415,115 @@ test('validateAzure production mode flags missing budget private access and acti
   assert.match(result.next.join('\n'), /action group destinations/);
 });
 
+test('validateAzure team profile fails uncapped ingestion and missing budget', () => {
+  const result = validateAzure({
+    readinessProfile: 'team',
+    workspaceId: 'workspace-123',
+    workspaceName: 'law-agentops-dev',
+    resourceGroup: 'rg-agentops-dev',
+    expectedDashboards: [],
+    spawnSync: (command, args) => {
+      if (args.includes('account') && args.includes('show')) return { status: 0, stdout: JSON.stringify({ id: 'sub-123' }), stderr: '' };
+      if (args.includes('group') && args.includes('exists')) return { status: 0, stdout: 'true\n', stderr: '' };
+      if (args.includes('consumption') && args.includes('budget')) return { status: 0, stdout: '[]', stderr: '' };
+      if (args.includes('log-analytics') && args.includes('query')) return { status: 0, stdout: JSON.stringify([{ Rows: 1 }]), stderr: '' };
+      if (args.includes('workspace') && args.includes('show')) return { status: 0, stdout: JSON.stringify({
+        retentionInDays: 30,
+        workspaceCapping: { dailyQuotaGb: -1 },
+        features: { enableLogAccessUsingOnlyResourcePermissions: true }
+      }), stderr: '' };
+      if (args.includes('scheduled-query')) return { status: 0, stdout: '[]', stderr: '' };
+      return { status: 0, stdout: '{}', stderr: '' };
+    }
+  });
+  const byName = Object.fromEntries(result.checks.map(check => [check.name, check]));
+
+  assert.equal(byName['azure-readiness-profile'].readiness_profile, 'team');
+  assert.equal(byName['azure-budget-posture'].ok, false);
+  assert.equal(byName['azure-budget-posture'].required, true);
+  assert.equal(byName['log-analytics-posture'].ok, false);
+  assert.deepEqual(byName['log-analytics-posture'].issues, ['daily_cap']);
+  assert.equal(result.ok, false);
+});
+
+test('validateAzure internal profile requires group RBAC without claiming production', () => {
+  const result = validateAzure({
+    readinessProfile: 'internal',
+    remediationPlan: true,
+    workspaceId: 'workspace-123',
+    workspaceName: 'law-agentops-dev',
+    resourceGroup: 'rg-agentops-dev',
+    grafanaBaseUrl: 'https://grafana.example',
+    grafanaName: 'graf-agentops-dev',
+    expectedDashboards: [],
+    spawnSync: (command, args) => {
+      if (args.includes('account') && args.includes('show')) return { status: 0, stdout: JSON.stringify({ id: 'sub-123' }), stderr: '' };
+      if (args.includes('group') && args.includes('exists')) return { status: 0, stdout: 'true\n', stderr: '' };
+      if (args.includes('consumption') && args.includes('budget')) return { status: 0, stdout: JSON.stringify([{ name: 'budget-agentops', amount: 100 }]), stderr: '' };
+      if (args.includes('log-analytics') && args.includes('query')) return { status: 0, stdout: JSON.stringify([{ Rows: 1 }]), stderr: '' };
+      if (args.includes('workspace') && args.includes('show')) return { status: 0, stdout: JSON.stringify({
+        id: '/subscriptions/sub-123/resourceGroups/rg-agentops-dev/providers/Microsoft.OperationalInsights/workspaces/law-agentops-dev',
+        retentionInDays: 30,
+        workspaceCapping: { dailyQuotaGb: 1 },
+        features: { enableLogAccessUsingOnlyResourcePermissions: true }
+      }), stderr: '' };
+      if (args[0] === 'grafana' && args[1] === 'show') return { status: 0, stdout: JSON.stringify({
+        id: '/subscriptions/sub-123/resourceGroups/rg-agentops-dev/providers/Microsoft.Dashboard/grafana/graf-agentops-dev',
+        identity: { type: 'SystemAssigned' },
+        properties: { apiKey: 'Disabled', publicNetworkAccess: 'Enabled', zoneRedundancy: 'Disabled' }
+      }), stderr: '' };
+      if (args[0] === 'role' && args[1] === 'assignment') return { status: 0, stdout: JSON.stringify([{ principalType: 'User', roleDefinitionId: '/subscriptions/sub-123/providers/Microsoft.Authorization/roleDefinitions/60921a7e-fef1-4a43-9b16-a26c52ad4769', roleDefinitionName: 'Grafana Viewer' }]), stderr: '' };
+      if (args.includes('data-source')) return { status: 0, stdout: JSON.stringify([{ uid: 'azure-monitor-oob' }]), stderr: '' };
+      if (args.includes('dashboard')) return { status: 0, stdout: '[]', stderr: '' };
+      if (args.includes('scheduled-query')) return { status: 0, stdout: '[]', stderr: '' };
+      return { status: 0, stdout: '{}', stderr: '' };
+    }
+  });
+  const byName = Object.fromEntries(result.checks.map(check => [check.name, check]));
+
+  assert.equal(result.config.production, false);
+  assert.equal(result.config.subscription_id, 'sub-123');
+  assert.equal(result.config.active_subscription_id, 'sub-123');
+  assert.equal(byName['log-analytics-rbac-posture'].group_rbac_required, true);
+  assert.equal(byName['grafana-rbac-posture'].group_rbac_required, true);
+  assert.equal(byName['access-rbac-posture'].ok, false);
+  assert.match(result.next.join('\n'), /internal rollout/);
+  assert.match(result.remediation_plan.actions.find(action => action.name === 'review-agentops-rbac-assignments').reason, /^internal posture/);
+  assert.match(result.remediation_plan.actions.find(action => action.name === 'review-agentops-rbac-assignments').commands.join('\n'), /--profile internal/);
+});
+
+test('validateAzure personal profile reports cost drift as non-blocking advisory', () => {
+  const result = validateAzure({
+    readinessProfile: 'personal',
+    workspaceId: 'workspace-123',
+    workspaceName: 'law-agentops-dev',
+    resourceGroup: 'rg-agentops-dev',
+    expectedDashboards: [],
+    spawnSync: (command, args) => {
+      if (args.includes('account') && args.includes('show')) return { status: 0, stdout: JSON.stringify({ id: 'sub-123' }), stderr: '' };
+      if (args.includes('group') && args.includes('exists')) return { status: 0, stdout: 'true\n', stderr: '' };
+      if (args.includes('consumption') && args.includes('budget')) return { status: 0, stdout: '[]', stderr: '' };
+      if (args.includes('log-analytics') && args.includes('query')) return { status: 0, stdout: JSON.stringify([{ Rows: 1 }]), stderr: '' };
+      if (args.includes('workspace') && args.includes('show')) return { status: 0, stdout: JSON.stringify({
+        retentionInDays: 30,
+        workspaceCapping: { dailyQuotaGb: -1 },
+        features: { enableLogAccessUsingOnlyResourcePermissions: true }
+      }), stderr: '' };
+      if (args.includes('scheduled-query')) return { status: 0, stdout: '[]', stderr: '' };
+      return { status: 0, stdout: '{}', stderr: '' };
+    }
+  });
+  const byName = Object.fromEntries(result.checks.map(check => [check.name, check]));
+
+  assert.equal(byName['azure-readiness-profile'].advisory, true);
+  assert.match(byName['azure-readiness-profile'].detail, /personal dev\/demo/);
+  assert.equal(byName['azure-budget-posture'].ok, true);
+  assert.equal(byName['azure-budget-posture'].advisory, true);
+  assert.equal(byName['log-analytics-posture'].ok, true);
+  assert.equal(byName['log-analytics-posture'].advisory, true);
+  assert.equal(result.config.data_boundary, 'personal-dev-demo-metadata-only');
+});
+
 test('validateAzure remediation plan proposes safe Azure commands without mutating', () => {
   const result = validateAzure({
     production: true,
@@ -4339,6 +4670,8 @@ test('V2 dashboard ux-check protects the Datadog-style operator flow', () => {
   assert.equal(result.contracts.semantic_review, true);
   assert.equal(result.contracts.promotion_approvals, true);
   assert.equal(result.contracts.ask_agentops_context, true);
+  assert.equal(result.contracts.privacy_scope_boundary, true);
+  assert.equal(result.contracts.privacy_capture_posture, true);
 });
 
 test('V2 dashboard content guardrails isolate prompt response text to the opt-in viewer', () => {
@@ -4376,6 +4709,7 @@ test('product audit proves the local AgentOps control-room contract', () => {
   const byName = Object.fromEntries(result.checks.map(check => [check.name, check]));
 
   assert.equal(result.ok, true, result.checks.filter(check => !check.ok).map(check => `${check.name}: ${check.missing.join(', ')}`).join('\n'));
+  assert.ok(result.checks.filter(check => check.ok).every(check => check.missing.length === 0));
   assert.equal(result.scope, 'local-product-contract');
   assert.equal(result.live_azure_verified, false);
   assert.equal(result.live_grafana_verified, false);
@@ -4388,6 +4722,7 @@ test('product audit proves the local AgentOps control-room contract', () => {
     'copilot-cli-surface',
     'real-copilot-otel-fixture-contract',
     'copilot-sdk-adapter',
+    'copilot-sdk-ordered-events-contract',
     'mcp-observability-proxy',
     'github-outcomes',
     'evals-insights-recommendations',
@@ -4458,9 +4793,9 @@ test('product audit can require rendered Grafana visual proof', async () => {
       ok: true,
       playwright: {
         grafana: [
-          { label: 'AgentOps V2 Home', dashboardVisible: true },
-          { label: 'V2 Runs Explorer', dashboardVisible: true },
-          { label: 'V2 Run Replay', dashboardVisible: true }
+          { label: 'Today', dashboardVisible: true },
+          { label: 'Runs', dashboardVisible: true },
+          { label: 'Run Story', dashboardVisible: true }
         ]
       }
     })
@@ -4549,7 +4884,7 @@ test('product visual audit returns auth remediation when Grafana is SSO-blocked'
           verify_after_sign_in: ['rerun-command']
         },
         grafana: [
-          { label: 'AgentOps V2 Home', authBlocked: true, dashboardVisible: false }
+          { label: 'Today', authBlocked: true, dashboardVisible: false }
         ]
       }
     })
@@ -4612,6 +4947,11 @@ test('V2 dashboard links preserve drilldown contracts', () => {
   assert.match(JSON.stringify(homeDashboard), /RecommendedNextAction/);
   assert.match(JSON.stringify(homeDashboard), /RootAgent/);
   assert.match(JSON.stringify(homeDashboard), /HealthStatus/);
+  assert.match(JSON.stringify(homeDashboard), /These runs are visible in Azure/);
+  assert.match(JSON.stringify(homeDashboard), /agentops delivery status/);
+  assert.match(JSON.stringify(homeDashboard), /Delivery='Visible in Azure'/);
+  assert.match(JSON.stringify(homeDashboard), /Coverage='AgentOps managed'/);
+  assert.match(JSON.stringify(homeDashboard), /Coverage='Native best effort'/);
   assert.match(JSON.stringify(replayDashboard), /OpenTranscript/);
   assert.match(JSON.stringify(replayDashboard), /viewPanel=26/);
   assert.match(JSON.stringify(replayDashboard), /MessageText/);
@@ -4693,21 +5033,23 @@ test('dashboard import plans V2 managed Grafana import safely by default', () =>
 test('dashboard import --yes invokes the import script with explicit env', () => {
   const calls = [];
   const result = runDashboardImport(['--yes', '--resource-group', 'rg-agentops-dev', '--grafana-name', 'graf-agentops-dev'], {
-    env: {},
+    env: { AGENTOPS_AZURE_SUBSCRIPTION_ID: TEST_APPROVED_SUBSCRIPTION_ID, AGENTOPS_APPROVED_AZURE_SUBSCRIPTION_IDS: TEST_APPROVED_SUBSCRIPTION_ID },
     spawnSync: (command, args, options) => {
       calls.push({ command, args, options });
+      if (command === 'az') return { status: 0, stdout: `${TEST_APPROVED_SUBSCRIPTION_ID}\n`, stderr: '' };
       return { status: 0, stdout: 'imported\n', stderr: '' };
     }
   });
 
   assert.equal(result.ok, true);
   assert.equal(result.dry_run, false);
-  assert.equal(calls.length, 1);
-  assert.match(calls[0].command, /grafana-import-dashboard\.sh$/);
-  assert.equal(calls[0].options.env.AGENTOPS_V2_ONLY, 'true');
-  assert.equal(calls[0].options.env.GRAFANA_FOLDER, 'AgentOps for Azure');
-  assert.equal(calls[0].options.env.AZURE_RESOURCE_GROUP, 'rg-agentops-dev');
-  assert.equal(calls[0].options.env.GRAFANA_NAME, 'graf-agentops-dev');
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].command, 'az');
+  assert.match(calls[1].command, /grafana-import-dashboard\.sh$/);
+  assert.equal(calls[1].options.env.AGENTOPS_V2_ONLY, 'true');
+  assert.equal(calls[1].options.env.GRAFANA_FOLDER, 'AgentOps for Azure');
+  assert.equal(calls[1].options.env.AZURE_RESOURCE_GROUP, 'rg-agentops-dev');
+  assert.equal(calls[1].options.env.GRAFANA_NAME, 'graf-agentops-dev');
 });
 
 test('dashboard kql-check renders representative V2 panel queries', () => {
@@ -5118,20 +5460,37 @@ test('pre-tool policy emits valid deny decisions for camelCase and snake_case in
 
 test('pre-tool policy allows explicit false broad content metadata', () => {
   const hook = path.join(root, 'plugin', 'scripts', 'pre-tool-policy.js');
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-script-observability-'));
+  const eventFile = path.join(tempDir, 'sidecar-events.jsonl');
   const result = spawnSync(process.execPath, [hook], {
     input: JSON.stringify({
+      sessionId: 'script-session-1',
       toolName: 'mcp__filesystem__read_file',
-      toolArgs: { path: 'notes.md' },
+      toolArgs: { path: 'SECRET_SHOULD_NOT_LEAVE.md' },
+      prompt: 'PROMPT_SHOULD_NOT_LEAVE',
       metadata: {
         allowAllTools: 'false',
         contentCaptureEnabled: 'false'
       }
     }),
-    encoding: 'utf8'
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      AGENTOPS_SIDECAR_EVENTS_PATH: eventFile
+    }
   });
 
   assert.equal(result.status, 0, result.stderr);
   assert.equal(result.stdout, '');
+  const event = JSON.parse(fs.readFileSync(eventFile, 'utf8').trim());
+  assert.equal(event.type, 'agentops.script.executed');
+  assert.equal(event.data.sessionId, 'script-session-1');
+  assert.equal(event.data.scriptName, 'pre-tool-policy');
+  assert.equal(event.data.hookType, 'preToolUse');
+  assert.equal(event.data.outcome, 'allowed');
+  assert.equal(event.data.contentCapture, false);
+  assert.doesNotMatch(JSON.stringify(event), /SECRET_SHOULD_NOT_LEAVE|PROMPT_SHOULD_NOT_LEAVE/);
+  fs.rmSync(tempDir, { recursive: true, force: true });
 });
 
 test('agent stop quality gate emits metadata-only warnings without blocking', () => {
@@ -5220,7 +5579,8 @@ test('Copilot hook payload fixtures stay compatible with bundled hook scripts', 
   for (const name of ['preToolUse.camel.json', 'preToolUse.vscode.json']) {
     const result = spawnSync(process.execPath, [preTool], {
       input: fixture(name),
-      encoding: 'utf8'
+      encoding: 'utf8',
+      env: { ...process.env, AGENTOPS_SIDECAR_EVENTS_PATH: eventFile }
     });
     assert.equal(result.status, 0, result.stderr);
     const decision = JSON.parse(result.stdout);
@@ -5229,14 +5589,16 @@ test('Copilot hook payload fixtures stay compatible with bundled hook scripts', 
 
   const failure = spawnSync(process.execPath, [postToolFailure], {
     input: fixture('postToolUseFailure.camel.json'),
-    encoding: 'utf8'
+    encoding: 'utf8',
+    env: { ...process.env, AGENTOPS_SIDECAR_EVENTS_PATH: eventFile }
   });
   assert.equal(failure.status, 2, failure.stderr);
   assert.match(failure.stdout, /Recovery hint/);
 
   const stop = spawnSync(process.execPath, [stopGate], {
     input: fixture('stop.vscode.json'),
-    encoding: 'utf8'
+    encoding: 'utf8',
+    env: { ...process.env, AGENTOPS_SIDECAR_EVENTS_PATH: eventFile }
   });
   assert.equal(stop.status, 0, stop.stderr);
 
@@ -5249,7 +5611,8 @@ test('Copilot hook payload fixtures stay compatible with bundled hook scripts', 
     }
   });
   assert.equal(notification.status, 0, notification.stderr);
-  const event = JSON.parse(fs.readFileSync(eventFile, 'utf8').trim());
+  const event = fs.readFileSync(eventFile, 'utf8').trim().split(/\r?\n/).map(line => JSON.parse(line))
+    .find(row => row['agentops.hook.type'] === 'Notification');
   assert.equal(event['agentops.hook.type'], 'Notification');
   assert.equal(event['agentops.hook.reason_category'], 'permission_required');
   assert.equal(event['gen_ai.conversation.id'], 'hook-session-notify');
@@ -5310,33 +5673,39 @@ test('E2E live commands force strict privacy and content capture off', () => {
 
 test('E2E Grafana screenshot targets use stable V2 tour names', () => {
   const targets = grafanaScreenshotTargets([
-    { label: 'AgentOps V2 Home', url: 'https://grafana.example.grafana.azure.com/d/agentops-v2-home' },
-    { label: 'V2 Runs Explorer', url: 'https://grafana.example.grafana.azure.com/d/agentops-v2-runs-explorer' },
-    { label: 'V2 Run Replay', url: 'https://grafana.example.grafana.azure.com/d/agentops-v2-run-replay' },
+    { label: 'Today', url: 'https://grafana.example.grafana.azure.com/d/agentops-v2-home' },
+    { label: 'Runs', url: 'https://grafana.example.grafana.azure.com/d/agentops-v2-runs-explorer' },
+    { label: 'Run Story', url: 'https://grafana.example.grafana.azure.com/d/agentops-v2-run-replay' },
     { label: 'Overview', url: 'https://grafana.example.grafana.azure.com/d/overview' }
   ], { v2Only: true });
 
   assert.deepEqual(targets.map(target => target.fileName), [
     'agentops-v2-home-live.png',
     'agentops-v2-runs-explorer-live.png',
-    'agentops-v2-run-replay-live.png'
+    'agentops-v2-run-replay-live.png',
+    'agentops-v2-models-cost-tokens-live.png',
+    'agentops-v2-tools-mcp-risk-live.png',
+    'agentops-v2-safety-privacy-policy-live.png',
+    'agentops-v2-code-outcomes-live.png',
+    'agentops-v2-evals-quality-live.png',
+    'agentops-v2-insights-regressions-live.png',
+    'agentops-v2-collector-health-live.png'
   ]);
   assert.ok(targets.every(target => target.v2Tour));
 });
 
 test('E2E Grafana visual gate distinguishes auth-blocked from visible dashboards', () => {
   const authBlocked = [
-    { label: 'AgentOps V2 Home', authBlocked: true, dashboardVisible: false },
-    { label: 'V2 Runs Explorer', authBlocked: true, dashboardVisible: false }
+    { label: 'Today', authBlocked: true, dashboardVisible: false },
+    { label: 'Runs', authBlocked: true, dashboardVisible: false }
   ];
   const visible = [
-    { label: 'AgentOps V2 Home', authBlocked: false, dashboardVisible: true },
-    { label: 'V2 Runs Explorer', authBlocked: false, dashboardVisible: true }
+    { label: 'Today', authBlocked: false, dashboardVisible: true },
+    { label: 'Runs', authBlocked: false, dashboardVisible: true }
   ];
 
-  assert.equal(grafanaVisualOk(authBlocked, false), true);
-  assert.equal(grafanaVisualOk(authBlocked, true), false);
-  assert.equal(grafanaVisualOk(visible, true), true);
+  assert.equal(grafanaVisualOk(authBlocked), false);
+  assert.equal(grafanaVisualOk(visible), true);
 });
 
 test('E2E browser profile args support authenticated Grafana visual QA', () => {
@@ -5392,7 +5761,7 @@ test('E2E auth-profile command renders reusable Grafana sign-in profile steps', 
 });
 
 test('import-jsonl summarizes operations', () => {
-  const result = importJsonl(path.join(root, 'tests', 'sample-otel', 'tool-failure.jsonl'));
+  const result = importJsonl(path.join(root, 'fixtures', 'sample-otel', 'tool-failure.ndjson.fixture'));
   assert.equal(result.rows, 2);
   assert.equal(result.operations.invoke_agent, 1);
   assert.equal(result.operations.execute_tool, 1);
@@ -8194,15 +8563,40 @@ test('link trace builds OperationId query', () => {
 });
 
 test('latest summarizes a fixture session in plain language', () => {
-  const summary = latestSessionSummary({ filePath: path.join(root, 'tests', 'sample-otel', 'tool-failure.jsonl') });
+  const summary = latestSessionSummary({ filePath: path.join(root, 'fixtures', 'sample-otel', 'tool-failure.ndjson.fixture') });
   const output = renderLatest(summary);
 
   assert.equal(summary.session.id, 'conv-tool-failure');
+  assert.match(output, /AgentOps receipt/);
   assert.match(output, /Latest Copilot session/);
   assert.match(output, /1 tool call/);
-  assert.match(output, /Tools: shell/);
-  assert.match(output, /Grafana session:/);
-  assert.match(output, /Data missing: live Azure query/);
+  assert.match(output, /tools shell/);
+  assert.match(output, /Open team view:/);
+  assert.match(output, /Not available here: live Azure query/);
+});
+
+test('latest distinguishes dropped sensitive fields from retained content', () => {
+  const summary = latestSessionSummary({
+    rows: [{
+      TimeGenerated: '2026-08-03T14:55:24.000Z',
+      RunId: 'run-safe',
+      SessionId: 'session-safe',
+      OutcomeStatus: 'success',
+      DurationMs: 4900,
+      ContentCaptureMode: 'signal_only',
+      ContentCaptureSignal: true,
+      PrivacyMode: 'strict'
+    }],
+    source: 'local'
+  });
+  const output = renderLatest(summary);
+
+  assert.equal(summary.session.content_capture_warning, false);
+  assert.equal(summary.session.content_dropped_signal, true);
+  assert.equal(summary.session.duration_ms, 4900);
+  assert.match(output, /sensitive fields were detected and dropped/);
+  assert.match(output, /1 run summary/);
+  assert.doesNotMatch(output, /content capture may be on/);
 });
 
 test('latest summarizes Azure query rows with Properties JSON strings', () => {
@@ -8257,7 +8651,7 @@ test('latest summarizes Azure query rows with Properties JSON strings', () => {
   assert.equal(summary.session.output_tokens, 40);
   assert.equal(summary.session.credits, 2);
   assert.equal(summary.session.data_missing.includes('live Azure query'), false);
-  assert.match(output, /Tools: azure-mcp\/monitor/);
+  assert.match(output, /tools azure-mcp\/monitor/);
   assert.match(output, /Estimated cost: \$0\.02/);
   assert.doesNotMatch(output, /live Azure query/);
 });
@@ -8386,18 +8780,18 @@ test('latest Azure query rejects unsafe lookback values before spawning az', () 
 });
 
 test('explain latest classifies fixture sessions with simple labels', () => {
-  const failed = latestSessionSummary({ filePath: path.join(root, 'tests', 'sample-otel', 'tool-failure.jsonl') });
+  const failed = latestSessionSummary({ filePath: path.join(root, 'fixtures', 'sample-otel', 'tool-failure.ndjson.fixture') });
   const failedOutput = renderExplanation(explainLatest(failed));
   assert.match(failedOutput, /Tools kept failing/);
 
-  const success = latestSessionSummary({ filePath: path.join(root, 'tests', 'sample-otel', 'simple-success.jsonl') });
+  const success = latestSessionSummary({ filePath: path.join(root, 'fixtures', 'sample-otel', 'simple-success.ndjson.fixture') });
   const successExplanation = explainLatest(success);
   assert.equal(successExplanation.classification, 'success');
   assert.match(renderExplanation(successExplanation), /This session looks successful/);
 });
 
 test('recommendation contract turns latest failure into evidence-backed next actions', () => {
-  const failed = latestSessionSummary({ filePath: path.join(root, 'tests', 'sample-otel', 'tool-failure.jsonl') });
+  const failed = latestSessionSummary({ filePath: path.join(root, 'fixtures', 'sample-otel', 'tool-failure.ndjson.fixture') });
   const recommendation = recommendationForExplanation(explainLatest(failed), { last: '7d' });
   const output = renderRecommendation(recommendation);
 
@@ -8411,13 +8805,13 @@ test('recommendation contract turns latest failure into evidence-backed next act
 });
 
 test('open prints main Grafana and latest fixture session links', () => {
-  const summary = latestSessionSummary({ filePath: path.join(root, 'tests', 'sample-otel', 'simple-success.jsonl') });
+  const summary = latestSessionSummary({ filePath: path.join(root, 'fixtures', 'sample-otel', 'simple-success.ndjson.fixture') });
   const output = renderOpenLinks(openLinksSummary(summary));
 
   assert.match(output, /Main dashboard:/);
-  assert.match(output, /AgentOps V2 Home:/);
+  assert.match(output, /Today:/);
   assert.match(output, /agentops-v2-home/);
-  assert.match(output, /V2 Run Replay:/);
+  assert.match(output, /Run Story:/);
   assert.match(output, /copilot-cli-agentops/);
   assert.match(output, /Latest session:/);
   assert.match(output, /var-conversation=conv-success/);
@@ -8505,7 +8899,7 @@ test('replay summary avoids double counting parent agent usage when chat usage e
 });
 
 test('live view can render from a local JSONL export', () => {
-  const view = liveViewFromArgs(['--file', path.join(root, 'tests', 'sample-otel', 'tool-failure.jsonl')]);
+  const view = liveViewFromArgs(['--file', path.join(root, 'fixtures', 'sample-otel', 'tool-failure.ndjson.fixture')]);
   const output = renderLive(view);
 
   assert.equal(view.ok, true);
@@ -8515,7 +8909,7 @@ test('live view can render from a local JSONL export', () => {
 });
 
 test('span source reads local JSONL without Azure access', () => {
-  const source = spanRowsFromSource(['--file', path.join(root, 'tests', 'sample-otel', 'simple-success.jsonl')]);
+  const source = spanRowsFromSource(['--file', path.join(root, 'fixtures', 'sample-otel', 'simple-success.ndjson.fixture')]);
 
   assert.equal(source.mode, 'local');
   assert.equal(source.rows.length, 2);
@@ -8638,8 +9032,11 @@ test('command plan exposes shadow and collector lifecycle commands', () => {
   assert.match(install.command, /install-agentops\.sh$/);
   assert.deepEqual(install.args, []);
 
+  const installShadow = commandPlan('install', ['--shadow-copilot'], 'darwin');
+  assert.deepEqual(installShadow.args, ['--shadow-copilot']);
+
   const installNoShadow = commandPlan('install', ['--no-shadow-copilot', '--no-collector'], 'darwin');
-  assert.deepEqual(installNoShadow.args, ['--no-shadow-copilot', '--no-collector']);
+  assert.deepEqual(installNoShadow.args, ['--no-collector']);
 
   const enable = commandPlan('enable-shadow', [], 'darwin');
   assert.match(enable.command, /install-copilot-agentops-shim\.sh$/);
@@ -8705,6 +9102,21 @@ test('PowerShell shim does not auto-install plugin files and uninstall advice is
   assert.match(installScript, /agentops plugin install/);
   assert.match(uninstallScript, /agentops collector stop --mode auto/);
   assert.doesNotMatch(uninstallScript, /docker compose/);
+});
+
+test('top-level installers leave plain copilot unchanged unless explicitly opted in', () => {
+  const shellInstaller = fs.readFileSync(path.join(root, 'install-agentops.sh'), 'utf8');
+  const powershellInstaller = fs.readFileSync(path.join(root, 'install-agentops.ps1'), 'utf8');
+  const setupScript = fs.readFileSync(path.join(root, 'setup-agentops.sh'), 'utf8');
+
+  assert.match(shellInstaller, /shadow_copilot=false/);
+  assert.match(shellInstaller, /--shadow-copilot\s+Opt in/);
+  assert.match(shellInstaller, /collector start --mode local --privacy strict/);
+  assert.match(powershellInstaller, /\$installShadow = \$false/);
+  assert.match(powershellInstaller, /collector start --mode local --privacy strict/);
+  assert.match(setupScript, /agentops copilot --no-ask-user/);
+  assert.match(setupScript, /collector start --mode local --privacy strict/);
+  assert.match(setupScript, /Plain copilot is unchanged/);
 });
 
 test('policy and mcp KQL queries expose documented Copilot dimensions', () => {
@@ -8984,8 +9396,8 @@ test('shared store write API accepts only metadata-only recommendation saved-vie
     Action: 'reduce_context',
     Severity: 'medium',
     ObservedPattern: 'context pressure',
-    NextAction: 'Open Run Replay',
-    DashboardTitles: ['Run Replay'],
+    NextAction: 'Open Run Story',
+    DashboardTitles: ['Run Story'],
     DashboardCount: 1,
     Validation: ['Run benchmark'],
     RollbackCondition: 'Revert if eval drops'
@@ -9129,7 +9541,7 @@ test('ask agentops launcher builds metadata-only assistant context', async () =>
       compare_command: 'agentops recommend run-123 --runs <after-AgentOpsRunSummary_CL.jsonl>'
     },
     ChangeTargetRefs: ['skill:agentops-latest-run'],
-    DashboardTitles: ['Run Replay'],
+    DashboardTitles: ['Run Story'],
     DashboardCount: 1,
     Validation: ['agentops experimental benchmark report bench-123'],
     RollbackCondition: 'Revert the skill change if eval score drops.'
@@ -9816,9 +10228,13 @@ test('alert azure devops route requires review gates before posting', () => {
     owners: ['agentops-oncall@example.com'],
     org: 'https://dev.azure.com/contoso',
     project: 'AgentOps',
+    expectedSubscriptionId: 'sub-approved',
+    approvedSubscriptionIds: ['sub-approved'],
+    env: { AGENTOPS_AZURE_SUBSCRIPTION_ID: 'sub-approved', AGENTOPS_APPROVED_AZURE_SUBSCRIPTION_IDS: 'sub-approved' },
     yes: true,
     spawnSync: (command, args, options) => {
       invoked = { command, args, options };
+      if (args[0] === 'account') return { status: 0, stdout: 'sub-approved\n', stderr: '' };
       return { status: 0, stdout: '{"id":123,"url":"https://dev.azure.com/contoso/_apis/wit/workItems/123"}', stderr: '' };
     }
   });
@@ -9830,14 +10246,37 @@ test('alert azure devops route requires review gates before posting', () => {
   assert.equal(invoked.args[0], 'boards');
   assert.equal(invoked.options.encoding, 'utf8');
 
+  let writeCalled = false;
+  const refused = alertAzureDevOpsWorkItemRoute({
+    rule: 'failed-spans',
+    session: 'session-456',
+    owners: ['agentops-oncall@example.com'],
+    org: 'https://dev.azure.com/contoso',
+    project: 'AgentOps',
+    expectedSubscriptionId: 'sub-unapproved',
+    approvedSubscriptionIds: ['sub-approved'],
+    yes: true,
+    spawnSync: () => {
+      writeCalled = true;
+      return { status: 0, stdout: '', stderr: '' };
+    }
+  });
+  assert.equal(refused.mode, 'refused-azure-devops-work-item-route');
+  assert.match(refused.error, /not in AGENTOPS_APPROVED_AZURE_SUBSCRIPTION_IDS/);
+  assert.equal(writeCalled, false);
+
   const failed = alertAzureDevOpsWorkItemRoute({
     rule: 'failed-spans',
     session: 'session-456',
     owners: ['agentops-oncall@example.com'],
     org: 'https://dev.azure.com/contoso',
     project: 'AgentOps',
+    expectedSubscriptionId: 'sub-approved',
+    approvedSubscriptionIds: ['sub-approved'],
     yes: true,
-    spawnSync: () => ({ status: 1, stdout: '', stderr: 'not logged in' })
+    spawnSync: (command, args) => args[0] === 'account'
+      ? ({ status: 0, stdout: 'sub-approved\n', stderr: '' })
+      : ({ status: 1, stdout: '', stderr: 'not logged in' })
   });
   assert.equal(failed.mode, 'failed-azure-devops-work-item-route');
   assert.equal(failed.error, 'not logged in');
@@ -9914,8 +10353,11 @@ test('alert action group route requires review gates before updating scheduled q
     actionGroups: [actionGroupId],
     enableAlert: true,
     yes: true,
+    expectedSubscriptionId: TEST_APPROVED_SUBSCRIPTION_ID,
+    approvedSubscriptionIds: [TEST_APPROVED_SUBSCRIPTION_ID],
     spawnSync: (command, args, options) => {
       invoked = { command, args, options };
+      if (args[0] === 'account') return { status: 0, stdout: `${TEST_APPROVED_SUBSCRIPTION_ID}\n`, stderr: '' };
       return { status: 0, stdout: '{"name":"sqr-agentops-failed-spans"}', stderr: '' };
     }
   });
@@ -9937,7 +10379,11 @@ test('alert action group route requires review gates before updating scheduled q
     scheduledQuery: 'sqr-agentops-failed-spans',
     actionGroups: [actionGroupId],
     yes: true,
-    spawnSync: () => ({ status: 1, stdout: '', stderr: 'not authorized' })
+    expectedSubscriptionId: TEST_APPROVED_SUBSCRIPTION_ID,
+    approvedSubscriptionIds: [TEST_APPROVED_SUBSCRIPTION_ID],
+    spawnSync: (command, args) => args[0] === 'account'
+      ? { status: 0, stdout: `${TEST_APPROVED_SUBSCRIPTION_ID}\n`, stderr: '' }
+      : { status: 1, stdout: '', stderr: 'not authorized' }
   });
   assert.equal(failed.mode, 'failed-action-group-route');
   assert.equal(failed.error, 'not authorized');

@@ -1,12 +1,13 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
+const { readJson } = require('./json');
 const { repoRoot } = require('./paths');
 
 const releaseCadencePath = path.join(repoRoot, 'collector', 'release-cadence.json');
 
 function readCollectorRelease(filePath = releaseCadencePath) {
-  return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  return readJson(filePath);
 }
 
 function defaultCollectorVersion() {

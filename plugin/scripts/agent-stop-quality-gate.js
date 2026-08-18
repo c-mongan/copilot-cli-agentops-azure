@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+const { recordScriptExecution } = require('./script-observability');
+
 async function readStdin() {
   return new Promise((resolve) => {
     let data = '';
@@ -119,6 +121,11 @@ function summarize(input = {}) {
     input = {};
   }
   const result = summarize(input);
+  recordScriptExecution(input, {
+    scriptName: 'agent-stop-quality-gate',
+    hookType: result.hook,
+    outcome: result.warnings.length > 0 ? 'warned' : 'passed'
+  });
   if (result.warnings.length > 0) {
     process.stdout.write(JSON.stringify(result));
   }

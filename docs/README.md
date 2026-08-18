@@ -7,8 +7,10 @@ Start here when you want the shortest path through the repo:
 ```text
 README.md
   -> docs/README.md                 # docs index
+  -> docs/simplified-azure-design.md # next-version product shape
   -> docs/architecture.md            # system shape
   -> docs/grafana-dashboard-tour-v2.md
+  -> docs/public-release.md             # package and public-release checklist
   -> docs/release-checklist-v2.md
 ```
 
@@ -16,11 +18,10 @@ README.md
 
 ```text
 Copilot CLI / SDK / VS Code + MCP
-  -> local AgentOps wrapper or proxy
-  -> localhost OTLP collector
-  -> strict privacy processors
-  -> Azure Monitor + Log Analytics
-  -> Grafana AgentOps for Azure dashboards
+  -> local AgentOps privacy boundary
+  -> Azure Monitor / Application Insights
+  -> native Agents view first
+  -> optional Workbooks or Managed Grafana for advanced operators
 ```
 
 AgentOps answers:
@@ -46,10 +47,10 @@ For rendered docs and presentations:
 
 ### New User
 
-1. [Secure by default](secure-by-default.md)
-2. [Collector modes](collector-modes.md)
-3. [Privacy modes](privacy-modes.md)
-4. [Grafana dashboard tour V2](grafana-dashboard-tour-v2.md)
+1. [Simplified Azure-native design](simplified-azure-design.md)
+2. [Secure by default](secure-by-default.md)
+3. [Collector modes](collector-modes.md)
+4. [Privacy modes](privacy-modes.md)
 5. [E2E validation](e2e-validation.md)
 
 ### Operator

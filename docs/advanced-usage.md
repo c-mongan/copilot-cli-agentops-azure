@@ -140,7 +140,7 @@ Docs used for this support matrix:
 
 ## Shadow Install And Plugin Files
 
-The setup script is the shortest local wrapper. It installs the tested Collector binary, installs shims, and makes plain `copilot` observed when `~/.local/bin` is first on `PATH`:
+The setup script is the shortest local wrapper. It installs the tested Collector binary plus the `agentops` and `copilot-agentops` commands. Plain `copilot` remains unchanged by default:
 
 ```bash
 ./setup-agentops.sh
@@ -152,10 +152,10 @@ The product-style CLI installer is:
 agentops install
 ```
 
-The installer adds `agentops`, `copilot-agentops`, the tested local Collector binary, and the plain-`copilot` shim by default. Skip the plain shim with:
+The installer adds `agentops`, `copilot-agentops`, and the tested local Collector binary. To explicitly route plain `copilot` through AgentOps too, use:
 
 ```bash
-agentops install --no-shadow-copilot
+agentops install --shadow-copilot
 ```
 
 If you deployed with `azd` and the environment contains the expected outputs, use:

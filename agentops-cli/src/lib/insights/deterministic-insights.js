@@ -1,15 +1,10 @@
-const fs = require('node:fs');
 const path = require('node:path');
 
+const { writeJsonlFile } = require('../command-output');
 const { evaluateRunQuality } = require('../evals');
+const { readJsonl } = require('../json');
 const { detectOutliers } = require('./outlier-detector');
 const { detectEvalRegression, detectToolRegression } = require('./regression-detector');
-
-function readJsonl(filePath) {
-  if (!filePath) return [];
-  const text = fs.readFileSync(filePath, 'utf8');
-  return text.split(/\r?\n/).filter(Boolean).map(line => JSON.parse(line));
-}
 
 function byRun(rows) {
   const map = new Map();
@@ -84,7 +79,7 @@ function addRecurringPatterns(insights, runs) {
       rows.length >= 5 ? 'high' : 'medium',
       'task_model_outcome',
       `${rows.length} failed runs share the same task/model/outcome shape.`,
-      'Open Runs Explorer filtered by task and model, then inspect the newest failed Run Replay.',
+      'Open Runs Explorer filtered by task and model, then inspect the newest failed Run Story.',
       { PatternKey: key, CurrentValue: rows.length }
     );
   }
@@ -213,7 +208,7 @@ function generateInsights(tables = {}) {
       addInsight(insights, run, 'policy-deny', 'high', 'A tool request was blocked by policy metadata.', 'Review the denied tool risk and tighten the task or permissions.');
     }
     if (Number(run.ContextWindowPct || 0) >= 90 || Number(run.TokensRemoved || 0) > 0) {
-      addInsight(insights, run, 'context-pressure', 'medium', 'Context pressure or token removal was observed during the run.', 'Open Run Replay and inspect context/cache posture before retrying.');
+      addInsight(insights, run, 'context-pressure', 'medium', 'Context pressure or token removal was observed during the run.', 'Open Run Story and inspect context/cache posture before retrying.');
     }
     if (context.privacy.length > 0) {
       addInsight(insights, run, 'privacy-drop', 'medium', 'Content-like fields were observed and dropped before export.', 'Keep strict mode enabled and inspect the source surface for unexpected content fields.');
@@ -251,11 +246,10 @@ function generateInsights(tables = {}) {
 }
 
 function writeInsights(result, outDir) {
-  fs.mkdirSync(outDir, { recursive: true });
   const evalFile = path.join(outDir, 'AgentOpsEval_CL.jsonl');
   const insightsFile = path.join(outDir, 'AgentOpsInsights_CL.jsonl');
-  fs.writeFileSync(evalFile, `${result.evals.map(row => JSON.stringify(row)).join('\n')}${result.evals.length ? '\n' : ''}`);
-  fs.writeFileSync(insightsFile, `${result.insights.map(row => JSON.stringify(row)).join('\n')}${result.insights.length ? '\n' : ''}`);
+  writeJsonlFile(evalFile, result.evals);
+  writeJsonlFile(insightsFile, result.insights);
   return { evalFile, insightsFile };
 }
 

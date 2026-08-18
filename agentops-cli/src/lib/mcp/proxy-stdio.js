@@ -1,7 +1,7 @@
 const childProcess = require('node:child_process');
-const fs = require('node:fs');
 const path = require('node:path');
 
+const { appendJsonlFile } = require('../command-output');
 const { classifyMcpToolRisk } = require('./risk-classifier');
 const { argsSchemaHash, jsonByteSize, stableHashJson } = require('./redactor');
 const { injectTraceContext } = require('./trace-context');
@@ -91,8 +91,7 @@ function createMcpProxyObserver(options = {}) {
 }
 
 function appendJsonl(filePath, row) {
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.appendFileSync(filePath, `${JSON.stringify(row)}\n`);
+  appendJsonlFile(filePath, row);
 }
 
 function proxyStdio(options = {}) {

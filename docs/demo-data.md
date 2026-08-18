@@ -66,7 +66,7 @@ Synthetic scenarios:
 
 Demo payloads are metadata-only by default. They include hashes, counts, model names, statuses, risk labels, durations, token totals, costs, eval scores, and GitHub outcome states. They do not include fake prompts, responses, tool arguments, tool results, source code, file contents, full URLs, or secrets.
 
-To preview the optional Run Replay prompt/response viewer with safe synthetic text:
+To preview the optional Run Story prompt/response viewer with safe synthetic text:
 
 ```bash
 agentops demo generate --runs 10 --with-content --json

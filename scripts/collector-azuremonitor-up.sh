@@ -1,19 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-subscription_id="${AZURE_SUBSCRIPTION_ID:-}"
 resource_group="${AZURE_RESOURCE_GROUP:-rg-agentops-dev}"
 app_insights_name="${APPLICATIONINSIGHTS_NAME:-appi-agentops-dev}"
 privacy_mode="${AGENTOPS_PRIVACY_MODE:-strict}"
 export AGENTOPS_PRIVACY_MODE="${privacy_mode}"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${script_dir}/lib/azure-subscription-guard.sh"
 repo_root="$(cd "${script_dir}/.." && pwd)"
 collector_dir="${repo_root}/collector"
 compose_file="${collector_dir}/docker-compose.azuremonitor.yaml"
 
-if [[ -n "$subscription_id" ]]; then
-  az account set --subscription "$subscription_id"
-fi
+agentops_require_azure_subscription
 
 export APPLICATIONINSIGHTS_CONNECTION_STRING="$(az monitor app-insights component show \
   --resource-group "$resource_group" \

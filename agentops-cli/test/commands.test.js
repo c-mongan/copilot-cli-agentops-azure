@@ -5,6 +5,8 @@ const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 
+const { setEnvForTest } = require('./support/env');
+
 const repoRoot = path.resolve(__dirname, '..', '..');
 
 function tmpDir(name) {
@@ -116,8 +118,7 @@ test('doctorSummary flags stored connection strings and renderDoctor reports blo
   const legacy = require('../src/legacy');
   const collector = require('../src/lib/collector-manager');
   const resolver = require('../src/lib/copilot-resolver');
-  const originalConfigPath = process.env.AGENTOPS_CONFIG_PATH;
-  process.env.AGENTOPS_CONFIG_PATH = configPath;
+  const restoreEnv = setEnvForTest({ AGENTOPS_CONFIG_PATH: configPath });
   const restore = [
     patch(legacy, 'doctor', () => [{ name: 'base-check', ok: true }]),
     patch(collector, 'status', async () => ({
@@ -141,8 +142,7 @@ test('doctorSummary flags stored connection strings and renderDoctor reports blo
     assert.match(renderDoctor(summary), /Doctor found blocking issues/);
   } finally {
     restore.reverse().forEach(fn => fn());
-    if (originalConfigPath === undefined) delete process.env.AGENTOPS_CONFIG_PATH;
-    else process.env.AGENTOPS_CONFIG_PATH = originalConfigPath;
+    restoreEnv();
   }
 });
 
@@ -207,10 +207,12 @@ test('copilotCommand records fallback envelope when unobserved fallback is allow
   const resolver = require('../src/lib/copilot-resolver');
   const dir = tmpDir('wrapper-envelope');
   const eventFile = path.join(dir, 'wrapper-events.jsonl');
-  const originalFallback = process.env.AGENTOPS_ALLOW_UNOBSERVED_FALLBACK;
-  const originalEventsPath = process.env.AGENTOPS_WRAPPER_EVENTS_PATH;
-  process.env.AGENTOPS_ALLOW_UNOBSERVED_FALLBACK = '1';
-  process.env.AGENTOPS_WRAPPER_EVENTS_PATH = eventFile;
+  const restoreEnv = setEnvForTest({
+    AGENTOPS_ALLOW_UNOBSERVED_FALLBACK: '1',
+    AGENTOPS_WRAPPER_EVENTS_PATH: eventFile,
+    AGENTOPS_DURABLE_SPOOL_DIR: path.join(dir, 'delivery-spool'),
+    AGENTOPS_CONFIG_PATH: path.join(dir, 'missing-config.json')
+  });
   let spawned = null;
   const restore = [
     patch(collector, 'status', async () => ({ running: false })),
@@ -234,17 +236,15 @@ test('copilotCommand records fallback envelope when unobserved fallback is allow
       'agentops.wrapper.fallback_unobserved',
       'agentops.run.end'
     ]);
-    assert.equal(byName['agentops.wrapper.fallback_unobserved'].Reason, 'collector unavailable in test');
+    assert.equal(byName['agentops.wrapper.fallback_unobserved'].ReasonCategory, 'collector_start_failed');
+    assert.doesNotMatch(JSON.stringify(events), /collector unavailable in test/);
     assert.equal(byName['agentops.run.end'].FallbackUnobserved, true);
     assert.equal(spawned.env.AGENTOPS_WRAPPER_FALLBACK_UNOBSERVED, 'true');
     assert.equal(spawned.env.AGENTOPS_WRAPPER_RUN_ID, byName['agentops.run.start'].RunId);
     assert.equal(spawned.env.AGENTOPS_WRAPPER_SESSION_ID, byName['agentops.run.start'].SessionId);
   } finally {
     restore.reverse().forEach(fn => fn());
-    if (originalFallback === undefined) delete process.env.AGENTOPS_ALLOW_UNOBSERVED_FALLBACK;
-    else process.env.AGENTOPS_ALLOW_UNOBSERVED_FALLBACK = originalFallback;
-    if (originalEventsPath === undefined) delete process.env.AGENTOPS_WRAPPER_EVENTS_PATH;
-    else process.env.AGENTOPS_WRAPPER_EVENTS_PATH = originalEventsPath;
+    restoreEnv();
   }
 });
 
@@ -415,6 +415,15 @@ test('static-check script validates repo syntax and local docs links', () => {
   assert.ok(summary.checked.markdown > 0);
 });
 
+test('native OTLP trace smoke uses strict-allowlisted correlation fields', () => {
+  const script = fs.readFileSync(path.join(repoRoot, 'scripts', 'otlp-smoke-trace.sh'), 'utf8');
+
+  assert.match(script, /agentops\.e2e\.id/);
+  assert.match(script, /agentops\.custom_event_id/);
+  assert.match(script, /OTelSpans/);
+  assert.doesNotMatch(script, /agentops\.smoke_id/);
+});
+
 test('security audit reports production readiness checks as JSON', () => {
   const result = childProcess.spawnSync(process.execPath, [
     path.join(repoRoot, 'agentops-cli', 'src', 'index.js'),
@@ -436,6 +445,7 @@ test('security audit reports production readiness checks as JSON', () => {
   assert.ok(audit.checks.some(check => check.name === 'dashboard-content-guardrails' && check.ok));
   assert.ok(audit.checks.some(check => check.name === 'content-capture-operational-guardrails' && check.ok));
   assert.ok(audit.checks.some(check => check.name === 'dashboard-evidence-disclaimer' && check.ok));
+  assert.ok(audit.checks.some(check => check.name === 'collector-persistent-queue-security' && check.ok));
 });
 
 test('security posture reports OWASP and ASVS control coverage as JSON', () => {

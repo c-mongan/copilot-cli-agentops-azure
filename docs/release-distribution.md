@@ -14,6 +14,7 @@ Run this before creating a GitHub release:
 ```bash
 node scripts/check-release-distribution.js --json
 node scripts/check-install-smoke.js --json
+node scripts/check-packaged-lifecycle.js --json
 node scripts/check-homebrew-formula.js --json
 ```
 
@@ -23,13 +24,26 @@ The check:
 - runs the Copilot SDK publish-readiness check;
 - builds npm `.tgz` artifacts for both packages;
 - computes a SHA256 checksum for each artifact;
+- creates a CycloneDX 1.5 SBOM for each package;
+- writes a release manifest containing package/SBOM hashes, the source revision, dirty-worktree state, and `publish_authorized: false`;
 - verifies this release documentation is present.
+
+A bundle built from a dirty worktree is review-only. Rebuild from a clean, reviewed commit before publishing; generating this evidence never authorizes publication.
 
 Then the install smoke:
 
 - installs the packed CLI into a clean temporary npm prefix;
 - runs the installed `agentops` command, not the repo checkout;
 - verifies `doctor`, dashboard verification, security audit, collector artifact validation, and plugin dry-run install.
+
+Then the POSIX packaged-lifecycle gate:
+
+- uses disposable AgentOps, Copilot, npm-prefix, and command paths without changing the user's home or configuration;
+- preserves a pre-existing `copilot` command byte-for-byte while installing the transparent shadow;
+- runs normal `copilot` through the packed CLI with strict metadata-only lifecycle receipts and a prompt-poison persistence check;
+- exercises a same-code metadata-version upgrade and downgrade before uninstalling;
+- proves uninstall restores the original command and leaves no AgentOps interception;
+- reports Windows PowerShell, Linux distribution, WSL, and container clean-machine lanes as unproven until those environments run their native gates.
 
 Then the Homebrew formula check:
 
@@ -58,6 +72,7 @@ Verification
 - npm --prefix packages/agentops-copilot-sdk run publish:check -- --json
 - node scripts/check-release-distribution.js --json
 - node scripts/check-install-smoke.js --json
+- node scripts/check-packaged-lifecycle.js --json
 - node scripts/check-homebrew-formula.js --json
 - node agentops-cli/src/index.js collector smoke --privacy strict --poison --json
 ```
@@ -79,6 +94,7 @@ Before publishing or updating a formula:
 
 - run `node scripts/check-release-distribution.js --json`;
 - run `node scripts/check-install-smoke.js --json`;
+- run `node scripts/check-packaged-lifecycle.js --json`;
 - run `node scripts/check-homebrew-formula.js --json`;
 - verify the formula SHA256 matches the generated CLI artifact SHA256;
 - install into a clean temp prefix;

@@ -14,7 +14,10 @@ if (-not $CollectorVersion) {
   $CollectorVersion = "0.151.0"
 }
 
-$installShadow = $true
+$installShadow = $false
+if ($ShadowCopilot) {
+  $installShadow = $true
+}
 if ($NoShadowCopilot) {
   $installShadow = $false
 }
@@ -29,7 +32,7 @@ if (-not $NoCollector) {
 }
 
 $shimArgs = @()
-if ($installShadow -or $ShadowCopilot) {
+if ($installShadow) {
   $shimArgs += "-ShadowCopilot"
 }
 & (Join-Path $scriptDir "scripts/install-copilot-agentops-shim.ps1") @shimArgs
@@ -46,8 +49,15 @@ Write-Host ""
 Write-Host "Next:"
 Write-Host '  $env:PATH = "$HOME/.local/bin;$env:PATH"'
 Write-Host "  agentops configure import-azd"
-Write-Host "  agentops collector start --mode auto --privacy strict"
-Write-Host '  copilot -p "Say AGENTOPS_READY in one short sentence."'
+Write-Host "  agentops collector start --mode local --privacy strict"
+Write-Host '  agentops copilot -p "Say AGENTOPS_READY in one short sentence."'
+Write-Host ""
+if ($installShadow) {
+  Write-Host "Plain copilot is routed through AgentOps. Its original command is preserved for uninstall."
+} else {
+  Write-Host "Plain copilot is unchanged. To route it through AgentOps too, reinstall with:"
+  Write-Host "  ./install-agentops.ps1 -ShadowCopilot"
+}
 Write-Host ""
 Write-Host "Remove later with:"
 Write-Host "  ./uninstall-agentops.ps1"

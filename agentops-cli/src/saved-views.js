@@ -1,6 +1,10 @@
 const fs = require('node:fs');
-const crypto = require('node:crypto');
 const path = require('node:path');
+
+const { changeRef, configChangeAnnotationsForSession } = require('./lib/change-annotations');
+const { writeJsonFile, writeJsonlFile } = require('./lib/command-output');
+const { prefixedHash } = require('./lib/hash');
+const { readJsonl } = require('./lib/json');
 
 function createSavedViews({ savedViewsPath, readJson, buildLink }) {
   function readSavedViews(filePath = savedViewsPath) {
@@ -12,80 +16,16 @@ function createSavedViews({ savedViewsPath, readJson, buildLink }) {
   }
 
   function writeSavedViews(payload, filePath = savedViewsPath) {
-    fs.mkdirSync(path.dirname(filePath), { recursive: true });
-    fs.writeFileSync(filePath, `${JSON.stringify(payload, null, 2)}\n`);
-  }
-
-  function readJsonl(filePath) {
-    if (!filePath) return [];
-    const text = fs.readFileSync(filePath, 'utf8');
-    return text.split(/\r?\n/).filter(Boolean).map(line => JSON.parse(line));
-  }
-
-  function stringValue(value) {
-    if (value === undefined || value === null) return '';
-    if (typeof value === 'string') return value;
-    return String(value);
-  }
-
-  function propertyValue(row = {}, key) {
-    const props = row.Properties && typeof row.Properties === 'object'
-      ? row.Properties
-      : {};
-    return row[key]
-      ?? row[`agentops.custom.${key}`]
-      ?? row[`agentops.${key}`]
-      ?? props[key]
-      ?? props[`agentops.custom.${key}`]
-      ?? props[`agentops.${key}`]
-      ?? '';
-  }
-
-  function parseDetailsValue(details, key) {
-    const text = stringValue(details);
-    if (!text) return '';
-    const pattern = new RegExp(`${key}[=: ]+([A-Za-z0-9_.@/-]+)`);
-    return pattern.exec(text)?.[1] || '';
-  }
-
-  function normalizeConfigChangeAnnotation(row = {}) {
-    const props = row.Properties && typeof row.Properties === 'object' ? row.Properties : {};
-    const eventName = stringValue(row.EventName || row.Event || row.event || props['agentops.event.name'] || props['event.name']);
-    const eventType = stringValue(row.EventType || row.Type || row.type);
-    const details = stringValue(row.Details || row.ResultCode || row.details || '');
-    const annotationType = stringValue(propertyValue(row, 'annotation_type') || row.AnnotationType || parseDetailsValue(details, 'annotation_type'));
-    const isConfigAnnotation = eventName === 'agentops.config.changed'
-      || annotationType === 'config_change'
-      || eventType === 'annotation'
-      || details.includes('config_change');
-    if (!isConfigAnnotation) return null;
-
-    return {
-      time_generated: stringValue(row.TimeGenerated || row.time || row.timestamp),
-      component: stringValue(row.ChangeComponent || propertyValue(row, 'component') || propertyValue(row, 'entity.type') || row.EntityType || parseDetailsValue(details, 'component')),
-      target: stringValue(row.ChangeTarget || propertyValue(row, 'target') || propertyValue(row, 'entity.id_hash') || row.EntityIdHash || parseDetailsValue(details, 'target')),
-      change_type: stringValue(row.ChangeType || propertyValue(row, 'change_type') || parseDetailsValue(details, 'change_type') || 'updated'),
-      change_id: stringValue(row.ChangeId || propertyValue(row, 'change_id') || parseDetailsValue(details, 'change_id')),
-      version: stringValue(row.Version || propertyValue(row, 'version') || parseDetailsValue(details, 'version')),
-      run_id: stringValue(row.RunId || propertyValue(row, 'run.id')),
-      session_id: stringValue(row.SessionId || propertyValue(row, 'session.id') || props['gen_ai.conversation.id']),
-      trace_id: stringValue(row.TraceId || propertyValue(row, 'trace.id')),
-      event_name: eventName || 'agentops.config.changed'
-    };
+    writeJsonFile(filePath, payload);
   }
 
   function annotationsForSession(events = [], session) {
-    const normalizedSession = String(session || '').trim();
-    if (!normalizedSession) return [];
-    return events
-      .map(normalizeConfigChangeAnnotation)
-      .filter(annotation => annotation && annotation.session_id === normalizedSession)
-      .slice(0, 10);
+    return configChangeAnnotationsForSession(events, session);
   }
 
   function annotationRefs(annotations = []) {
     return annotations
-      .map(annotation => [annotation.component, annotation.target].filter(Boolean).join(':'))
+      .map(changeRef)
       .filter(Boolean);
   }
 
@@ -140,18 +80,14 @@ function createSavedViews({ savedViewsPath, readJson, buildLink }) {
     return options;
   }
 
-  function stableId(value, prefix = 'view') {
-    return `${prefix}_${crypto.createHash('sha256').update(String(value)).digest('hex').slice(0, 16)}`;
-  }
-
   function savedViewRow(view, timeGenerated = new Date().toISOString()) {
     return {
       TimeGenerated: timeGenerated,
-      SavedViewId: stableId([view.name, view.url, view.session || '', view.createdAt || ''].join('|')),
+      SavedViewId: prefixedHash([view.name, view.url, view.session || '', view.createdAt || ''].join('|'), 'view'),
       Name: view.name || '',
       Description: view.description || '',
       Url: view.url || '',
-      QueryHash: view.query ? stableId(view.query, 'query') : '',
+      QueryHash: view.query ? prefixedHash(view.query, 'query') : '',
       Tags: Array.isArray(view.tags) ? view.tags : [],
       SessionId: view.session || '',
       CreatedAt: view.createdAt || '',
@@ -173,18 +109,17 @@ function createSavedViews({ savedViewsPath, readJson, buildLink }) {
 
   function exportSavedViews(views, outDir, options = {}) {
     const absoluteDir = path.resolve(outDir);
-    fs.mkdirSync(absoluteDir, { recursive: true });
     const rows = views.map(view => savedViewRow(viewWithAnnotations(view, options.events || [])));
     const file = path.join(absoluteDir, 'AgentOpsSavedViews_CL.jsonl');
-    fs.writeFileSync(file, `${rows.map(row => JSON.stringify(row)).join('\n')}${rows.length ? '\n' : ''}`);
+    writeJsonlFile(file, rows);
     const manifest = path.join(absoluteDir, 'saved-views-manifest.json');
-    fs.writeFileSync(manifest, `${JSON.stringify({
+    writeJsonFile(manifest, {
       generated_at: new Date().toISOString(),
       table: 'AgentOpsSavedViews_CL',
       file,
       rows_written: rows.length,
       privacy: 'metadata-only; query text is represented by QueryHash and is not exported'
-    }, null, 2)}\n`);
+    });
     return { out_dir: absoluteDir, file, manifest, rows_written: rows.length, rows };
   }
 

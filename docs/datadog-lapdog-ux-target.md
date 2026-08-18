@@ -34,7 +34,7 @@ The V2 Grafana control room should preserve this path without requiring KQL:
 ```text
 Home
   -> Runs Explorer
-  -> Run Replay
+  -> Run Story
   -> span/tool/model/privacy/GitHub/eval detail
   -> related dashboard filtered to the same run, model, tool, repo, skill, or sub-agent
 ```
@@ -42,7 +42,7 @@ Home
 Content follows the same contract, but only after opt-in:
 
 ```text
-Run Replay
+Run Story
   -> Content posture panel
   -> Prompt/response viewer
   -> related privacy signals and trace spans

@@ -1,10 +1,11 @@
 const os = require('node:os');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readJson } = require('./json');
 
 function readPackageName(filePath) {
   try {
-    return JSON.parse(fs.readFileSync(filePath, 'utf8')).name;
+    return readJson(filePath).name;
   } catch {
     return null;
   }
@@ -37,6 +38,10 @@ const defaultInstallDir = path.join(os.homedir(), '.local', 'bin');
 const agentopsHome = process.env.AGENTOPS_HOME || path.join(os.homedir(), '.agentops');
 const collectorHome = process.env.AGENTOPS_COLLECTOR_HOME || path.join(agentopsHome, 'collector');
 
+function defaultUserAgentOpsPath(relativePath, homeDir = os.homedir()) {
+  return path.join(homeDir, '.agentops', relativePath);
+}
+
 function repoPath(...parts) {
   return path.join(repoRoot, ...parts);
 }
@@ -51,6 +56,7 @@ module.exports = {
   collectorConfigPath,
   collectorDir,
   collectorHome,
+  defaultUserAgentOpsPath,
   copilotDir,
   defaultInstallDir,
   packageRoot,

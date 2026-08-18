@@ -65,7 +65,7 @@ function checkInstallSmoke(options = {}) {
   fs.mkdirSync(artifactsDir, { recursive: true });
   fs.mkdirSync(prefix, { recursive: true });
 
-  const distribution = checkReleaseDistribution({ outDir: artifactsDir, skipDocs: options.skipDocs });
+  const distribution = checkReleaseDistribution({ outDir: artifactsDir, skipDocs: options.skipDocs, requireGitIdentity: false });
   const cliArtifact = distribution.artifacts.find(artifact => artifact.package === 'cli' && artifact.ok);
   const failures = [];
   const commands = [];
@@ -105,6 +105,9 @@ function checkInstallSmoke(options = {}) {
       )));
       commands.push(commandRecord('agentops security audit --json', run(agentops, ['security', 'audit', '--json'], { env }), ({ result, parsed }) => (
         result.status === 0 && parsed?.ok === true
+      )));
+      commands.push(commandRecord('agentops product audit --json', run(agentops, ['product', 'audit', '--json'], { env }), ({ result, parsed }) => (
+        result.status === 0 && parsed?.ok === true && parsed?.summary?.failed === 0
       )));
       commands.push(commandRecord('agentops collector validate --mode none --json', run(agentops, ['collector', 'validate', '--mode', 'none', '--privacy', 'strict', '--json'], { env }), ({ parsed }) => (
         parsed?.artifact_validation?.ok === true

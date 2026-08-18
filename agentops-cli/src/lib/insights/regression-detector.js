@@ -39,7 +39,7 @@ function detectToolRegression(run = {}, tools = [], baselineTools = [], options 
     type: 'tool-regression',
     severity: currentFailureRate >= 0.5 ? 'high' : 'medium',
     summary: 'One or more tool calls failed above the recent baseline.',
-    suggestedNextStep: 'Open Run Replay and inspect the failed tool span.',
+    suggestedNextStep: 'Open Run Story and inspect the failed tool span.',
     baselineValue: baselineFailureRate,
     currentValue: currentFailureRate,
     toolName

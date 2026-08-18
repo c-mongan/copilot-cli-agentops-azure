@@ -49,7 +49,7 @@ function detectLatencyOutlier(run = {}, baselineRuns = [], options = {}) {
     summary: baseline > 0
       ? `Run duration is ${Math.round(current / 1000)}s, above the ${Math.round(baseline / 1000)}s baseline for this task.`
       : 'Run duration is high for this task.',
-    suggestedNextStep: 'Open Run Replay and inspect the slow model/tool spans.',
+    suggestedNextStep: 'Open Run Story and inspect the slow model/tool spans.',
     baselineValue: baseline || null,
     currentValue: current
   };

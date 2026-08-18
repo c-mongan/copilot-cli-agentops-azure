@@ -17,6 +17,9 @@ param baseName string = 'copilot-agentops'
 @description('Security and cost posture preset. dev and team stay cost-capped; enterprise increases retention but keeps ingestion capped unless explicitly overridden.')
 param deploymentProfile string = 'team'
 
+@description('Deploy optional advanced operator services: Azure Monitor Workspace, Azure Managed Grafana, and Key Vault. Keep false for the smallest native Application Insights path.')
+param deployAdvancedServices bool = false
+
 @description('Log Analytics retention in days. Use 0 to accept the deployment profile default.')
 @minValue(0)
 @maxValue(730)
@@ -135,7 +138,7 @@ module appInsights 'app-insights.bicep' = {
   }
 }
 
-module monitorWorkspace 'azure-monitor-workspace.bicep' = {
+module monitorWorkspace 'azure-monitor-workspace.bicep' = if (deployAdvancedServices) {
   name: 'azure-monitor-workspace'
   params: {
     location: location
@@ -144,7 +147,7 @@ module monitorWorkspace 'azure-monitor-workspace.bicep' = {
   }
 }
 
-module grafana 'grafana.bicep' = {
+module grafana 'grafana.bicep' = if (deployAdvancedServices) {
   name: 'grafana'
   params: {
     location: location
@@ -155,7 +158,7 @@ module grafana 'grafana.bicep' = {
   }
 }
 
-module keyVault 'key-vault.bicep' = {
+module keyVault 'key-vault.bicep' = if (deployAdvancedServices) {
   name: 'key-vault'
   params: {
     location: location
@@ -230,11 +233,11 @@ module alerts 'alerts.bicep' = if (deployAlerts) {
   }
 }
 
-module rbac 'rbac.bicep' = if (deployRbacAssignments) {
+module rbac 'rbac.bicep' = if (deployRbacAssignments && deployAdvancedServices) {
   name: 'enterprise-rbac'
   params: {
     logAnalyticsWorkspaceName: logAnalytics.outputs.name
-    grafanaName: grafana.outputs.name
+    grafanaName: grafana!.outputs.name
     observerPrincipalIds: observerPrincipalIds
     operatorPrincipalIds: operatorPrincipalIds
     adminPrincipalIds: adminPrincipalIds
@@ -257,16 +260,18 @@ output BUDGET_DEPLOYED bool = effectiveDeployBudget
 output DEPLOYMENT_PROFILE string = deploymentProfile
 output LOG_ANALYTICS_RETENTION_DAYS int = logAnalytics.outputs.retentionInDays
 output LOG_ANALYTICS_DAILY_QUOTA_GB int = logAnalytics.outputs.dailyQuotaGb
-output RBAC_ASSIGNMENTS_ENABLED bool = deployRbacAssignments
+output ADVANCED_SERVICES_DEPLOYED bool = deployAdvancedServices
+output RBAC_ASSIGNMENTS_ENABLED bool = deployRbacAssignments && deployAdvancedServices
 output LOG_ANALYTICS_WORKSPACE_ID string = logAnalytics.outputs.customerId
 output LOG_ANALYTICS_WORKSPACE_NAME string = logAnalytics.outputs.name
-output AZURE_MONITOR_WORKSPACE_ID string = monitorWorkspace.outputs.resourceId
-output GRAFANA_ENDPOINT string = grafana.outputs.endpoint
-output GRAFANA_RESOURCE_ID string = grafana.outputs.resourceId
-output GRAFANA_NAME string = grafana.outputs.name
-output GRAFANA_PUBLIC_NETWORK_ACCESS string = grafana.outputs.publicNetworkAccess
-output GRAFANA_ZONE_REDUNDANCY string = grafana.outputs.zoneRedundancy
-output KEY_VAULT_RESOURCE_ID string = keyVault.outputs.resourceId
+output AZURE_MONITOR_WORKSPACE_ID string = deployAdvancedServices ? monitorWorkspace!.outputs.resourceId : ''
+output GRAFANA_DEPLOYED bool = deployAdvancedServices
+output GRAFANA_ENDPOINT string = deployAdvancedServices ? grafana!.outputs.endpoint : ''
+output GRAFANA_RESOURCE_ID string = deployAdvancedServices ? grafana!.outputs.resourceId : ''
+output GRAFANA_NAME string = deployAdvancedServices ? grafana!.outputs.name : ''
+output GRAFANA_PUBLIC_NETWORK_ACCESS string = deployAdvancedServices ? grafana!.outputs.publicNetworkAccess : ''
+output GRAFANA_ZONE_REDUNDANCY string = deployAdvancedServices ? grafana!.outputs.zoneRedundancy : ''
+output KEY_VAULT_RESOURCE_ID string = deployAdvancedServices ? keyVault!.outputs.resourceId : ''
 output SHARED_STORE_DEPLOYED bool = deploySharedStore
 output SHARED_STORE_ACCOUNT_NAME string = deploySharedStore ? sharedStore!.outputs.name : ''
 output SHARED_STORE_BLOB_ENDPOINT string = deploySharedStore ? sharedStore!.outputs.blobEndpoint : ''

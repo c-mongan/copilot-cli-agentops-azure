@@ -10,7 +10,7 @@ function loadCopilotClient() {
       }
 
       async createSession(config) {
-        return { dryRun: true, config };
+        return { dryRun: true, config, on: () => () => {} };
       }
     };
   }
@@ -28,8 +28,15 @@ const client = createAgentOpsCopilotClient(CopilotClient, {
 });
 
 async function main() {
-  const session = await client.createSession(client.createAgentOpsSessionConfig());
-  console.log(`created session: ${Boolean(session)}`);
+  // One call composes privacy hooks, enables streaming, and attaches the
+  // ordered metadata-only session observer.
+  const session = await client.createAgentOpsSession();
+  try {
+    console.log(`created session: ${Boolean(session)}`);
+  } finally {
+    if (typeof session?.destroy === 'function') await session.destroy();
+    if (typeof client.stop === 'function') await client.stop();
+  }
 }
 
 main().catch(error => {

@@ -1,8 +1,8 @@
-const crypto = require('node:crypto');
+const { hashText } = require('../hash');
 
 function hashValue(value) {
   if (!value) return '';
-  return crypto.createHash('sha256').update(String(value)).digest('hex');
+  return hashText(String(value));
 }
 
 function normalizeGenAiAttributes(attributes = {}, defaults = {}) {

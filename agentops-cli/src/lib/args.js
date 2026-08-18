@@ -14,6 +14,42 @@ function optionValue(args, names, fallback = null) {
   return fallback;
 }
 
+function requiredOptionValue(args, names) {
+  const list = Array.isArray(names) ? names : [names];
+  for (const name of list) {
+    const index = args.indexOf(name);
+    if (index !== -1) {
+      if (!args[index + 1]) throw new Error(`${name} requires a value`);
+      return args[index + 1];
+    }
+  }
+  return null;
+}
+
+function optionValues(args, name) {
+  const values = [];
+  for (let index = 0; index < args.length; index += 1) {
+    if (args[index] === name) {
+      if (!args[index + 1]) throw new Error(`${name} requires a value`);
+      values.push(args[index + 1]);
+      index += 1;
+    }
+  }
+  return values;
+}
+
+function firstPositional(args = []) {
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg.startsWith('--')) {
+      if (!arg.includes('=') && index + 1 < args.length && !args[index + 1].startsWith('--')) index += 1;
+      continue;
+    }
+    return arg;
+  }
+  return 'latest';
+}
+
 function parseJsonFlag(args) {
   return hasFlag(args, '--json');
 }
@@ -34,8 +70,11 @@ function withoutFlags(args, names) {
 }
 
 module.exports = {
+  firstPositional,
   hasFlag,
   optionValue,
+  optionValues,
   parseJsonFlag,
+  requiredOptionValue,
   withoutFlags
 };

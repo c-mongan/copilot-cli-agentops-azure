@@ -1,7 +1,7 @@
 const crypto = require('node:crypto');
-const fs = require('node:fs');
 const path = require('node:path');
 
+const { appendJsonlFile } = require('../command-output');
 const { agentopsHome } = require('../paths');
 
 function wrapperId(prefix) {
@@ -19,19 +19,34 @@ function wrapperEventsPath() {
   return process.env.AGENTOPS_WRAPPER_EVENTS_PATH || path.join(agentopsHome, 'wrapper-events.jsonl');
 }
 
+function safeWrapperEvent(event = {}) {
+  const row = {
+    TimeGenerated: new Date().toISOString(),
+    EventName: String(event.EventName || 'agentops.wrapper.event').slice(0, 120),
+    RunId: String(event.RunId || '').slice(0, 200),
+    SessionId: String(event.SessionId || '').slice(0, 200),
+    Surface: String(event.Surface || 'cli').slice(0, 40),
+    PrivacyMode: String(event.PrivacyMode || 'strict').slice(0, 20)
+  };
+  if (event.CollectorMode) row.CollectorMode = String(event.CollectorMode).slice(0, 20);
+  if (Number.isInteger(event.ExitCode)) row.ExitCode = event.ExitCode;
+  if (event.FallbackUnobserved !== undefined) row.FallbackUnobserved = Boolean(event.FallbackUnobserved);
+  if (event.Reason || event.Error) row.ReasonCategory = event.EventName === 'agentops.collector.start_failed'
+    || event.EventName === 'agentops.wrapper.fallback_unobserved'
+    ? 'collector_start_failed'
+    : 'runtime_error';
+  return row;
+}
+
 function appendWrapperEvent(event, options = {}) {
   const file = options.file || wrapperEventsPath();
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.appendFileSync(file, `${JSON.stringify({
-    TimeGenerated: new Date().toISOString(),
-    EventName: event.EventName || 'agentops.wrapper.event',
-    ...event
-  })}\n`);
+  appendJsonlFile(file, safeWrapperEvent(event));
   return file;
 }
 
 module.exports = {
   appendWrapperEvent,
   createWrapperEnvelope,
+  safeWrapperEvent,
   wrapperEventsPath
 };

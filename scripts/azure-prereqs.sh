@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-: "${AZURE_SUBSCRIPTION_ID:?Set AZURE_SUBSCRIPTION_ID before running scripts/azure-prereqs.sh}"
-subscription_id="$AZURE_SUBSCRIPTION_ID"
-resource_group="${AZURE_RESOURCE_GROUP:-rg-agentops-dev}"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${script_dir}/lib/azure-subscription-guard.sh"
+
+: "${AGENTOPS_AZURE_SUBSCRIPTION_ID:?Set AGENTOPS_AZURE_SUBSCRIPTION_ID before running scripts/azure-prereqs.sh}"
+subscription_id="$AGENTOPS_AZURE_SUBSCRIPTION_ID"
+resource_group="${AZURE_RESOURCE_GROUP:-rg-copilot-agentops-dev}"
 location="${AZURE_LOCATION:-northeurope}"
 
 cat <<MSG
@@ -24,7 +27,7 @@ MSG
   exit 2
 fi
 
-az account set --subscription "$subscription_id"
+agentops_require_azure_subscription
 az provider register --namespace Microsoft.Monitor
 az provider register --namespace Microsoft.Dashboard
 az group create --name "$resource_group" --location "$location" --tags app=copilot-cli-agentops-azure environment=dev

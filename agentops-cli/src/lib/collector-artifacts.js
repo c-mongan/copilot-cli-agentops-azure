@@ -2,6 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const { collectorDir, repoRoot } = require('./paths');
+const { readJson } = require('./json');
 const { contentLikeKeys, sanitizeAttributesStrict } = require('./privacy');
 
 const requiredProcessors = [
@@ -24,6 +25,7 @@ const requiredOwaspFixtures = [
 ];
 const requiredMcpAbuseRisks = ['network', 'shell', 'destructive', 'secret-access'];
 const strictConfigs = ['otelcol.azuremonitor.strict.yaml', 'otelcol.binary.strict.yaml', 'otelcol.local.strict.yaml'];
+const nativeConfigs = ['otelcol.azuremonitor.native.strict.yaml'];
 
 function validateProcessorFragment({ file, body }) {
   if (file === 'strict-allowlist.yaml' && !body.includes('keep_keys')) return `${file}: missing keep_keys allowlist`;
@@ -37,7 +39,7 @@ function validateProcessorFragment({ file, body }) {
 function validatePoisonFixture({ file, fullPath }) {
   let fixture;
   try {
-    fixture = JSON.parse(fs.readFileSync(fullPath, 'utf8'));
+    fixture = readJson(fullPath);
   } catch (error) {
     return {
       file,
@@ -75,7 +77,7 @@ function validateCollectorArtifacts(options = {}) {
   const root = options.root || repoRoot;
   const collectorRoot = path.join(root, 'collector');
   const processorsDir = path.join(collectorRoot, 'processors');
-  const fixturesDir = path.join(collectorRoot, 'tests', 'privacy-poison-fixtures');
+  const fixturesDir = path.join(collectorRoot, 'security-fixtures', 'privacy-poison-fixtures');
   const errors = [];
   const warnings = [];
 
@@ -115,6 +117,19 @@ function validateCollectorArtifacts(options = {}) {
     else if (!fs.readFileSync(fullPath, 'utf8').includes('transform/privacy_strict')) warnings.push(`${file}: does not reference transform/privacy_strict`);
   }
 
+  for (const file of nativeConfigs) {
+    const fullPath = path.join(collectorRoot, file);
+    if (!fs.existsSync(fullPath)) {
+      errors.push(`missing native Azure Collector overlay: ${fullPath}`);
+      continue;
+    }
+    const body = fs.readFileSync(fullPath, 'utf8');
+    if (!body.includes('azure_auth') || !body.includes('use_default: true')) errors.push(`${file}: missing default Entra azure_auth configuration`);
+    if (!body.includes('otlp_http/azuremonitor')) errors.push(`${file}: missing current otlp_http Azure exporter`);
+    if (!body.includes('AZURE_MONITOR_OTLP_TRACES_ENDPOINT') || !body.includes('AZURE_MONITOR_OTLP_LOGS_ENDPOINT') || !body.includes('AZURE_MONITOR_OTLP_METRICS_ENDPOINT')) errors.push(`${file}: missing signal-specific Azure OTLP endpoint environment variables`);
+    if (!body.includes('otelcol.local.strict.yaml')) warnings.push(`${file}: overlay must be run with otelcol.local.strict.yaml for the fail-closed privacy processor`);
+  }
+
   return {
     ok: errors.length === 0,
     processors: requiredProcessors.map(file => path.join(processorsDir, file)),
@@ -126,7 +141,7 @@ function validateCollectorArtifacts(options = {}) {
 
 function validateOwaspFixtures(options = {}) {
   const root = options.root || repoRoot;
-  const fixturesDir = path.join(root, 'collector', 'tests', 'owasp-abuse-fixtures');
+  const fixturesDir = path.join(root, 'collector', 'security-fixtures', 'owasp-abuse-fixtures');
   const errors = [];
   const results = [];
 
@@ -141,7 +156,7 @@ function validateOwaspFixtures(options = {}) {
     if (result.error) errors.push(result.error);
     if (!result.ok && !result.error) errors.push(`${file}: strict sanitizer did not drop all abuse fixture content`);
     if (file === 'mcp-dangerous-tool-classes.json' && !result.error) {
-      const fixture = JSON.parse(fs.readFileSync(fullPath, 'utf8'));
+      const fixture = readJson(fullPath);
       const risks = mcpAbuseRisksFromFixture(fixture);
       const missingRisks = requiredMcpAbuseRisks.filter(risk => !risks.has(risk));
       if (missingRisks.length > 0) errors.push(`${file}: missing MCP abuse risk classes: ${missingRisks.join(', ')}`);
@@ -166,6 +181,7 @@ module.exports = {
   requiredMcpAbuseRisks,
   requiredOwaspFixtures,
   requiredProcessors,
+  nativeConfigs,
   strictConfigs,
   validateCollectorArtifacts,
   validateOwaspFixtures,

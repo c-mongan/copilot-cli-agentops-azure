@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+const { recordScriptExecution } = require('./script-observability');
+
 async function readStdin() {
   return new Promise((resolve) => {
     let data = '';
@@ -9,7 +11,8 @@ async function readStdin() {
   });
 }
 
-function deny(reason) {
+function deny(input, reason) {
+  recordScriptExecution(input, { scriptName: 'pre-tool-policy', hookType: 'preToolUse', outcome: 'blocked' });
   process.stdout.write(JSON.stringify({
     permissionDecision: 'deny',
     permissionDecisionReason: reason
@@ -66,17 +69,18 @@ function truthy(value) {
 
   for (const pattern of blockedPatterns) {
     if (argText.includes(pattern)) {
-      return deny(`Blocked by AgentOps demo preToolUse guardrail: risky command or secret access pattern "${pattern}".`);
+      return deny(input, `Blocked by AgentOps demo preToolUse guardrail: risky command or secret access pattern "${pattern}".`);
     }
   }
 
   if (broadTools && contentCapture) {
-    return deny('Blocked by AgentOps demo preToolUse guardrail: broad tool permissions cannot run with content capture enabled.');
+    return deny(input, 'Blocked by AgentOps demo preToolUse guardrail: broad tool permissions cannot run with content capture enabled.');
   }
 
   if ((tool.includes('write') || tool.includes('edit')) && argText.includes('.env')) {
-    return deny('Blocked by AgentOps demo preToolUse guardrail: writing .env files is not allowed.');
+    return deny(input, 'Blocked by AgentOps demo preToolUse guardrail: writing .env files is not allowed.');
   }
 
+  recordScriptExecution(input, { scriptName: 'pre-tool-policy', hookType: 'preToolUse', outcome: 'allowed' });
   process.exit(0);
 })();

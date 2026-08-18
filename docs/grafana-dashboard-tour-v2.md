@@ -8,7 +8,7 @@ Start here when you want the answer in one screen.
 
 It shows:
 
-- a first-row action strip for opening the latest Run Replay, generating one recommendation, and building an Ask AgentOps context bundle with prompt-template guidance;
+- a first-row action strip for opening the latest Run Story, generating one recommendation, and building an Ask AgentOps context bundle with prompt-template guidance;
 - runs, success rate, failed runs, policy blocks, privacy drops, estimated cost, input/output tokens, p95 duration, tests ran percent, PRs opened, and collector health;
 - Session Health table with status, risk, root agent, model, tool failures, policy denials, privacy signal, context pressure, eval score, benchmark linkage, and recommended next action;
 - recommended next actions from insight rows;
@@ -16,7 +16,7 @@ It shows:
 - GitHub outcome summary;
 - shared saved investigations exported from `agentops saved-view export` or created in the hosted `/api/shared-store/editor` page.
 
-Click a `RunId` to open Run Replay. Click a model, repo hash, tool, skill, or sub-agent to keep drilling with the same time range.
+Click a `RunId` to open Run Story. Click a model, repo hash, tool, skill, or sub-agent to keep drilling with the same time range.
 
 ## 2. Runs Explorer
 
@@ -35,7 +35,7 @@ The table keeps the fields operators need most: run/session/trace IDs, surface, 
 
 Use the explicit `OpenReplay`, `OpenTrace`, and `OpenGithub` action cells when you want the shortest Datadog-style drilldown path from the trace list.
 
-## 3. Agent Run Replay
+## 3. Agent Run Story
 
 This is the main debugging screen.
 
@@ -55,7 +55,7 @@ It tells the story of one run using metadata that remains useful in strict priva
 
 Prompt and response text appears only in `AgentOpsContent_CL`, which is explicit opt-in. In strict mode, the transcript panel stays empty and does not error. When content rows exist, the viewer renders them as a transcript with role, turn, content kind, message text, capture mode, redaction status, content hash, and content length.
 
-From the CLI, `agentops open latest --runs <AgentOpsRunSummary_CL.jsonl>` prints both the normal Run Replay URL and a dedicated prompt/response viewer URL for panel 26. That link is a drilldown target, not permission to collect content.
+From the CLI, `agentops open latest --runs <AgentOpsRunSummary_CL.jsonl>` prints both the normal Run Story URL and a dedicated prompt/response viewer URL for panel 26. That link is a drilldown target, not permission to collect content.
 
 Inside Grafana, the **Transcript availability** panel has an `OpenTranscript` cell that jumps to the same prompt/response viewer while preserving the dashboard time range.
 
@@ -130,11 +130,11 @@ Scores cover:
 - reliability;
 - code outcome.
 
-Low-score runs link back into Run Replay.
+Low-score runs link back into Run Story.
 
 The **Eval scorecard by repo, model, and task** panel groups eval rows into scorecards with overall, test discipline, tool efficiency, security, reliability, and code outcome averages. It also counts poor and review-bucket runs so weak slices are visible without opening every run.
 
-The **Eval regression follow-up** panel shows poor/review eval recommendations and regression actions with Run Replay and pattern drilldowns.
+The **Eval regression follow-up** panel shows poor/review eval recommendations and regression actions with Run Story and pattern drilldowns.
 
 The **Before/after run comparison** panel compares each run with the previous run in the same repo, model, and task slice. It highlights eval, cost, token, tool-failure, and risk deltas so before/after changes can be reviewed without opening every run.
 
@@ -199,7 +199,7 @@ It shows:
 ```text
 Home
   -> click failed RunId
-  -> Run Replay
+  -> Run Story
   -> click failed ToolName
   -> Tools & MCP Risk
   -> click ModelActual

@@ -28,11 +28,11 @@ if (Get-Command azd -ErrorAction SilentlyContinue) {
 
 if ($startCollector) {
   Write-Host ""
-  & node (Join-Path $scriptDir "agentops-cli/src/index.js") collector start --mode auto --privacy strict
+  & node (Join-Path $scriptDir "agentops-cli/src/index.js") collector start --mode local --privacy strict
   if ($LASTEXITCODE -eq 0) {
     Write-Host "Collector is running."
   } else {
-    Write-Host "Collector did not start yet. Check Azure config with: agentops configure import-azd"
+    Write-Host "Collector did not start yet. Install the local binary with: agentops collector install-binary"
   }
 }
 

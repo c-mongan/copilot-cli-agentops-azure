@@ -25,7 +25,7 @@ const payload = {
           { key: 'service.namespace', value: { stringValue: 'copilot-agentops' } },
           { key: 'agent.runtime', value: { stringValue: 'github-copilot-cli' } },
           { key: 'agentops.profile', value: { stringValue: 'safe-default' } },
-          { key: 'agentops.smoke_id', value: { stringValue: smokeId } }
+          { key: 'agentops.e2e.id', value: { stringValue: smokeId } }
         ]
       },
       scopeSpans: [
@@ -40,7 +40,7 @@ const payload = {
               startTimeUnixNano: now.toString(),
               endTimeUnixNano: end.toString(),
               attributes: [
-                { key: 'agentops.smoke_id', value: { stringValue: smokeId } },
+                { key: 'agentops.custom_event_id', value: { stringValue: smokeId } },
                 { key: 'gen_ai.operation.name', value: { stringValue: 'smoke_test' } },
                 { key: 'content.capture.enabled', value: { boolValue: false } }
               ],
@@ -69,5 +69,5 @@ endpoint=${endpoint}
 Query it with:
 az monitor log-analytics query \\
   --workspace "\${AGENTOPS_LOG_ANALYTICS_WORKSPACE_ID}" \\
-  --analytics-query "AppDependencies | where TimeGenerated > ago(2h) | where Properties has '${smoke_id}' or Name has '${smoke_id}' | project TimeGenerated, Name, Properties | order by TimeGenerated desc | take 20"
+  --analytics-query "OTelSpans | where TimeGenerated > ago(2h) | where tostring(Attributes) contains '${smoke_id}' or tostring(ResourceAttributes) contains '${smoke_id}' | project TimeGenerated, Name, TraceId, SpanId, Attributes, ResourceAttributes | order by TimeGenerated desc | take 20"
 MSG

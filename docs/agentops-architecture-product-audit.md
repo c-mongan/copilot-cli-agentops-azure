@@ -406,7 +406,7 @@ Current gaps:
 
 Product recommendation:
 
-- Keep real Copilot OTel fixture snapshot contract tests in CI as Copilot fields evolve. The local `real-copilot-otel-fixture-contract` product-audit check now validates `tests/sample-otel/copilot-cli-wrapper-snapshot.jsonl` through `agentops-cli/src/lib/copilot/fixture-contract.js`.
+- Keep real Copilot OTel fixture snapshot contract tests in CI as Copilot fields evolve. The local `real-copilot-otel-fixture-contract` product-audit check now validates `fixtures/sample-otel/copilot-cli-wrapper-snapshot.ndjson.fixture` through `agentops-cli/src/lib/copilot/fixture-contract.js`.
 - Keep Copilot help snapshots current and classify new flags as tracked or intentionally ignored.
 - Generate Bash/PowerShell flag metadata from one source of truth if this grows further.
 
@@ -457,7 +457,6 @@ Product recommendation:
 Primary files:
 
 - `azure.yaml`
-- `.azure/deployment-plan.md`
 - `infra/bicep/main.bicep`
 - `infra/bicep/log-analytics.bicep`
 - `infra/bicep/app-insights.bicep`
@@ -579,7 +578,7 @@ Current gaps:
 - Some KQL files are investigation scripts with more than one final tabular expression. That is fine for manual use, but dashboard panels usually need one predictable result shape.
 - `agentops health --json` now exposes a stable machine-readable setup and latest-run health contract for setup wizards and UI adapters.
 - Recommendations are rule-based heuristics, not evidence ranking over recurring patterns.
-- `open` prints links. Real-Copilot smoke can open the Run Replay link directly with `--open-browser` after latest-run visibility is verified.
+- `open` prints links. Real-Copilot smoke can open the Run Story link directly with `--open-browser` after latest-run visibility is verified.
 
 Product recommendation:
 
@@ -739,7 +738,7 @@ What works well:
   - warn on unresolved tool failures, content-capture signals, and missing validation metadata at agent stop
   - write metadata-only notification sidecar rows for hook type, decision, reason category, duration, and session ID
   - validate bundled hook scripts against documented camelCase and VS Code-compatible snake_case hook stdin fixtures
-- `agentops-evidence-prompts` now starts from a concrete `agentops ask-context` investigation bundle with session ID, time range, Run Replay URL, KQL query, latest recommendation, and benchmark run ID when present.
+- `agentops-evidence-prompts` now starts from a concrete `agentops ask-context` investigation bundle with session ID, time range, Run Story URL, KQL query, latest recommendation, and benchmark run ID when present.
 - MCP config is read-only for Azure Monitor and tokenized for Grafana.
 
 Current gaps:
@@ -874,7 +873,7 @@ What works well:
 - Failure and high-AIU alerts exist as infrastructure.
 - No action groups are attached by default.
 - `agentops alert history` and `agentops alert detail` provide metadata-only fired-alert candidate review with KQL and session links.
-- `agentops alert open` turns an alert rule/session pair into Run Replay, Runs Explorer, session detail, content-viewer, and Azure Logs links.
+- `agentops alert open` turns an alert rule/session pair into Run Story, Runs Explorer, session detail, content-viewer, and Azure Logs links.
 - `agentops alert review` bundles alert detail, open links, action-plan metadata, and export evidence into one metadata-only packet.
 - The Alert Tuning dashboard includes metadata-only threshold recommendations, suggested threshold impact, and fired-alert candidates with session detail, replay, Azure Logs links, and `agentops alert review` commands.
 - `agentops alert action-plan` generates deterministic GitHub issue or Azure DevOps work-item payload metadata with KQL, session links, and guardrails.
@@ -1031,7 +1030,7 @@ agentops latest
 Then:
 
 ```text
-Use agentops-latest-run to find my latest AgentOps run, open the Run Replay link, explain it, and recommend one next action.
+Use agentops-latest-run to find my latest AgentOps run, open the Run Story link, explain it, and recommend one next action.
 ```
 
 ### Daily Copilot Use
@@ -1041,9 +1040,9 @@ Current experience:
 - If shadow shim is first on PATH, plain `copilot` is observed.
 - If collector is missing, wrapper tries to start it.
 - If collector fails to start, Copilot still runs without observation.
-- Successful wrapped runs print an optional `AgentOps Run Replay` link scoped to the wrapper run/session IDs.
+- Successful wrapped runs print an optional `AgentOps Run Story` link scoped to the wrapper run/session IDs.
 - The user can query latest run with CLI or ask `agentops-latest-run`.
-- The first-run real-Copilot smoke command includes `--open-browser`, so Run Replay opens directly after latest-run visibility is verified.
+- The first-run real-Copilot smoke command includes `--open-browser`, so Run Story opens directly after latest-run visibility is verified.
 
 This is close to native.
 
@@ -1060,8 +1059,8 @@ This is strong for technical users.
 
 Missing world-class behavior:
 
-- The dashboard now gives the agent explicit session context, Run Replay URL, starter KQL, copyable `agentops ask-context` commands, a linked `AskAgentOpsLaunch` action for the hosted `/api/ask-agentops` page/packet, one-click shared recommendation/saved-view actions, and alert handoff review rows for the hosted `/api/ask-agentops/shared/*` routes. The hosted page now includes a first-party metadata-only response draft, optional metadata-only live assistant response flow, and optional inline or shared-storage hydrated recommendation, saved-view, and alert-handoff context. It is still not a fully embedded Grafana-native assistant.
-- Recommendations are now present in Run Replay as first-class artifacts with copyable follow-up commands, a local metadata-only recommendation store, an opt-in shared Blob upload plan, a hosted metadata-only write API, and a hosted browser editor for team review artifacts. The CLI can compare a completed follow-up run with `agentops recommend compare` and populate `AfterTelemetry` plus pass/fail `ObservedMetricMovement`, then turn an approved `OperatorReview` row into a guarded `agentops recommend action-plan` patch/benchmark workflow. The hosted Ask AgentOps flow can now render recommendation target refs, benchmark links, artifact file paths, `ExpectedMetricMovement`, `BeforeTelemetry`, `AfterTelemetry`, validation, rollback, a guided approve/reject `OperatorReview`, saved-view annotations, and alert handoff config-change context, but the dashboard still does not apply the patch for the user.
+- The dashboard now gives the agent explicit session context, Run Story URL, starter KQL, copyable `agentops ask-context` commands, a linked `AskAgentOpsLaunch` action for the hosted `/api/ask-agentops` page/packet, one-click shared recommendation/saved-view actions, and alert handoff review rows for the hosted `/api/ask-agentops/shared/*` routes. The hosted page now includes a first-party metadata-only response draft, optional metadata-only live assistant response flow, and optional inline or shared-storage hydrated recommendation, saved-view, and alert-handoff context. It is still not a fully embedded Grafana-native assistant.
+- Recommendations are now present in Run Story as first-class artifacts with copyable follow-up commands, a local metadata-only recommendation store, an opt-in shared Blob upload plan, a hosted metadata-only write API, and a hosted browser editor for team review artifacts. The CLI can compare a completed follow-up run with `agentops recommend compare` and populate `AfterTelemetry` plus pass/fail `ObservedMetricMovement`, then turn an approved `OperatorReview` row into a guarded `agentops recommend action-plan` patch/benchmark workflow. The hosted Ask AgentOps flow can now render recommendation target refs, benchmark links, artifact file paths, `ExpectedMetricMovement`, `BeforeTelemetry`, `AfterTelemetry`, validation, rollback, a guided approve/reject `OperatorReview`, saved-view annotations, and alert handoff config-change context, but the dashboard still does not apply the patch for the user.
 - Saved investigations now surface on the Home dashboard from metadata-only `AgentOpsSavedViews_CL` exports, with an opt-in shared Blob store, hosted metadata-only write API, and browser-native saved-view editor.
 - Saved-view exports can now include session-matched config-change annotation counts and change-target refs from `--events`, so saved investigations keep the nearby skill/hook/MCP/model change context.
 
@@ -1140,13 +1139,13 @@ Implemented first slice:
 
 - `agentops init --dry-run` for setup readiness, bundled skill install planning, and first-run next steps.
 - `agentops setup` now prints a read-only one-minute first-run loop that recommends `agentops init --full` first, then keeps bind, strict poison smoke, `agentops smoke --real-copilot`, latest/open, dashboard import, and live dashboard verification as fallbacks.
-- `agentops smoke --real-copilot` sends the synthetic OTLP smoke, runs a safe no-edit Copilot prompt with content capture off, waits for the latest Copilot run to appear, then prints the V2 Run Replay link.
+- `agentops smoke --real-copilot` sends the synthetic OTLP smoke, runs a safe no-edit Copilot prompt with content capture off, waits for the latest Copilot run to appear, then prints the V2 Run Story link.
 - `agentops validate-azure` for read-only Azure CLI, subscription, resource group, workspace, App Insights, query, Grafana resource, datasource, and dashboard UID checks.
 - `agentops validate-azure --import-dashboards` for explicit remediation when validation finds missing Grafana dashboards.
 - `agentops init --dry-run` now points to the same core first-run loop instead of older experimental smoke/context commands.
 - `agentops init --full` now runs the explicit cloud provision, dashboard import, smoke/open-link, and latest triage stages together.
 - `agentops init --full` now returns a compact summary with the single next action and requested stage statuses.
-- The bundled `agentops-setup` Copilot skill now uses `agentops init --full` and asks Copilot to report the Run Replay link plus one evidence-backed next action.
+- The bundled `agentops-setup` Copilot skill now uses `agentops init --full` and asks Copilot to report the Run Story link plus one evidence-backed next action.
 - The latest-run workflow and bundled skill now prefer `agentops ask-context latest` as the metadata-only Copilot investigation bundle before explain/recommend commands.
 - `agentops annotation config-change` now emits metadata-only `agentops.config.changed` events for skill, hook, MCP, model, deployment, and benchmark changes, with an Insights dashboard panel for change/regression correlation.
 - `agentops recommend --events` now attaches matching config-change annotations to regression recommendations and persists them as metadata-only `ChangeAnnotations` plus concrete `ChangeTargetRefs`.
@@ -1155,12 +1154,12 @@ Implemented first slice:
 - `actioner/SharedStoreWrite` now accepts hosted metadata-only recommendation, saved-view, and alert-handoff row writes into the shared Blob store through managed identity.
 - `actioner/SharedStoreEditor` now renders a hosted browser form for metadata-only recommendation, saved-investigation, and alert-handoff rows that submits to the same validated write API.
 - `actioner/AskAgentOps` now renders a hosted metadata-only assistant launch packet/page for a selected run, session, or trace, with optional `AGENTOPS_ASSISTANT_URL` deep links.
-- The Run Replay `Ask AgentOps context` panel now includes an `AskAgentOpsLaunch` action URL driven by the configurable `actioner_url` dashboard variable.
+- The Run Story `Ask AgentOps context` panel now includes an `AskAgentOpsLaunch` action URL driven by the configurable `actioner_url` dashboard variable.
 - `actioner/AskAgentOps` now includes a first-party metadata-only response draft with evidence, root-cause candidates, proposed action, validation, and rollback condition so the hosted workflow has an immediate investigation answer even before an external assistant is configured.
 - `actioner/AskAgentOps` can now accept a schema-valid metadata-only recommendation row and render linked `ChangeTargetRefs`, benchmark run id/decision, artifact file paths, expected/before/after metric movement, validation steps, rollback, and a guided `OperatorReview` approve/reject control without rendering raw diff content.
 - `actioner/AskAgentOps` can now accept metadata-only saved-view rows and alert handoff packets, then render annotation-linked saved-view context, alert owner/query context, config-change counts, operator steps, and guardrails in the hosted workflow.
 - `actioner/AskAgentOpsShared` now exposes `/api/ask-agentops/shared`, which hydrates recommendation, saved-view, and alert-handoff context from shared Blob ids instead of requiring the full metadata packets to be posted inline.
-- Run Replay, Home, Insights, and Safety dashboards now include shared Ask AgentOps action cells for recommendation, saved-view, and alert handoff review rows, backed by GET routes that hydrate shared Blob metadata by id.
+- Run Story, Home, Insights, and Safety dashboards now include shared Ask AgentOps action cells for recommendation, saved-view, and alert handoff review rows, backed by GET routes that hydrate shared Blob metadata by id.
 - Recommendation rows now carry metadata-only `ExpectedMetricMovement`, `BeforeTelemetry`, `AfterTelemetry`, `ObservedMetricMovement`, and `OperatorReview` fields. `agentops recommend compare` populates the after-run snapshot and marks metric movement as improved, mixed, regressed, or not comparable.
 - `agentops recommend action-plan` now requires an approved `OperatorReview` and emits a metadata-only guarded patch prompt plus branch, benchmark run, benchmark report, and after-run compare commands. It refuses unapproved, regressed, rejected, or validation-missing recommendation rows.
 - `agentops alert handoff --events` now attaches matching config-change annotations plus a session-scoped annotation KQL query to alert operator handoffs and route previews.
@@ -1173,15 +1172,9 @@ Implemented first slice:
 - `agentops init --provision-cloud` is the explicit guided cloud deploy/bind path: it runs `azd provision` and imports azd outputs into AgentOps config.
 - `agentops init --provision-cloud` now reports the failing setup stage and targeted remediation when `azd provision` or `agentops configure import-azd` fails.
 - `agentops product audit` now verifies the local control-room contract: schema, strict privacy, Copilot CLI/SDK, MCP, GitHub outcomes, evals/insights, V2 dashboards, drilldowns, transcript opt-in, KQL library, and first-run wiring.
-- `agentops product audit --live --last 2h --require-rows --json` now verifies that same contract plus live Azure resources and row-backed Grafana KQL checks. Latest observed result on 2026-05-31: 18/18 checks passed, live Azure verified, live Grafana verified, 19 live KQL checks, and 709 dashboard links checked.
-- `agentops product audit --live --last 2h --require-rows --require-visual --json` is the final completion gate. It adds rendered Grafana dashboard proof through the same strict browser visual check used by E2E.
-- `npm --prefix agentops-cli test` latest observed result on 2026-05-31: 171/171 tests passed.
-- Read-only live validation on 2026-05-31 found the Azure resource group, Log Analytics workspace, Application Insights component, Managed Grafana resource, Azure Monitor datasource, and all 24 expected dashboards.
-- `agentops dashboard verify --live --last 24h --json` passed 19 live KQL syntax checks, 10 V2 dashboard UX checks, and 709 dashboard links. Current live tables were mostly empty for run-specific panels, so row-presence proof still needs a fresh real Copilot smoke or demo ingest.
-- Fresh strict real-Copilot smoke on 2026-05-31 produced `agentops-smoke-20260531122930-30d7a7`, verified one Log Analytics smoke row, and printed a V2 Run Replay link for session `github-copilot-cli_6729a76812fbd25604f1fd345c2fc29c_20260531_1200`.
-- `agentops dashboard verify --live --last 2h --require-rows --json` then passed row-required live checks: 19 KQL checks, 10 V2 dashboards, 709 links, 16 row-required panels populated, and the explicit opt-in transcript/pattern panels allowed to remain empty.
-- Fresh live E2E on 2026-05-31 produced `agentops-e2e-20260531T123920Z`, forced `AGENTOPS_PRIVACY_MODE=strict`, `AGENTOPS_CAPTURE_CONTENT=false`, and `COPILOT_OTEL_CAPTURE_CONTENT=false`, matched session `61a403b4-c5ea-4fff-bd88-a3a4b75ae1e5`, and generated a PASS browser report screenshot.
-- Browser screenshot attempts against Azure Managed Grafana were blocked by Microsoft sign-in in this unauthenticated browser profile. The E2E checker records `auth-blocked` and no longer copies sign-in pages into `docs/screenshots/v2/`.
+- Live product-audit and dashboard commands are operator-run gates only. Their output may contain tenant-specific resource IDs, row data, URLs, session identifiers, and screenshots; keep that evidence outside the public repository.
+- Local product-audit, dashboard-link, schema, and visual-report checks are useful offline evidence, but do not prove live Azure resources, query-back, authentication, or production readiness.
+- A successful OTLP HTTP response or local smoke is not query proof. For an approved pilot, independently verify traces, logs, metrics, and any rendered Agents/Grafana view, then record the result in a private evidence store.
 - `agentops e2e browser-check --require-grafana-visible` is now the strict visual gate: auth-blocked pages are acceptable for local report QA, but they fail authenticated dashboard visual verification.
 - The strict visual gate now accepts `--browser-user-data-dir`, `--storage-state`, `--browser-executable`, and `--headed` so authenticated Grafana screenshot QA can reuse a deliberate signed-in browser profile instead of relying on the default automation profile.
 - When the strict visual gate hits Microsoft SSO, `.agentops/e2e/latest/browser-notes.md` now includes an Auth Remediation section with the exact one-time sign-in command and the exact rerun command for the same report/profile.
@@ -1206,13 +1199,13 @@ The default UI answers: what happened, why did it fail or cost money, what chang
 Implemented:
 
 - Session explorer as first screen through the Home **Session Health** panel and the **Runs Explorer** dashboard.
-- Trace waterfall through Run Replay's **Replay timeline** and `OpenTrace` drilldowns.
-- Policy/safety strip through Run Replay's **Policy, privacy, tests, and GitHub outcome** panel plus the Safety, Privacy & Policy dashboard.
-- Tool/MCP waterfall through Run Replay's **Agent, skill, and MCP lineage** panel plus the Tools & MCP Risk dashboard.
-- Context/tokens panel through Run Replay's **Context and cache posture** panel and the Models, Cost & Tokens dashboard.
-- Recommendation panel through Home **Recommended next actions**, Run Replay **Latest recommendation**, and Insights **Recommendation artifacts**.
+- Trace waterfall through Run Story's **Replay timeline** and `OpenTrace` drilldowns.
+- Policy/safety strip through Run Story's **Policy, privacy, tests, and GitHub outcome** panel plus the Safety, Privacy & Policy dashboard.
+- Tool/MCP waterfall through Run Story's **Agent, skill, and MCP lineage** panel plus the Tools & MCP Risk dashboard.
+- Context/tokens panel through Run Story's **Context and cache posture** panel and the Models, Cost & Tokens dashboard.
+- Recommendation panel through Home **Recommended next actions**, Run Story **Latest recommendation**, and Insights **Recommendation artifacts**.
 - Eval/benchmark linkage through Evals & Quality scorecards, before/after comparison, artifact review, hidden checks, policy review, semantic checks, and promotion approvals.
-- Ask AgentOps panel through Run Replay **Ask AgentOps context** and hosted Ask AgentOps action links.
+- Ask AgentOps panel through Run Story **Ask AgentOps context** and hosted Ask AgentOps action links.
 - `agentops product audit` now includes `run-centric-ui-contract` so this UI shape remains a local release gate.
 
 ### 3. Agent Improvement Loop
@@ -1270,7 +1263,7 @@ Implemented:
 - Schema versioning in demo rows, ingest-plan warnings, and Collector Health coverage.
 - Exporter failure visibility in Collector Health rows and dashboard review actions.
 - Schema migration policy in ingest planning for current, legacy, missing, and unsupported newer table versions.
-- Real Copilot fixture regression tests through `real-copilot-otel-fixture-contract` and `tests/sample-otel/copilot-cli-wrapper-snapshot.jsonl`.
+- Real Copilot fixture regression tests through `real-copilot-otel-fixture-contract` and `fixtures/sample-otel/copilot-cli-wrapper-snapshot.ndjson.fixture`.
 
 ## Recommended Roadmap
 
