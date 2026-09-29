@@ -10,6 +10,7 @@ const skipDirs = new Set([
   '.agentops',
   '.azure',
   '.git',
+  '__pycache__',
   'node_modules'
 ]);
 const generatedCliAssetDirs = new Set([
@@ -24,6 +25,7 @@ const generatedCliAssetDirs = new Set([
   'examples',
   'grafana',
   'infra',
+  'instrumentation',
   'packages',
   'plugin',
   'scripts',

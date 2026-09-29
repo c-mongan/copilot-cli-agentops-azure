@@ -46,7 +46,7 @@ function defaultReceiptFiles() {
     .filter(file => fs.existsSync(file));
 }
 
-function readSessionOtelSpans(sessionId, files = defaultReceiptFiles()) {
+function readSessionOtelSpans(sessionId, files = defaultReceiptFiles(), options = {}) {
   const spans = [];
   const seen = new Set();
   let invalid = 0;
@@ -69,9 +69,13 @@ function readSessionOtelSpans(sessionId, files = defaultReceiptFiles()) {
           || attributeValue(attributes, 'agentops.session.id')
           || attributeValue(resourceAttributes, 'gen_ai.conversation.id')
           || attributeValue(resourceAttributes, 'agentops.session.id');
-        if (conversationId !== sessionId) continue;
-        const start = span.type === 'span' ? flatMillisecondTime(span.startTime) : millisecondTime(span.startTimeUnixNano);
-        const end = span.type === 'span' ? flatMillisecondTime(span.endTime) : millisecondTime(span.endTimeUnixNano);
+        const runId = attributeValue(attributes, 'agentops.run.id') || attributeValue(resourceAttributes, 'agentops.run.id');
+        const ownedScript = span.name === 'agentops.script' || span.name === 'agentops.script.step';
+        const exactSession = !ownedScript && conversationId === sessionId;
+        const runLinkedScript = Boolean(ownedScript && options.runId && runId === options.runId);
+        if (!exactSession && !runLinkedScript) continue;
+        const start = Array.isArray(span.startTime) ? flatMillisecondTime(span.startTime) : millisecondTime(span.startTimeUnixNano);
+        const end = Array.isArray(span.endTime) ? flatMillisecondTime(span.endTime) : millisecondTime(span.endTimeUnixNano);
         if (start === null || end === null || end < start) {
           invalid += 1;
           continue;
@@ -99,6 +103,10 @@ function readSessionOtelSpans(sessionId, files = defaultReceiptFiles()) {
           toolCallId: String(attributeValue(attributes, 'gen_ai.tool.call.id') || ''),
           model: String(attributeValue(attributes, 'gen_ai.response.model') || attributeValue(attributes, 'gen_ai.request.model') || ''),
           agent: String(attributeValue(attributes, 'gen_ai.agent.name') || attributeValue(attributes, 'agentops.agent.name') || 'native OTel'),
+          scriptName: String(attributeValue(attributes, 'agentops.script.name') || ''),
+          stepName: String(attributeValue(attributes, 'agentops.step.name') || ''),
+          match: exactSession ? 'exact-session' : 'run-linked-script',
+          runId: String(runId || ''),
           inputTokens: attributeValue(attributes, 'gen_ai.usage.input_tokens'),
           outputTokens: attributeValue(attributes, 'gen_ai.usage.output_tokens'),
           failed: Number(span.status?.code) === 2 || Boolean(attributeValue(attributes, 'error.type')),

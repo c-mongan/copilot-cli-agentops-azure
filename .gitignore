@@ -9,6 +9,7 @@ coverage/
 *.local
 .DS_Store
 .pytest_cache/
+__pycache__/
 .agentops/
 .playwright-mcp/
 .azure/*

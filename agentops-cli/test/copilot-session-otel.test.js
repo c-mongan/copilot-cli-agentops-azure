@@ -35,7 +35,7 @@ test('native receipt joins only exact Copilot conversation ID and tool call ID',
     assert.equal(waterfall.nativeToolJoins, 1);
     assert.equal(waterfall.rows.find(row => row.source === 'session event').details.nativeOtel.spanId, 'span-a');
     assert.match(renderSessionWaterfall(events, 'session-a', { nativeSpans: native.spans }), /<strong>1<\/strong><span>Exact-session native spans/);
-    assert.match(renderSessionWaterfall(events, 'session-a'), /No matching native spans were observed/);
+    assert.match(renderSessionWaterfall(events, 'session-a'), /No exact-session native spans were observed/);
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
   }
@@ -67,6 +67,36 @@ test('Copilot file exporter spans use flat attributes and second/nanosecond time
     assert.equal(result.spans[1].parentSpanId, 'root');
     assert.equal(result.spans[1].toolCallId, 'call-flat');
     assert.equal(result.spans[1].failed, true);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('owned script spans require an explicit exact run ID and remain logical links', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-script-otel-'));
+  try {
+    const file = path.join(directory, 'script.jsonl');
+    const script = (runId, spanId, name, attributes) => ({
+      type: 'span', traceId: 'script-trace', spanId, name,
+      startTimeUnixNano: '1767225601000000000', endTimeUnixNano: '1767225602000000000',
+      resource: { attributes: { 'agentops.run.id': runId } }, attributes
+    });
+    fs.writeFileSync(file, [
+      script('run-a', 'root', 'agentops.script', { 'agentops.script.name': 'fixture.py', 'gen_ai.conversation.id': 'session-a' }),
+      script('run-a', 'step', 'agentops.script.step', { 'agentops.script.name': 'fixture.py', 'agentops.step.name': 'parse' }),
+      script('run-b', 'other', 'agentops.script', { 'agentops.script.name': 'other.py' }),
+      script('run-a', 'unrelated', 'unrelated.operation', {})
+    ].map(JSON.stringify).join('\n'));
+    assert.equal(readSessionOtelSpans('session-a', [file]).spans.length, 0);
+    const result = readSessionOtelSpans('session-a', [file], { runId: 'run-a' });
+    assert.equal(result.spans.length, 2);
+    assert.equal(result.spans[0].match, 'run-linked-script');
+    assert.equal(result.spans[1].stepName, 'parse');
+    const waterfall = sessionWaterfall([], result.spans);
+    assert.equal(waterfall.nativeSpans, 0);
+    assert.equal(waterfall.scriptSpans, 2);
+    assert.equal(waterfall.rows[0].details.link.kind, 'logical');
+    assert.match(renderSessionWaterfall([], 'session-a', { nativeSpans: result.spans }), /Run-linked script spans/);
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
   }

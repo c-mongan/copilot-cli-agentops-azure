@@ -3,7 +3,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 const legacy = require('../../legacy');
-const { optionValue, parseJsonFlag } = require('../args');
+const { optionValue, optionValues, parseJsonFlag } = require('../args');
 const { otlpHttpEndpoint } = require('../collector-endpoints');
 const { writeJsonlFile, writeJsonOrRender } = require('../command-output');
 const {
@@ -26,7 +26,8 @@ function parseCopilotSessionArgs(args = []) {
     allowContent: args.includes('--allow-content'),
     synthetic: args.includes('--synthetic'),
     sidecarFile: optionValue(args, '--sidecar'),
-    otelFile: optionValue(args, '--otel-file'),
+    otelFiles: optionValues(args, '--otel-file'),
+    runId: optionValue(args, '--run-id'),
     endpoint: optionValue(args, '--endpoint', otlpHttpEndpoint),
     id: optionValue(args, '--id') || legacy.customEventId(),
     dryRun: args.includes('--dry-run'),
@@ -110,7 +111,7 @@ async function copilotSessionCommand(args = []) {
     if (!options.allowContent || !options.synthetic) throw new Error('copilot-session export-content requires --allow-content --synthetic');
     const eventsFile = options.file || defaultSessionEventsPath(options.sessionId);
     const sessionId = options.sessionId || path.basename(path.dirname(eventsFile));
-    const result = writeSessionContent(readCopilotSessionEvents(eventsFile), sessionId, options.output);
+    const result = writeSessionContent(readCopilotSessionEvents(eventsFile), sessionId, options.output, options.runId || sessionId);
     writeJsonOrRender({ ok: true, session_id: sessionId, ...result }, options.json, value => `Synthetic content rows: ${value.rows} in ${value.output}\n`);
     return;
   }
@@ -119,9 +120,9 @@ async function copilotSessionCommand(args = []) {
     if (!options.allowContent) throw new Error('copilot-session view includes prompts and tool payloads; pass --allow-content for an approved local session');
     const eventsFile = options.file || defaultSessionEventsPath(options.sessionId);
     const sessionId = options.sessionId || path.basename(path.dirname(eventsFile));
-    const native = readSessionOtelSpans(sessionId, options.otelFile ? [options.otelFile] : defaultReceiptFiles());
+    const native = readSessionOtelSpans(sessionId, options.otelFiles.length ? options.otelFiles : defaultReceiptFiles(), { runId: options.runId });
     const output = writeSessionWaterfall(readCopilotSessionEvents(eventsFile), sessionId, options.output, { nativeSpans: native.spans });
-    writeJsonOrRender({ ok: true, session_id: sessionId, output, native_spans: native.spans.length, native_receipt_files: native.files.length, invalid_native_records: native.invalid }, options.json, result => `Local waterfall: ${result.output} · ${result.native_spans} native OTel spans\n`);
+    writeJsonOrRender({ ok: true, session_id: sessionId, output, native_spans: native.spans.filter(span => span.match === 'exact-session').length, run_linked_script_spans: native.spans.filter(span => span.match === 'run-linked-script').length, native_receipt_files: native.files.length, invalid_native_records: native.invalid }, options.json, result => `Local waterfall: ${result.output} · ${result.native_spans} native OTel spans · ${result.run_linked_script_spans} run-linked script spans\n`);
     return;
   }
   const result = await buildCopilotSessionEnrichment(options);

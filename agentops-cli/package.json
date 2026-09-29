@@ -16,6 +16,7 @@
     "fixtures",
     "grafana",
     "infra",
+    "instrumentation",
     "kql",
     "install-agentops.ps1",
     "install-agentops.sh",

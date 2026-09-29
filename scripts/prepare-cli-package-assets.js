@@ -19,6 +19,7 @@ const assetDirs = [
   'fixtures',
   'grafana',
   'infra',
+  'instrumentation',
   'kql',
   'packages',
   'plugin',
@@ -35,6 +36,8 @@ const assetFiles = [
 function shouldCopy(src) {
   const relative = path.relative(root, src).replaceAll('\\', '/');
   if (relative.split('/').includes('node_modules')) return false;
+  if (relative.split('/').includes('__pycache__') || relative.endsWith('.pyc')) return false;
+  if (relative.startsWith('instrumentation/') && path.basename(relative).startsWith('test_')) return false;
   if (relative.split('/').some(segment => segment === 'test' || segment === 'tests') || path.basename(relative) === 'package-lock.json') return false;
   if (relative.endsWith('.tgz')) return false;
   if (relative.startsWith('docs/images/') && relative !== 'docs/images/agentops-architecture-dataflow.png') return false;

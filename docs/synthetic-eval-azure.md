@@ -27,12 +27,12 @@ az deployment sub what-if \
 ```bash
 agentops copilot-session export-content <synthetic-session-id> \
   --output <private-dir>/AgentOpsContent_CL.jsonl \
-  --allow-content --synthetic
+  --run-id <observed-run-id> --allow-content --synthetic
 
 agentops azure-ingest plan --dir <private-dir> --content-only --allow-content --json
 ```
 
-The export includes user prompts, tool arguments, tool results and assistant answers. It carries `CaptureMode=full`, `RedactionStatus=synthetic_unredacted`, session/run ID, model, timestamps and content hash. Missing trace IDs are left empty instead of invented. It omits system messages. Output creation refuses to overwrite an existing file.
+The export includes user prompts, tool arguments, tool results and assistant answers. It carries `CaptureMode=full`, `RedactionStatus=synthetic_unredacted`, session ID, the explicit observed run ID, model, timestamps and content hash. Without `--run-id`, `RunId` defaults to the session ID for older workflows. Missing trace IDs are left empty instead of invented. It omits system messages. Output creation refuses to overwrite an existing file.
 
 The content-only upload plan allows only `AgentOpsContent_CL`, requires an Azure Monitor ingestion endpoint and valid DCR ID, scans for obvious secrets, and limits one batch to 1 MiB. Upload remains dry-run until `--yes`. The Azure CLI write guard requires `AGENTOPS_AZURE_SUBSCRIPTION_ID` and `AGENTOPS_APPROVED_AZURE_SUBSCRIPTION_IDS`; content-only mode passes the chosen subscription explicitly without changing the machine's default Pay-As-You-Go subscription.
 
@@ -41,5 +41,7 @@ The content-only upload plan allows only `AgentOpsContent_CL`, requires an Azure
 The EVAL workspace uses Entra authentication, but its ingestion and query endpoints are public network endpoints. The signed-in user has a DCR-scoped Monitoring Metrics Publisher assignment. After role propagation, Azure accepted one four-row synthetic upload; a later table query read back the prompt, tool arguments, tool result, and response, including nonempty rich text fields. Table retention and DCR provisioning were read back; cost usage and deletion/recovery rules still need live verification. Rich content should enter this workspace only from approved synthetic or consented incident fixtures. Changing later redaction settings does not remove already ingested rows.
 
 The existing rich transcript Grafana panel assumes the content table is in its datasource's workspace. With an isolated EVAL workspace, configure a separate datasource or cross-workspace query; that connection is not yet implemented.
+
+On 29 September 2026, a second synthetic Copilot CLI run with an instrumented Python skill script exported ten content rows. The content-only plan passed schema and secret-pattern checks, Azure accepted the 6,693-byte upload, and a workspace query read back ten rows covering prompt, tool arguments, tool result, and response for that exact session ID. That upload predates the explicit `--run-id` option and has `RunId` equal to the session ID, so it does not join the script's separate run ID in Azure. The three script OTel spans remain local; this content-table upload does not establish Azure trace ingestion or a cloud waterfall.
 
 Sources: [GitHub Copilot CLI MCP configuration](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers), [Azure Logs Ingestion API](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview), [Azure daily cap](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/daily-cap), [Log Analytics access](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/manage-access).

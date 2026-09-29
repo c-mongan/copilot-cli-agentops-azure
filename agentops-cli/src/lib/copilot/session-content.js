@@ -7,7 +7,8 @@ function contentText(value) {
   return typeof value === 'string' ? value : JSON.stringify(value);
 }
 
-function contentRowsFromSession(events, sessionId) {
+function contentRowsFromSession(events, sessionId, runId = sessionId) {
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(runId)) throw new Error('content export requires a valid run ID');
   const rows = [];
   let turnIndex = 0;
   let model = '';
@@ -19,7 +20,7 @@ function contentRowsFromSession(events, sessionId) {
     if (Number.isNaN(timestamp.getTime())) return;
     rows.push({
       TimeGenerated: timestamp.toISOString(),
-      RunId: sessionId,
+      RunId: runId,
       SessionId: sessionId,
       TraceId: '',
       SpanId: '',
@@ -58,11 +59,11 @@ function contentRowsFromSession(events, sessionId) {
   return rows;
 }
 
-function writeSessionContent(events, sessionId, outputPath) {
+function writeSessionContent(events, sessionId, outputPath, runId = sessionId) {
   if (!outputPath || path.basename(outputPath) !== 'AgentOpsContent_CL.jsonl') {
     throw new Error('copilot-session export-content requires --output <dir>/AgentOpsContent_CL.jsonl');
   }
-  const rows = contentRowsFromSession(events, sessionId);
+  const rows = contentRowsFromSession(events, sessionId, runId);
   if (!rows.length) throw new Error('session has no content rows with valid timestamps');
   const output = path.resolve(outputPath);
   fs.writeFileSync(output, `${rows.map(row => JSON.stringify(row)).join('\n')}\n`, { flag: 'wx', mode: 0o600 });

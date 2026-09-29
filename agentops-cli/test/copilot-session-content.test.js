@@ -21,6 +21,9 @@ test('synthetic content export retains prompt, tool arguments/result, answer and
   assert.equal(rows[2].ResponseText, 'synthetic failure');
   assert.ok(rows.every(row => row.CaptureMode === 'full' && row.SchemaVersion === '2'));
   assert.ok(rows.every(row => row.SessionId === 'session-test'));
+  assert.ok(rows.every(row => row.RunId === 'session-test'));
+  assert.ok(contentRowsFromSession(events, 'session-test', 'observed-run').every(row => row.RunId === 'observed-run'));
+  assert.throws(() => contentRowsFromSession(events, 'session-test', 'bad run id'), /valid run ID/);
   assert.doesNotMatch(JSON.stringify(rows), /call-a/);
 });
 
