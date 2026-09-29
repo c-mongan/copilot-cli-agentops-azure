@@ -31,6 +31,7 @@ test('copilot session command library parses args and renders enrichment summary
     allowContent: true,
     synthetic: false,
     sidecarFile: 'sidecar-events.jsonl',
+    otelFile: null,
     endpoint: 'http://127.0.0.1:4319',
     id: 'import-1',
     dryRun: true,

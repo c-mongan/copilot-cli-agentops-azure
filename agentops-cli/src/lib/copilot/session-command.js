@@ -13,6 +13,7 @@ const {
   readCopilotSessionEvents
 } = require('./session-enricher');
 const { writeSessionWaterfall } = require('./session-waterfall');
+const { defaultReceiptFiles, readSessionOtelSpans } = require('./session-otel');
 const { writeSessionContent } = require('./session-content');
 
 function parseCopilotSessionArgs(args = []) {
@@ -25,6 +26,7 @@ function parseCopilotSessionArgs(args = []) {
     allowContent: args.includes('--allow-content'),
     synthetic: args.includes('--synthetic'),
     sidecarFile: optionValue(args, '--sidecar'),
+    otelFile: optionValue(args, '--otel-file'),
     endpoint: optionValue(args, '--endpoint', otlpHttpEndpoint),
     id: optionValue(args, '--id') || legacy.customEventId(),
     dryRun: args.includes('--dry-run'),
@@ -117,8 +119,9 @@ async function copilotSessionCommand(args = []) {
     if (!options.allowContent) throw new Error('copilot-session view includes prompts and tool payloads; pass --allow-content for an approved local session');
     const eventsFile = options.file || defaultSessionEventsPath(options.sessionId);
     const sessionId = options.sessionId || path.basename(path.dirname(eventsFile));
-    const output = writeSessionWaterfall(readCopilotSessionEvents(eventsFile), sessionId, options.output);
-    writeJsonOrRender({ ok: true, session_id: sessionId, output }, options.json, result => `Local waterfall: ${result.output}\n`);
+    const native = readSessionOtelSpans(sessionId, options.otelFile ? [options.otelFile] : defaultReceiptFiles());
+    const output = writeSessionWaterfall(readCopilotSessionEvents(eventsFile), sessionId, options.output, { nativeSpans: native.spans });
+    writeJsonOrRender({ ok: true, session_id: sessionId, output, native_spans: native.spans.length, native_receipt_files: native.files.length, invalid_native_records: native.invalid }, options.json, result => `Local waterfall: ${result.output} · ${result.native_spans} native OTel spans\n`);
     return;
   }
   const result = await buildCopilotSessionEnrichment(options);

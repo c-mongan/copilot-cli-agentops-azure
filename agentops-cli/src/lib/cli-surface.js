@@ -105,7 +105,7 @@ Core commands:
   content status|opt-in [--dir <AgentOps table dir>] [--runs <jsonl>] [--allow-content] [--json]
   copilot [copilot-args...]
   copilot-session enrich <session-id> [--file <events.jsonl>] [--sidecar <sidecar-events.jsonl>] [--dry-run] [--json]
-  copilot-session view <session-id> --output <local.html> --allow-content [--file <events.jsonl>] [--json]
+  copilot-session view <session-id> --output <local.html> --allow-content [--file <events.jsonl>] [--otel-file <native-receipt.jsonl>] [--json]
   copilot-session export-content <session-id> --output <dir>/AgentOpsContent_CL.jsonl --allow-content --synthetic [--file <events.jsonl>] [--json]
   schema validate|print [--file <json>]
   security audit|posture [--json] [--fail-on-warning]

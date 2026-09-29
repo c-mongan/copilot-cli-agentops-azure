@@ -1,6 +1,6 @@
 # CLI-first flight recorder
 
-This is the first usable slice of the broader [requirements](requirements/full-agent-observability-requirements.md). It uses Copilot CLI's native session events to build a local timed waterfall. The Azure route continues to use the existing Collector and optional `AgentOpsContent_CL` path.
+This is the first usable slice of the broader [requirements](requirements/full-agent-observability-requirements.md). It combines Copilot CLI's native session events with exact-session native OpenTelemetry spans from local Collector receipts to build a timed waterfall. The Azure route continues to use the existing Collector and optional `AgentOpsContent_CL` path.
 
 ## Inspect one synthetic run
 
@@ -9,9 +9,13 @@ node agentops-cli/src/index.js copilot-session view <session-id> \
   --output /path/to/synthetic-run.html --allow-content
 ```
 
-The output is a self-contained local HTML file created with owner-only permissions. The command refuses to overwrite an existing file. Rows show elapsed position and duration for model turns, tools, and hooks. Overlap is visible. Click a row to see its original event fields, including prompt and tool payloads. Tool completions without names are paired to starts through `toolCallId`; missing starts are marked. This command does not upload anything.
+The command reads the local `native-receipt.jsonl` and `native-azure-receipt.jsonl` files when present, or accepts `--otel-file <native-receipt.jsonl>` for a specific Collector receipt. It matches spans only when `gen_ai.conversation.id` or `agentops.session.id` exactly equals the selected Copilot session ID. The page reports the count of matched spans and exact tool-call ID joins; zero means OTel coverage was not observed. The receipt is local, and this command does not upload anything.
 
-The current waterfall is a **session-event view**. Native OTel spans provide the stronger trace timing and Azure compatibility but are not yet joined to these rows. Subagent intervals, static architecture references, causality across processes, and a run list are not yet complete. This is a working first detailed view, not an enterprise-ready observability claim.
+[GitHub's Copilot CLI reference](https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-command-reference) defines `gen_ai.conversation.id` as the session identifier and documents its native OTel model/tool spans. The local receipt format is Collector OTLP JSONL; this view does not directly query Azure traces.
+
+The output is a self-contained local HTML file created with owner-only permissions. The command refuses to overwrite an existing file. Rows show elapsed position and duration for model turns, tools, hooks, and matched native OTel spans. Overlap is visible. Click a row to see its source and fields, including prompt and tool payloads from the session file. Tool completions without names are paired to starts through `toolCallId`; missing starts are marked.
+
+The current waterfall joins native OTel and session events by the exact Copilot session ID; tool spans may additionally join by exact call ID. It does not infer a link from timestamp proximity. Full parent/child trace-tree rendering, subagent intervals, static architecture references, causality across processes, and a run list are not yet complete. This is a working first detailed view, not an enterprise-ready observability claim.
 
 Microsoft now documents an [Application Insights Agents view](https://learn.microsoft.com/en-us/azure/azure-monitor/app/agents-view) and [prebuilt Copilot/Codex dashboards](https://learn.microsoft.com/en-us/azure/managed-grafana/grafana-opentelemetry-app-insights). Use those for fleet operations, tokens, latency, and error triage. The product's custom view should focus on the rich single-run evidence and correlation that the native summaries do not yet prove for this Copilot CLI path. See the [link assessment](research/2026-09-29/new-azure-observability-links.md).
 
