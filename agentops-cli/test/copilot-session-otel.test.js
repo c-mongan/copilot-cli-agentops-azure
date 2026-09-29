@@ -40,3 +40,34 @@ test('native receipt joins only exact Copilot conversation ID and tool call ID',
     fs.rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test('Copilot file exporter spans use flat attributes and second/nanosecond timestamps', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-session-flat-'));
+  try {
+    const file = path.join(directory, 'native.jsonl');
+    const root = {
+      type: 'span', traceId: 'trace-flat', spanId: 'root', name: 'invoke_agent',
+      startTime: [1767225601, 250000000], endTime: [1767225603, 500000000],
+      attributes: { 'gen_ai.conversation.id': 'session-a', 'gen_ai.operation.name': 'invoke_agent', 'gen_ai.agent.name': 'fixture-agent' },
+      events: [{ name: 'github.copilot.skill.invoked', time: [1767225602, 0], attributes: { 'github.copilot.skill.name': 'fixture-flow' } }],
+      status: { code: 1 }
+    };
+    const tool = {
+      ...root, spanId: 'tool', parentSpanId: 'root', name: 'execute_tool',
+      attributes: { 'gen_ai.conversation.id': 'session-a', 'gen_ai.operation.name': 'execute_tool', 'gen_ai.tool.name': 'fixture-mcp-search', 'gen_ai.tool.call.id': 'call-flat' },
+      status: { code: 2 }
+    };
+    fs.writeFileSync(file, [root, tool, { ...root, spanId: 'other', attributes: { 'gen_ai.conversation.id': 'session-b' } }, { type: 'metric', name: 'duration' }].map(JSON.stringify).join('\n'));
+    const result = readSessionOtelSpans('session-a', [file]);
+    assert.equal(result.invalid, 0);
+    assert.equal(result.spans.length, 2);
+    assert.equal(result.spans[0].end - result.spans[0].start, 2250);
+    assert.equal(result.spans[0].agent, 'fixture-agent');
+    assert.deepEqual(result.spans[0].events, [{ time: 1767225602000, name: 'github.copilot.skill.invoked', attributes: { 'github.copilot.skill.name': 'fixture-flow' } }]);
+    assert.equal(result.spans[1].parentSpanId, 'root');
+    assert.equal(result.spans[1].toolCallId, 'call-flat');
+    assert.equal(result.spans[1].failed, true);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});

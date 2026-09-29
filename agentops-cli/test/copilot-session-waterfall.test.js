@@ -66,3 +66,17 @@ test('empty failure view does not claim a run succeeded', () => {
   assert.match(html, /No failure signal was observed in the available evidence/);
   assert.match(html, /This does not prove the run succeeded/);
 });
+
+test('native skill invocation appears at its event time on the waterfall', () => {
+  const nativeSpans = [{
+    start: 1767225601000, end: 1767225603000, traceId: 'trace-1', spanId: 'root',
+    operation: 'invoke_agent', agent: 'fixture-agent', failed: false,
+    events: [{ time: 1767225602000, name: 'github.copilot.skill.invoked', attributes: { 'github.copilot.skill.name': 'fixture-flow' } }]
+  }];
+  const { rows, nativeSpans: count } = sessionWaterfall([], nativeSpans);
+  assert.equal(count, 1);
+  assert.equal(rows.length, 2);
+  assert.equal(rows[1].label, 'skill: fixture-flow');
+  assert.equal(rows[1].start, 1767225602000);
+  assert.match(renderSessionWaterfall([], 'fixture', { nativeSpans }), /skill: fixture-flow/);
+});

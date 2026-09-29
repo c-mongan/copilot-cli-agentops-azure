@@ -98,6 +98,20 @@ function sessionWaterfall(events = [], nativeSpans = []) {
       source: 'native OTel',
       details: span
     });
+    for (const event of span.events || []) {
+      const skill = event.name === 'github.copilot.skill.invoked' ? event.attributes?.['github.copilot.skill.name'] : '';
+      rows.push({
+        index: events.length + rows.length,
+        start: event.time,
+        end: event.time,
+        lane: `OTel · ${span.agent}`,
+        kind: event.name,
+        label: skill ? `skill: ${skill}` : event.name,
+        status: 'observed',
+        source: 'native OTel',
+        details: { ...event, traceId: span.traceId, parentSpanId: span.spanId }
+      });
+    }
     if (span.toolCallId) {
       const tool = rows.find(row => row.source === 'session event'
         && row.kind === 'tool.execution_start'
