@@ -1,6 +1,6 @@
 # Azure deployment plan
 
-> Status: Isolated synthetic EVAL resources deployed and read back. The original main template remains blocked. Synthetic content ingestion is awaiting DCR role propagation and query readback.
+> Status: Isolated synthetic EVAL resources deployed. Four rich synthetic rows were ingested and read back from Log Analytics. The original main template remains blocked.
 
 Date: 2026-09-29
 
@@ -34,8 +34,9 @@ Date: 2026-09-29
 - Local completed: focused CLI tests; Bicep compile; static check; synthetic run waterfall and four-row content export; content-only plan and secret-pattern scan.
 - Cloud read-only completed: explicit-subscription inventory, existing ingestion cap/retention, direct subscription RBAC, and isolated-template what-if. Existing managed workspace `Usage` returned no rows for the past seven days.
 - Cloud validation completed: subscription-scope template validation succeeded. First deployment attempt rejected a 7-day **workspace** retention setting: PerGB2018 requires a 30-day workspace default. The template now sets the workspace default to 30 days while the `AgentOpsContent_CL` table remains at seven days. A second what-if showed three creates and two deploys after the partially created resource group and DCE; the corrected deployment succeeded.
-- Cloud readback completed: the separate EVAL workspace reports 30-day default retention and 1 GB/day cap; the Analytics content table reports seven-day interactive and total retention; DCR provisioning succeeded. The signed-in user was assigned `Monitoring Metrics Publisher` on this DCR only. The first upload was forbidden before the role assignment; the immediate retry was still forbidden while Azure RBAC propagated. No content ingestion has yet been confirmed.
+- Cloud readback completed: the separate EVAL workspace reports 30-day default retention and 1 GB/day cap; the Analytics content table reports seven-day interactive and total retention; DCR provisioning succeeded. The signed-in user was assigned `Monitoring Metrics Publisher` on this DCR only. Earlier uploads were forbidden while Azure RBAC propagated. At 19:30 UTC, Azure accepted one four-row, 3,021-byte synthetic upload. After indexing, a Log Analytics query returned exactly four rows: prompt, tool arguments, tool result, and response; four distinct content hashes; two nonempty prompt fields and two nonempty response fields totaling 1,062 characters. All rows report `CaptureMode=full` and `RedactionStatus=synthetic_unredacted`.
 - Azure confirms the signed-in user's object ID matches the monitoring-audience token's `oid`, and the DCR-scoped role assignment is listed. [Microsoft's ingestion tutorial](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/tutorial-logs-ingestion-portal) says role propagation can take up to 30 minutes and returns HTTP 403 before it takes effect.
-- Cloud next step: upload only the reviewed 3,021-byte synthetic batch after the new role is effective, then query `AgentOpsContent_CL` and read back four rows. Do not run `azd provision` or the original `main.bicep` against the existing resource group.
+- DCR metrics after the accepted upload show four rows received, zero rows dropped, zero transformation errors, and nonzero output bytes. The DCR destination is the new workspace. [Microsoft's custom-log migration guidance](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/custom-logs-migrate) says a newly created table or schema change can take 10–15 minutes before data appears in the destination table; this run took several minutes.
+- Do not repeat the accepted upload. Do not run `azd provision` or the original `main.bicep` against the existing resource group.
 
 The original main template remains blocked because it would repoint the existing Application Insights component.

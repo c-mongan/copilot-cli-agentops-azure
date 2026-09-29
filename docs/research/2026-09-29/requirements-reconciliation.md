@@ -2,6 +2,8 @@
 
 Reviewed 29 September 2026 against the user's 113-section **Full Requirements: Agent Observability, Evaluation and Architecture Improvement System**, the attached research bundle, and `c-mongan/copilot-cli-agentops-azure` at commit `090d337d4226d7f8a3ebadc2228e9cb4c8e326b5`. This is a design assessment, not implementation or a live Azure certification.
 
+**Implementation update:** The tool-completion join and a local synthetic session waterfall described below now exist on `feat/enterprise-flight-recorder`; see [CLI-first flight recorder](../../cli-first-flight-recorder.md). The isolated synthetic Azure EVAL resources have been deployed, and four rich content rows were read back from Log Analytics. The rest of the slice 1 acceptance matrix remains open.
+
 ## Correction to the earlier simplification
 
 The original request explicitly requires a chronological run waterfall as the main debugging screen (§74). It also requires repo-wide structural observation with scoped filtering (§§6–7), static and dynamic architecture graphs (§§37–39), agent/skill/reference/script analytics (§§10–26, 42–53), evaluations and protected experiments (§§55–70), and multiple aggregate views (§§75–81). A three-screen-only *product scope* would omit requirements. A three-entry-point *navigation* can simplify the experience while preserving the deeper capabilities.

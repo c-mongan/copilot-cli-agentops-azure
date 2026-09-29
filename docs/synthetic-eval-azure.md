@@ -38,7 +38,7 @@ The content-only upload plan allows only `AgentOpsContent_CL`, requires an Azure
 
 ## Production boundary
 
-The EVAL workspace uses Entra authentication, but its ingestion and query endpoints are public network endpoints. The signed-in user has a DCR-scoped Monitoring Metrics Publisher assignment; ingestion was initially forbidden and its success remains to be verified after role propagation. Table retention and DCR provisioning were read back; cost usage and deletion/recovery rules still need live verification. Rich content should enter this workspace only from approved synthetic or consented incident fixtures. Changing later redaction settings does not remove already ingested rows.
+The EVAL workspace uses Entra authentication, but its ingestion and query endpoints are public network endpoints. The signed-in user has a DCR-scoped Monitoring Metrics Publisher assignment. After role propagation, Azure accepted one four-row synthetic upload; a later table query read back the prompt, tool arguments, tool result, and response, including nonempty rich text fields. Table retention and DCR provisioning were read back; cost usage and deletion/recovery rules still need live verification. Rich content should enter this workspace only from approved synthetic or consented incident fixtures. Changing later redaction settings does not remove already ingested rows.
 
 The existing rich transcript Grafana panel assumes the content table is in its datasource's workspace. With an isolated EVAL workspace, configure a separate datasource or cross-workspace query; that connection is not yet implemented.
 
