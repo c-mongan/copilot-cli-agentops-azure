@@ -34,7 +34,7 @@ test('native receipt joins only exact Copilot conversation ID and tool call ID',
     assert.equal(waterfall.nativeSpans, 1);
     assert.equal(waterfall.nativeToolJoins, 1);
     assert.equal(waterfall.rows.find(row => row.source === 'session event').details.nativeOtel.spanId, 'span-a');
-    assert.match(renderSessionWaterfall(events, 'session-a', { nativeSpans: native.spans }), /1 exact-session OTel spans/);
+    assert.match(renderSessionWaterfall(events, 'session-a', { nativeSpans: native.spans }), /<strong>1<\/strong><span>Exact-session native spans/);
     assert.match(renderSessionWaterfall(events, 'session-a'), /No matching native spans were observed/);
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });

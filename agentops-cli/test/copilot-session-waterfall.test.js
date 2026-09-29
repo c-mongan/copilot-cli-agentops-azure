@@ -27,7 +27,7 @@ test('local waterfall escapes rich content and writes owner-only file without ov
   const html = renderSessionWaterfall(events, 'test<script>');
   assert.match(html, /test&lt;script&gt;/);
   assert.match(html, /&lt;content&gt;/);
-  assert.doesNotMatch(html, /<content>|<script>/);
+  assert.doesNotMatch(html, /<content>|test<script>/);
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-waterfall-test-'));
   try {
     const output = path.join(directory, 'run.html');
@@ -37,4 +37,32 @@ test('local waterfall escapes rich content and writes owner-only file without ov
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test('failure-first view links preceding context and exact native evidence', () => {
+  const failureEvents = [
+    { type: 'user.message', timestamp: '2026-01-01T00:00:00.000Z', data: { content: 'Fix the build' } },
+    { type: 'assistant.message', timestamp: '2026-01-01T00:00:00.500Z', data: { content: 'I will run the build' } },
+    { type: 'tool.execution_start', timestamp: '2026-01-01T00:00:01.000Z', data: { toolCallId: 'call-1', toolName: 'bash', arguments: { command: 'npm test' } } },
+    { type: 'tool.execution_complete', timestamp: '2026-01-01T00:00:02.000Z', data: { toolCallId: 'call-1', success: false, result: 'exit 1 <failed>' } }
+  ];
+  const nativeSpans = [{ start: Date.parse('2026-01-01T00:00:01.000Z'), end: Date.parse('2026-01-01T00:00:02.000Z'), traceId: 'trace-1', spanId: 'span-1', operation: 'execute_tool', toolName: 'bash', toolCallId: 'call-1', agent: 'copilot', failed: true }];
+  const html = renderSessionWaterfall(failureEvents, 'fixture', { nativeSpans });
+  assert.match(html, /2 failure signals observed/);
+  assert.match(html, /Failure detail/);
+  assert.match(html, /exit 1 &lt;failed&gt;/);
+  assert.match(html, /Fix the build/);
+  assert.match(html, /&quot;command&quot;:&quot;npm test&quot;/);
+  assert.match(html, /href="#event-0">User message/);
+  assert.match(html, /href="#event-1">Assistant message/);
+  assert.match(html, /href="#event-3">Matching native span/);
+  assert.match(html, /data-filter="failed"/);
+  assert.match(html, /Trace trace-1/);
+  assert.doesNotMatch(html, /exit 1 <failed>/);
+});
+
+test('empty failure view does not claim a run succeeded', () => {
+  const html = renderSessionWaterfall(events.filter(event => event.data?.success !== false), 'fixture');
+  assert.match(html, /No failure signal was observed in the available evidence/);
+  assert.match(html, /This does not prove the run succeeded/);
 });
