@@ -4,7 +4,7 @@ Status: accepted direction, implementation pending. Updated 29 September 2026.
 
 ## Decision and outcome
 
-Build Copilot CLI coverage first, then add other Copilot surfaces through adapters with explicit capability ratings. Default setup is project-local and does not require a persistent Copilot or script wrapper. An optional script runner provides exact script boundaries and trace-context bridging where native signals and auto-instrumentation cannot. Approved rich work content may reside in restricted Azure storage; development uses synthetic or public data only.
+Build Copilot CLI coverage first, then add other Copilot surfaces through adapters with explicit capability ratings. Full end-to-end coverage of owned skill scripts is a release requirement: use auto-instrumentation, explicit spans, and a controlled script entry point wherever needed to prove the links. Prefer project-local setup without a persistent global wrapper, but do not weaken trace fidelity to preserve a wrapper-free preference. Approved rich work content may reside in restricted Azure storage; development uses synthetic or public data only.
 
 The product's job is to answer two linked questions: **what happened in this run?** and **which architecture change is supported by repeated evidence and a controlled evaluation?** A waterfall alone answers only part of the first question.
 
@@ -28,9 +28,9 @@ agentops attach --repo . --azure <agentops-environment>
 
 | Level | Setup | Expected visibility |
 | --- | --- | --- |
-| Basic | Provision Azure once, attach a repo once, enable CLI OTel via enterprise policy or a single-session launch | Native agent/model/tool events and available skill/selection events across the repo, with explicit gaps |
-| Enhanced | Opt in owned Node/Python scripts | Supported library activity and script status where runtime configuration proves it |
-| Deep | Add named internal spans or optional runner | Important script steps, reliable process boundary, and stronger trace correlation |
+| Discovery | Provision Azure once, attach a repo once, enable CLI OTel via enterprise policy or a single-session launch | Native agent/model/tool events and available skill/selection events across the repo, with explicit gaps; not the full product |
+| Full owned flow | Instrument every in-scope owned skill script through project-local language setup and controlled entry points where needed | Exact script execution, outcome, meaningful internal steps, and link back to the invoking tool/skill |
+| Unsupported surface | Show the nearest observed boundary and the missing edge | Honest partial coverage until an adapter or runtime capability closes the gap |
 
 The product may support any GitHub Copilot agent by **discovering it and showing the available evidence**; it cannot guarantee identical deep coverage for every runtime or arbitrary script with zero setup. Each unsupported field stays visible as a coverage gap.
 
@@ -64,31 +64,46 @@ Local Collector → Azure Monitor / Application Insights / Log Analytics
 
 ## Instrumentation design
 
+### End-to-end traceability contract
+
+For every in-scope synthetic pilot run, the run view must account for this chain:
+
+| Edge | Evidence needed |
+| --- | --- |
+| User task → selected agent or delegated subagent | Copilot lifecycle event/span with agent identity and original parent/run identifiers |
+| Agent → activated skill | Skill invocation event and the versioned skill definition; discovery alone is not activation |
+| Skill → reference | Observed file/resource read tied to the run, resolved against the skill's declared references; a declared reference alone is not use |
+| Skill or agent → script | Observed command/tool call and script process start with exact correlation where available; a path-and-time match is labelled inferred |
+| Script → internal work | Script root span, supported library spans, and named spans for domain steps needed to understand failures and latency |
+| Script → agent continuation | Exit/exception/output, matching tool completion, subsequent agent action, and final answer or abort |
+
+The static Agent Skills directory scan identifies **which scripts belong to which skills**. It cannot prove a script executed. The runtime chain proves execution and order. Each edge carries observed / inferred / not observed / unsupported, source, producer version, original IDs, and reason for any gap. A run is labelled **full for the declared scope** only when every required edge is observed or a documented deterministic bridge supplies it. This is a coverage claim about observable operations, not a claim to expose private model reasoning or every executed line of code.
+
 ### Copilot boundary
 
 Use native Copilot OTel as the primary source for model/tool timing and IDs, session events for richer lifecycle detail, and project hooks only for gaps that they can observe without altering tool behavior. Reconcile rather than count duplicate observations as separate operations. Retain original IDs and record which source supplied each field. Do not infer exact causality from nearby timestamps.
 
 GitHub documents native model/tool spans, skill-invocation events, `/agent` selection, and CLI hooks. These are useful sources, not proof that every skill reference or subprocess step is emitted. [Copilot CLI reference](https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-command-reference), [custom agents](https://docs.github.com/en/enterprise-cloud@latest/copilot/how-tos/copilot-cli/customize-copilot/create-custom-agents-for-cli), [hooks reference](https://docs.github.com/en/copilot/reference/hooks-reference).
 
-### Scripts without a mandatory wrapper
+### Owned skill scripts
 
 1. Native `execute_tool` and hook/session records establish **that a command was requested and how it ended**, when those records are present.
-2. For owned Node and Python scripts, offer project-local auto-instrumentation of supported libraries (for example HTTP/database clients) through explicit dependencies and session-scoped environment configuration. Do not mutate user/global shell or package-manager configuration. Auto-instrumentation does not reveal arbitrary application functions. [OTel zero-code boundary](https://opentelemetry.io/docs/concepts/instrumentation/zero-code/), [Node setup](https://opentelemetry.io/docs/zero-code/js/), [Python setup](https://opentelemetry.io/docs/languages/python/getting-started/).
-3. Offer a small library/API for named internal spans at important script steps such as parse, fetch, classify, and validate. Keep a script runnable without telemetry and report export failure separately from task failure.
-4. Use an optional `agentops-run` only when the user needs a guaranteed script start/end span, exit code, bounded output capture, or explicit propagation into a subprocess. It must be a project-owned invocation, with no persistent shell alias, global hook, or hidden command rewriting.
+2. Instrument every **in-scope owned** Node and Python skill script with a project-local bootstrap, including a root script span, outcome, and supported library calls (for example HTTP/database clients). A setup skill may propose and apply the small entry-point edits or package changes needed; it must verify and record each change for clean removal. Do not mutate user/global shell or package-manager configuration. Auto-instrumentation does not reveal arbitrary application functions. [OTel zero-code boundary](https://opentelemetry.io/docs/concepts/instrumentation/zero-code/), [Node setup](https://opentelemetry.io/docs/zero-code/js/), [Python setup](https://opentelemetry.io/docs/languages/python/getting-started/).
+3. Add a small library/API for named internal spans at important script steps such as parse, fetch, classify, and validate. The onboarding interview identifies those steps with the maintainer. Keep a script runnable without telemetry and report export failure separately from task failure.
+4. Use a project-owned `agentops-run` or equivalent controlled entry point whenever required to prove script start/end, exit code, bounded output capture, or exact context propagation. It must not create a persistent global alias or silently rewrite unrelated commands. Ease of setup means the setup assistant performs and verifies this once, not that necessary instrumentation is omitted.
 5. Test whether Copilot CLI supplies a valid parent `traceparent` to spawned code. If it does, continue the trace. If it does not, use explicit session/run and tool-call correlation and mark the script span as a **logical link**, not a physical child. OTel environment carriers are currently release candidate; use standard propagators and verify actual Node/Python behavior before depending on them. [OTel process propagation](https://opentelemetry.io/docs/specs/otel/context/env-carriers/).
 
 ### Setup assistant in the repository
 
-Create or revise one Agent Skill to interview a repo maintainer about runtime, languages, script entry points, Azure target, content mode, and ownership. It should inspect the repo and current installation before proposing changes; generate a project-local manifest and preview exact file edits; apply only selected setup; run a synthetic smoke; verify Collector receipt and Azure readback; and offer a removal command that deletes only manifest-owned changes after checking for user edits. The skill is the **guided setup interface**. The CLI and Collector perform tracing deterministically, so correctness does not depend on an agent remembering instructions. Reuse `agentops-setup` and `agentops-custom-telemetry` rather than adding a competing skill pack. Agent Skills already defines portable `SKILL.md`, `references/`, and `scripts/` layout and progressive loading. [Agent Skills specification](https://agentskills.io/specification).
+Create or revise one Agent Skill to interview a repo maintainer about runtime, languages, skill script entry points, important internal steps, Azure target, content mode, and ownership. It should inspect the repo and current installation before proposing changes; generate a project-local manifest and preview exact file edits; apply the instrumentation required for the agreed full scope; run a synthetic smoke through each owned script path; verify Collector receipt and Azure readback; and offer a removal command that deletes only manifest-owned changes after checking for user edits. The skill is the **guided setup interface**. The CLI and Collector perform tracing deterministically, so correctness does not depend on an agent remembering instructions. Reuse `agentops-setup` and `agentops-custom-telemetry` rather than adding a competing skill pack. Agent Skills already defines portable `SKILL.md`, `references/`, and `scripts/` layout and progressive loading. [Agent Skills specification](https://agentskills.io/specification).
 
 ## Delivery stages and acceptance
 
 | Stage | Deliverable | Proof required |
 | --- | --- | --- |
 | 0. Evidence contract | Versioned run/operation/component IDs, event source, parent or logical link, content policy, and coverage states | Synthetic records from native OTel, session, hook, and script sources merge without duplicate operations; missing IDs stay unjoined |
-| 1. Complete synthetic CLI run | One public/synthetic agent selected via `/agent`, one delegated subagent, progressive skill activation, a reference read, two tools, one Node or Python script, and an outcome | Run view shows the observed order/overlap, prompts and tool data in approved mode, errors, explicit gaps, and original source records |
-| 2. Project-local script setup | Reversible onboarding skill plus optional Node/Python auto-instrumentation and named internal spans; runner only where needed | Plain Copilot CLI still works; project setup/removal round-trip preserves user files; script success/failure, HTTP/internal step, and correlation status appear in the same run |
+| 1. Complete synthetic CLI run | One public/synthetic agent selected via `/agent`, one delegated subagent, progressive skill activation, a reference read, two tools, one Node or Python skill script, and an outcome | Run view proves the traceability chain above, observed order/overlap, prompts and tool data in approved mode, errors, and original source records; any missing edge blocks a full-coverage claim |
+| 2. Project-local script setup | Reversible onboarding skill plus Node/Python instrumentation for every in-scope owned skill script and named internal spans; controlled entry point where needed | Plain Copilot CLI still works; setup/removal round-trip preserves user files; script success/failure, supported outbound call, named internal step, and exact or explicitly logical correlation appear in the same run |
 | 3. Azure evidence and quick start | Safe Bicep topology plus one-line `provision` and repo-local `attach`/`detach` for native spans, script spans, run ledger, and approved rich content | Fresh subscription target deploys only expected resources; attach works for two distinct synthetic agent repos without per-agent edits; native OTel is verified under enterprise policy or a single-session launch, not assumed from attach; detach preserves user changes; Azure readback shows exact run links, access policy, retention/cost limits, and negative privacy tests |
 | 4. Architecture intelligence | Declared/observed map and deterministic findings for skills, references, scripts, tools, and subagents | Every frequency has denominator and source coverage; unobserved is never called unused; findings link to example runs |
 | 5. Evaluation loop | One-change candidate workflow and protected baseline/candidate test set | Same tasks, repeated runs where needed, quality and critical regressions before cost/latency; accepted and rejected candidates retained |
@@ -96,7 +111,7 @@ Create or revise one Agent Skill to interview a repo maintainer about runtime, l
 
 ### First release gate
 
-The smallest credible pilot is stages 0–3 on synthetic data. A user can provision an isolated Azure target with one command, attach either of two different synthetic Copilot CLI agent repos without changing individual agents, activate native OTel through an approved enterprise policy or one reversible session launch, and open one run with agent/subagent lanes, activated skill, reference read, script timing and internal step, tool inputs/results where approved, and the final outcome. The same run is queryable in Azure, with an explicit coverage report. Detach removes only AgentOps-owned project changes; plain Copilot CLI and unrelated project files continue to work.
+The smallest credible pilot is stages 0–3 on synthetic data. A user can provision an isolated Azure target with one command, attach either of two different synthetic Copilot CLI agent repos, instrument the owned skill scripts discovered during setup, activate native OTel through an approved enterprise policy or one reversible session launch, and open one run with the complete observed chain: agent/subagent lanes, activated skill, reference read, script root and internal steps, tool inputs/results where approved, and the final outcome. The same run is queryable in Azure, with an explicit coverage report. A missing required link blocks the full-coverage claim. Detach removes only AgentOps-owned project changes; plain Copilot CLI and unrelated project files continue to work.
 
 ## Security and operations gates
 
