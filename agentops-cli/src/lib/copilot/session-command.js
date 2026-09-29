@@ -12,6 +12,8 @@ const {
   readScriptSidecarEvents,
   readCopilotSessionEvents
 } = require('./session-enricher');
+const { writeSessionWaterfall } = require('./session-waterfall');
+const { writeSessionContent } = require('./session-content');
 
 function parseCopilotSessionArgs(args = []) {
   const [subcommand, sessionId] = args;
@@ -19,6 +21,9 @@ function parseCopilotSessionArgs(args = []) {
     subcommand,
     sessionId,
     file: optionValue(args, '--file'),
+    output: optionValue(args, '--output'),
+    allowContent: args.includes('--allow-content'),
+    synthetic: args.includes('--synthetic'),
     sidecarFile: optionValue(args, '--sidecar'),
     endpoint: optionValue(args, '--endpoint', otlpHttpEndpoint),
     id: optionValue(args, '--id') || legacy.customEventId(),
@@ -98,6 +103,24 @@ function renderCopilotSessionEnrichment(result = {}) {
 
 async function copilotSessionCommand(args = []) {
   const options = parseCopilotSessionArgs(args);
+  if (options.subcommand === 'export-content') {
+    if (!options.sessionId && !options.file) throw new Error('copilot-session export-content requires <session-id> or --file <events.jsonl>');
+    if (!options.allowContent || !options.synthetic) throw new Error('copilot-session export-content requires --allow-content --synthetic');
+    const eventsFile = options.file || defaultSessionEventsPath(options.sessionId);
+    const sessionId = options.sessionId || path.basename(path.dirname(eventsFile));
+    const result = writeSessionContent(readCopilotSessionEvents(eventsFile), sessionId, options.output);
+    writeJsonOrRender({ ok: true, session_id: sessionId, ...result }, options.json, value => `Synthetic content rows: ${value.rows} in ${value.output}\n`);
+    return;
+  }
+  if (options.subcommand === 'view') {
+    if (!options.sessionId && !options.file) throw new Error('copilot-session view requires <session-id> or --file <events.jsonl>');
+    if (!options.allowContent) throw new Error('copilot-session view includes prompts and tool payloads; pass --allow-content for an approved local session');
+    const eventsFile = options.file || defaultSessionEventsPath(options.sessionId);
+    const sessionId = options.sessionId || path.basename(path.dirname(eventsFile));
+    const output = writeSessionWaterfall(readCopilotSessionEvents(eventsFile), sessionId, options.output);
+    writeJsonOrRender({ ok: true, session_id: sessionId, output }, options.json, result => `Local waterfall: ${result.output}\n`);
+    return;
+  }
   const result = await buildCopilotSessionEnrichment(options);
   writeJsonOrRender(result, options.json, renderCopilotSessionEnrichment);
   process.exitCode = result.ok ? 0 : 1;

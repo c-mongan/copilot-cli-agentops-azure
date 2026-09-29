@@ -116,7 +116,7 @@ function jsonArrayUploadFile(jsonlFile, tempDir, table) {
     .filter(line => line.trim())
     .map(line => JSON.parse(line));
   const file = path.join(tempDir, `${table}.json`);
-  fs.writeFileSync(file, `${JSON.stringify(rows)}\n`);
+  fs.writeFileSync(file, `${JSON.stringify(rows)}\n`, { mode: 0o600 });
   return file;
 }
 
@@ -127,7 +127,8 @@ function runLogsIngestionUpload(plan, options = {}) {
     spawnSync,
     env: options.env,
     expectedSubscriptionId: options.expectedSubscriptionId,
-    approvedSubscriptionIds: options.approvedSubscriptionIds
+    approvedSubscriptionIds: options.approvedSubscriptionIds,
+    requireActive: !plan.content_only
   });
   if (!subscription.ok) {
     return {
@@ -147,6 +148,8 @@ function runLogsIngestionUpload(plan, options = {}) {
       const bodyFile = jsonArrayUploadFile(upload.file, tempDir, upload.table);
       const args = [
         'rest',
+        '--subscription',
+        subscription.expected,
         '--method',
         'post',
         '--uri',

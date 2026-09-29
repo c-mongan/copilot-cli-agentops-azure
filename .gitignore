@@ -12,6 +12,8 @@ coverage/
 .agentops/
 .playwright-mcp/
 .azure/*
+!.azure/deployment-plan.md
+graphify-out/
 collector/*.local.out
 copilot-otel*.jsonl
 benchmarks/runs/

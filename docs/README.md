@@ -47,11 +47,12 @@ For rendered docs and presentations:
 
 ### New User
 
-1. [Simplified Azure-native design](simplified-azure-design.md)
-2. [Secure by default](secure-by-default.md)
-3. [Collector modes](collector-modes.md)
-4. [Privacy modes](privacy-modes.md)
-5. [E2E validation](e2e-validation.md)
+1. [CLI-first flight recorder](cli-first-flight-recorder.md)
+2. [Simplified Azure-native design](simplified-azure-design.md)
+3. [Secure by default](secure-by-default.md)
+4. [Collector modes](collector-modes.md)
+5. [Privacy modes](privacy-modes.md)
+6. [E2E validation](e2e-validation.md)
 
 ### Operator
 

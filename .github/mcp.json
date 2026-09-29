@@ -1,0 +1,20 @@
+{
+  "mcpServers": {
+    "azure-mcp": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@azure/mcp@latest", "server", "start", "--read-only", "--namespace", "monitor"],
+      "tools": ["*"]
+    },
+    "microsoft-learn": {
+      "type": "http",
+      "url": "https://learn.microsoft.com/api/mcp",
+      "tools": ["microsoft_docs_search", "microsoft_docs_fetch", "microsoft_code_sample_search"]
+    },
+    "context7": {
+      "type": "http",
+      "url": "https://mcp.context7.com/mcp/oauth",
+      "tools": ["*"]
+    }
+  }
+}

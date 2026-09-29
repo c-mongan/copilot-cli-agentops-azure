@@ -148,6 +148,20 @@ test('copilot session enrichment emits MCP metadata, skill requests, and failed 
   assert.equal(rows[5].event, 'hook.started');
 });
 
+test('copilot session enrichment resolves tool completions through call IDs without leaking content', () => {
+  const rows = enrichCopilotSessionEvents([
+    { type: 'tool.execution_start', data: { toolCallId: 'call-one', toolName: 'view', arguments: { path: 'secret.txt' } } },
+    { type: 'tool.execution_start', data: { toolCallId: 'call-two', toolName: 'bash', arguments: { command: 'private' } } },
+    { type: 'tool.execution_complete', data: { toolCallId: 'call-two', success: false, result: 'private result' } },
+    { type: 'tool.execution_complete', data: { toolCallId: 'call-one', success: true, result: 'secret content' } },
+    { type: 'tool.execution_complete', data: { toolCallId: 'missing', success: false } }
+  ], { sessionId: 'synthetic-session' });
+
+  assert.deepEqual(rows.map(row => row.attributes['gen_ai.tool.name']), ['bash', 'view', 'unknown-tool']);
+  assert.deepEqual(rows.map(row => row.outcome), ['failed', 'success', 'failed']);
+  assert.doesNotMatch(JSON.stringify(rows), /call-one|call-two|secret|private/);
+});
+
 test('copilot session enrichment preserves ordered fleet subagent lifecycle metadata', () => {
   const rows = enrichCopilotSessionEvents([
     { id: 'start-1', type: 'subagent.started', data: { agentName: 'explore', model: 'claude-haiku-4.5', toolCallId: 'call-one' } },

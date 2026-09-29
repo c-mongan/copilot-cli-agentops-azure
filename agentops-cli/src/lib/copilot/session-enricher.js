@@ -86,6 +86,7 @@ function enrichCopilotSessionEvents(events = [], options = {}) {
   const sessionId = options.sessionId || 'unknown-session';
   const rows = [];
   let activeAgent = safeName(options.agent || '');
+  const startedTools = new Map();
 
   events.forEach((entry, index) => {
     const type = entry.type || '';
@@ -240,9 +241,17 @@ function enrichCopilotSessionEvents(events = [], options = {}) {
       return;
     }
 
-    if (type === 'tool.execution_complete') {
+    if (type === 'tool.execution_start') {
+      const callId = typeof data.toolCallId === 'string' ? data.toolCallId : '';
       const name = safeName(data.toolName || '');
-      if (!name) return;
+      if (callId && name) startedTools.set(callId, name);
+      return;
+    }
+
+    if (type === 'tool.execution_complete') {
+      const callId = typeof data.toolCallId === 'string' ? data.toolCallId : '';
+      const name = safeName(data.toolName || '') || startedTools.get(callId) || 'unknown-tool';
+      if (callId) startedTools.delete(callId);
       rows.push({
         ...eventBase(entry, activeAgent, sessionId, index),
         event: 'tool.completed',

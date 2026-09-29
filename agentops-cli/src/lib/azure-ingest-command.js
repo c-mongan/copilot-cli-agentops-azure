@@ -23,7 +23,7 @@ function azureIngestCommand(args = []) {
 
   if (subcommand === 'plan') {
     const dir = optionValue(args, '--dir', path.join(repoRoot, '.agentops', 'demo', 'latest'));
-    const plan = buildAzureIngestPlan({ dir, allowContent: hasFlag(args, '--allow-content') });
+    const plan = buildAzureIngestPlan({ dir, allowContent: hasFlag(args, '--allow-content'), contentOnly: hasFlag(args, '--content-only') });
 
     writeJsonOrRender(plan, hasFlag(args, '--json'), renderAzureIngestPlan);
     if (!plan.ok) process.exitCode = 1;
@@ -36,7 +36,8 @@ function azureIngestCommand(args = []) {
       dir,
       endpoint: optionValue(args, '--endpoint', process.env.AGENTOPS_LOGS_INGESTION_ENDPOINT || ''),
       dcrImmutableId: optionValue(args, '--dcr-immutable-id', process.env.AGENTOPS_DCR_IMMUTABLE_ID || ''),
-      allowContent: hasFlag(args, '--allow-content')
+      allowContent: hasFlag(args, '--allow-content'),
+      contentOnly: hasFlag(args, '--content-only')
     });
     const yes = hasFlag(args, '--yes');
     const result = yes ? runLogsIngestionUpload(plan) : plan;

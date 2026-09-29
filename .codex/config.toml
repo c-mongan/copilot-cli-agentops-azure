@@ -1,0 +1,10 @@
+[mcp_servers.azure-mcp]
+command = "npx"
+args = ["-y", "@azure/mcp@latest", "server", "start", "--read-only", "--namespace", "monitor"]
+startup_timeout_sec = 40
+
+[mcp_servers.microsoft-learn]
+url = "https://learn.microsoft.com/api/mcp"
+
+[mcp_servers.context7]
+url = "https://mcp.context7.com/mcp/oauth"

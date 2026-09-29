@@ -4,7 +4,7 @@
 
 > Independent personal OSS project. Not an official Microsoft, GitHub, OpenAI, Azure, or Grafana product.
 
-The checked-in dev deployment is a personal development/demo environment. Keep it metadata-only; it is not approved for Microsoft confidential, customer, or production data. `agentops validate-azure` defaults to this non-blocking `personal` posture. Use `--profile team` or `--profile internal` for readiness gates that fail when Log Analytics ingestion is uncapped or the resource group has no Azure Consumption budget. `--production` implies the stricter `internal` profile and retains the wider production security checks.
+The checked-in dev deployment is a personal development/demo environment. Its normal telemetry path is metadata-only; a separately controlled synthetic EVAL path may carry rich content after the destination and access checks in the [deployment plan](.azure/deployment-plan.md). This environment is not approved for Microsoft confidential, customer, work-agent, or production data. `agentops validate-azure` defaults to this non-blocking `personal` posture. Use `--profile team` or `--profile internal` for readiness gates that fail when Log Analytics ingestion is uncapped or the resource group has no Azure Consumption budget. `--production` implies the stricter `internal` profile and retains the wider production security checks.
 
 Privacy-first observability for GitHub Copilot CLI runs, Copilot SDK sessions, MCP tools, and code outcomes using Azure Monitor. AgentOps records run/session metadata, tool names, failures, latency, token usage, estimated cost, privacy signals, evals, and GitHub outcomes without recording prompts, code, file contents, tool arguments, or tool results by default. Azure Monitor's native Application Insights Agents view is the primary investigation surface; Managed Grafana is optional for advanced operators.
 
@@ -18,6 +18,7 @@ GitHub Copilot CLI
 
 See the [simplified Azure-native design](docs/simplified-azure-design.md) for
 the minimum service footprint, first-value flow, and live-evidence states.
+The [CLI-first flight recorder](docs/cli-first-flight-recorder.md) now generates a local timed waterfall from a synthetic Copilot session. The [dated research and full requirements](docs/research/2026-09-29/README.md) explain the broader product target.
 
 If you are new to the project, start with the [junior quickstart](docs/junior-quickstart.md).
 It gets you from zero to a local privacy-safe Copilot receipt, then shows the

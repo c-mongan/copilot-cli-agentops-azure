@@ -771,7 +771,9 @@ test('azure-ingest logs-upload executes az rest only after a ready plan', () => 
     assert.equal(result.executed, true);
     assert.equal(calls[0].command, 'az');
     assert.deepEqual(calls[0].args, ['account', 'show', '--query', 'id', '-o', 'tsv']);
-    assert.deepEqual(calls[1].args.slice(0, 4), ['rest', '--method', 'post', '--uri']);
+    assert.deepEqual(calls[1].args.slice(0, 6), [
+      'rest', '--subscription', '11111111-1111-4111-8111-111111111111', '--method', 'post', '--uri'
+    ]);
     assert.equal(calls[1].args[calls[1].args.indexOf('--resource') + 1], 'https://monitor.azure.com/');
     assert.ok(calls[1].args.includes('Content-Type=application/json'));
     assert.ok(calls[1].args.some(arg => /^@.*AgentOpsRunSummary_CL\.json$/.test(arg)));

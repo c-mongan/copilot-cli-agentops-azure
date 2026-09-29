@@ -1,0 +1,44 @@
+{
+  "scope": "Generic Python OTel only; Copilot CLI, SDK, VS Code and Azure not executed",
+  "python": "3.13.5",
+  "opentelemetry_sdk": "1.42.1",
+  "cases": {
+    "absent": {
+      "trace_id": "8d08be80d70271572a63be4d2195e6cc",
+      "span_id": "dfce67ca848460fc",
+      "parent_span_id": null,
+      "carrier_present": false,
+      "same_trace": false,
+      "correct_parent": false
+    },
+    "no_extract": {
+      "trace_id": "ed375475290167ae54ef7b925263ffe6",
+      "span_id": "5332d4b56fb6fb08",
+      "parent_span_id": null,
+      "carrier_present": true,
+      "same_trace": false,
+      "correct_parent": false
+    },
+    "extract": {
+      "trace_id": "23ac5dd3f176971b0ea330e9093f930e",
+      "span_id": "5cb45050bd84c2cb",
+      "parent_span_id": "9731bcbc1a807515",
+      "carrier_present": true,
+      "same_trace": true,
+      "correct_parent": true
+    },
+    "invalid": {
+      "trace_id": "3db55f2e5305cf0d2482ae010fcb4592",
+      "span_id": "cdbb9ea976fcae78",
+      "parent_span_id": null,
+      "carrier_present": true,
+      "same_trace": false,
+      "correct_parent": false
+    }
+  },
+  "parent": {
+    "trace_id": "23ac5dd3f176971b0ea330e9093f930e",
+    "span_id": "9731bcbc1a807515"
+  },
+  "assertions_passed": 4
+}

@@ -1,0 +1,623 @@
+[
+  {
+    "id": "cli",
+    "title": "Copilot CLI command / OTel reference",
+    "url": "https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-command-reference",
+    "type": "Official reference",
+    "supports": "Native CLI signal names, content settings, transport and invocation options",
+    "confidence": "High—contract",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "gh-otel",
+    "title": "GitHub enterprise OpenTelemetry overview",
+    "url": "https://docs.github.com/en/copilot/concepts/enterprise/opentelemetry",
+    "type": "Official documentation",
+    "supports": "Telemetry scope and enterprise context",
+    "confidence": "High—contract",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "hooks",
+    "title": "GitHub hooks reference",
+    "url": "https://docs.github.com/en/copilot/reference/hooks-reference",
+    "type": "Official reference",
+    "supports": "CLI/cloud hook payloads, coverage, matching and failure behavior",
+    "confidence": "High—contract",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "custom-agents",
+    "title": "GitHub custom-agent configuration",
+    "url": "https://docs.github.com/en/copilot/reference/custom-agents-configuration",
+    "type": "Official reference",
+    "supports": "Native agent frontmatter and surface-dependent configuration",
+    "confidence": "High—contract",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "sdk-otel",
+    "title": "Copilot SDK OpenTelemetry",
+    "url": "https://docs.github.com/en/copilot/how-tos/copilot-sdk/observability/opentelemetry",
+    "type": "Official SDK documentation",
+    "supports": "W3C context across SDK/CLI and custom tool boundaries",
+    "confidence": "High—contract",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "sdk-python",
+    "title": "Copilot SDK Python context helper",
+    "url": "https://github.com/github/copilot-sdk/blob/2a67e4e651846ec0d7684c63f67ff9b86bdcc198/python/copilot/_telemetry.py",
+    "type": "Pinned source",
+    "supports": "Explicit inject/extract/attach/detach behavior; not automatic shell propagation",
+    "confidence": "High—source",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "vscode-monitor",
+    "title": "VS Code agent monitoring",
+    "url": "https://code.visualstudio.com/docs/agents/guides/monitoring-agents",
+    "type": "Official documentation",
+    "supports": "Local agent/model/tool/skill-related signals, content controls, legacy fields",
+    "confidence": "High—contract; scope with current source",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "vscode-hooks",
+    "title": "VS Code Local hooks reference",
+    "url": "https://code.visualstudio.com/docs/agents/reference/hooks-reference",
+    "type": "Official reference",
+    "supports": "Local hook tool_use_id and agent IDs; separate from provider hooks",
+    "confidence": "High—contract",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "vscode-ownership",
+    "title": "VS Code OTel ownership skill",
+    "url": "https://github.com/microsoft/vscode/blob/main/.github/skills/otel/SKILL.md",
+    "type": "Repository architecture guidance",
+    "supports": "Agent Host versus Local Chat ownership and runtime revision discipline",
+    "confidence": "High—source document",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "agenthost",
+    "title": "VS Code Agent Host OTel reference",
+    "url": "https://github.com/microsoft/vscode/blob/main/src/vs/platform/agentHost/OTEL.md",
+    "type": "Repository architecture reference",
+    "supports": "JSON loopback, SQLite, forwarding limits, provider context, metadata and settings",
+    "confidence": "High—source document; main not installed release",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "vscode-config",
+    "title": "Local Chat OTel configuration implementation",
+    "url": "https://github.com/microsoft/vscode/blob/a0c82f9df6268b5d35d109254b995190b02d2aa5/extensions/copilot/src/platform/otel/common/otelConfig.ts",
+    "type": "Pinned TypeScript source",
+    "supports": "Policy precedence, Local telemetry kill switch, identity/content and header configuration",
+    "confidence": "High—source; inspected lines 1–180",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "vscode-privacy-issue",
+    "title": "VS Code content-capture issue report",
+    "url": "https://github.com/microsoft/vscode/issues/326254",
+    "type": "Official repository issue",
+    "supports": "Reported privacy edge case; not proof of a bug in the target build",
+    "confidence": "Medium—report only",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "skills",
+    "title": "Agent Skills specification",
+    "url": "https://agentskills.io/specification",
+    "type": "Official specification",
+    "supports": "Discovery, progressive disclosure, directories, metadata and sizing guidance",
+    "confidence": "High—specification",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "sem-agent",
+    "title": "GenAI agent span conventions",
+    "url": "https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-agent-spans.md",
+    "type": "OTel specification repository",
+    "supports": "Standard agent/tool semantic definitions and status",
+    "confidence": "High—specification; pin revision",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "sem-model",
+    "title": "GenAI model span conventions",
+    "url": "https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-spans.md",
+    "type": "OTel specification repository",
+    "supports": "Model operation, usage and content semantic definitions",
+    "confidence": "High—specification; pin revision",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "sem-registry",
+    "title": "GenAI attribute registry",
+    "url": "https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/registry/attributes/gen-ai.md",
+    "type": "OTel attribute registry",
+    "supports": "Existing names including workflow, evaluation and compaction attributes",
+    "confidence": "High—specification; field maturity varies",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "sem-vcs",
+    "title": "VCS attribute registry",
+    "url": "https://opentelemetry.io/docs/specs/semconv/registry/attributes/vcs/",
+    "type": "OTel registry",
+    "supports": "Standard revision/ref/repository fields instead of custom git duplicates",
+    "confidence": "High—specification; maturity varies",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "otel-python",
+    "title": "Python zero-code instrumentation",
+    "url": "https://opentelemetry.io/docs/zero-code/python/",
+    "type": "Official OTel documentation",
+    "supports": "Supported-library instrumentation; distinguish it from business phase spans",
+    "confidence": "High—contract",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "otel-node",
+    "title": "Node.js instrumentation guide",
+    "url": "https://opentelemetry.io/docs/languages/js/getting-started/nodejs/",
+    "type": "Official OTel documentation",
+    "supports": "Node SDK setup and application instrumentation",
+    "confidence": "High—contract",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "otel-transform",
+    "title": "Collector telemetry transformation",
+    "url": "https://opentelemetry.io/docs/collector/transforming-telemetry/",
+    "type": "Official OTel documentation",
+    "supports": "Existing filtering/transformation building blocks",
+    "confidence": "High—contract",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "azure-coding",
+    "title": "Azure coding-agent / Grafana integration",
+    "url": "https://learn.microsoft.com/en-us/azure/managed-grafana/grafana-opentelemetry-app-insights",
+    "type": "Microsoft Learn",
+    "supports": "Documented coding-agent → Collector → Azure integration path",
+    "confidence": "High—contract",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "agent-view",
+    "title": "Application Insights Agent View",
+    "url": "https://learn.microsoft.com/en-us/azure/azure-monitor/app/agents-view",
+    "type": "Microsoft Learn",
+    "supports": "GenAI visualization, query and preview surface",
+    "confidence": "High—contract",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "azure-native",
+    "title": "Azure native OTLP ingestion",
+    "url": "https://learn.microsoft.com/en-us/azure/azure-monitor/containers/opentelemetry-protocol-ingestion",
+    "type": "Microsoft Learn",
+    "supports": "Provisioned endpoints, DCR/identity, split log/trace versus metric destinations",
+    "confidence": "High—contract; target availability untested",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "azure-distro",
+    "title": "Azure Monitor OpenTelemetry enablement",
+    "url": "https://learn.microsoft.com/en-us/azure/azure-monitor/app/opentelemetry-enable",
+    "type": "Microsoft Learn",
+    "supports": "Supported application instrumentation/distribution path",
+    "confidence": "High—contract",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "azure-entra",
+    "title": "Entra authentication for Application Insights",
+    "url": "https://learn.microsoft.com/en-us/azure/azure-monitor/app/azure-ad-authentication",
+    "type": "Microsoft Learn",
+    "supports": "Entra-only ingestion, credential guidance and AI-scoped publisher role",
+    "confidence": "High—contract",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "azure-exporter",
+    "title": "Collector Azure Monitor exporter",
+    "url": "https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/azuremonitorexporter",
+    "type": "Component documentation",
+    "supports": "Span/table/event mappings, span-event default and component stability",
+    "confidence": "High—component contract",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "azure-exporter-auth",
+    "title": "Azure Monitor exporter authentication",
+    "url": "https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/exporter/azuremonitorexporter/AUTHENTICATION.md",
+    "type": "Component documentation",
+    "supports": "Authenticator configuration plus older proxy guidance; discrepancy noted",
+    "confidence": "High—source document; runtime test pending",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "azure-exporter-config",
+    "title": "Azure Monitor exporter config.go",
+    "url": "https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/exporter/azuremonitorexporter/config.go",
+    "type": "Go source",
+    "supports": "Embedded HTTP client configuration and explicit span-event setting",
+    "confidence": "High—source",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "azure-auth-ext",
+    "title": "Azure auth extension",
+    "url": "https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/azureauthextension",
+    "type": "Component documentation",
+    "supports": "Outbound credential modes; inbound validation and advisory distinction",
+    "confidence": "High—component contract",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "azure-auth-advisory",
+    "title": "GHSA-pjv4-3c63-699f",
+    "url": "https://github.com/open-telemetry/opentelemetry-collector-contrib/security/advisories/GHSA-pjv4-3c63-699f",
+    "type": "Project security advisory",
+    "supports": "Affected inbound-auth versions 0.124.0–0.150.0; outbound unaffected; no patched version listed in retrieved advisory",
+    "confidence": "High—primary advisory",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "azure-mcp",
+    "title": "Azure MCP Server overview",
+    "url": "https://learn.microsoft.com/en-us/azure/developer/azure-mcp-server/",
+    "type": "Microsoft Learn",
+    "supports": "Optional agent interface to Azure services, not telemetry ingestion",
+    "confidence": "High—documentation",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "aspire",
+    "title": "Aspire standalone dashboard",
+    "url": "https://aspire.dev/dashboard/standalone/",
+    "type": "Official project documentation",
+    "supports": "Local OTLP viewing option",
+    "confidence": "High—contract",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "hve-skill",
+    "title": "hve-core copilot-otel-metrics skill",
+    "url": "https://github.com/microsoft/hve-core/tree/main/.github/skills/experimental/copilot-otel-metrics",
+    "type": "Repository skill directory",
+    "supports": "Existing experimental observability skill and asset organization",
+    "confidence": "High—repository inventory",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "hve-examples",
+    "title": "hve-core observability examples",
+    "url": "https://github.com/microsoft/hve-core/tree/main/.github/skills/experimental/copilot-otel-metrics/examples",
+    "type": "Inspected repository tree",
+    "supports": "Actual collector/IaC/dashboard/helper file inventory; not a full helper-code audit",
+    "confidence": "High—source tree",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "hve-collector",
+    "title": "hve-core Azure Collector YAML",
+    "url": "https://github.com/microsoft/hve-core/blob/main/.github/skills/experimental/copilot-otel-metrics/examples/azure/otel-collector-config.yaml",
+    "type": "YAML source",
+    "supports": "Allow-list omissions, event-name scrubbing, TLS/bearer structure and exporter settings",
+    "confidence": "High—source",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "hve-bicep",
+    "title": "hve-core Azure main.bicep",
+    "url": "https://github.com/microsoft/hve-core/blob/main/.github/skills/experimental/copilot-otel-metrics/examples/azure/main.bicep",
+    "type": "Bicep source",
+    "supports": "Local auth/public-network defaults, environment isolation and omitted collector deployment",
+    "confidence": "High—source",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "hve-guide",
+    "title": "hve-core metrics operational guide",
+    "url": "https://microsoft.github.io/hve-core/docs/customization/copilot-otel-metrics/",
+    "type": "Official project documentation",
+    "supports": "Metrics versus agent-trace attribution; verify actual sink data",
+    "confidence": "High—documentation",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "vally-how",
+    "title": "Vally execution model",
+    "url": "https://microsoft.github.io/vally/concepts/how-it-works/",
+    "type": "Official project documentation",
+    "supports": "Executor/trajectory/grader model and repeated evaluation",
+    "confidence": "High—contract; repository unavailable",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "vally-trajectory",
+    "title": "Vally trajectory format",
+    "url": "https://microsoft.github.io/vally/reference/trajectory-format/",
+    "type": "Official schema documentation",
+    "supports": "Trajectory fields, workspace diffs, artifact error states and serialization boundaries",
+    "confidence": "High—contract",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "vally-experiment",
+    "title": "Vally experiment CLI",
+    "url": "https://microsoft.github.io/vally/reference/cli/experiment/",
+    "type": "Official CLI reference",
+    "supports": "Variants, comparisons, explicit failure gates and shard behavior",
+    "confidence": "High—contract",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "vally-eval",
+    "title": "Vally eval CLI",
+    "url": "https://microsoft.github.io/vally/reference/cli/eval/",
+    "type": "Official CLI reference",
+    "supports": "OTLP endpoint option; trial/attempt/runtime hierarchy; local-file differences",
+    "confidence": "High—contract",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "vally-telemetry",
+    "title": "Vally telemetry streams",
+    "url": "https://microsoft.github.io/vally/reference/telemetry/",
+    "type": "Official documentation",
+    "supports": "Usage opt-out versus richer local/OTLP eval traces",
+    "confidence": "High—contract",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "skillopt-research",
+    "title": "SkillOpt Copilot research integration",
+    "url": "https://github.com/microsoft/SkillOpt/blob/main/plugins/copilot/skillopt/README.md",
+    "type": "Project integration documentation",
+    "supports": "Training/eval MCP tools, bounded skill optimization and gate override",
+    "confidence": "High—documented interface",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "skillopt-copilot",
+    "title": "SkillOpt-Sleep Copilot backend",
+    "url": "https://github.com/microsoft/SkillOpt/blob/main/plugins/copilot/README.md",
+    "type": "Project integration documentation",
+    "supports": "Copilot backend, isolated environment and data-exposure qualifications",
+    "confidence": "High—documented interface",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "skillopt-plugins",
+    "title": "SkillOpt shared plugin status",
+    "url": "https://github.com/microsoft/SkillOpt/blob/main/plugins/README.md",
+    "type": "Project integration documentation",
+    "supports": "Main versus PyPI 0.2.0 features; fan-out/adoption and replay limitations",
+    "confidence": "High—documented interface",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "skillopt-mcp",
+    "title": "SkillOpt Copilot MCP implementation",
+    "url": "https://github.com/microsoft/SkillOpt/blob/main/plugins/copilot/mcp_server.py",
+    "type": "Python source",
+    "supports": "Seven tools, source/backend distinction, reviewed tasks and auto-adopt controls",
+    "confidence": "High—source; inspected lines 1–140",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "scope",
+    "title": "Microsoft Scope",
+    "url": "https://github.com/microsoft/scope",
+    "type": "Research project repository",
+    "supports": "Broader agentic testing/criteria/workspace environment; not minimum telemetry core",
+    "confidence": "Medium—project; not executed",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "agentrx",
+    "title": "Microsoft AgentRx",
+    "url": "https://github.com/microsoft/AgentRx",
+    "type": "Research project repository",
+    "supports": "Trajectory failure diagnosis and reusable analysis direction",
+    "confidence": "Medium—project; no full implementation audit",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "agentrx-workflow",
+    "title": "GitHub AgentRx trace optimizer workflow",
+    "url": "https://github.com/github/gh-aw/blob/main/.github/workflows/daily-agentrx-trace-optimizer.md",
+    "type": "Actual agentic workflow definition",
+    "supports": "Existing trace-analysis-to-action pattern beyond a repository README",
+    "confidence": "High—workflow source; not executed",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "agentpex",
+    "title": "Microsoft AgentPex",
+    "url": "https://github.com/microsoft/agentpex",
+    "type": "Research project repository",
+    "supports": "Trace/specification/evaluation inspiration",
+    "confidence": "Medium—project; not executed",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "foundry-opt",
+    "title": "Foundry Agent Optimizer overview",
+    "url": "https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/agent-optimizer-overview",
+    "type": "Microsoft Learn preview documentation",
+    "supports": "Existing supported-agent optimization loop; not arbitrary Copilot drop-in",
+    "confidence": "High—preview contract",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "foundry-dataset",
+    "title": "Foundry optimizer datasets",
+    "url": "https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/create-optimizer-dataset",
+    "type": "Microsoft Learn",
+    "supports": "Dataset/evaluation construction for optimizer workflows",
+    "confidence": "High—documentation",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "foundry-skills",
+    "title": "Foundry observability skills",
+    "url": "https://github.com/microsoft/foundry-observability-skills",
+    "type": "Project repository",
+    "supports": "Related trace/evaluation skills; availability and preview limits must be checked",
+    "confidence": "Medium—project",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "foundry-workshop",
+    "title": "Foundry optimization workshop",
+    "url": "https://github.com/microsoft-foundry/agent-optimization-workshop",
+    "type": "Official workshop repository",
+    "supports": "Existing worked optimization flow, not production compatibility certification",
+    "confidence": "Medium—example",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "anthropic-agents",
+    "title": "Building effective agents",
+    "url": "https://www.anthropic.com/engineering/building-effective-agents",
+    "type": "Primary engineering guidance",
+    "supports": "Simple workflows, orchestration and conditional complexity",
+    "confidence": "High—guidance, not universal causal proof",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "openai-orchestration",
+    "title": "OpenAI orchestration and handoffs",
+    "url": "https://developers.openai.com/api/docs/guides/agents/orchestration",
+    "type": "Official API guidance",
+    "supports": "Manager-owned specialists versus conversation handoffs",
+    "confidence": "High—guidance",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "braintrust-loop",
+    "title": "Braintrust Loop",
+    "url": "https://www.braintrust.dev/blog/loop",
+    "type": "Vendor primary description",
+    "supports": "Trace-aware engineering and evaluation feature benchmark",
+    "confidence": "Medium—vendor capability description",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "phoenix",
+    "title": "Arize Phoenix",
+    "url": "https://arize.com/phoenix/",
+    "type": "Vendor/project primary description",
+    "supports": "Tracing, evaluation, annotations and current agent-assisted workflow benchmark",
+    "confidence": "Medium—vendor capability description",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "langfuse-datasets",
+    "title": "Langfuse datasets",
+    "url": "https://langfuse.com/docs/evaluation/experiments/datasets",
+    "type": "Official product documentation",
+    "supports": "Production-linked dataset creation and provenance",
+    "confidence": "High—documented feature",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "langfuse-retention",
+    "title": "Langfuse retention",
+    "url": "https://langfuse.com/docs/administration/data-retention",
+    "type": "Official product documentation",
+    "supports": "Derived dataset items can persist beyond originating traces",
+    "confidence": "High—documented behavior",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "langsmith-insights",
+    "title": "LangSmith Insights analysis",
+    "url": "https://www.langchain.com/blog/from-traces-to-insights-understanding-agent-behavior-at-scale",
+    "type": "Vendor engineering/product article",
+    "supports": "Clustered analysis of behavior and failure patterns",
+    "confidence": "Medium—documented product capability",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "langsmith-trajectories",
+    "title": "LangSmith Trajectories release",
+    "url": "https://www.langchain.com/blog/langsmith-trajectories-tracing",
+    "type": "Vendor release announcement, 2026-09-24",
+    "supports": "Chronological session projection, annotations and eval/dataset workflows",
+    "confidence": "High—release description; not independently tested",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "openllmetry",
+    "title": "OpenLLMetry",
+    "url": "https://github.com/traceloop/openllmetry",
+    "type": "Primary open-source repository",
+    "supports": "Reusable OTel-based AI/library instrumentation",
+    "confidence": "High—project scope; package coverage untested",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "openinference",
+    "title": "OpenInference",
+    "url": "https://github.com/Arize-ai/openinference",
+    "type": "Primary open-source repository",
+    "supports": "AI OTel instrumentation and distinct convention family",
+    "confidence": "High—project scope",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "bench-adr",
+    "title": "ADR Generator agent",
+    "url": "https://github.com/github/awesome-copilot/blob/main/agents/adr-generator.agent.md",
+    "type": "Agent source definition",
+    "supports": "Simple direct-agent benchmark candidate",
+    "confidence": "High—source; not executed",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "bench-context7",
+    "title": "Context7 Expert agent",
+    "url": "https://github.com/github/awesome-copilot/blob/main/agents/context7.agent.md",
+    "type": "Agent source definition",
+    "supports": "MCP/documentation/subagent benchmark and explicit tool configuration",
+    "confidence": "High—source; dependencies require validation",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "bench-playwright",
+    "title": "Playwright tester agent",
+    "url": "https://github.com/github/awesome-copilot/blob/main/agents/playwright-tester.agent.md",
+    "type": "Agent source definition",
+    "supports": "Browser/test benchmark candidate",
+    "confidence": "High—source; not executed",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "bench-rug",
+    "title": "RUG orchestrator",
+    "url": "https://github.com/github/awesome-copilot/blob/main/agents/rug-orchestrator.agent.md",
+    "type": "Inspected agent definition",
+    "supports": "Delegation to SWE/QA and prose/tool-allowlist distinction",
+    "confidence": "High—source; inspected first 90 lines",
+    "checked": "2026-09-29"
+  },
+  {
+    "id": "bench-gem",
+    "title": "GEM orchestrator",
+    "url": "https://github.com/github/awesome-copilot/blob/main/agents/gem-orchestrator.agent.md",
+    "type": "Agent source definition",
+    "supports": "Broad multi-worker orchestration benchmark",
+    "confidence": "High—source; deep runtime delegation unverified",
+    "checked": "2026-09-29"
+  }
+]
