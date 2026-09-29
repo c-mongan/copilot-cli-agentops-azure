@@ -1,5 +1,7 @@
 # CLI-first flight recorder
 
+For the product roadmap, low-friction setup contract, and script tracing acceptance checks, see the [Copilot agent observability plan](plans/2026-09-29-copilot-agentops-observability.md).
+
 This is the first usable slice of the broader [requirements](requirements/full-agent-observability-requirements.md). It combines Copilot CLI's native session events with exact-session native OpenTelemetry spans from local Collector receipts to build a timed waterfall. The Azure route continues to use the existing Collector and optional `AgentOpsContent_CL` path.
 
 ## Inspect one synthetic run
