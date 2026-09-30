@@ -45,7 +45,7 @@ Cloud uploads cannot be undone by changing future redaction settings. Keep STAND
 
 ## MCP setup for repo users
 
-- GitHub Copilot CLI: [`.github/mcp.json`](../.github/mcp.json) defines read-only Azure Monitor, Microsoft Learn, and Context7 for trusted repository sessions. The Azure Monitor server exposes Log Analytics KQL tools; no Azure Data Explorer cluster is required.
+- GitHub Copilot CLI: [`.github/mcp.json`](../.github/mcp.json) defines read-only Azure MCP (Monitor/Log Analytics KQL, Application Insights, Workbooks, Managed Grafana, Kusto, resource groups, subscriptions, RBAC, pricing and Bicep schemas), Microsoft Learn, Context7, and a headless isolated Playwright browser for reviewing the local waterfall HTML. No Azure Data Explorer cluster is required. GitHub access uses Copilot CLI's built-in GitHub MCP server.
 - Codex: [`.codex/config.toml`](../.codex/config.toml) defines the same servers for trusted project sessions.
 - Context7 uses its OAuth endpoint; a client may request a browser sign-in on first use. No API key is committed.
 - Always target Visual Studio Enterprise subscription `0222a208-955a-45fd-b6d8-ca4704421bf0` in Azure queries. The machine's current default subscription is Pay-As-You-Go.
