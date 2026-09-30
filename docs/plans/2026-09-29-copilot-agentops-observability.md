@@ -10,6 +10,8 @@ Status: authoritative working master plan, updated 30 September 2026. This is th
 
 **Release finish line:** a new user can preview and provision an isolated synthetic Azure target in one command; attach a repository without global hooks or shell changes; select a Copilot agent and launch an observed run; see scripts, references, MCP calls, subagents, failures, and evidence gaps in a usable waterfall; read back the same run in Azure; compare ordinary and observed task results; and detach without damaging user-owned files. The product must say what each Copilot/runtime surface can and cannot expose. Enterprise approval additionally requires a reviewed identity/access model, private-network posture, retention/deletion behavior, budget/alerts, and an approved destination. Passing synthetic tests does not pass that enterprise gate.
 
+The multi-skill acceptance extension is defined in [Multi-skill execution and evaluation contract](#multi-skill-execution-and-evaluation-contract--planning-update-30-september-2026): account for progressive instruction/reference delivery and important internal execution boundaries in named StockPilot-derived workflows. This is planned acceptance scope, not additional completed proof.
+
 | Workstream | State today | Next acceptance proof |
 | --- | --- | --- |
 | Copilot CLI event capture and run model | Synthetic flows cover session events, agents/skills, references, MCP, scripts, failure and partial evidence; correlation confidence is surfaced. | Version/capability matrix; additional CLI/plugin configurations; verify all joins and gaps against fresh fixtures. |
@@ -117,11 +119,61 @@ The repository already contains the synthetic pipeline, one-line Azure provision
 2. **Failure-first product view:** interactive browser checks cover synthetic failure/success, missing-edge/truncated capture, overlapping calls, filters, separate-session isolation, and mixed per-stream delivery state. The truncated fixture shows four gaps (two unresolved operations, one invalid timestamp and one uncorrelated stream delta) without claiming success. The waterfall joins local outbox status only when given a run ID and exact session/run match. Next review parent/worker attribution, detail policy, and first-failure ordering across the fixture matrix; add success/failure cases as needed.
 3. **Delivery and Azure profile reliability:** preserve the same-run content correlation check in setup acceptance: inspect content DCR/table schema, wait for propagation after schema changes, run a unique fixture, and verify exact IDs in Azure plus a zero dropped-column metric. The explicit `source` transform fixed the tested EVAL path; two earlier batches were not resent because ingestion is append-only. Next run the multi-run partial-acceptance/restart matrix and define stable-ID duplicate handling for every consumer. Add canary/drop detection, rollback, and Azure-side retention/deletion proof. The EVAL workspace's 1 GB/day ingestion cap is not a spend cap.
 4. **Enterprise boundary:** before any work data, use a separately authorized target and review least-privilege sender/reader roles, private networking, access audit, content allowlists, retention/deletion, alerts, rollback, and actual spend controls. Current live internal-profile validation fails six required controls; the EVAL DCEs are public, the Log Analytics workspace has no group reader assignments, no Azure budget is configured, and there is no Managed Grafana resource. The workspace-linked Application Insights component now passes its live validation check. The personal profile's pass result is not team/internal readiness. Cost-bearing team/internal resources need an explicit cost target before creation.
-5. **Later product stages:** only after gates 1–4 pass, build declared-versus-observed architecture insights and the protected baseline/candidate evaluation loop. Add VS Code and hosted-agent adapters as separate, measured capability profiles.
+5. **Later product stages:** build gate 4 architecture insights only after gates 1–3 pass for the synthetic pilot; build gate 5 protected baseline/candidate comparisons after gate 4 passes. Apply the multi-skill contract below to progressive-disclosure findings, script/tool batching, delegation, and model comparisons. Prepare StockPilot task contracts and capability mapping during the current coverage work, without launching optimization experiments or paid sweeps. Add VS Code and hosted-agent adapters as separate, measured capability profiles.
 
 For the immediate work package, keep changes scoped to the synthetic fixture, coverage association, setup instructions, and evidence ledger. Each later package gets its own executable implementation subplan with exact files, acceptance checks, and rollback. Update this master plan as the single roadmap; do not create a second requirements or roadmap document.
 
 ## Master delivery plan
+
+### Multi-skill execution and evaluation contract — planning update, 30 September 2026
+
+This update defines additional acceptance requirements; it does not report new implementation, test results, Azure readback, or enterprise readiness. Existing dated checkpoints remain historical evidence at their recorded versions. Use the following contract to extend the current pilot rather than restart it or create another roadmap.
+
+**Full E2E means complete coverage of a named workflow at recorded Copilot CLI, plugin, runtime, and loader versions.** Declare expected operations and relationships before running the acceptance fixture. Account for each required boundary from task start through final outcome and telemetry delivery. Missing required observations or relationships block the full-coverage claim; show the nearest observed boundary and the missing evidence. Distinguish exact source IDs, deterministic logical bridges, inferred associations, unsupported surfaces, and unknown coverage. Full coverage does not mean access to private model reasoning or every executed line of code.
+
+```text
+Versioned task and agent configuration
+  -> parent agent / delegated subagent
+  -> skill activation and instruction delivery
+  -> supporting reference delivery
+  -> script root and important internal steps / native or MCP tool call
+  -> result, continuation, final artifact or failure
+  -> local capture, export, Azure indexed readback, rendered run
+  -> outcome evaluation and protected baseline comparison
+```
+
+| Boundary | Required evidence and interpretation |
+| --- | --- |
+| Skills and context | Distinguish available metadata, activated skill, and delivered instructions. Record component identity/version and repeated loads; record context size where the producer exposes it. Inventory is not execution evidence. |
+| Supporting references | Distinguish inventoried files, successful reads, and confirmed context delivery. A read is evidence of access, not proof of model comprehension or correct use. Track file version, size, repeated access, and agent/run association without exporting file contents by default. |
+| Scripts | Record actual entry point/runtime, start/end, exit status or incomplete termination, error type, and meaningful internal steps. Keep declared runtime labels distinct from measured runtime identity. Join to the invoking operation with stated evidence and confidence. |
+| MCP and delegation | Correlate request/result and parent/child lifecycle, duration, retries, and failure. Resolve the effective server configuration. Client-side MCP success does not prove downstream server operations; instrument owned local server steps for the pilot and expose unavailable remote internals as gaps. |
+| Outcome and delivery | Associate final artifacts and grader results with the exact task/configuration/run. Distinguish local capture, remote acceptance, and indexed readback; account for drops, duplicates, sampling, and interrupted runs. |
+
+Label bytes, measured tokens, and estimated tokens separately; never convert a file-size count into a measured token claim. Per-skill model cost is unavailable unless the producer supports that attribution. Use task/run costs otherwise. Cross-run frequencies must name the eligible population and source coverage; absent telemetry is never evidence that a skill, reference, or script is unused.
+
+**Representative pilot: adapt StockPilot from the agent-decomposition workshop to Copilot CLI.** Use project-local custom-agent profiles and Agent Skills with synthetic inventory data. Retain the workshop's skill/script provenance and license notices, pin the source revision when preparing the fixture, and replace Claude-specific execution/delegation plumbing with verified Copilot interfaces. Retain the existing synthetic regression fixtures alongside this broader pilot.
+
+1. Routine forecasting: activate the forecasting skill, read the task-contract reference, run the rolling-mean script, and pass validated results to reorder-policy.
+2. Complex forecasting: exercise the seasonal/promotion branch through a forecaster subagent; validate structured output and confidence propagation into reorder-policy and notification behavior.
+3. Batch workflow: exercise multiple skills and the batch days-of-cover script; grade the synthetic business outcome as well as call count and duration.
+4. MCP variant: supply synthetic data through an owned local stdio MCP server with named internal operation spans. Add a small task-contract reference to exercise explicit progressive disclosure. Both are pilot additions: upstream StockPilot uses sandbox CSVs in place of MCP and is not a ready-made Copilot integration.
+
+For these workflows, predeclare which skills/references are required, optional, or intentionally not activated. Check required events rather than demanding every inventoried component execute. Exercise successful and deliberately failing scripts, malformed subagent/script outputs, MCP errors, repeated/concurrent calls, unsupported loaders, abrupt termination, and interrupted export. Preserve plain-versus-observed outputs and exit status with telemetry enabled and unavailable. Verify the same selected run locally, in Azure indexed readback, and in the rendered waterfall; retain gaps rather than manufacture parentage.
+
+**Evaluation-driven refactoring:** use the eval-driven development workshop's baseline/output-grader pattern and rightmodel's audit-before-sweep pattern. The workshop materials are not maintained production integrations, and their reported scores are not project results. First audit task representativeness, deterministic checks, judge reliability, harness isolation, and measurement consistency. Link each result to task ID, configuration/component versions, producer versions, run evidence, artifacts, grader version, and resource measurements. Protect a holdout set and retain failed and rejected candidates. Fix the trial count and comparison criteria in each experiment's implementation subplan before running it; repeated trials are required for model-dependent quality/cost comparisons.
+
+| Observed pattern | Candidate experiment; required outcome check |
+| --- | --- |
+| Overlapping skills or excessive instruction loading | Consolidate skills or move optional detail into focused references; verify correctness on affected tasks and holdout tasks. |
+| Repeated reference loading or long reference chains | Improve routing or reorganize references; verify required detail is still accessed and outcomes remain correct. |
+| Repeated small tool/data calls | Replace the loop with a batch script; verify equivalent results and error handling. |
+| Script failures, retries, or slow internal steps | Repair the demonstrated runtime/input/step/output defect; verify regression cases and telemetry-off parity. |
+| Expensive delegation or model use | Compare direct execution with delegation, or supported model/effort settings, after auditing the eval; enforce correctness and safety before latency/cost improvements. |
+
+Every architecture finding is a hypothesis with example runs, coverage limits, one proposed change, and a test that can reject it. Compare one change at a time against the same synthetic/public tasks and controlled runtime conditions; do not make removal decisions from low observed frequency alone. Retain human review and prohibit automatic refactor/merge as part of this stage.
+
+**Sequence:** prepare the StockPilot task contracts and producer-capability mapping during the existing fixture/coverage packages. Use the additional cases to close the current flight-recorder acceptance gaps. Architecture findings and optimization experiments remain gated by the existing pilot acceptance requirements; paid model sweeps, hosted workshop deployment, and new Azure resources are separate authorized actions. Enterprise work-data gates remain independent and unchanged. Record future commands/results in the evidence ledger and implementation decisions in the relevant executable subplan.
 
 This section is the short execution contract. The detailed requirement catalog remains authoritative for breadth; phases below establish sequence and release criteria. Every claim must link to synthetic/public evidence first. Work data is out of scope until an explicitly approved work environment has passed its security and policy review.
 
@@ -408,5 +460,8 @@ Managed Grafana remains undeployed. Its preview enables public access and disabl
 - [Opt-in observation decision](../adr/0003-opt-in-observation-process.md)
 - [Azure readiness profiles](../adr/0004-azure-readiness-profiles.md)
 - [Agent Skills overview](https://agentskills.io/home) and [specification](https://agentskills.io/specification)
+- [Agent decomposition / StockPilot workshop](https://github.com/anthropics/cwc-workshops/tree/main/agent-decomposition)
+- [Eval-driven agent development workshop](https://github.com/anthropics/cwc-workshops/tree/main/eval-driven-agent-development)
+- [Picking the right model workshop](https://github.com/anthropics/cwc-workshops/tree/main/rightmodel)
 - [GitHub Copilot CLI OTel reference](https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-command-reference)
 - [Azure Monitor Agents view](https://learn.microsoft.com/en-us/azure/azure-monitor/app/agents-view)

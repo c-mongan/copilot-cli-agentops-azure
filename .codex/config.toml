@@ -6,5 +6,5 @@ startup_timeout_sec = 40
 [mcp_servers.microsoft-learn]
 url = "https://learn.microsoft.com/api/mcp"
 
-[mcp_servers.context7]
+[mcp_servers.context7-http]
 url = "https://mcp.context7.com/mcp/oauth"
