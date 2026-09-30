@@ -20,6 +20,28 @@ function normalizedSkillName(value) {
     : '';
 }
 
+function safeReferenceToolStart(data, referenceName) {
+  const safe = {
+    referenceRead: true,
+    referenceName,
+    toolCallId: data.toolCallId || '',
+    toolName: data.toolName || '',
+    parentToolCallId: data.parentToolCallId || ''
+  };
+  if (data.toolCallStream) safe.toolCallStream = data.toolCallStream;
+  return safe;
+}
+
+function safeReferenceToolCompletion(data) {
+  const safe = {
+    referenceRead: true,
+    toolCallId: data.toolCallId || '',
+    success: data.success
+  };
+  if (Number.isSafeInteger(data.shellExecution?.exitCode)) safe.shellExecution = { exitCode: data.shellExecution.exitCode };
+  return safe;
+}
+
 function sessionWaterfall(events = [], nativeSpans = [], options = {}) {
   const repoRoot = path.resolve(options.repoRoot || process.cwd());
   const referencePaths = options.referencePaths || attachmentReferencePaths(repoRoot);
@@ -52,11 +74,12 @@ function sessionWaterfall(events = [], nativeSpans = [], options = {}) {
   let suppressedEvents = 0;
   let unmatchedDeltas = 0;
 
-  const owningSkillLink = (lane, referenceName, time) => {
+  const owningSkillLink = (lane, referenceName, time, index) => {
     const declaringSkills = new Set(skillReferences.get(referenceName) || []);
     const candidates = [];
     for (const invocation of invokedSkillsByLane.get(lane) || []) {
-      if (invocation.time < time && declaringSkills.has(invocation.name) && !candidates.includes(invocation.name)) {
+      const earlier = invocation.time < time || invocation.time === time && invocation.index < index;
+      if (earlier && declaringSkills.has(invocation.name) && !candidates.includes(invocation.name)) {
         candidates.push(invocation.name);
       }
     }
@@ -86,7 +109,7 @@ function sessionWaterfall(events = [], nativeSpans = [], options = {}) {
         parentToolCallId: parentToolCallId || '',
         agentId: event.agentId || '',
         toolCallLink: { evidence: 'exact', toolCallId },
-        owningSkillLink: owningSkillLink(lane, referenceName, time)
+        owningSkillLink: owningSkillLink(lane, referenceName, time, index)
       }
     });
   };
@@ -140,6 +163,7 @@ function sessionWaterfall(events = [], nativeSpans = [], options = {}) {
       const operation = operationFields(event, repoRoot, referencePaths);
       if (operation.ReferenceName && data.toolCallId) {
         referenceToolCalls.add(data.toolCallId);
+        row.details = safeReferenceToolStart({ ...data, toolCallStream: row.details.toolCallStream }, operation.ReferenceName);
         addReferenceReadRow({
           event,
           index,
@@ -171,6 +195,9 @@ function sessionWaterfall(events = [], nativeSpans = [], options = {}) {
             parentToolCallId: priorDetails.parentToolCallId || data.parentToolCallId || ''
           });
         }
+        if (priorDetails.referenceRead || operation.ReferenceName) {
+          started.details = { start: priorDetails, completion: safeReferenceToolCompletion(data) };
+        }
         pendingTools.delete(data.toolCallId);
         continue;
       }
@@ -179,6 +206,7 @@ function sessionWaterfall(events = [], nativeSpans = [], options = {}) {
       const operation = operationFields(event, repoRoot, referencePaths);
       if (operation.ReferenceName && data.toolCallId && !referenceToolCalls.has(data.toolCallId)) {
         referenceToolCalls.add(data.toolCallId);
+        row.details = safeReferenceToolCompletion(data);
         addReferenceReadRow({
           event,
           index,
@@ -268,7 +296,7 @@ function sessionWaterfall(events = [], nativeSpans = [], options = {}) {
       const skillName = normalizedSkillName(data.name || data.skillName || data.skill_name || '');
       if (skillName) {
         const lane = row.lane;
-        invokedSkillsByLane.set(lane, [...(invokedSkillsByLane.get(lane) || []), { name: skillName, time }]);
+        invokedSkillsByLane.set(lane, [...(invokedSkillsByLane.get(lane) || []), { name: skillName, time, index }]);
       }
     }
     rows.push(row);

@@ -230,6 +230,25 @@ test('declared reference reads become metadata-only waterfall rows with inferred
   }
 });
 
+test('rendered reference-read tool details omit arguments and results in standard waterfall output', () => {
+  const reference = '.github/skills/build-check/references/guide.md';
+  const root = fixtureAttachment([
+    { name: 'build-check', references: [{ path: reference }] }
+  ]);
+  try {
+    const html = renderSessionWaterfall([
+      { type: 'skill.invoked', timestamp: '2026-01-01T00:00:00.000Z', data: { name: 'build-check' } },
+      { type: 'tool.execution_start', timestamp: '2026-01-01T00:00:01.000Z', data: { toolCallId: 'read-1', toolName: 'view', arguments: { path: reference, secret: 'PRIVATE_ARGUMENT' } } },
+      { type: 'tool.execution_complete', timestamp: '2026-01-01T00:00:01.100Z', data: { toolCallId: 'read-1', success: true, result: 'PRIVATE_REFERENCE_CONTENT' } }
+    ], 'references', { repoRoot: root });
+    assert.match(html, /reference: \.github\/skills\/build-check\/references\/guide\.md/);
+    assert.match(html, /&quot;referenceRead&quot;: true/);
+    assert.doesNotMatch(html, /PRIVATE_ARGUMENT|PRIVATE_REFERENCE_CONTENT|&quot;arguments&quot;|&quot;result&quot;/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('reference skill relationship is ambiguous when multiple earlier same-lane invoked skills declare it', () => {
   const reference = '.github/skills/shared/references/guide.md';
   const root = fixtureAttachment([
@@ -246,6 +265,26 @@ test('reference skill relationship is ambiguous when multiple earlier same-lane 
       evidence: 'ambiguous',
       skillName: '',
       candidates: ['alpha', 'beta']
+    });
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('same-timestamp earlier skill invocation can infer reference ownership by source order', () => {
+  const reference = '.github/skills/build-check/references/guide.md';
+  const root = fixtureAttachment([
+    { name: 'build-check', references: [{ path: reference }] }
+  ]);
+  try {
+    const { rows } = sessionWaterfall([
+      { type: 'skill.invoked', timestamp: '2026-01-01T00:00:01.000Z', data: { name: 'build-check' } },
+      { type: 'tool.execution_start', timestamp: '2026-01-01T00:00:01.000Z', data: { toolCallId: 'read-1', toolName: 'view', arguments: { path: reference } } }
+    ], [], { repoRoot: root });
+    assert.deepEqual(rows.find(row => row.kind === 'reference.read').details.owningSkillLink, {
+      evidence: 'inferred',
+      skillName: 'build-check',
+      candidates: ['build-check']
     });
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
