@@ -44,6 +44,29 @@ function attachmentReferencePaths(repoRoot) {
   }
 }
 
+function attachmentSkillReferences(repoRoot) {
+  const manifest = path.join(repoRoot, '.agentops', 'attachment.json');
+  try {
+    const value = JSON.parse(fs.readFileSync(manifest, 'utf8'));
+    const references = new Map();
+    for (const skill of value.architecture?.skills || []) {
+      const skillName = safeText(skill.name, 200).replace(/^skill-/, '');
+      if (!skillName) continue;
+      for (const reference of skill.references || []) {
+        const referencePath = safeText(reference.path, 1024);
+        if (!referencePath) continue;
+        references.set(referencePath, [...(references.get(referencePath) || []), skillName]);
+      }
+    }
+    for (const [referencePath, skillNames] of references) {
+      references.set(referencePath, [...new Set(skillNames)].sort((left, right) => left.localeCompare(right)));
+    }
+    return references;
+  } catch {
+    return new Map();
+  }
+}
+
 function directShellReferenceRead(command, toolName, event, repoRoot, referencePaths) {
   if (toolName !== 'bash' || event.type !== 'tool.execution_complete') return '';
   const data = event.data || {};
@@ -179,4 +202,12 @@ function writeSessionEvents(events, sessionId, runId, outputPath, options = {}) 
   return { output: file, rows: rows.length };
 }
 
-module.exports = { eventId, projectSessionEvents, writeSessionEvents };
+module.exports = {
+  attachmentReferencePaths,
+  attachmentSkillReferences,
+  eventId,
+  operationFields,
+  projectSessionEvents,
+  safeRepoPath,
+  writeSessionEvents
+};

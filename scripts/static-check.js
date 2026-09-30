@@ -11,6 +11,7 @@ const skipDirs = new Set([
   '.azure',
   '.git',
   '.refs',
+  '.worktrees',
   '__pycache__',
   'node_modules'
 ]);
