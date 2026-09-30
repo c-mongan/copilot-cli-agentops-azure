@@ -1,6 +1,7 @@
 function usage() {
   const commands = [
     'setup [--json]',
+    'coverage --repo <git-repo> [--json]',
     'status',
     'latest [--file <jsonl>] [--last <duration>]',
     'live|tail [--file <jsonl>] [--last <duration>] [--follow] [--interval <seconds>]',
@@ -19,7 +20,7 @@ function usage() {
     'custom emit --event <name> --agent <name> [--parent-agent <name>] [--delegation-id <id>] [--workflow <name>] [--step <name>] [--outcome <value>] [--risk <value>] [--score <number>] [--tag <tag>] [--custom key=value] [--attribute key=value] [--dry-run] [--json]',
     'custom import <file> [--agent <name>] [--workflow <name>] [--dry-run] [--json]',
     'annotation config-change --component <name> --target <name> [--change-type <type>] [--change-id <id>] [--version <value>] [--run-id <id>] [--session <id>] [--trace-id <id>] [--dry-run] [--json]',
-    'configure show|set|import-azd [--agents-url <url>] [--json]',
+    'configure show|set|import-azd [--project|--user] [--python-runtime <label>] [--node-runtime <label>] [--typescript-loader <label|unknown>] [--json]',
     'install [--shadow-copilot]',
     'otel-setup [--endpoint <url>] [--service-name <name>] [--shell bash|powershell|json]',
     'start|stop',
@@ -30,6 +31,7 @@ function usage() {
     'validate-azure [--last <duration>] [--profile personal|team|internal] [--verify-dashboard-content] [--production] [--remediation-plan] [--json]',
     'init --local-only [--yes] [--shell bash|zsh|fish|powershell|json] [--force-skills] [--no-skills] [--json]',
     'init [--dry-run] --full [--yes] [--provision-cloud] [--import-dashboards] [--run-smoke] [--triage-latest] [--force-skills] [--no-skills] [--json]',
+    'provision azure --subscription <id> --resource-group <name> [--profile pilot] [--yes] [--json]',
     'smoke [--local] [--dry-run] [--endpoint <url>] [--id <smoke-id>] [--last <duration>] [--wait <duration>] [--poll <duration>] [--open-browser] [--no-verify] [--json]',
     'attribution-smoke [--dry-run] [--endpoint <url>] [--id <smoke-id>] [--last <duration>] [--wait <duration>] [--poll <duration>] [--no-verify] [--json]',
     'live-replay-smoke [--dry-run] [--endpoint <url>] [--id <smoke-id>] [--last <duration>] [--wait <duration>] [--poll <duration>] [--no-verify] [--json]',

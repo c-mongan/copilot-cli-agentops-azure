@@ -20,6 +20,8 @@ export OTEL_EXPORTER_OTLP_ENDPOINT="${OTEL_EXPORTER_OTLP_ENDPOINT:-http://127.0.
 export OTEL_SERVICE_NAME="${OTEL_SERVICE_NAME:-github-copilot-cli}"
 export OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT="false"
 export COPILOT_OTEL_SOURCE_NAME="${COPILOT_OTEL_SOURCE_NAME:-github.copilot}"
+export AGENTOPS_RUN_ID="${AGENTOPS_RUN_ID:-${AGENTOPS_WRAPPER_RUN_ID:-}}"
+export AGENTOPS_SCRIPT_OTLP_ENDPOINT="${AGENTOPS_SCRIPT_OTLP_ENDPOINT:-${OTEL_EXPORTER_OTLP_ENDPOINT%/}/v1/traces}"
 
 repo_url="$(git remote get-url origin 2>/dev/null || echo unknown)"
 repo_hash="$(printf '%s' "$repo_url" | shasum -a 256 | awk '{print $1}')"

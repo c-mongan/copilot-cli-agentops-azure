@@ -60,7 +60,7 @@ function createSetupGuide(dependencies = {}) {
     if (result.status !== 0) {
       const rawDetail = (result.stderr || result.stdout || `azd exited with status ${result.status}`).trim();
       const detail = /out of date/i.test(rawDetail) && !/error|failed|not found/i.test(rawDetail)
-        ? 'azd env get-values did not return AgentOps outputs. Run azd provision or select the right azd environment.'
+        ? 'azd env get-values did not return AgentOps outputs. Use agentops provision azure for a fresh pilot, or select the existing azd environment.'
         : rawDetail;
       return {
         checked: true,
@@ -173,14 +173,15 @@ function createSetupGuide(dependencies = {}) {
       .map(name => setupToolStatus(name, options));
     const toolByName = Object.fromEntries(tools.map(tool => [tool.name, tool]));
     const shim = installedShimStatus(options.installDir || defaultInstallDir);
-    const cloud = configuredCloudValues(options);
+    const cloud = configuredCloudValues({ ...options, projectOnly: true });
     const azureAccount = azureAccountStatus(options, toolByName.az.ok);
     const expectedSubscriptionId = cloud.subscriptionId || null;
     const subscriptionMatch = Boolean(expectedSubscriptionId && azureAccount.id && expectedSubscriptionId.toLowerCase() === azureAccount.id.toLowerCase());
     const workspaceConfigured = isConfiguredValue(cloud.workspaceId, /^0{8}-0{4}-0{4}-0{4}-0{12}$/);
     const grafanaConfigured = isConfiguredValue(cloud.grafanaBaseUrl, /your-grafana|<your-grafana>|^$/);
     const agentsViewConfigured = isConfiguredValue(cloud.agentsViewUrl, /^$/);
-    const cloudConfigured = workspaceConfigured && (grafanaConfigured || agentsViewConfigured);
+    const cloudConfigured = workspaceConfigured
+      && Boolean(cloud.subscriptionId && cloud.resourceGroup && cloud.logsIngestionEndpoint && cloud.dcrImmutableId);
     const resourceGroup = cloudConfigured
       ? azureResourceGroupStatus({
           resourceGroup: cloud.resourceGroup,
@@ -196,84 +197,106 @@ function createSetupGuide(dependencies = {}) {
           detail: 'Cloud binding is incomplete; Azure target lookup is deferred.'
         };
     const cloudTargetReady = cloudConfigured && resourceGroup.ok && subscriptionMatch;
-    const localReady = Boolean(toolByName.node.ok && shim.agentops_cli_installed && shim.copilot_agentops_installed);
+    const localReady = Boolean(toolByName.node.ok && toolByName.copilot.ok);
     const azd = azdEnvironmentStatus(options, toolByName.azd.ok);
     const dashboardCloud = cloudConfigured ? cloud : { ...cloud, ...azd.values };
     const dashboardGrafanaConfigured = isConfiguredValue(dashboardCloud.grafanaBaseUrl, /your-grafana|<your-grafana>|^$/);
     const dashboardImportCommand = dashboardGrafanaConfigured
       ? grafanaDashboardImportCommand(dashboardCloud)
-      : 'Optional advanced path: agentops configure set --grafana-url <grafana-url> then agentops dashboard import';
+      : 'agentops configure set --grafana-url <grafana-url> && agentops dashboard import';
+    const azureProvisionPreviewCommand = 'agentops provision azure --subscription <subscription-id> --resource-group <new-agentops-rg> --profile pilot';
+    const azureProvisionApplyCommand = `${azureProvisionPreviewCommand} --yes`;
+    const projectBindCommand = 'agentops configure set --project --subscription-id <subscription-id> --resource-group <resource-group> --workspace-id <workspace-customer-id> --workspace-name <workspace-name> --logs-ingestion-endpoint <dce-ingestion-endpoint> --dcr-immutable-id <dcr-immutable-id>';
+    const observeCommand = 'agentops copilot-session launch --repo . -- --agent <agent-name>';
+    const uploadCommand = 'agentops copilot-session launch --repo . --upload --yes -- --agent <agent-name>';
+    const coverageCommand = 'agentops coverage --repo . --json';
+    const runtimeProfileCommand = 'agentops configure set --project --python-runtime <version> --node-runtime <version> --typescript-loader <loader-or-unknown>';
+    const azureValidationCommand = 'agentops validate-azure --profile personal --json';
+    const viewCommand = 'agentops copilot-session view <session-id> --run-id <run-id> --output <local.html>';
 
     const phases = [
       {
-        name: '1. Provision Azure once',
+        name: '1. Review and attach this repository',
+        status: 'review',
+        commands: [
+          'agentops attach --repo .',
+          'Review discovered agents, skills, references, and hash-eligible scripts.',
+          'After review, apply with: agentops attach --repo . --yes'
+        ],
+        verify: coverageCommand
+      },
+      {
+        name: '2. Record the project runtime profile',
+        status: 'review',
+        commands: [
+          'Ask which Python and Node runtimes execute repository scripts, and which loader executes TypeScript.',
+          runtimeProfileCommand,
+          'Omit flags for unused runtimes; use unknown when the TypeScript loader is not known.'
+        ],
+        verify: 'agentops configure show --json; runtime labels are private metadata, not proof that scripts were observed.'
+      },
+      {
+        name: '3. Provision Azure once when needed',
         status: cloudTargetReady ? 'done' : cloudConfigured ? 'needs-review' : (azd.ok ? 'ready-to-import' : 'needed'),
         commands: cloudTargetReady
           ? ['agentops configure show']
           : cloudConfigured
           ? ['agentops validate-azure --last 24h', 'confirm the intended Azure resource group before any write']
-          : ['az login', 'azd provision'],
-        verify: 'agentops configure import-azd'
+          : azd.ok
+          ? ['agentops configure import-azd --project']
+          : [...(azureAccount.ok ? [] : ['az login']), azureProvisionPreviewCommand, `Review the Azure what-if; after explicit target and cost approval, rerun: ${azureProvisionApplyCommand}`],
+        verify: azd.ok && !cloudConfigured ? 'agentops configure import-azd --project' : 'Verify provision readback, then bind the selected target to this project.'
       },
       {
-        name: '2. Install local AgentOps utility',
-        status: shim.agentops_cli_installed && shim.copilot_agentops_installed ? 'done' : 'needed',
-        commands: [
-          'agentops install',
-          'export PATH="$HOME/.local/bin:$PATH"'
-        ],
-        verify: 'agentops status'
-      },
-      {
-        name: '3. Bind local CLI to Azure outputs',
-        status: cloudTargetReady ? 'done' : cloudConfigured ? 'needs-review' : (azd.ok ? 'needed' : 'blocked'),
+        name: '4. Bind local CLI to Azure outputs',
+        status: cloudTargetReady ? 'done' : cloudConfigured ? 'needs-review' : 'needed',
         commands: cloudTargetReady
           ? ['agentops configure show']
           : cloudConfigured
           ? ['agentops configure show', 'do not redirect to another resource group automatically']
           : azd.ok
-          ? ['agentops configure import-azd']
-          : ['agentops configure set --resource-group <resource-group> --workspace-id <workspace-id> --agents-url <azure-monitor-agents-view-url> --app-insights-name <app-insights-name>'],
-        verify: 'agentops configure show'
+          ? ['agentops configure import-azd --project']
+          : [projectBindCommand],
+        verify: `agentops configure show --json; then ${azureValidationCommand}`
       },
       {
-        name: '4. Validate and smoke test',
-        status: cloudTargetReady ? 'ready' : 'blocked',
-        commands: [
-          'agentops validate-enterprise',
-          'agentops validate-azure',
-          'agentops collector smoke --privacy strict --poison'
-        ],
-        verify: 'agentops latest --last 2h'
+        name: '5. Start one process-scoped observed run',
+        status: localReady ? 'ready' : 'blocked',
+        commands: [observeCommand, ...(cloudTargetReady ? [uploadCommand] : [])],
+        verify: `${coverageCommand}; then open the matching local run view`
       },
       {
-        name: '5. Observe a real run',
-        status: cloudTargetReady ? 'ready' : 'blocked',
-        commands: [
-          'agentops copilot -p "Reply with exactly: agentops smoke."',
-          'agentops latest --last 2h',
-          'agentops open'
-        ],
-        verify: 'Open the newest run in Run Story.'
+        name: '6. Review evidence and coverage',
+        status: localReady ? 'ready' : 'blocked',
+        commands: [viewCommand, coverageCommand],
+        verify: 'Confirm the selected agent, observed scripts, missing links, and delivery state for the same run and session.'
       }
     ];
 
     const firstRun = {
       name: 'First-run loop',
-      ready: cloudTargetReady && shim.agentops_cli_installed && shim.copilot_agentops_installed,
+      ready: cloudTargetReady && localReady,
       read_only: true,
       setup_command: 'agentops setup',
-      guided_command: 'agentops init --full',
+      guided_command: 'agentops attach --repo .',
+      observe_command: observeCommand,
+      upload_command: uploadCommand,
+      runtime_profile_command: runtimeProfileCommand,
+      coverage_command: coverageCommand,
+      view_command: viewCommand,
+      azure_validation_command: azureValidationCommand,
       bind_command: cloudTargetReady
         ? 'agentops configure show'
         : cloudConfigured
         ? 'agentops validate-azure --last 24h'
         : azd.ok
-        ? 'agentops configure import-azd'
-        : 'az login && azd provision && agentops configure import-azd',
+        ? 'agentops configure import-azd --project'
+        : projectBindCommand,
+      azure_provision_preview_command: !cloudConfigured && !azd.ok ? azureProvisionPreviewCommand : null,
+      azure_provision_apply_command: !cloudConfigured && !azd.ok ? azureProvisionApplyCommand : null,
       privacy_smoke_command: 'agentops collector smoke --privacy strict --poison --json',
       smoke_command: 'agentops smoke --real-copilot --wait 2m --poll 10s --open-browser',
-      run_command: realCopilotSmokeCommand(),
+      run_command: observeCommand,
       latest_command: 'agentops latest --last 2h',
       replay_command: 'agentops replay latest --last 2h',
       open_command: 'agentops open latest --last 2h',
@@ -284,41 +307,36 @@ function createSetupGuide(dependencies = {}) {
     };
 
     const next = [];
-    const missingTools = tools.filter(tool => !tool.ok).map(tool => tool.name);
+    const missingTools = ['node', 'copilot'].filter(name => !toolByName[name]?.ok);
     if (missingTools.length > 0) {
       next.push(`Install missing tools: ${missingTools.join(', ')}.`);
     }
+    next.push('agentops attach --repo .');
+    next.push('Review the inventory; apply only after agreement with: agentops attach --repo . --yes');
+    next.push(`Interview and record applicable runtime labels (omit unused-runtime flags): ${runtimeProfileCommand}`);
+    next.push(observeCommand);
+    next.push(coverageCommand);
+    next.push(viewCommand);
     if (!cloudConfigured) {
       if (azd.ok) {
-        next.push('agentops configure import-azd');
+        next.push('agentops configure import-azd --project');
       } else {
-        next.push('az login');
-        next.push('azd provision');
-        next.push('agentops configure import-azd');
+        if (!azureAccount.ok) next.push('az login');
+        next.push(azureProvisionPreviewCommand);
+        next.push(`Review the Azure what-if; after explicit target and cost approval, rerun: ${azureProvisionApplyCommand}`);
+        next.push(projectBindCommand);
       }
     } else if (!cloudTargetReady) {
       next.push('agentops validate-azure --last 24h');
       next.push('Confirm the intended Azure resource group; AgentOps will not redirect to another group automatically.');
     }
-    if (!shim.agentops_cli_installed || !shim.copilot_agentops_installed) {
-      next.push('agentops install');
+    if (cloudTargetReady) {
+      next.push(azureValidationCommand);
+      next.push(`Upload only after validation passes: ${uploadCommand}`);
     }
-    if (!shim.plain_copilot_observed) {
-      next.push('export PATH="$HOME/.local/bin:$PATH"');
-    }
-    next.push('agentops init --full');
-    next.push('agentops validate-enterprise');
-    next.push('agentops validate-azure');
-    next.push('agentops collector smoke --privacy strict --poison');
-    next.push('agentops copilot -p "Reply with exactly: agentops smoke."');
-    next.push('agentops latest --last 2h');
-    next.push('agentops open');
 
     return {
-      ok: tools.every(tool => tool.ok) &&
-        shim.agentops_cli_installed &&
-        shim.copilot_agentops_installed &&
-        cloudTargetReady,
+      ok: localReady && cloudTargetReady,
       mode: 'guide',
       mutates: false,
       local_ready: localReady,
@@ -372,31 +390,28 @@ function createSetupGuide(dependencies = {}) {
 
     lines.push('', `azd environment: ${result.azd.ok ? 'AgentOps outputs found' : result.azd.detail}`);
     lines.push(`Azure subscription: expected=${result.cloud.expected_subscription_id || 'not configured'}, active=${result.cloud.active_subscription_name || 'not signed in'} (${result.cloud.active_subscription_id || 'unknown'}), match=${result.cloud.subscription_match ? 'yes' : 'no'}.`);
-    lines.push(`Local shim: agentops=${result.shim.agentops_cli_installed ? 'installed' : 'missing'}, copilot-agentops=${result.shim.copilot_agentops_installed ? 'installed' : 'missing'}, transparent routing=${result.shim.plain_copilot_observed ? 'enabled' : 'disabled'}.`);
-    lines.push(`Cloud config: workspace=${result.cloud.workspace_id_configured ? 'set' : 'missing'}, Azure Monitor Agents view=${result.cloud.agents_view_url_configured ? 'set' : 'missing'}, Grafana advanced=${result.cloud.grafana_url_configured ? 'set' : 'missing'}.`);
-    lines.push(`Azure target: resource group=${result.cloud.resource_group || 'missing'} (${result.cloud.resource_group_status || 'not-checked'}); binding=${result.cloud.binding_status || 'unknown'}.`);
+    lines.push(`Compatibility shim (optional): ${result.shim.copilot_agentops_installed ? 'installed' : 'not installed'}; transparent routing=${result.shim.plain_copilot_observed ? 'enabled' : 'disabled'}. Default observation is process-scoped.`);
+    lines.push(`Project cloud config: workspace=${result.cloud.workspace_id_configured ? 'set' : 'missing'}, Azure Monitor Agents view=${result.cloud.agents_view_url_configured ? 'set' : 'missing'}, Grafana advanced=${result.cloud.grafana_url_configured ? 'set' : 'missing'}.`);
+    lines.push(`Project Azure target: resource group=${result.cloud.resource_group || 'missing'} (${result.cloud.resource_group_status || 'not-checked'}); binding=${result.cloud.binding_status || 'unknown'}.`);
 
-    lines.push('', 'One-minute first run:');
-    lines.push(`1. Guided path: ${result.first_run.guided_command}`);
-    lines.push('   This is a zero-write preview. Execute the reviewed plan with: agentops init --full --yes');
-    lines.push(`2. Setup/bind fallback: ${result.first_run.bind_command}`);
-    lines.push(`3. Privacy smoke fallback: ${result.first_run.privacy_smoke_command}`);
-    lines.push(`4. Real smoke fallback: ${result.first_run.smoke_command}`);
-    lines.push(`5. See it: the smoke opens Run Story, or run ${result.first_run.latest_command} && ${result.first_run.open_command}`);
-    lines.push(`6. Dashboards: ${result.first_run.dashboard_import_command} && ${result.first_run.dashboard_verify_command}`);
-    lines.push(`Privacy: ${result.first_run.privacy_note}`);
-    lines.push('Everyday observed use: agentops copilot ... (plain copilot stays unobserved unless transparent routing is enabled).');
-
-    lines.push('', 'Fastest path:');
-    for (const phase of result.phases) {
-      lines.push('', `${phase.name} (${phase.status})`);
-      for (const command of phase.commands) lines.push(`  ${command}`);
-      lines.push(`  verify: ${phase.verify}`);
+    lines.push('', 'Recommended Copilot CLI setup:');
+    lines.push(`1. No-write repo inventory: ${result.first_run.guided_command}`);
+    lines.push('   Review the discovered agents, skills, references, and eligible scripts. Attach only after review: agentops attach --repo . --yes');
+    lines.push(`2. Record runtime labels: ${result.first_run.runtime_profile_command}`);
+    lines.push('   Ask which versions actually run scripts. Omit unused runtime flags; use “unknown” if the TypeScript loader is unclear. Labels are private setup metadata, not execution proof.');
+    lines.push(`3. Process-scoped observed run: ${result.first_run.observe_command}`);
+    lines.push('   This is local-only by default. It does not install hooks or change shell startup. Plain copilot sessions remain uninstrumented.');
+    lines.push(`4. Check declared-versus-observed coverage: ${result.first_run.coverage_command}`);
+    lines.push(`5. Open the matching local waterfall: ${result.first_run.view_command}`);
+    if (result.first_run.azure_provision_preview_command) {
+      lines.push(`Azure is optional for the local smoke. To prepare an isolated target, preview: ${result.first_run.azure_provision_preview_command}`);
+      lines.push(`Review the Azure what-if, exact target, resource list, and expected cost before applying: ${result.first_run.azure_provision_apply_command}`);
     }
-
-    lines.push('', 'Run next:');
-    for (const command of result.next.slice(0, 3)) lines.push(`- ${command}`);
-    if (result.next.length > 3) lines.push(`- ${result.next.length - 3} more fallback commands are available in: agentops setup --json`);
+    lines.push(`Project Azure binding: ${result.first_run.bind_command}`);
+    lines.push(`Validate Azure before upload: ${result.first_run.azure_validation_command}`);
+    lines.push(`Azure upload is separate and requires a complete validated project target: ${result.first_run.upload_command}`);
+    lines.push(`For synthetic content only, review the restricted content workflow separately. ${result.first_run.privacy_note}`);
+    lines.push(`Optional advanced dashboards: ${result.first_run.dashboard_import_command} && ${result.first_run.dashboard_verify_command}`);
     return `${lines.join('\n')}\n`;
   }
 

@@ -3,6 +3,8 @@
 const legacy = require('./legacy');
 const { collectorCommand } = require('./commands/collector');
 const { azureIngestCommand } = require('./commands/azure-ingest');
+const { azureProvisionCommand } = require('./commands/azure-provision');
+const { attachCommand, coverageCommand, detachCommand } = require('./commands/attach');
 const { askContextCommand } = require('./commands/ask-context');
 const { contentCommand } = require('./commands/content');
 const { copilotCommand } = require('./commands/copilot');
@@ -30,6 +32,10 @@ const { coreCommands, experimentalCommands, usage } = require('./lib/cli-surface
 
 const commandHandlers = {
   azureIngestCommand,
+  azureProvisionCommand,
+  attachCommand,
+  coverageCommand,
+  detachCommand,
   askContextCommand,
   collectorCommand,
   contentCommand,
@@ -77,6 +83,10 @@ module.exports = {
   experimentalCommands,
   collectorCommand,
   azureIngestCommand,
+  azureProvisionCommand,
+  attachCommand,
+  coverageCommand,
+  detachCommand,
   askContextCommand,
   contentCommand,
   copilotCommand,

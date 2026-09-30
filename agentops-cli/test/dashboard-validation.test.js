@@ -19,8 +19,12 @@ test('dashboard validation helpers inspect V2 dashboard contracts directly', () 
   const replay = dashboards.find(item => item.body.uid === 'agentops-v2-run-replay');
   const sessionHealth = (home.body.panels || []).find(panel => panel.title === 'Session Health');
   const runsTable = (runs.body.panels || []).find(panel => panel.title === 'Runs');
+  const recommendations = (home.body.panels || []).find(panel => panel.title === 'Recommended next actions');
   const orderedTimeline = (replay.body.panels || []).find(panel => panel.title === 'Ordered timeline');
+  const failureGuidance = (replay.body.panels || []).find(panel => panel.title === 'Why this failed / next check');
   const lineage = (replay.body.panels || []).find(panel => panel.title === 'Agent, skill, and MCP lineage');
+  const configAnnotations = (dashboards.find(item => item.body.uid === 'agentops-v2-insights-regressions').body.panels || [])
+    .find(panel => panel.title === 'Config change annotations');
   const primaryTitles = Object.fromEntries(dashboards
     .filter(item => ['agentops-v2-home', 'agentops-v2-runs-explorer', 'agentops-v2-run-replay', 'agentops-v2-safety-privacy-policy'].includes(item.body.uid))
     .map(item => [item.body.uid, item.body.title]));
@@ -37,9 +41,20 @@ test('dashboard validation helpers inspect V2 dashboard contracts directly', () 
   assert.match(queryFromPanel(sessionHealth), /Delivery='Visible in Azure'/);
   assert.match(queryFromPanel(sessionHealth), /Coverage='AgentOps managed'/);
   assert.match(queryFromPanel(sessionHealth), /Coverage='Native best effort'/);
+  assert.match(queryFromPanel(runsTable), /AgentOpsEvents_CL/);
+  assert.match(queryFromPanel(runsTable), /completion_not_observed/);
+  assert.match(queryFromPanel(runsTable), /InputTokens=sum\(todouble\(InputTokens\)\)/);
+  assert.match(queryFromPanel(runsTable), /ToolFailureCount=countif\(EventName == 'tool.execution_complete' and Status in \('failed', 'error'\)\)/);
+  assert.match(queryFromPanel(recommendations), /AgentOpsSpans_CL/);
+  assert.match(queryFromPanel(recommendations), /observed_span_failure_/);
+  assert.match(queryFromPanel(failureGuidance), /AgentOpsSpans_CL/);
+  assert.match(queryFromPanel(failureGuidance), /evidence-linked tool call/);
   assert.match(queryFromPanel(runsTable), /project TimeGenerated, Delivery, Coverage/);
   const timelineQuery = queryFromPanel(orderedTimeline);
   assert.match(timelineQuery, /Sequence, EventId, ParentEventId, Delivery, Coverage, AttributionConfidence, AttributionGap/);
+  assert.match(timelineQuery, /summarize arg_max\(TimeGenerated, \*\) by EventKeyRunId, EventKeyId/);
+  assert.match(timelineQuery, /where isempty\(tostring\(column_ifexists\('EventId', ''\)\)\)/);
+  assert.match(queryFromPanel(configAnnotations), /summarize arg_max\(TimeGenerated, \*\) by EventKeyRunId, EventKeyId/);
   assert.match(timelineQuery, /McpToolName, ToolName, CommandName, ScriptName/);
   assert.match(timelineQuery, /InputTokens, OutputTokens, ReasoningTokens, TotalTokens, EstimatedCostUsd/);
   assert.match(timelineQuery, /PermissionKind, PermissionDecision, PrivacyMode, ContentCaptureMode, ContentCaptureSignal, ContentAction, ContentDroppedBytes, SecretLike/);

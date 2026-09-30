@@ -10,13 +10,51 @@ const {
 
 const bicepPath = path.resolve(__dirname, '../../infra/bicep/v2-ingestion.bicep');
 const bicep = fs.readFileSync(bicepPath, 'utf8');
+const evalSpansBicep = fs.readFileSync(path.resolve(__dirname, '../../infra/bicep/eval-spans.bicep'), 'utf8');
+const runtimeMigrationBicep = fs.readFileSync(path.resolve(__dirname, '../../infra/bicep/migrate-script-runtime-schema.bicep'), 'utf8');
 
 test('AgentOpsEvents Bicep preserves legacy cost type and adds ordered receipt columns', () => {
   const columns = new Map(agentOpsEventsColumnsFromBicep(bicep).map(column => [column.name, column.type]));
+  assert.equal(columns.get('Status'), 'string');
   assert.equal(columns.get('EstimatedCostUsd'), 'long');
   assert.equal(columns.get('EstimatedCostUsdReal'), 'real');
   assert.equal(columns.get('EventId'), 'string');
   assert.equal(columns.get('Sequence'), 'long');
+  assert.equal(columns.get('AgentId'), 'string');
+  assert.equal(columns.get('ParentAgentId'), 'string');
+  assert.equal(columns.get('ParentToolCallId'), 'string');
+  assert.equal(columns.get('ExitCode'), 'long');
+});
+
+test('AgentOpsSpans schema adds precise nanosecond duration without changing millisecond type', () => {
+  const spansStart = bicep.indexOf("name: 'AgentOpsSpans_CL'");
+  const spansEnd = bicep.indexOf("name: 'AgentOpsToolCalls_CL'", spansStart);
+  const spansSchema = bicep.slice(spansStart, spansEnd);
+  assert.match(spansSchema, /name: 'DurationMs', type: 'long'/);
+  assert.match(spansSchema, /name: 'DurationNs', type: 'long'/);
+  for (const name of ['ScriptRuntimeName', 'ScriptRuntimeVersion', 'ScriptRuntimeImplementation', 'ScriptLoaderName']) {
+    assert.match(spansSchema, new RegExp(`name: '${name}', type: 'string'`));
+    assert.match(bicep, new RegExp(`var spansTransformKql = 'source \\| project .*${name}`));
+    assert.match(evalSpansBicep, new RegExp(`transformKql: 'source \\| project .*${name}`));
+    assert.match(bicep, new RegExp(`${name}=tostring\\(${name}\\)`));
+    assert.match(evalSpansBicep, new RegExp(`${name}=tostring\\(${name}\\)`));
+    assert.match(runtimeMigrationBicep, new RegExp(`${name}=tostring\\(${name}\\)`));
+  }
+  assert.match(bicep, /var spansTransformKql = 'source \| project .*DurationNs/);
+  assert.match(bicep, /transformKql: table\.stream == 'Custom-AgentOpsSpans_CL' \? spansTransformKql : 'source'/);
+  assert.match(evalSpansBicep, /transformKql: 'source \| project .*DurationNs/);
+});
+
+test('v2 Bicep declares each custom table once and spans use the exported outcome column', () => {
+  const tableNames = [...bicep.matchAll(/^\s*name: '(AgentOps[A-Za-z0-9]+_CL)'$/gm)].map(match => match[1]);
+  assert.equal(tableNames.length, new Set(tableNames).size);
+  assert.equal(tableNames.filter(name => name === 'AgentOpsSpans_CL').length, 1);
+  const spansStart = bicep.indexOf("name: 'AgentOpsSpans_CL'");
+  const spansEnd = bicep.indexOf('\n  {\n    name:', spansStart);
+  const spansBlock = bicep.slice(spansStart, spansEnd < 0 ? undefined : spansEnd);
+  assert.match(spansBlock, /name: 'Outcome', type: 'string'/);
+  assert.match(spansBlock, /name: 'ToolCallEvidence', type: 'string'/);
+  assert.doesNotMatch(spansBlock, /name: 'Status', type: 'string'/);
 });
 
 test('migration guard accepts a purely additive desired schema', () => {
@@ -48,11 +86,11 @@ test('migration guard rejects removal and immutable type changes independently',
 });
 
 test('real v2 Bicep is additive against an injected compatible live schema', () => {
-  const live = agentOpsEventsColumnsFromBicep(bicep).filter(column => !['EventId', 'Sequence', 'EstimatedCostUsdReal'].includes(column.name));
+  const live = agentOpsEventsColumnsFromBicep(bicep).filter(column => !['EventId', 'Sequence', 'EstimatedCostUsdReal', 'AgentId', 'ParentAgentId', 'ParentToolCallId', 'ExitCode'].includes(column.name));
   const result = validateAgentOpsEventsBicepMigration(bicep, live);
   assert.equal(result.ok, true);
   assert.deepEqual(result.contract_violations, []);
-  assert.deepEqual(result.additive_columns.map(column => column.name), ['Sequence', 'EventId', 'EstimatedCostUsdReal']);
+  assert.deepEqual(result.additive_columns.map(column => column.name), ['Sequence', 'EventId', 'AgentId', 'ParentAgentId', 'ParentToolCallId', 'ExitCode', 'EstimatedCostUsdReal']);
 });
 
 test('Bicep migration preflight fails closed when an injected live column would be lost', () => {

@@ -107,7 +107,11 @@ async function drainDurableLogsIngestion(options = {}) {
     sleep: options.sleep
   });
   const uploader = createDurableLogsIngestionUploader(options);
-  return spool.drain(uploader, { maxAttempts: options.maxAttempts });
+  return spool.drain(uploader, {
+    maxAttempts: options.maxAttempts,
+    runId: options.runId,
+    eventIds: options.eventIds
+  });
 }
 
 function jsonArrayUploadFile(jsonlFile, tempDir, table) {
@@ -128,7 +132,7 @@ function runLogsIngestionUpload(plan, options = {}) {
     env: options.env,
     expectedSubscriptionId: options.expectedSubscriptionId,
     approvedSubscriptionIds: options.approvedSubscriptionIds,
-    requireActive: !plan.content_only
+    requireActive: !(plan.content_only || plan.spans_only || plan.events_only)
   });
   if (!subscription.ok) {
     return {

@@ -34,7 +34,7 @@ test('azure validation renderer formats checks remediations and next steps', () 
   assert.match(output, /- grafana-dashboards: failed \(2 expected dashboards missing\)/);
   assert.match(output, /missing: agentops-home, agentops-runs/);
   assert.match(output, /fix: agentops validate-azure --import-dashboards --last 24h/);
-  assert.match(output, /- grafana-resource: ok skipped \(resource name is not configured\)/);
+  assert.match(output, /- grafana-resource: skipped \(resource name is not configured\)/);
   assert.match(output, /Azure validation is incomplete\./);
   assert.match(output, /Remediation plan:\nReview these commands before running them\./);
   assert.match(output, /command: agentops dashboard import --yes/);

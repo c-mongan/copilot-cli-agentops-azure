@@ -1,9 +1,8 @@
 function renderValidateAzure(result) {
   const lines = ['AgentOps Azure validation', ''];
   for (const check of result.checks) {
-    const status = check.ok ? 'ok' : 'failed';
-    const skipped = check.skipped ? ' skipped' : '';
-    lines.push(`- ${check.name}: ${status}${skipped}${check.detail ? ` (${check.detail})` : ''}`);
+    const status = check.skipped ? 'skipped' : check.ok ? 'ok' : 'failed';
+    lines.push(`- ${check.name}: ${status}${check.detail ? ` (${check.detail})` : ''}`);
     if (check.name === 'grafana-dashboards' && !check.ok && Array.isArray(check.missing) && check.missing.length > 0) {
       lines.push(`  missing: ${check.missing.join(', ')}`);
       lines.push('  fix: agentops validate-azure --import-dashboards --last 24h');

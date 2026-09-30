@@ -16,6 +16,17 @@ param retentionInDays int = 7
 @maxValue(5)
 param dailyQuotaGb int = 1
 
+@description('Microsoft Entra object ID allowed to send synthetic content to the content DCR.')
+param ingestionPrincipalId string = ''
+
+@description('Microsoft Entra principal type for the telemetry sender.')
+@allowed([
+  'User'
+  'ServicePrincipal'
+  'Group'
+])
+param ingestionPrincipalType string = 'User'
+
 var tags = {
   app: 'copilot-cli-agentops-azure'
   environment: environmentName
@@ -35,6 +46,7 @@ var columns = [
   { name: 'PromptText', type: 'string' }
   { name: 'ResponseText', type: 'string' }
   { name: 'ToolName', type: 'string' }
+  { name: 'ToolCallId', type: 'string' }
   { name: 'ModelActual', type: 'string' }
   { name: 'RedactionStatus', type: 'string' }
   { name: 'ContentHash', type: 'string' }
@@ -95,11 +107,24 @@ resource rule 'Microsoft.Insights/dataCollectionRules@2022-06-01' = {
       {
         streams: ['Custom-AgentOpsContent_CL']
         destinations: ['eval-content']
+        transformKql: 'source'
         outputStream: 'Custom-AgentOpsContent_CL'
       }
     ]
   }
   dependsOn: [contentTable]
+}
+
+var metricsPublisherRoleDefinitionId = '3913510d-42f4-4e42-8a64-420c390055eb'
+
+resource contentDcrSender 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (ingestionPrincipalId != '') {
+  name: guid(rule.id, ingestionPrincipalId, metricsPublisherRoleDefinitionId)
+  scope: rule
+  properties: {
+    principalId: ingestionPrincipalId
+    principalType: ingestionPrincipalType
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', metricsPublisherRoleDefinitionId)
+  }
 }
 
 output workspaceResourceId string = workspace.id

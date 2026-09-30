@@ -48,9 +48,9 @@ async function collectorStatus({
     : null;
   const runningManaged = runningLocal || runningNative || runningBinary;
   const effectiveMode = runningLocal ? 'local' : runningNative ? 'azure-native' : runningBinary ? 'binary' : auto.mode || requestedMode;
-  const effectivePrivacy = runningManaged?.privacy || privacy;
+  const effectivePrivacy = runningManaged?.privacy || (health.ok ? 'unknown' : privacy);
   const configTarget = effectiveMode === 'binary' || effectiveMode === 'local' || effectiveMode === 'azure-native' ? effectiveMode : 'docker';
-  const config = runningManaged?.config || configPathFor(configTarget, effectivePrivacy);
+  const config = runningManaged?.config || (health.ok ? null : configPathFor(configTarget, effectivePrivacy));
   const discoveredPid = effectiveMode === 'binary' || effectiveMode === 'local' || effectiveMode === 'azure-native'
     ? (runningManaged?.pid || (binary.path ? findManagedCollectorProcess(binary.path, config) : findCollectorProcessByConfig(config)))
     : null;
@@ -66,6 +66,7 @@ async function collectorStatus({
   if (!composeHasLocalhostBindings()) details.push('Docker Compose host bindings are not localhost-only.');
   if (pid && !processAlive(pid) && discoveredPid) details.push(`Binary PID file was stale; found running collector PID ${discoveredPid}.`);
   if (pid && !processAlive(pid) && health.ok && !discoveredPid) details.push('Binary PID file is stale, but the collector health endpoint is responding.');
+  if (health.ok && !runningManaged) details.push('Collector health endpoint is responding, but its running configuration and privacy mode could not be verified.');
 
   return {
     mode: requestedMode,
@@ -75,6 +76,7 @@ async function collectorStatus({
     healthUrl,
     safeLocalhostBinding: composeHasLocalhostBindings(),
     privacyMode: effectivePrivacy,
+    privacyVerified: Boolean(runningManaged),
     config: fs.existsSync(config)
       ? config
       : null,

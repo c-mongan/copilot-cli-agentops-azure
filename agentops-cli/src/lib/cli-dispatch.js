@@ -34,13 +34,17 @@ function createCliMain(dependencies = {}) {
   } = dependencies;
 
   const directCommands = {
+    attach: commands.attachCommand,
+    coverage: commands.coverageCommand,
     'ask-context': commands.askContextCommand,
     'azure-ingest': commands.azureIngestCommand,
+    provision: commands.azureProvisionCommand,
     content: commands.contentCommand,
     copilot: commands.copilotCommand,
     'copilot-session': commands.copilotSessionCommand,
     dashboard: commands.dashboardCommand,
     demo: commands.demoCommand,
+    detach: commands.detachCommand,
     delivery: commands.deliveryCommand,
     doctor: commands.doctorCommand,
     e2e: commands.e2eCommand,
@@ -102,7 +106,13 @@ function createCliMain(dependencies = {}) {
 
     if (experimentalCommands.has(command)) return legacyWithMigration(command, args);
 
-    if (coreCommands.includes(command)) return legacy.main([command, ...args]);
+    if (coreCommands.includes(command)) {
+      if (args.includes('--help') || args.includes('-h')) {
+        stdout.write(usage(command));
+        return undefined;
+      }
+      return legacy.main([command, ...args]);
+    }
 
     const suggestion = commandSuggestion(command, [
       ...Object.keys(directCommands),

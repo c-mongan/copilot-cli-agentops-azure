@@ -41,6 +41,9 @@ available during the native migration.
 node src/index.js doctor --local-only
 node src/index.js install --shadow-copilot
 node src/index.js configure show
+node src/index.js attach --repo .
+node src/index.js coverage --repo . --json
+node src/index.js detach --repo .
 node src/index.js configure set --resource-group rg-agentops-dev --workspace-id <workspace-id> --grafana-url https://<your-grafana>.grafana.azure.com
 node src/index.js configure import-azd
 node src/index.js start
@@ -104,8 +107,41 @@ change counts when present. Prompts, answers, tool arguments/results, paths and
 file names are never copied into the receipt. Ordered wrapper lifecycle receipts
 are fsynced into a bounded private queue. The receipt labels that evidence
 `waiting for Azure` until the configured ingestion endpoint accepts the exact
-event; native Copilot detail is labelled separately as best-effort collector
-coverage.
+event. After Copilot exits, the wrapper also writes owner-only metadata exports
+for session events and spans under `~/.agentops/runs/<run-id>/`, then uploads
+each stream through the project-bound metadata DCR when configured. Prompts,
+answers, tool arguments/results, and script output are excluded. The receipt
+reports event and span delivery separately; API acceptance is not Azure query
+readback, and missing spans remain a visible coverage gap.
+
+`coverage --repo . --json` compares the attached static inventory with local
+run exports whose repository-path hash and attachment-manifest hash match. It
+reports observed names and denominators for agents, skills, references, and
+scripts. Unobserved components are not classified as unused; older or differently
+attached runs remain outside the comparison.
+
+For wrapper-free observation, use the temporary native launcher. It invokes
+the real Copilot binary directly, scopes OTel and script bootstrap variables to
+that child process, and collects after it exits:
+
+```bash
+agentops copilot-session launch --repo . -- --agent <agent-name>
+```
+
+The launch is local-only by default. Add `--upload --yes` before `--` only
+after reviewing the project-bound Azure target. Upload stops before Copilot starts
+if the selected repo has no complete project target; it does not fall back to the
+user-level target. For one-off routing, set all three explicit values:
+`AGENTOPS_AZURE_SUBSCRIPTION_ID`, `AGENTOPS_LOGS_INGESTION_ENDPOINT`, and
+`AGENTOPS_DCR_IMMUTABLE_ID`. Each run starts a short-lived
+strict Collector on unique loopback ports, independent of the ambient
+compatibility Collector. The metadata path forces Copilot content capture off.
+Copilot's own noninteractive permission rules still apply; grant only the tools
+and paths required by the observed run. Do not use shell-wide `eval` exports as
+the default setup; those variables can instrument later Copilot processes in
+the same terminal. The command installs no shim, hook, or shell configuration
+and leaves plain `copilot` unchanged. See the setup skill for the guided opt-in
+workflow.
 
 Inspect the queue at any time:
 
@@ -113,11 +149,29 @@ Inspect the queue at any time:
 agentops delivery status
 agentops delivery drain                 # preview only
 agentops delivery drain --yes           # requires configured endpoint + DCR
+agentops delivery drain --run-id <id>    # scope to one run; preview only
+agentops delivery drain --run-id <id> --yes  # send only that run's pending batches
+agentops delivery drain --event-id <id> --yes  # send one lifecycle event only
+agentops delivery review                # inspect held lifecycle and pending session metadata
+agentops delivery review --run-id <id>  # limit session batch review to one run
+agentops delivery requeue --event-id <id>  # preview a held-record requeue
+agentops delivery requeue --event-id <id> --yes  # return a valid, unexpired record to local pending
+agentops delivery prune                 # preview local artifacts older than 30 days
+agentops delivery prune --older-than 90 --yes  # remove eligible local artifacts after 90 days
 ```
 
 `delivery drain` fails closed unless the exact approved subscription, Azure
 Monitor ingestion hostname, and DCR identifier pass validation. Endpoint `2xx`
 means accepted for ingestion, not yet visible in Log Analytics.
+Run scope includes all pending session Events/Spans streams for that run and
+lifecycle rows with the same `RunId`. Event scope filters lifecycle rows by
+`EventId`; event-only scope never sends session outboxes. Supplying both limits
+lifecycle rows to that event within the run and includes that run's pending
+session streams. Unselected lifecycle rows and other run outboxes stay pending.
+The status and drain commands also include private per-run session Events and
+Spans batches. Drain retries only batches marked pending for the currently
+configured project target; already accepted batches are skipped. A lost Azure
+acknowledgment can still cause a resend, so delivery is at-least-once.
 
 `codex` starts the collector if needed, sets privacy-safe OTLP environment defaults, and runs the local Codex CLI. Add Azure Monitor MCP with `codex mcp add azure-mcp -- npx -y @azure/mcp@latest server start --read-only --namespace monitor`.
 
@@ -142,7 +196,7 @@ The optional native Azure preview uses `agentops collector validate --mode azure
 
 `compat-check` prints a Log Analytics query that checks whether recent Copilot/GenAI OTel has the fields dashboards and evals need: operation, session, model, tool, token usage, and cost or AIU signals.
 
-`validate-azure` runs read-only Azure checks for CLI login, resource group, Log Analytics query access, Application Insights, Grafana resource, datasource UID, and imported dashboard UIDs.
+`validate-azure` runs read-only Azure checks for CLI login, resource group, and Log Analytics query access. The default `personal` metadata-only profile treats unconfigured Application Insights and Managed Grafana as optional and reports them as skipped; configured resources are still checked. `--profile team` and `--profile internal` require both views in addition to cost guardrails. `internal` also checks group-based Log Analytics/Grafana access. `--production` implies `internal` and enables the wider production posture checks.
 
 `smoke` sends or dry-runs a privacy-safe OTLP trace through the local collector. In live mode it polls Log Analytics for the smoke id by default; use `--no-verify` only when you want a collector-only check.
 

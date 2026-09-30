@@ -9,6 +9,7 @@ const { AGENTOPS_SCHEMA_VERSION } = require('../schema/agentops-attributes');
 const tableNames = [
   'AgentOpsRunSummary_CL',
   'AgentOpsEvents_CL',
+  'AgentOpsSpans_CL',
   'AgentOpsToolCalls_CL',
   'AgentOpsMcpCalls_CL',
   'AgentOpsPrivacy_CL',

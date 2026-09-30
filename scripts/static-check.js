@@ -10,6 +10,7 @@ const skipDirs = new Set([
   '.agentops',
   '.azure',
   '.git',
+  '.refs',
   '__pycache__',
   'node_modules'
 ]);
@@ -55,8 +56,19 @@ function walk(dir, files = [], root = repoRoot) {
     if (relativeDir === 'agentops-cli' && generatedCliAssetDirs.has(entry.name)) continue;
     if (relativeDir === 'agentops-cli/src' && entry.name === 'fixtures') continue;
     const fullPath = path.join(dir, entry.name);
-    if (entry.isDirectory()) walk(fullPath, files, root);
-    else files.push(fullPath);
+    if (entry.isDirectory()) {
+      walk(fullPath, files, root);
+    } else if (entry.isFile()) {
+      files.push(fullPath);
+    } else if (entry.isSymbolicLink()) {
+      // Directory symlinks must not be treated as files. File symlinks remain
+      // part of the repository checks when their targets are readable files.
+      try {
+        if (fs.statSync(fullPath).isFile()) files.push(fullPath);
+      } catch {
+        // Broken or inaccessible symlinks are not source files to inspect.
+      }
+    }
   }
   return files;
 }

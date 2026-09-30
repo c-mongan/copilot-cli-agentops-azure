@@ -248,6 +248,54 @@ test('copilotCommand records fallback envelope when unobserved fallback is allow
   }
 });
 
+test('copilotCommand refuses a strict run when the already-running collector is compatibility mode', async () => {
+  const childProcessModule = require('node:child_process');
+  const collector = require('../src/lib/collector-manager');
+  const resolver = require('../src/lib/copilot-resolver');
+  const dir = tmpDir('wrapper-privacy-mismatch');
+  const restoreEnv = setEnvForTest({
+    AGENTOPS_WRAPPER_EVENTS_PATH: path.join(dir, 'wrapper-events.jsonl'),
+    AGENTOPS_DURABLE_SPOOL_DIR: path.join(dir, 'delivery-spool'),
+    AGENTOPS_CONFIG_PATH: path.join(dir, 'missing-config.json')
+  });
+  let spawned = false;
+  const restore = [
+    patch(collector, 'status', async () => ({ running: true, privacyMode: 'compat' })),
+    patch(resolver, 'resolveCopilotBinary', () => ({ ok: true, path: '/bin/copilot', source: 'mock' })),
+    patch(childProcessModule, 'spawnSync', () => { spawned = true; return { status: 0 }; })
+  ];
+  try {
+    const { copilotCommand } = freshRequire('src/commands/copilot.js');
+    await assert.rejects(copilotCommand(['--privacy', 'strict', '-p', 'synthetic']), /Strict privacy was requested.*compatibility mode/);
+    assert.equal(spawned, false);
+  } finally {
+    restore.reverse().forEach(fn => fn());
+    restoreEnv();
+  }
+});
+
+test('copilotCommand refuses a health-only collector with unverified privacy configuration', async () => {
+  const childProcessModule = require('node:child_process');
+  const collector = require('../src/lib/collector-manager');
+  const resolver = require('../src/lib/copilot-resolver');
+  const dir = tmpDir('wrapper-unverified-privacy');
+  const restoreEnv = setEnvForTest({ AGENTOPS_CONFIG_PATH: path.join(dir, 'missing-config.json') });
+  let spawned = false;
+  const restore = [
+    patch(collector, 'status', async () => ({ running: true, privacyMode: 'unknown', privacyVerified: false, binary: { running: false } })),
+    patch(resolver, 'resolveCopilotBinary', () => ({ ok: true, path: '/bin/copilot', source: 'mock' })),
+    patch(childProcessModule, 'spawnSync', () => { spawned = true; return { status: 0 }; })
+  ];
+  try {
+    const { copilotCommand } = freshRequire('src/commands/copilot.js');
+    await assert.rejects(copilotCommand(['--privacy', 'strict', '-p', 'synthetic']), /active collector configuration could not be verified/);
+    assert.equal(spawned, false);
+  } finally {
+    restore.reverse().forEach(fn => fn());
+    restoreEnv();
+  }
+});
+
 test('runSummaryCommand rolls up a JSONL span file and writes table paths', async () => {
   const { runSummaryCommand } = freshRequire('src/commands/run-summary.js');
   const dir = tmpDir('run-summary');

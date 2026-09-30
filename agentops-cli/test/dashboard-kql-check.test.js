@@ -3,8 +3,20 @@ const assert = require('node:assert/strict');
 
 const {
   dashboardKqlCheck,
-  substituteGrafanaMacros
+  substituteGrafanaMacros,
+  v2KqlSmokePanels
 } = require('../src/lib/dashboard-kql-check');
+
+test('empty recommendation, insight, and privacy tables remain valid no-data states', () => {
+  for (const panel of [
+    ['agentops-v2-home', 'Recommended next actions'],
+    ['agentops-v2-run-replay', 'Why this failed / next check'],
+    ['agentops-v2-safety-privacy-policy', 'Blocked or redacted items by kind'],
+    ['agentops-v2-insights-regressions', 'Latest insights']
+  ]) {
+    assert.equal(v2KqlSmokePanels.find(item => item.uid === panel[0] && item.panel === panel[1])?.requireRows, false);
+  }
+});
 
 test('dashboard KQL helpers substitute Grafana macros and variables', () => {
   const query = substituteGrafanaMacros(

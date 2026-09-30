@@ -50,6 +50,7 @@ function validateAzure(options = {}, dependencies = {}) {
     : (['personal', 'team', 'internal'].includes(requestedReadinessProfile) ? requestedReadinessProfile : 'personal');
   const costGuardrailsRequired = readinessProfile === 'team' || readinessProfile === 'internal';
   const groupRbacRequired = production || readinessProfile === 'internal';
+  const azureViewsRequired = readinessProfile === 'team' || readinessProfile === 'internal';
 
   checks.push(checkResult('azure-readiness-profile', readinessProfileValid, {
     readiness_profile: readinessProfile,
@@ -294,7 +295,7 @@ function validateAzure(options = {}, dependencies = {}) {
     }
   }
 
-  if (hasAz && cloud.resourceGroup && cloud.appInsightsName) {
+  if (cloud.appInsightsName && hasAz && cloud.resourceGroup) {
     const appResult = runAz([
       'monitor',
       'app-insights',
@@ -309,17 +310,40 @@ function validateAzure(options = {}, dependencies = {}) {
     ], options);
     checks.push(checkResult('application-insights', appResult.status === 0, {
       app: cloud.appInsightsName,
+      required: azureViewsRequired,
       detail: appResult.status === 0 ? 'found' : (appResult.stderr || appResult.stdout || 'not found').trim()
     }));
-    if (appResult.status !== 0) next.push('Set APPLICATIONINSIGHTS_NAME to the deployed App Insights component name.');
+    if (appResult.status !== 0) next.push('Check APPLICATIONINSIGHTS_NAME against the deployed App Insights component name.');
+  } else if (cloud.appInsightsName) {
+    checks.push(checkResult('application-insights', !azureViewsRequired, {
+      app: cloud.appInsightsName,
+      required: azureViewsRequired,
+      skipped: !azureViewsRequired,
+      detail: 'configured, but could not be checked without Azure CLI and a resource group'
+    }));
+  } else {
+    checks.push(checkResult('application-insights', !azureViewsRequired, {
+      required: azureViewsRequired,
+      skipped: !azureViewsRequired,
+      detail: azureViewsRequired
+        ? 'required for team/internal readiness; configure APPLICATIONINSIGHTS_NAME'
+        : 'optional for personal metadata-only readiness; not configured'
+    }));
+    if (azureViewsRequired && !cloud.appInsightsName) next.push('Configure APPLICATIONINSIGHTS_NAME for team/internal readiness.');
   }
 
   const grafanaConfigured = isConfiguredValue(cloud.grafanaBaseUrl, /your-grafana|<your-grafana>|^$/);
-  checks.push(checkResult('grafana-base-url', grafanaConfigured, {
+  checks.push(checkResult('grafana-base-url', grafanaConfigured || !azureViewsRequired, {
     url: grafanaConfigured ? cloud.grafanaBaseUrl : null,
-    detail: grafanaConfigured ? 'configured' : 'Set AGENTOPS_GRAFANA_BASE_URL.'
+    required: azureViewsRequired,
+    skipped: !grafanaConfigured && !azureViewsRequired,
+    detail: grafanaConfigured
+      ? 'configured'
+      : azureViewsRequired
+        ? 'required for team/internal readiness; set AGENTOPS_GRAFANA_BASE_URL'
+        : 'optional for personal metadata-only readiness; not configured'
   }));
-  if (!grafanaConfigured) next.push('agentops configure set --grafana-url "https://<your-grafana>.grafana.azure.com"');
+  if (!grafanaConfigured && azureViewsRequired) next.push('agentops configure set --grafana-url "https://<your-grafana>.grafana.azure.com"');
 
   if (hasAz && cloud.grafanaName && cloud.resourceGroup) {
     const grafanaResult = runAz(['grafana', 'show', '-n', cloud.grafanaName, '-g', cloud.resourceGroup, '-o', 'json'], options);
@@ -497,10 +521,23 @@ function validateAzure(options = {}, dependencies = {}) {
       }
     }
   } else if (!cloud.grafanaName) {
-    checks.push({ name: 'grafana-resource', ok: true, skipped: true, detail: 'Set GRAFANA_NAME or AGENTOPS_GRAFANA_NAME to validate the resource directly.' });
-    checks.push({ name: 'grafana-production-posture', ok: true, skipped: true, detail: 'Skipped because Grafana resource name is not configured.' });
+    checks.push(checkResult('grafana-resource', !azureViewsRequired, {
+      required: azureViewsRequired,
+      skipped: !azureViewsRequired,
+      detail: azureViewsRequired
+        ? 'required for team/internal readiness; configure GRAFANA_NAME'
+        : 'optional for personal metadata-only readiness; not configured'
+    }));
+    checks.push(checkResult('grafana-production-posture', !azureViewsRequired, {
+      required: azureViewsRequired,
+      skipped: !azureViewsRequired,
+      detail: azureViewsRequired
+        ? 'required for team/internal readiness; configure a Managed Grafana resource'
+        : 'optional for personal metadata-only readiness; not configured'
+    }));
     checks.push({ name: 'grafana-datasource', ok: true, skipped: true, detail: 'Skipped because Grafana resource name is not configured.' });
     checks.push({ name: 'grafana-dashboards', ok: true, skipped: true, detail: 'Skipped because Grafana resource name is not configured.' });
+    if (azureViewsRequired) next.push('Configure GRAFANA_NAME for team/internal readiness.');
   }
 
   if (hasAz && cloud.resourceGroup) {
