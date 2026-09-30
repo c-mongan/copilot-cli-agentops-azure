@@ -1,6 +1,8 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
+const { attachmentReferencePaths, attachmentSkillReferences, operationFields } = require('./session-event-export');
+
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, character => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
@@ -12,7 +14,16 @@ function eventTime(event) {
   return Number.isFinite(value) ? value : null;
 }
 
-function sessionWaterfall(events = [], nativeSpans = []) {
+function normalizedSkillName(value) {
+  return typeof value === 'string' && value.length <= 200 && !/[\u0000-\u001f\u007f]/.test(value)
+    ? value.replace(/^skill-/, '')
+    : '';
+}
+
+function sessionWaterfall(events = [], nativeSpans = [], options = {}) {
+  const repoRoot = path.resolve(options.repoRoot || process.cwd());
+  const referencePaths = options.referencePaths || attachmentReferencePaths(repoRoot);
+  const skillReferences = options.skillReferences || attachmentSkillReferences(repoRoot);
   const ordered = events.map((event, index) => ({ event, index, time: eventTime(event) }))
     .filter(item => item.time !== null)
     .sort((left, right) => left.time - right.time || left.index - right.index);
@@ -35,8 +46,50 @@ function sessionWaterfall(events = [], nativeSpans = []) {
   const parentAgent = rootAgent || 'github-copilot-cli';
   const agentFor = event => agentNames.get(event.agentId) || parentAgent;
   const scopedId = (event, id) => `${event.agentId || 'parent'}:${id || ''}`;
+  const invokedSkillsByLane = new Map();
+  const referenceReadCounts = new Map();
+  const referenceToolCalls = new Set();
   let suppressedEvents = 0;
   let unmatchedDeltas = 0;
+
+  const owningSkillLink = (lane, referenceName, time) => {
+    const declaringSkills = new Set(skillReferences.get(referenceName) || []);
+    const candidates = [];
+    for (const invocation of invokedSkillsByLane.get(lane) || []) {
+      if (invocation.time < time && declaringSkills.has(invocation.name) && !candidates.includes(invocation.name)) {
+        candidates.push(invocation.name);
+      }
+    }
+    if (candidates.length === 1) return { evidence: 'inferred', skillName: candidates[0], candidates };
+    if (candidates.length > 1) return { evidence: 'ambiguous', skillName: '', candidates };
+    return { evidence: 'missing', skillName: '', candidates: [] };
+  };
+
+  const addReferenceReadRow = ({ event, index, time, lane, referenceName, toolCallId, parentToolCallId }) => {
+    if (!referenceName || !toolCallId) return;
+    const countKey = `${lane}\u0000${referenceName}`;
+    const readCount = (referenceReadCounts.get(countKey) || 0) + 1;
+    referenceReadCounts.set(countKey, readCount);
+    rows.push({
+      index,
+      start: time,
+      end: time,
+      lane,
+      kind: 'reference.read',
+      label: `reference: ${referenceName}`,
+      status: 'observed',
+      source: 'session event',
+      details: {
+        referenceName,
+        readCount,
+        toolCallId,
+        parentToolCallId: parentToolCallId || '',
+        agentId: event.agentId || '',
+        toolCallLink: { evidence: 'exact', toolCallId },
+        owningSkillLink: owningSkillLink(lane, referenceName, time)
+      }
+    });
+  };
 
   for (const { event, index, time } of ordered) {
     const data = event.data || {};
@@ -84,18 +137,58 @@ function sessionWaterfall(events = [], nativeSpans = []) {
       const stream = toolCallStreams.get(scopedId(event, data.toolCallId));
       if (stream) row.details = { ...data, toolCallStream: { chunks: stream.count, firstAt: stream.first, lastAt: stream.last } };
       if (data.toolCallId) pendingTools.set(data.toolCallId, row);
+      const operation = operationFields(event, repoRoot, referencePaths);
+      if (operation.ReferenceName && data.toolCallId) {
+        referenceToolCalls.add(data.toolCallId);
+        addReferenceReadRow({
+          event,
+          index,
+          time,
+          lane: row.lane,
+          referenceName: operation.ReferenceName,
+          toolCallId: data.toolCallId,
+          parentToolCallId: data.parentToolCallId || ''
+        });
+      }
     } else if (type === 'tool.execution_complete') {
       const started = pendingTools.get(data.toolCallId);
       const failed = data.success === false || Number.isSafeInteger(data.shellExecution?.exitCode) && data.shellExecution.exitCode !== 0;
       if (started) {
+        const priorDetails = started.details || {};
+        const operation = operationFields(event, repoRoot, referencePaths, priorDetails);
         started.end = time;
         started.status = failed ? 'failed' : 'completed';
-        started.details = { start: started.details, completion: data };
+        started.details = { start: priorDetails, completion: data };
+        if (operation.ReferenceName && data.toolCallId && !referenceToolCalls.has(data.toolCallId)) {
+          referenceToolCalls.add(data.toolCallId);
+          addReferenceReadRow({
+            event,
+            index,
+            time,
+            lane: started.lane,
+            referenceName: operation.ReferenceName,
+            toolCallId: data.toolCallId,
+            parentToolCallId: priorDetails.parentToolCallId || data.parentToolCallId || ''
+          });
+        }
         pendingTools.delete(data.toolCallId);
         continue;
       }
       row.label = data.toolName || 'unknown tool';
       row.status = failed ? 'failed' : 'completed, start not observed';
+      const operation = operationFields(event, repoRoot, referencePaths);
+      if (operation.ReferenceName && data.toolCallId && !referenceToolCalls.has(data.toolCallId)) {
+        referenceToolCalls.add(data.toolCallId);
+        addReferenceReadRow({
+          event,
+          index,
+          time,
+          lane: row.lane,
+          referenceName: operation.ReferenceName,
+          toolCallId: data.toolCallId,
+          parentToolCallId: data.parentToolCallId || ''
+        });
+      }
     } else if (type === 'hook.start') {
       row.label = `hook: ${data.hookType || 'unknown'}`;
       row.status = 'incomplete';
@@ -172,6 +265,11 @@ function sessionWaterfall(events = [], nativeSpans = []) {
       row.label = `${type}: ${data.agentName || data.agentDisplayName || 'unknown'}`;
     } else if (type === 'skill.invoked') {
       row.label = `skill: ${data.name || 'unknown'}`;
+      const skillName = normalizedSkillName(data.name || data.skillName || data.skill_name || '');
+      if (skillName) {
+        const lane = row.lane;
+        invokedSkillsByLane.set(lane, [...(invokedSkillsByLane.get(lane) || []), { name: skillName, time }]);
+      }
     }
     rows.push(row);
   }
@@ -312,7 +410,7 @@ function preview(value) {
 }
 
 function renderSessionWaterfall(events, sessionId, options = {}) {
-  const { rows, first, durationMs, invalidTimestamps, suppressedEvents, unmatchedDeltas, unresolvedRows, coverageGaps, nativeSpans, scriptSpans, exactToolCallJoins, inferredScriptToolLinks } = sessionWaterfall(events, options.nativeSpans || []);
+  const { rows, first, durationMs, invalidTimestamps, suppressedEvents, unmatchedDeltas, unresolvedRows, coverageGaps, nativeSpans, scriptSpans, exactToolCallJoins, inferredScriptToolLinks } = sessionWaterfall(events, options.nativeSpans || [], options);
   rows.forEach((row, index) => { row.displayIndex = index; });
   const sessionFailureToolCalls = new Set(rows
     .filter(row => row.source === 'session event' && row.kind === 'tool.execution_start' && row.status === 'failed')

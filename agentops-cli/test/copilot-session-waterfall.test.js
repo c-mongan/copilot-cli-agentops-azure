@@ -6,6 +6,15 @@ const test = require('node:test');
 
 const { renderSessionWaterfall, sessionWaterfall, writeSessionWaterfall } = require('../src/lib/copilot/session-waterfall');
 
+function fixtureAttachment(skills) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-waterfall-attachment-'));
+  fs.mkdirSync(path.join(root, '.agentops'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.agentops', 'attachment.json'), JSON.stringify({
+    architecture: { skills }
+  }));
+  return root;
+}
+
 const events = [
   { type: 'session.start', timestamp: '2026-01-01T00:00:00.000Z', data: {} },
   { type: 'tool.execution_start', timestamp: '2026-01-01T00:00:01.000Z', data: { toolCallId: 'a', toolName: 'view', arguments: { path: '<fixture>' } } },
@@ -165,6 +174,134 @@ test('native skill invocation appears at its event time on the waterfall', () =>
   assert.equal(rows[1].label, 'skill: fixture-flow');
   assert.equal(rows[1].start, 1767225602000);
   assert.match(renderSessionWaterfall([], 'fixture', { nativeSpans }), /skill: fixture-flow/);
+});
+
+test('declared reference reads become metadata-only waterfall rows with inferred or missing skill links and read counts', () => {
+  const reference = '.github/skills/build-check/references/guide.md';
+  const missingSkillReference = '.github/skills/release-check/references/release.md';
+  const root = fixtureAttachment([
+    { name: 'build-check', references: [{ path: reference }] },
+    { name: 'release-check', references: [{ path: missingSkillReference }] }
+  ]);
+  try {
+    const items = [
+      { type: 'skill.invoked', timestamp: '2026-01-01T00:00:00.000Z', data: { name: 'build-check' } },
+      { type: 'tool.execution_start', timestamp: '2026-01-01T00:00:01.000Z', data: { toolCallId: 'read-1', toolName: 'view', arguments: { path: path.join(root, reference) } } },
+      { type: 'tool.execution_complete', timestamp: '2026-01-01T00:00:01.100Z', data: { toolCallId: 'read-1', success: true, result: 'PRIVATE_REFERENCE_CONTENT' } },
+      { type: 'tool.execution_start', timestamp: '2026-01-01T00:00:02.000Z', data: { toolCallId: 'read-2', toolName: 'view', arguments: { path: reference } } },
+      { type: 'tool.execution_start', timestamp: '2026-01-01T00:00:03.000Z', data: { toolCallId: 'read-missing-skill', toolName: 'view', arguments: { path: missingSkillReference } } },
+      { type: 'tool.execution_start', timestamp: '2026-01-01T00:00:04.000Z', data: { toolCallId: 'private-read', toolName: 'view', arguments: { path: 'private/unlisted.md' } } }
+    ];
+    const { rows } = sessionWaterfall(items, [], { repoRoot: root });
+    const references = rows.filter(row => row.kind === 'reference.read');
+    assert.equal(references.length, 3);
+    assert.deepEqual(references.map(row => row.label), [
+      `reference: ${reference}`,
+      `reference: ${reference}`,
+      `reference: ${missingSkillReference}`
+    ]);
+    assert.deepEqual(references.map(row => row.details.readCount), [1, 2, 1]);
+    assert.deepEqual(references.map(row => row.details.toolCallLink), [
+      { evidence: 'exact', toolCallId: 'read-1' },
+      { evidence: 'exact', toolCallId: 'read-2' },
+      { evidence: 'exact', toolCallId: 'read-missing-skill' }
+    ]);
+    assert.deepEqual(references[0].details.owningSkillLink, {
+      evidence: 'inferred',
+      skillName: 'build-check',
+      candidates: ['build-check']
+    });
+    assert.deepEqual(references[1].details.owningSkillLink, {
+      evidence: 'inferred',
+      skillName: 'build-check',
+      candidates: ['build-check']
+    });
+    assert.deepEqual(references[2].details.owningSkillLink, {
+      evidence: 'missing',
+      skillName: '',
+      candidates: []
+    });
+    assert.doesNotMatch(JSON.stringify(references), /PRIVATE_REFERENCE_CONTENT|private\/unlisted\.md/);
+    const html = renderSessionWaterfall(items, 'references', { repoRoot: root });
+    assert.match(html, /reference: \.github\/skills\/build-check\/references\/guide\.md/);
+    assert.match(html, /&quot;readCount&quot;: 2/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('reference skill relationship is ambiguous when multiple earlier same-lane invoked skills declare it', () => {
+  const reference = '.github/skills/shared/references/guide.md';
+  const root = fixtureAttachment([
+    { name: 'alpha', references: [{ path: reference }] },
+    { name: 'beta', references: [{ path: reference }] }
+  ]);
+  try {
+    const { rows } = sessionWaterfall([
+      { type: 'skill.invoked', timestamp: '2026-01-01T00:00:00.000Z', data: { name: 'alpha' } },
+      { type: 'skill.invoked', timestamp: '2026-01-01T00:00:00.500Z', data: { name: 'beta' } },
+      { type: 'tool.execution_start', timestamp: '2026-01-01T00:00:01.000Z', data: { toolCallId: 'read-shared', toolName: 'view', arguments: { path: reference } } }
+    ], [], { repoRoot: root });
+    assert.deepEqual(rows.find(row => row.kind === 'reference.read').details.owningSkillLink, {
+      evidence: 'ambiguous',
+      skillName: '',
+      candidates: ['alpha', 'beta']
+    });
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('subagent reference reads stay in the subagent lane under the parent tool call', () => {
+  const reference = '.github/skills/worker-skill/references/guide.md';
+  const root = fixtureAttachment([
+    { name: 'worker-skill', references: [{ path: reference }] }
+  ]);
+  try {
+    const { rows } = sessionWaterfall([
+      { type: 'subagent.started', timestamp: '2026-01-01T00:00:00.000Z', agentId: 'worker-1', data: { toolCallId: 'delegate-1', agentName: 'fixture-worker' } },
+      { type: 'skill.invoked', timestamp: '2026-01-01T00:00:00.500Z', agentId: 'worker-1', data: { name: 'worker-skill', parentToolCallId: 'delegate-1' } },
+      { type: 'tool.execution_start', timestamp: '2026-01-01T00:00:01.000Z', agentId: 'worker-1', data: { toolCallId: 'worker-read', parentToolCallId: 'delegate-1', toolName: 'view', arguments: { path: reference } } }
+    ], [], { repoRoot: root });
+    const row = rows.find(candidate => candidate.kind === 'reference.read');
+    assert.equal(row.lane, 'fixture-worker');
+    assert.equal(row.details.parentToolCallId, 'delegate-1');
+    assert.deepEqual(row.details.toolCallLink, { evidence: 'exact', toolCallId: 'worker-read' });
+    assert.deepEqual(row.details.owningSkillLink, {
+      evidence: 'inferred',
+      skillName: 'worker-skill',
+      candidates: ['worker-skill']
+    });
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('script internal step spans render as script child rows linked to the parent script span and tool call', () => {
+  const nativeSpans = [
+    {
+      start: Date.parse('2026-01-01T00:00:01.000Z'), end: Date.parse('2026-01-01T00:00:04.000Z'),
+      traceId: 'trace-script', spanId: 'script-root', operation: 'script.execute', scriptName: 'scripts/check.py',
+      toolCallId: 'call-python', toolCallEvidence: 'inferred-unique-session-tool-event-window',
+      match: 'run-linked-script', failed: false
+    },
+    {
+      start: Date.parse('2026-01-01T00:00:02.000Z'), end: Date.parse('2026-01-01T00:00:03.000Z'),
+      traceId: 'trace-script', spanId: 'script-step', parentSpanId: 'script-root', operation: 'script.step',
+      scriptName: 'scripts/check.py', stepName: 'validate-inputs', toolCallId: 'call-python',
+      toolCallEvidence: 'inferred-unique-session-tool-event-window', match: 'run-linked-script', failed: false
+    }
+  ];
+  const { rows } = sessionWaterfall([
+    { type: 'tool.execution_start', timestamp: '2026-01-01T00:00:00.500Z', data: { toolCallId: 'call-python', toolName: 'bash', arguments: { command: 'python scripts/check.py' } } }
+  ], nativeSpans);
+  const script = rows.find(row => row.label === 'script: scripts/check.py');
+  const step = rows.find(row => row.label === 'step: validate-inputs');
+  assert.equal(step.source, 'script OTel');
+  assert.equal(step.details.parentSpanId, 'script-root');
+  assert.equal(step.details.toolCallId, 'call-python');
+  assert.ok(step.start >= script.start && step.end <= script.end);
+  assert.match(renderSessionWaterfall([], 'script-step', { nativeSpans }), /step: validate-inputs/);
 });
 
 test('assistant streaming deltas collapse into one timed message while preserving the final text', () => {
