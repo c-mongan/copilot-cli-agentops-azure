@@ -6,6 +6,8 @@ packages are loaded only when AGENTOPS_RUN_ID is present.
 
 from contextlib import contextmanager
 import os
+import platform
+import logging
 import re
 import sys
 from urllib.parse import urlsplit
@@ -13,6 +15,15 @@ from urllib.parse import urlsplit
 
 _SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 _TRACEPARENT = re.compile(r"^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$")
+
+
+def _record_error(span, error):
+    span.set_attribute("error.type", type(error).__name__)
+    try:
+        from opentelemetry.trace import Status, StatusCode
+        span.set_status(Status(StatusCode.ERROR))
+    except ImportError:
+        span.set_status(2)
 
 
 class ScriptObservation:
@@ -29,15 +40,16 @@ class ScriptObservation:
         with self._tracer.start_as_current_span(
             "agentops.script.step", attributes={
                 "agentops.step.name": str(name)[:128], "agentops.script.name": self._script_name,
+                "agentops.script.runtime.name": "python",
+                "agentops.script.runtime.version": platform.python_version(),
+                "agentops.script.runtime.implementation": platform.python_implementation(),
             },
             record_exception=False, set_status_on_exception=False,
         ) as span:
             try:
                 yield
             except BaseException as error:
-                from opentelemetry.trace import Status, StatusCode
-                span.set_attribute("error.type", type(error).__name__)
-                span.set_status(Status(StatusCode.ERROR))
+                _record_error(span, error)
                 raise
 
 
@@ -72,6 +84,10 @@ def observe_script(name):
         yield ScriptObservation()
         return
 
+    provider = None
+    exporter_logger = None
+    exporter_logger_disabled = None
+    fallback_parent = None
     try:
         from opentelemetry import context as otel_context
         from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
@@ -84,34 +100,71 @@ def observe_script(name):
             "service.name": "agentops-skill-script",
             "agentops.run.id": run_id,
             "agentops.session.id": os.environ.get("AGENTOPS_SESSION_ID", ""),
+            "agentops.script.runtime.name": "python",
+            "agentops.script.runtime.version": platform.python_version(),
+            "agentops.script.runtime.implementation": platform.python_implementation(),
         })
         provider = TracerProvider(resource=resource)
-        provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(endpoint=endpoint)))
+        # The SDK exporter logs retries to stderr and may retry an unreachable
+        # collector for much longer than the script itself. Observation is
+        # fail-open: bound that wait and silence only its exporter diagnostics.
+        exporter = OTLPSpanExporter(endpoint=endpoint, timeout=1)
+        exporter_logger = getattr(getattr(exporter, "_client", None), "_logger", None)
+        if isinstance(exporter_logger, logging.Logger):
+            exporter_logger_disabled = exporter_logger.disabled
+            exporter_logger.disabled = True
+        provider.add_span_processor(BatchSpanProcessor(exporter, export_timeout_millis=1000))
         tracer = provider.get_tracer("agentops.skill-script")
         traceparent = os.environ.get("TRACEPARENT", "").lower()
         parent = (TraceContextTextMapPropagator().extract({"traceparent": traceparent})
                   if _TRACEPARENT.fullmatch(traceparent) else otel_context.Context())
+    except ImportError:
+        try:
+            from otlp_stdlib import create_tracer
+            tracer, fallback_parent = create_tracer(
+                endpoint,
+                run_id,
+                os.environ.get("AGENTOPS_SESSION_ID", ""),
+                os.environ.get("TRACEPARENT", "").lower(),
+            )
+            parent = None
+        except Exception as error:
+            print(f"AgentOps script telemetry disabled: {type(error).__name__}", file=sys.stderr)
+            yield ScriptObservation()
+            return
     except Exception as error:
         print(f"AgentOps script telemetry disabled: {type(error).__name__}", file=sys.stderr)
         yield ScriptObservation()
         return
     try:
-        with tracer.start_as_current_span(
-            "agentops.script", context=parent,
-            attributes={"agentops.script.name": str(name)[:128], "gen_ai.operation.name": "script.execute"},
-            record_exception=False, set_status_on_exception=False,
-        ) as span:
+        root_options = {
+            "attributes": {
+                "agentops.script.name": str(name)[:128],
+                "gen_ai.operation.name": "script.execute",
+                "agentops.script.runtime.name": "python",
+                "agentops.script.runtime.version": platform.python_version(),
+                "agentops.script.runtime.implementation": platform.python_implementation(),
+            },
+            "record_exception": False,
+            "set_status_on_exception": False,
+        }
+        if fallback_parent:
+            root_options["parent"] = fallback_parent
+        else:
+            root_options["context"] = parent
+        with tracer.start_as_current_span("agentops.script", **root_options) as span:
             try:
                 yield ScriptObservation(tracer, str(name)[:128])
             except BaseException as error:
-                from opentelemetry.trace import Status, StatusCode
-                span.set_attribute("error.type", type(error).__name__)
-                span.set_status(Status(StatusCode.ERROR))
+                _record_error(span, error)
                 raise
     finally:
-        try:
-            if not provider.force_flush(timeout_millis=5000):
-                print("AgentOps script telemetry flush failed", file=sys.stderr)
-            provider.shutdown()
-        except Exception as error:
-            print(f"AgentOps script telemetry shutdown failed: {type(error).__name__}", file=sys.stderr)
+        if provider is not None:
+            try:
+                provider.force_flush(timeout_millis=1500)
+                provider.shutdown()
+            except Exception:
+                pass
+            finally:
+                if exporter_logger is not None and exporter_logger_disabled is not None:
+                    exporter_logger.disabled = exporter_logger_disabled
