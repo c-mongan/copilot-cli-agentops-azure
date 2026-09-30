@@ -6,6 +6,7 @@ const test = require('node:test');
 
 const {
   changedCopilotSession,
+  sessionStateDir,
   snapshotCopilotSessions,
   summarizeSessionEvents
 } = require('../src/lib/copilot/receipt-session');
@@ -52,4 +53,16 @@ test('changed session detection selects the newest created or updated event stre
   const summary = changedCopilotSession(before, root);
   assert.equal(summary.sessionId, 'session-a');
   assert.equal(summary.model, 'gpt-5.6-sol');
+});
+
+test('session state lookup follows COPILOT_HOME when the CLI uses an isolated home', () => {
+  const previous = process.env.COPILOT_HOME;
+  const isolatedHome = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-isolated-copilot-home-'));
+  process.env.COPILOT_HOME = isolatedHome;
+  try {
+    assert.equal(sessionStateDir(), path.join(isolatedHome, 'session-state'));
+  } finally {
+    if (previous === undefined) delete process.env.COPILOT_HOME;
+    else process.env.COPILOT_HOME = previous;
+  }
 });

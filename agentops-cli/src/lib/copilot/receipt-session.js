@@ -2,8 +2,10 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-function sessionStateDir(home = os.homedir()) {
-  return path.join(home, '.copilot', 'session-state');
+function sessionStateDir(copilotHome = process.env.COPILOT_HOME) {
+  return copilotHome
+    ? path.join(copilotHome, 'session-state')
+    : path.join(os.homedir(), '.copilot', 'session-state');
 }
 
 function snapshotCopilotSessions(root = sessionStateDir()) {

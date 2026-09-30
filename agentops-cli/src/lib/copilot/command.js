@@ -1,4 +1,5 @@
 const childProcess = require('node:child_process');
+const os = require('node:os');
 const path = require('node:path');
 
 const legacy = require('../../legacy');
@@ -6,10 +7,12 @@ const collector = require('../collector-manager');
 const { optionValue, withoutFlags } = require('../args');
 const { appendWrapperEvent, createWrapperEnvelope } = require('./wrapper-envelope');
 const { resolveCopilotBinary } = require('../copilot-resolver');
-const { copilotDir } = require('../paths');
+const { copilotDir, repoRoot } = require('../paths');
 const { changedCopilotSession, snapshotCopilotSessions } = require('./receipt-session');
 const { receiptDeliveryText } = require('../delivery-state');
 const { createWrapperDelivery } = require('./wrapper-delivery');
+const { attachedScriptEnvironment, scriptTraceEndpoint } = require('./script-observation');
+const { deliverCopilotSession } = require('./session-run-delivery');
 
 function removeAgentOpsCopilotFlags(args) {
   return withoutFlags(args, ['--collector-mode', '--privacy', '--unsafe-no-collector']);
@@ -30,7 +33,7 @@ function safeReceiptName(value = '') {
   return /^[A-Za-z0-9_.:/@+-]{1,200}$/.test(text) ? text : '';
 }
 
-function renderCopilotReceipt({ envelope, exitCode, privacy = 'strict', requestedPrivacy = privacy, fallbackUnobserved = false, deliveryState = 'native_best_effort', replayUrl = '', summary = null, wallDurationMs = 0, agent = '' }) {
+function renderCopilotReceipt({ envelope, exitCode, privacy = 'strict', requestedPrivacy = privacy, fallbackUnobserved = false, deliveryState = 'native_best_effort', sessionDelivery = null, replayUrl = '', summary = null, wallDurationMs = 0, agent = '' }) {
   const completed = Number(exitCode) === 0;
   const lines = [
     '',
@@ -38,6 +41,9 @@ function renderCopilotReceipt({ envelope, exitCode, privacy = 'strict', requeste
     `Result      ${completed ? 'Completed' : 'Needs attention'} · exit ${Number.isInteger(exitCode) ? exitCode : 1}`,
     `Copilot     ${summary?.sessionId || 'session details pending'}`,
     `Delivery    ${receiptDeliveryText(fallbackUnobserved ? 'unobserved' : deliveryState)}`,
+    ...(sessionDelivery ? [`Evidence    ${sessionDelivery.streams
+      ? `events ${sessionDelivery.streams.events.rows}: ${sessionDelivery.streams.events.status.replaceAll('_', ' ')} · spans ${sessionDelivery.streams.spans.rows}: ${sessionDelivery.streams.spans.status.replaceAll('_', ' ')}`
+      : sessionDelivery.reason || 'Detailed session evidence was not observed'}${sessionDelivery.state === 'azure_acknowledged' ? ' · indexing may take a few minutes' : sessionDelivery.reason ? ` · ${sessionDelivery.reason}` : ''}`] : []),
     ...(fallbackUnobserved ? [] : ['Coverage    Detailed Copilot activity is best effort; use agentops latest to check what arrived']),
     `Privacy     ${privacy}${requestedPrivacy !== privacy ? ` effective · ${requestedPrivacy} requested` : ''} · AgentOps did not record prompts, answers, code, or tool payloads`,
   ];
@@ -98,6 +104,13 @@ async function copilotCommand(args = []) {
   });
 
   const currentStatus = await collector.status({ mode, privacy });
+  if (mode !== 'none' && currentStatus.running && privacy === 'strict' && currentStatus.privacyMode === 'compat') {
+    throw new Error('Strict privacy was requested, but the running collector uses compatibility mode. Stop the existing collector or run with an isolated strict collector before starting Copilot.');
+  }
+  if (mode !== 'none' && currentStatus.running && privacy === 'strict'
+    && (currentStatus.privacyMode !== 'strict' || currentStatus.privacyVerified === false || currentStatus.binary?.running === false)) {
+    throw new Error('Strict privacy was requested, but the active collector configuration could not be verified. Stop it or use a verified strict collector before starting Copilot.');
+  }
   let effectivePrivacy = currentStatus.running && currentStatus.privacyMode
     ? currentStatus.privacyMode
     : privacy;
@@ -123,6 +136,13 @@ async function copilotCommand(args = []) {
         throw new Error(`AgentOps collector unavailable: ${started.error || 'unknown error'}`);
       }
     }
+    if (!fallbackUnobserved && privacy === 'strict' && mode !== 'none') {
+      const verified = await collector.status({ mode, privacy });
+      if (!verified.running || verified.privacyMode !== 'strict' || verified.privacyVerified === false || verified.binary?.running === false) {
+        throw new Error('Strict AgentOps collector started, but its active process and configuration could not be verified. Copilot was not launched.');
+      }
+      effectivePrivacy = verified.privacyMode;
+    }
   }
 
   if (mode === 'none' && !unsafeNoCollector) {
@@ -133,20 +153,38 @@ async function copilotCommand(args = []) {
   if (!resolved.ok) throw new Error(resolved.error);
 
   const observeScript = path.join(copilotDir, 'copilot-observe');
-  const sessionsBefore = snapshotCopilotSessions();
+  const copilotHome = process.env.COPILOT_HOME || path.join(os.homedir(), '.copilot');
+  const sessionRoot = path.join(copilotHome, 'session-state');
+  const sessionsBefore = snapshotCopilotSessions(sessionRoot);
   const runStartedAt = Date.now();
-  const env = {
+  let env = {
     ...process.env,
     COPILOT_CLI_BIN: resolved.path,
     AGENTOPS_PRIVACY_MODE: effectivePrivacy,
     AGENTOPS_COLLECTOR_MODE: mode,
     AGENTOPS_WRAPPER_RUN_ID: envelope.runId,
     AGENTOPS_WRAPPER_SESSION_ID: envelope.sessionId,
+    AGENTOPS_RUN_ID: envelope.runId,
+    AGENTOPS_SESSION_ID: '',
     AGENTOPS_WRAPPER_FALLBACK_UNOBSERVED: fallbackUnobserved ? 'true' : 'false'
   };
+  const scriptEndpoint = scriptTraceEndpoint(env, mode);
+  if (scriptEndpoint) env.AGENTOPS_SCRIPT_OTLP_ENDPOINT = scriptEndpoint;
+  env = attachedScriptEnvironment({ env, cwd: process.cwd(), runId: envelope.runId, agentopsRoot: repoRoot, collectorMode: mode });
   const result = childProcess.spawnSync(observeScript, observedArgs, { stdio: 'inherit', env });
   const wallDurationMs = Date.now() - runStartedAt;
-  const summary = changedCopilotSession(sessionsBefore);
+  const summary = changedCopilotSession(sessionsBefore, sessionRoot);
+  let sessionDelivery = null;
+  try {
+    sessionDelivery = deliverCopilotSession({ summary, runId: envelope.runId, copilotHome, cwd: process.cwd(), env: process.env });
+  } catch (error) {
+    sessionDelivery = {
+      state: 'local_pending',
+      events: 0,
+      spans: 0,
+      reason: `session export or upload failed: ${String(error.message || error).slice(0, 240)}`
+    };
+  }
   recordLifecycle({
     ...baseEvent,
     EventName: 'agentops.run.end',
@@ -166,6 +204,7 @@ async function copilotCommand(args = []) {
       requestedPrivacy: privacy,
       fallbackUnobserved,
       deliveryState,
+      sessionDelivery,
       replayUrl: wrapperReplayUrl(summary?.sessionId ? { runId: '__all', sessionId: summary.sessionId } : envelope),
       summary,
       wallDurationMs,

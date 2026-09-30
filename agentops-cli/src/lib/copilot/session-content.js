@@ -13,7 +13,7 @@ function contentRowsFromSession(events, sessionId, runId = sessionId) {
   let turnIndex = 0;
   let model = '';
   const toolNames = new Map();
-  const add = (event, role, kind, value, toolName = '') => {
+  const add = (event, role, kind, value, toolName = '', toolCallId = '') => {
     const content = contentText(value);
     if (!content) return;
     const timestamp = new Date(event.timestamp);
@@ -31,6 +31,7 @@ function contentRowsFromSession(events, sessionId, runId = sessionId) {
       PromptText: kind === 'prompt' || kind === 'tool_arguments' ? content : '',
       ResponseText: kind === 'response' || kind === 'tool_result' ? content : '',
       ToolName: toolName,
+      ToolCallId: toolCallId,
       ModelActual: model,
       RedactionStatus: 'synthetic_unredacted',
       ContentHash: crypto.createHash('sha256').update(content).digest('hex'),
@@ -49,10 +50,10 @@ function contentRowsFromSession(events, sessionId, runId = sessionId) {
     }
     if (event.type === 'tool.execution_start') {
       if (data.toolCallId && data.toolName) toolNames.set(data.toolCallId, data.toolName);
-      add(event, 'tool', 'tool_arguments', data.arguments, data.toolName || '');
+      add(event, 'tool', 'tool_arguments', data.arguments, data.toolName || '', data.toolCallId || '');
     }
     if (event.type === 'tool.execution_complete') {
-      add(event, 'tool', 'tool_result', data.result, data.toolName || toolNames.get(data.toolCallId) || '');
+      add(event, 'tool', 'tool_result', data.result, data.toolName || toolNames.get(data.toolCallId) || '', data.toolCallId || '');
       if (data.toolCallId) toolNames.delete(data.toolCallId);
     }
   }

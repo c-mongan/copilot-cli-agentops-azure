@@ -1,11 +1,20 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const crypto = require('node:crypto');
+const childProcess = require('node:child_process');
 
 const legacy = require('../../legacy');
 const { optionValue, optionValues, parseJsonFlag } = require('../args');
 const { otlpHttpEndpoint } = require('../collector-endpoints');
 const { writeJsonlFile, writeJsonOrRender } = require('../command-output');
+const { agentopsHome, repoRoot: agentopsRoot } = require('../paths');
+const { configuredCloudValues, projectAgentOpsConfigPath } = require('../agentops-config');
+const { resolveCopilotBinary } = require('../copilot-resolver');
+const { attachedScriptEnvironment } = require('./script-observation');
+const { startScopedStrictCollector } = require('./scoped-collector');
+const { changedCopilotSession, snapshotCopilotSessions } = require('./receipt-session');
+const { deliverCopilotSession } = require('./session-run-delivery');
 const {
   defaultSessionEventsPath,
   enrichCopilotSessionEvents,
@@ -14,25 +23,138 @@ const {
 } = require('./session-enricher');
 const { writeSessionWaterfall } = require('./session-waterfall');
 const { defaultReceiptFiles, readSessionOtelSpans } = require('./session-otel');
+const { enrichSpansWithSessionToolContext, readSessionSpanRows, writeSessionSpans } = require('./session-span-export');
 const { writeSessionContent } = require('./session-content');
+const { writeSessionEvents } = require('./session-event-export');
+const { readSessionOutbox } = require('./session-delivery-outbox');
 
 function parseCopilotSessionArgs(args = []) {
-  const [subcommand, sessionId] = args;
+  const [subcommand, positional] = args;
+  const separator = args.indexOf('--');
+  const commandArgs = separator >= 0 ? args.slice(separator + 1) : [];
+  const optionArgs = separator >= 0 ? args.slice(0, separator) : args;
   return {
     subcommand,
-    sessionId,
-    file: optionValue(args, '--file'),
-    output: optionValue(args, '--output'),
-    allowContent: args.includes('--allow-content'),
-    synthetic: args.includes('--synthetic'),
-    sidecarFile: optionValue(args, '--sidecar'),
-    otelFiles: optionValues(args, '--otel-file'),
-    runId: optionValue(args, '--run-id'),
-    endpoint: optionValue(args, '--endpoint', otlpHttpEndpoint),
-    id: optionValue(args, '--id') || legacy.customEventId(),
-    dryRun: args.includes('--dry-run'),
-    json: parseJsonFlag(args)
+    sessionId: positional && !positional.startsWith('-') ? positional : undefined,
+    file: optionValue(optionArgs, '--file'),
+    output: optionValue(optionArgs, '--output'),
+    allowContent: optionArgs.includes('--allow-content'),
+    synthetic: optionArgs.includes('--synthetic'),
+    sidecarFile: optionValue(optionArgs, '--sidecar'),
+    otelFiles: optionValues(optionArgs, '--otel-file'),
+    runId: optionValue(optionArgs, '--run-id'),
+    repo: optionValue(optionArgs, '--repo'),
+    copilotHome: optionValue(optionArgs, '--copilot-home'),
+    upload: optionArgs.includes('--upload'),
+    yes: optionArgs.includes('--yes'),
+    help: optionArgs.includes('--help') || optionArgs.includes('-h'),
+    endpoint: optionValue(optionArgs, '--endpoint', otlpHttpEndpoint),
+    id: optionValue(optionArgs, '--id') || legacy.customEventId(),
+    dryRun: optionArgs.includes('--dry-run'),
+    json: parseJsonFlag(optionArgs),
+    commandArgs
   };
+}
+
+function uniqueRunId() {
+  return `native_run_${Date.now()}_${crypto.randomBytes(5).toString('hex')}`;
+}
+
+async function launchObservedCopilot(options = {}, dependencies = {}) {
+  if (options.upload && !options.yes) throw new Error('copilot-session launch --upload requires --yes; omit --upload to keep evidence local');
+  if (options.yes && !options.upload) throw new Error('copilot-session launch --yes requires --upload');
+  const env = dependencies.env || process.env;
+  const cwd = options.repo || process.cwd();
+  const copilotHome = options.copilotHome || env.COPILOT_HOME || path.join(os.homedir(), '.copilot');
+  const projectConfigPath = projectAgentOpsConfigPath({ cwd, agentOpsHome: dependencies.agentopsHome || agentopsHome });
+  const hasProjectConfig = Boolean(projectConfigPath && fs.existsSync(projectConfigPath));
+  const hasExplicitEnvironmentTarget = Boolean(
+    (env.AGENTOPS_AZURE_SUBSCRIPTION_ID || env.AZURE_SUBSCRIPTION_ID)
+    && env.AGENTOPS_LOGS_INGESTION_ENDPOINT
+    && env.AGENTOPS_DCR_IMMUTABLE_ID
+  );
+  if (options.upload && !hasProjectConfig && !hasExplicitEnvironmentTarget) {
+    throw new Error('copilot-session launch --upload requires a project-scoped Azure target; run agentops configure set --project in the target repository or set AGENTOPS_AZURE_SUBSCRIPTION_ID, AGENTOPS_LOGS_INGESTION_ENDPOINT, and AGENTOPS_DCR_IMMUTABLE_ID explicitly');
+  }
+  const projectCloud = configuredCloudValues({ env, projectConfigPath });
+  if (options.upload && (!projectCloud.subscriptionId || !projectCloud.logsIngestionEndpoint || !projectCloud.dcrImmutableId)) {
+    throw new Error('copilot-session launch --upload requires a complete Azure target with subscription, Logs Ingestion endpoint, and DCR immutable ID');
+  }
+  const scopedDeliveryEnv = { ...env };
+  if (options.upload && options.yes && projectCloud.subscriptionId && !scopedDeliveryEnv.AGENTOPS_APPROVED_AZURE_SUBSCRIPTION_IDS) {
+    scopedDeliveryEnv.AGENTOPS_APPROVED_AZURE_SUBSCRIPTION_IDS = projectCloud.subscriptionId;
+  }
+  const resolve = dependencies.resolveCopilotBinary || resolveCopilotBinary;
+  const resolved = resolve({ env });
+  if (!resolved.ok) throw new Error(resolved.error);
+  const startCollector = dependencies.startScopedStrictCollector || startScopedStrictCollector;
+  const scopedCollector = await startCollector({ agentopsHome: dependencies.agentopsHome || agentopsHome });
+  const runId = options.runId || uniqueRunId();
+  try {
+    const endpoint = scopedCollector.endpoint;
+    const runEnv = {
+      ...env,
+      COPILOT_HOME: copilotHome,
+      COPILOT_OTEL_ENABLED: 'true',
+      COPILOT_OTEL_EXPORTER_TYPE: 'otlp-http',
+      COPILOT_OTEL_SOURCE_NAME: 'github.copilot',
+      COPILOT_OTEL_CAPTURE_CONTENT: 'false',
+      OTEL_EXPORTER_OTLP_ENDPOINT: endpoint,
+      OTEL_EXPORTER_OTLP_PROTOCOL: 'http/protobuf',
+      OTEL_SERVICE_NAME: env.OTEL_SERVICE_NAME || 'github-copilot-cli',
+      OTEL_RESOURCE_ATTRIBUTES: [env.OTEL_RESOURCE_ATTRIBUTES, `agentops.run.id=${runId}`, 'agent.framework=github-copilot', 'agent.runtime=github-copilot-cli'].filter(Boolean).join(','),
+      AGENTOPS_PRIVACY_MODE: 'strict',
+      AGENTOPS_CAPTURE_CONTENT: 'false',
+      AGENTOPS_RUN_ID: runId,
+      AGENTOPS_SCRIPT_OTLP_ENDPOINT: `${endpoint}/v1/traces`
+    };
+    const observedEnv = attachedScriptEnvironment({ env: runEnv, cwd, runId, agentopsRoot, collectorMode: 'auto' });
+    const sessionRoot = path.join(copilotHome, 'session-state');
+    const snapshot = (dependencies.snapshotCopilotSessions || snapshotCopilotSessions)(sessionRoot);
+    const spawnSync = dependencies.spawnSync || childProcess.spawnSync;
+    const result = spawnSync(resolved.path, options.commandArgs || [], { cwd, env: observedEnv, stdio: 'inherit' });
+
+    // Graceful Collector shutdown flushes the final OTel batches to its
+    // strict-redacted local receipt before delivery reads that file.
+    await scopedCollector.stop({ remove: false });
+    const summary = (dependencies.changedCopilotSession || changedCopilotSession)(snapshot, sessionRoot);
+    let evidence = null;
+    if (summary?.sessionId) {
+      const deliver = dependencies.deliverCopilotSession || deliverCopilotSession;
+      evidence = deliver({
+        summary,
+        runId,
+        copilotHome,
+        cwd,
+        agentopsHome: dependencies.agentopsHome || agentopsHome,
+        env: scopedDeliveryEnv,
+        otelFiles: [scopedCollector.receiptPath],
+        upload: Boolean(options.upload)
+      });
+    }
+    if (result.error) throw result.error;
+    const output = {
+      runId,
+      sessionId: summary?.sessionId || '',
+      copilotPath: resolved.path,
+      exitCode: result.status === null ? 1 : result.status,
+      signal: result.signal || '',
+      evidence
+    };
+    writeJsonOrRender(output, options.json, value => [
+      'Native Copilot observation',
+      `Run: ${value.runId}`,
+      `Session: ${value.sessionId || 'not detected'}`,
+      `Copilot exit: ${value.exitCode}${value.signal ? ` (${value.signal})` : ''}`,
+      `Evidence: ${value.evidence ? `${value.evidence.events} events, ${value.evidence.spans} spans · ${value.evidence.state}` : 'not collected'}`,
+      ...(value.evidence?.outputDir ? [`Local evidence: ${value.evidence.outputDir}`] : []),
+      ...(options.upload ? [] : ['Azure: not requested; evidence remains local'])
+    ].join('\n') + '\n');
+    process.exitCode = output.exitCode;
+    return output;
+  } finally {
+    await scopedCollector.stop({ remove: true });
+  }
 }
 
 async function buildCopilotSessionEnrichment(options = {}) {
@@ -104,8 +226,50 @@ function renderCopilotSessionEnrichment(result = {}) {
   return `${lines.join('\n')}\n`;
 }
 
-async function copilotSessionCommand(args = []) {
+function renderCopilotSessionCollection(result = {}) {
+  const lines = [
+    'Copilot session evidence',
+    `Session: ${result.sessionId || 'unknown'}`,
+    `Run: ${result.runId || 'unknown'}`,
+    `State: ${result.state || 'unknown'}`,
+    `Events: ${result.events || 0}`,
+    `Spans: ${result.spans || 0}`,
+    `Local evidence: ${result.outputDir || 'not written'}`,
+    ...(result.reason ? [`Note: ${result.reason}`] : [])
+  ];
+  return `${lines.join('\n')}\n`;
+}
+
+async function copilotSessionCommand(args = [], dependencies = {}) {
   const options = parseCopilotSessionArgs(args);
+  if (options.subcommand === 'launch' && options.help) {
+    const stdout = dependencies.stdout || process.stdout;
+    stdout.write('agentops copilot-session launch [--repo <git-repo>] [--copilot-home <path>] [--upload --yes] [--json] -- [copilot-args...]\n');
+    stdout.write('Starts one process-scoped Copilot CLI observation run. Evidence stays local unless --upload --yes is explicit.\n');
+    stdout.write('Azure upload requires a complete project-scoped target or all three explicit Azure target environment values.\n');
+    return { ok: true, action: 'help' };
+  }
+  if (options.subcommand === 'launch') return launchObservedCopilot(options, dependencies);
+  if (options.subcommand === 'collect') {
+    if (!options.sessionId) throw new Error('copilot-session collect requires <session-id>');
+    if (!options.runId) throw new Error('copilot-session collect requires --run-id <observed-run-id>');
+    if (options.upload && !options.yes) throw new Error('copilot-session collect --upload requires --yes; omit --upload to keep evidence local');
+    if (options.yes && !options.upload) throw new Error('copilot-session collect --yes requires --upload');
+    const collect = dependencies.deliverCopilotSession || deliverCopilotSession;
+    const result = collect({
+      summary: { sessionId: options.sessionId },
+      runId: options.runId,
+      cwd: options.repo || process.cwd(),
+      copilotHome: options.copilotHome || process.env.COPILOT_HOME,
+      agentopsHome,
+      env: process.env,
+      otelFiles: options.otelFiles.length ? options.otelFiles : defaultReceiptFiles(),
+      upload: options.upload
+    });
+    writeJsonOrRender({ ok: options.upload ? result.state === 'azure_acknowledged' : result.state !== 'native_best_effort', ...result }, options.json, renderCopilotSessionCollection);
+    if (options.upload && result.state !== 'azure_acknowledged') process.exitCode = 1;
+    return;
+  }
   if (options.subcommand === 'export-content') {
     if (!options.sessionId && !options.file) throw new Error('copilot-session export-content requires <session-id> or --file <events.jsonl>');
     if (!options.allowContent || !options.synthetic) throw new Error('copilot-session export-content requires --allow-content --synthetic');
@@ -115,14 +279,57 @@ async function copilotSessionCommand(args = []) {
     writeJsonOrRender({ ok: true, session_id: sessionId, ...result }, options.json, value => `Synthetic content rows: ${value.rows} in ${value.output}\n`);
     return;
   }
+  if (options.subcommand === 'export-spans') {
+    if (!options.sessionId && !options.file) throw new Error('copilot-session export-spans requires <session-id> or --file <events.jsonl>');
+    if (!options.runId) throw new Error('copilot-session export-spans requires --run-id <observed-run-id>');
+    const eventsFile = options.file || defaultSessionEventsPath(options.sessionId);
+    const sessionId = options.sessionId || path.basename(path.dirname(eventsFile));
+    const sessionEvents = readCopilotSessionEvents(eventsFile);
+    const native = readSessionOtelSpans(sessionId, options.otelFiles.length ? options.otelFiles : defaultReceiptFiles(), { runId: options.runId });
+    const spans = enrichSpansWithSessionToolContext(native.spans, sessionEvents);
+    const result = writeSessionSpans(spans, sessionId, options.runId, options.output);
+    writeJsonOrRender({ ok: true, session_id: sessionId, run_id: options.runId, native_spans: native.spans.filter(span => span.match === 'exact-session').length, run_linked_script_spans: native.spans.filter(span => span.match === 'run-linked-script').length, ...result }, options.json, value => `Synthetic run spans: ${value.rows} rows in ${value.output}\n`);
+    return;
+  }
+  if (options.subcommand === 'export-events') {
+    if (!options.sessionId && !options.file) throw new Error('copilot-session export-events requires <session-id> or --file <events.jsonl>');
+    if (!options.runId) throw new Error('copilot-session export-events requires --run-id <observed-run-id>');
+    const eventsFile = options.file || defaultSessionEventsPath(options.sessionId);
+    const sessionId = options.sessionId || path.basename(path.dirname(eventsFile));
+    const result = writeSessionEvents(readCopilotSessionEvents(eventsFile), sessionId, options.runId, options.output);
+    writeJsonOrRender({ ok: true, session_id: sessionId, run_id: options.runId, ...result }, options.json, value => `Session metadata events: ${value.rows} rows in ${value.output}\n`);
+    return;
+  }
   if (options.subcommand === 'view') {
     if (!options.sessionId && !options.file) throw new Error('copilot-session view requires <session-id> or --file <events.jsonl>');
     if (!options.allowContent) throw new Error('copilot-session view includes prompts and tool payloads; pass --allow-content for an approved local session');
     const eventsFile = options.file || defaultSessionEventsPath(options.sessionId);
     const sessionId = options.sessionId || path.basename(path.dirname(eventsFile));
+    const sessionEvents = readCopilotSessionEvents(eventsFile);
     const native = readSessionOtelSpans(sessionId, options.otelFiles.length ? options.otelFiles : defaultReceiptFiles(), { runId: options.runId });
-    const output = writeSessionWaterfall(readCopilotSessionEvents(eventsFile), sessionId, options.output, { nativeSpans: native.spans });
-    writeJsonOrRender({ ok: true, session_id: sessionId, output, native_spans: native.spans.filter(span => span.match === 'exact-session').length, run_linked_script_spans: native.spans.filter(span => span.match === 'run-linked-script').length, native_receipt_files: native.files.length, invalid_native_records: native.invalid }, options.json, result => `Local waterfall: ${result.output} · ${result.native_spans} native OTel spans · ${result.run_linked_script_spans} run-linked script spans\n`);
+    let joinedSpans = enrichSpansWithSessionToolContext(native.spans, sessionEvents);
+    let invalidNativeRecords = native.invalid;
+    let deliveryStatus = null;
+    if (options.runId) {
+      if (!/^[A-Za-z0-9_.:-]{1,128}$/.test(options.runId)) throw new Error('copilot-session view requires a safe --run-id');
+      const runDirectory = path.join(agentopsHome, 'runs', options.runId);
+      let outbox = null;
+      try { outbox = readSessionOutbox(runDirectory); } catch (error) {
+        if (error.code !== 'ENOENT') throw error;
+      }
+      deliveryStatus = outbox?.sessionId === sessionId && outbox.runId === options.runId
+        ? outbox
+        : { streams: { events: { status: 'not_observed', rows: 0, attempts: 0 }, spans: { status: 'not_observed', rows: 0, attempts: 0 } } };
+      if (outbox?.sessionId === sessionId && outbox.runId === options.runId) {
+        const exported = readSessionSpanRows(runDirectory, options.runId, sessionId);
+        if (exported.spans.length) {
+          joinedSpans = enrichSpansWithSessionToolContext(exported.spans, sessionEvents);
+          invalidNativeRecords += exported.invalid;
+        }
+      }
+    }
+    const output = writeSessionWaterfall(sessionEvents, sessionId, options.output, { nativeSpans: joinedSpans, deliveryStatus });
+    writeJsonOrRender({ ok: true, session_id: sessionId, output, native_spans: joinedSpans.filter(span => span.match === 'exact-session').length, run_linked_script_spans: joinedSpans.filter(span => span.match === 'run-linked-script').length, native_receipt_files: native.files.length, invalid_native_records: invalidNativeRecords }, options.json, result => `Local waterfall: ${result.output} · ${result.native_spans} native OTel spans · ${result.run_linked_script_spans} run-linked script spans\n`);
     return;
   }
   const result = await buildCopilotSessionEnrichment(options);
@@ -133,6 +340,8 @@ async function copilotSessionCommand(args = []) {
 module.exports = {
   buildCopilotSessionEnrichment,
   copilotSessionCommand,
+  launchObservedCopilot,
   parseCopilotSessionArgs,
+  renderCopilotSessionCollection,
   renderCopilotSessionEnrichment
 };

@@ -50,14 +50,36 @@ function withTempDir(fn) {
 test('copilot session paths reject unsafe session ids and preserve safe ids', () => {
   assert.equal(safeName(' agent-01_./:@* '), 'agent-01_./:@*');
   assert.equal(safeName('../bad session', 'fallback'), 'fallback');
-  assert.throws(
-    () => defaultSessionEventsPath('../bad session', '/tmp/home'),
-    /session id is required/
-  );
-  assert.equal(
-    defaultSessionEventsPath('session_123', '/tmp/home'),
-    path.join('/tmp/home', '.copilot', 'session-state', 'session_123', 'events.jsonl')
-  );
+  const previous = process.env.COPILOT_HOME;
+  delete process.env.COPILOT_HOME;
+  try {
+    assert.throws(
+      () => defaultSessionEventsPath('../bad session', '/tmp/home'),
+      /session id is required/
+    );
+    assert.equal(
+      defaultSessionEventsPath('session_123', '/tmp/home'),
+      path.join('/tmp/home', '.copilot', 'session-state', 'session_123', 'events.jsonl')
+    );
+  } finally {
+    if (previous !== undefined) process.env.COPILOT_HOME = previous;
+  }
+});
+
+test('copilot session path follows COPILOT_HOME for isolated session stores', () => {
+  const previous = process.env.COPILOT_HOME;
+  const isolatedHome = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-copilot-home-'));
+  process.env.COPILOT_HOME = isolatedHome;
+  try {
+    assert.equal(
+      defaultSessionEventsPath('session_123'),
+      path.join(isolatedHome, 'session-state', 'session_123', 'events.jsonl')
+    );
+  } finally {
+    if (previous === undefined) delete process.env.COPILOT_HOME;
+    else process.env.COPILOT_HOME = previous;
+    fs.rmSync(isolatedHome, { recursive: true, force: true });
+  }
 });
 
 test('copilot session reader parses jsonl and surfaces invalid file/json paths', () => {

@@ -5,6 +5,7 @@ const path = require('node:path');
 const test = require('node:test');
 
 const { createWrapperDelivery } = require('../src/lib/copilot/wrapper-delivery');
+const { projectAgentOpsConfigPath } = require('../src/lib/agentops-config');
 
 function tempDirectory(t) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-wrapper-delivery-'));
@@ -47,6 +48,39 @@ test('wrapper delivery reports Azure acceptance only for the exact acknowledged 
   });
   assert.equal(drained.state, 'azure_acknowledged');
   assert.equal(drained.result.acknowledged, 1);
+});
+
+test('wrapper delivery resolves the attached repository project Azure target', async t => {
+  const directory = tempDirectory(t);
+  const repo = path.join(directory, 'repo');
+  const agentOpsHome = path.join(directory, 'agentops-home');
+  fs.mkdirSync(path.join(repo, '.git'), { recursive: true });
+  const projectConfigPath = projectAgentOpsConfigPath({ cwd: repo, agentOpsHome });
+  fs.mkdirSync(path.dirname(projectConfigPath), { recursive: true });
+  fs.writeFileSync(projectConfigPath, JSON.stringify({
+    subscriptionId: '11111111-1111-4111-8111-111111111111',
+    logsIngestionEndpoint: 'https://project.ingest.monitor.azure.com',
+    dcrImmutableId: 'dcr-project'
+  }));
+
+  const delivery = createWrapperDelivery({
+    directory: path.join(directory, 'spool'),
+    env: { AGENTOPS_APPROVED_AZURE_SUBSCRIPTION_IDS: '11111111-1111-4111-8111-111111111111' },
+    projectConfigPath
+  });
+  const recorded = delivery.record({ RunId: 'run-project', SessionId: 'session-project', EventName: 'agentops.run.end', ExitCode: 0 }, { sequence: 1 });
+  const drained = await delivery.drain([recorded.evidence.EventId], {
+    spawnSync() { return { status: 0, stdout: '11111111-1111-4111-8111-111111111111\n', stderr: '' }; },
+    tokenProvider: async () => 'token',
+    fetchImpl: async uri => {
+      assert.match(String(uri), /project\.ingest\.monitor\.azure\.com/);
+      assert.match(String(uri), /dcr-project/);
+      return { status: 204, headers: {}, body: { cancel: async () => {} } };
+    }
+  });
+
+  assert.equal(drained.configured, true);
+  assert.equal(drained.state, 'azure_acknowledged');
 });
 
 test('operator drain reports Azure acceptance when every claimed row was accepted', async t => {

@@ -1,0 +1,123 @@
+const fs = require('node:fs');
+const crypto = require('node:crypto');
+const path = require('node:path');
+
+const { configuredCloudValues, projectAgentOpsConfigPath } = require('../agentops-config');
+const { gitRoot, readOwnedAttachment } = require('../attach-command');
+const { agentopsHome } = require('../paths');
+const { defaultReceiptFiles, readSessionOtelSpans } = require('./session-otel');
+const { readCopilotSessionEvents } = require('./session-enricher');
+const { writeSessionEvents } = require('./session-event-export');
+const { enrichSpansWithSessionToolContext, writeSessionSpans } = require('./session-span-export');
+const { drainSessionOutboxes, initializeSessionOutbox, readSessionOutbox } = require('./session-delivery-outbox');
+
+function safeRunId(value) {
+  const text = String(value || '');
+  if (!/^[A-Za-z0-9_.:-]{1,128}$/.test(text)) throw new Error('session delivery requires a safe AgentOps run ID');
+  return text;
+}
+
+function ensurePrivateDirectory(directory, options = {}) {
+  try {
+    fs.mkdirSync(directory, { recursive: Boolean(options.recursive), mode: 0o700 });
+  } catch (error) {
+    if (error.code !== 'EEXIST') throw error;
+  }
+  const stat = fs.lstatSync(directory);
+  if (stat.isSymbolicLink() || !stat.isDirectory()) {
+    throw new Error('session export directory must be a real directory, not a symlink or file');
+  }
+  fs.chmodSync(directory, 0o700);
+}
+
+function deliverCopilotSession(options = {}) {
+  const summary = options.summary;
+  if (!summary?.sessionId) return { state: 'native_best_effort', reason: 'no changed Copilot session was detected' };
+
+  const runId = safeRunId(options.runId);
+  const copilotHome = options.copilotHome || process.env.COPILOT_HOME || path.join(require('node:os').homedir(), '.copilot');
+  const eventsFile = path.join(copilotHome, 'session-state', summary.sessionId, 'events.jsonl');
+  if (!fs.existsSync(eventsFile)) return { state: 'native_best_effort', reason: 'Copilot session event file was not found' };
+
+  const sessionEvents = readCopilotSessionEvents(eventsFile);
+  const sessionId = sessionEvents.find(event => event.type === 'session.start')?.data?.sessionId || summary.sessionId;
+  const cwd = options.cwd || process.cwd();
+  const env = options.env || process.env;
+  const home = path.resolve(options.agentopsHome || agentopsHome);
+  const runsDir = path.join(home, 'runs');
+  ensurePrivateDirectory(runsDir, { recursive: true });
+  const outputDir = path.join(runsDir, runId);
+  ensurePrivateDirectory(outputDir);
+
+  let repoRoot;
+  try {
+    repoRoot = gitRoot(cwd);
+  } catch {
+    repoRoot = fs.realpathSync(cwd);
+  }
+  const eventExport = writeSessionEvents(sessionEvents, sessionId, runId, outputDir, { repoRoot });
+  const native = readSessionOtelSpans(
+    sessionId,
+    options.otelFiles || defaultReceiptFiles(),
+    { runId }
+  );
+  const spans = enrichSpansWithSessionToolContext(native.spans, sessionEvents);
+  const spanExport = spans.length
+    ? writeSessionSpans(spans, sessionId, runId, path.join(outputDir, 'AgentOpsSpans_CL.jsonl'))
+    : null;
+
+  const projectConfigPath = options.projectConfigPath || projectAgentOpsConfigPath({ cwd });
+  const cloud = configuredCloudValues({ env, projectConfigPath });
+  initializeSessionOutbox(outputDir, { runId, sessionId, cloud });
+  const uploadRequested = options.upload !== false;
+  const delivery = uploadRequested && cloud.subscriptionId && cloud.logsIngestionEndpoint && cloud.dcrImmutableId
+    ? drainSessionOutboxes({
+      agentopsHome: home,
+      cloud,
+      env,
+      runId,
+      spawnSync: options.spawnSync
+    })
+    : { acknowledged: 0, pending: 0, skippedTarget: 0, streams: [] };
+  const outbox = readSessionOutbox(outputDir);
+  const streams = outbox.streams;
+  const results = delivery.streams.filter(item => item.runId === runId);
+  const uploaded = Object.values(streams).every(stream => stream.status === 'azure_accepted');
+  const runContextPath = path.join(outputDir, 'run-context.json');
+  const attachment = readOwnedAttachment(repoRoot);
+  const runContext = {
+    managedBy: 'copilot-agentops',
+    schemaVersion: 1,
+    runId,
+    sessionId,
+    repositoryRootHash: crypto.createHash('sha256').update(repoRoot).digest('hex').slice(0, 16),
+    attachmentManifestSha256: attachment.ok ? attachment.receipt.manifestSha256 : '',
+    createdAt: new Date().toISOString()
+  };
+  fs.writeFileSync(runContextPath, `${JSON.stringify(runContext, null, 2)}\n`, { flag: 'wx', mode: 0o600 });
+  return {
+    state: uploaded ? 'azure_acknowledged' : 'local_pending',
+    sessionId,
+    runId,
+    outputDir,
+    events: eventExport.rows,
+    spans: spanExport?.rows || 0,
+    invalidNativeRecords: native.invalid,
+    nativeReceiptFiles: native.files,
+    uploads: results,
+    streams: Object.fromEntries(Object.entries(streams).map(([kind, stream]) => [kind, {
+      status: stream.status === 'in_flight' || stream.status === 'pending' ? 'local_pending' : stream.status,
+      rows: stream.rows,
+      attempts: stream.attempts
+    }])),
+    reason: uploaded ? '' : !uploadRequested
+      ? 'Azure upload was not requested; evidence remains local and pending'
+      : !cloud.subscriptionId || !cloud.logsIngestionEndpoint || !cloud.dcrImmutableId
+      ? 'Azure target is not fully configured'
+      : Object.values(streams).some(stream => stream.status === 'in_flight' || stream.status === 'pending')
+        ? `Azure has ${delivery.pending} session stream batch(es) pending recovery`
+        : 'one or more evidence streams were not observed'
+  };
+}
+
+module.exports = { deliverCopilotSession, ensurePrivateDirectory, safeRunId };

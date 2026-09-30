@@ -41,6 +41,59 @@ test('native receipt joins only exact Copilot conversation ID and tool call ID',
   }
 });
 
+test('session OTel reader preserves sub-millisecond timestamps and exact duration nanoseconds', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-otel-submillisecond-'));
+  try {
+    const file = path.join(directory, 'receipt.jsonl');
+    fs.writeFileSync(file, `${JSON.stringify({ resourceSpans: [{ scopeSpans: [{ spans: [{
+      traceId: '0123456789abcdef0123456789abcdef', spanId: '0123456789abcdef', name: 'agentops.script',
+      startTimeUnixNano: '1767225601000123000', endTimeUnixNano: '1767225601000456000',
+      attributes: [attr('agentops.run.id', 'run-a'), attr('agentops.script.name', 'scripts/fail.py')]
+    }] }] }] })}\n`);
+    const result = readSessionOtelSpans('session-a', [file], { runId: 'run-a' });
+    assert.equal(result.spans.length, 1);
+    assert.equal(result.spans[0].durationNs, '333000');
+    assert.equal(result.spans[0].durationMs, 0.333);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('waterfall separates exact native joins from inferred repeated-script tool links', () => {
+  const callId = 'call-repeated-script-2';
+  const events = [
+    { type: 'tool.execution_start', timestamp: '2026-09-30T03:29:34.733Z', data: { toolCallId: callId, toolName: 'bash' } },
+    { type: 'tool.execution_complete', timestamp: '2026-09-30T03:29:34.787Z', data: { toolCallId: callId, success: true } }
+  ];
+  const spans = [
+    {
+      start: Date.parse('2026-09-30T03:29:34.733Z'), end: Date.parse('2026-09-30T03:29:34.787Z'),
+      spanName: 'execute_tool bash', operation: 'execute_tool', toolName: 'bash', toolCallId: callId,
+      traceId: 'native-trace', spanId: 'native-bash-span', match: 'exact-session'
+    },
+    {
+      start: Date.parse('2026-09-30T03:29:34.765Z'), end: Date.parse('2026-09-30T03:29:34.767Z'),
+      spanName: 'agentops.script', operation: 'agentops.script', scriptName: '.agents/skills/other/scripts/run.js',
+      toolCallId: callId, toolCallEvidence: 'inferred-unique-tool-span-window',
+      traceId: 'script-trace', spanId: 'script-root', match: 'run-linked-script'
+    }
+  ];
+  const result = sessionWaterfall(events, spans);
+  const tool = result.rows.find(row => row.source === 'session event' && row.kind === 'tool.execution_start');
+  const script = result.rows.find(row => row.source === 'script OTel');
+  assert.equal(result.exactToolCallJoins, 1);
+  assert.equal(result.inferredScriptToolLinks, 1);
+  assert.deepEqual(tool.details.toolCallEvidenceLinks.map(link => link.evidence), [
+    'exact-session-tool-call-id', 'inferred-unique-tool-span-window'
+  ]);
+  assert.equal(script.details.link.runEvidence, 'exact agentops.run.id; no shared trace parent observed');
+  assert.equal(script.details.link.toolCallEvidence, 'inferred-unique-tool-span-window');
+  const html = renderSessionWaterfall(events, 'session-a', { nativeSpans: spans });
+  assert.match(html, /Exact tool-call joins/);
+  assert.match(html, /Inferred script-to-tool links/);
+  assert.match(html, /inferred-unique-tool-span-window/);
+});
+
 test('Copilot file exporter spans use flat attributes and second/nanosecond timestamps', () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-session-flat-'));
   try {
@@ -61,7 +114,7 @@ test('Copilot file exporter spans use flat attributes and second/nanosecond time
     const result = readSessionOtelSpans('session-a', [file]);
     assert.equal(result.invalid, 0);
     assert.equal(result.spans.length, 2);
-    assert.equal(result.spans[0].end - result.spans[0].start, 2250);
+    assert.equal(result.spans[0].durationMs, 2250);
     assert.equal(result.spans[0].agent, 'fixture-agent');
     assert.deepEqual(result.spans[0].events, [{ time: 1767225602000, name: 'github.copilot.skill.invoked', attributes: { 'github.copilot.skill.name': 'fixture-flow' } }]);
     assert.equal(result.spans[1].parentSpanId, 'root');
@@ -97,6 +150,31 @@ test('owned script spans require an explicit exact run ID and remain logical lin
     assert.equal(waterfall.scriptSpans, 2);
     assert.equal(waterfall.rows[0].details.link.kind, 'logical');
     assert.match(renderSessionWaterfall([], 'session-a', { nativeSpans: result.spans }), /Run-linked script spans/);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('strictly redacted Collector names still identify attached script spans by safe attributes', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-redacted-script-otel-'));
+  try {
+    const file = path.join(directory, 'receipt.jsonl');
+    const script = (spanId, attributes) => ({
+      type: 'span', traceId: 'strict-trace', spanId, name: 'agentops.span',
+      startTimeUnixNano: '1767225601000000000', endTimeUnixNano: '1767225602000000000',
+      resource: { attributes: { 'agentops.run.id': 'strict-run', 'agentops.session.id': 'strict-session' } },
+      attributes: { 'agentops.script.name': '.github/skills/sample/scripts/do.py', ...attributes }
+    });
+    fs.writeFileSync(file, [
+      script('script-root', {}),
+      script('script-step', { 'agentops.step.name': 'validate' })
+    ].map(JSON.stringify).join('\n'));
+    const result = readSessionOtelSpans('strict-session', [file], { runId: 'strict-run' });
+    assert.equal(result.spans.length, 2);
+    assert.ok(result.spans.every(span => span.match === 'run-linked-script'));
+    assert.deepEqual(result.spans.map(span => span.spanName), ['agentops.script', 'agentops.script.step']);
+    assert.equal(result.spans[0].scriptName, '.github/skills/sample/scripts/do.py');
+    assert.equal(result.spans[1].stepName, 'validate');
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
   }

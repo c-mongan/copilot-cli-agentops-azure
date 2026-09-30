@@ -18,13 +18,17 @@ test('synthetic content export retains prompt, tool arguments/result, answer and
   const rows = contentRowsFromSession(events, 'session-test');
   assert.deepEqual(rows.map(row => row.ContentKind), ['prompt', 'tool_arguments', 'tool_result', 'response']);
   assert.equal(rows[2].ToolName, 'view');
+  assert.equal(rows[1].ToolCallId, 'call-a');
+  assert.equal(rows[2].ToolCallId, 'call-a');
+  assert.equal(rows[0].ToolCallId, '');
+  assert.equal(rows[3].ToolCallId, '');
   assert.equal(rows[2].ResponseText, 'synthetic failure');
   assert.ok(rows.every(row => row.CaptureMode === 'full' && row.SchemaVersion === '2'));
   assert.ok(rows.every(row => row.SessionId === 'session-test'));
   assert.ok(rows.every(row => row.RunId === 'session-test'));
   assert.ok(contentRowsFromSession(events, 'session-test', 'observed-run').every(row => row.RunId === 'observed-run'));
   assert.throws(() => contentRowsFromSession(events, 'session-test', 'bad run id'), /valid run ID/);
-  assert.doesNotMatch(JSON.stringify(rows), /call-a/);
+  assert.equal(rows.filter(row => row.ToolCallId === 'call-a').length, 2);
 });
 
 test('synthetic content export creates a private non-overwriting JSONL file', () => {

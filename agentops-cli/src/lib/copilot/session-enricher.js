@@ -15,7 +15,10 @@ function safeName(value, fallback = '') {
 function defaultSessionEventsPath(sessionId, home = os.homedir()) {
   const safeSessionId = safeName(sessionId);
   if (!safeSessionId) throw new Error('session id is required');
-  return path.join(home, '.copilot', 'session-state', safeSessionId, 'events.jsonl');
+  const sessionStateRoot = process.env.COPILOT_HOME
+    ? path.join(process.env.COPILOT_HOME, 'session-state')
+    : path.join(home, '.copilot', 'session-state');
+  return path.join(sessionStateRoot, safeSessionId, 'events.jsonl');
 }
 
 function readCopilotSessionEvents(filePath) {
