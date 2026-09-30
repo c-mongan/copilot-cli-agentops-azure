@@ -4,7 +4,7 @@
 
 > Independent personal OSS project. Not an official Microsoft, GitHub, OpenAI, Azure, or Grafana product.
 
-The checked-in dev deployment is a personal development/demo environment. Its normal telemetry path is metadata-only; a separately controlled synthetic EVAL path may carry rich content after the destination and access checks in the [deployment plan](.azure/deployment-plan.md). This environment is not approved for Microsoft confidential, customer, work-agent, or production data. `agentops validate-azure` defaults to this non-blocking `personal` posture. Use `--profile team` or `--profile internal` for readiness gates that fail when Log Analytics ingestion is uncapped or the resource group has no Azure Consumption budget. `--production` implies the stricter `internal` profile and retains the wider production security checks.
+The checked-in dev deployment is a personal development/demo environment. Its normal telemetry path is metadata-only; a separately controlled synthetic EVAL path may carry rich content after the destination and access checks in the [deployment plan](.azure/deployment-plan.md). This environment is not approved for Microsoft confidential, customer, work-agent, or production data. `agentops validate-azure` defaults to the personal metadata-only profile; unconfigured Application Insights and Managed Grafana checks are explicitly skipped. Use `--profile team` or `--profile internal` for readiness gates that require capped Log Analytics ingestion, an Azure Consumption budget, Application Insights, and Managed Grafana. `internal` also requires least-privilege group RBAC. `--production` implies `internal` and adds the wider production security checks.
 
 Privacy-first observability for GitHub Copilot CLI runs, Copilot SDK sessions, MCP tools, and code outcomes using Azure Monitor. AgentOps records run/session metadata, tool names, failures, latency, token usage, estimated cost, privacy signals, evals, and GitHub outcomes without recording prompts, code, file contents, tool arguments, or tool results by default. Azure Monitor's native Application Insights Agents view is the primary investigation surface; Managed Grafana is optional for advanced operators.
 
@@ -135,7 +135,7 @@ agentops status
 agentops doctor
 agentops doctor --local-only
 agentops health --json
-agentops configure show|set|import-azd
+agentops configure show|set|import-azd [--project]
 agentops collector start|stop|status|validate|smoke|install-binary|uninstall-binary
 agentops copilot [...args]
 agentops schema validate|print
@@ -172,6 +172,30 @@ agentops e2e report
 agentops e2e browser-check
 agentops e2e auth-profile
 ```
+
+`agentops configure set` uses the per-user settings by default. Use `--project`
+to keep an Azure target separate for the current Git repository:
+
+```bash
+agentops configure set --project \
+  --subscription-id <subscription-id> \
+  --resource-group <resource-group> \
+  --workspace-id <workspace-customer-id> \
+  --workspace-name <workspace-name> \
+  --logs-ingestion-endpoint <DCE-ingestion-endpoint> \
+  --dcr-immutable-id <DCR-immutable-id>
+```
+
+Project settings live in a private per-user file under `~/.agentops/projects/`,
+keyed to the Git root. They do not add repository files, hooks, or telemetry
+side effects. Inside a repository with project settings, AgentOps uses those
+settings instead of silently inheriting another project's resource identifiers;
+explicit `AGENTOPS_*` environment values still override them. `configure show`
+displays the effective project settings when present. Use `--project` on `show`
+or `import-azd` to select that scope explicitly, and `--user` to inspect or
+change the global defaults from inside a configured project. Setting
+`AGENTOPS_CONFIG_PATH` explicitly selects that config file and disables
+automatic project discovery unless `--project` is passed.
 
 Everything else is under `agentops experimental ...` or documented as experimental.
 
