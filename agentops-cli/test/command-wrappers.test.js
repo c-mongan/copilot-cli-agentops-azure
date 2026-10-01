@@ -188,6 +188,119 @@ test('observability query command writes links through injected stdout', () => {
   });
 });
 
+test('observability query command dispatches read-order to the local-ledger query with an optional session id', () => {
+  const output = createOutput();
+  let seenArgs = null;
+  const { queryCommand, queryCommandNames } = createObservabilityQueryCommand({
+    stdout: output.stdout,
+    readOrderQuery(runId, options) {
+      seenArgs = { runId, options };
+      return { ok: true, question: 'read-order', run_id: runId };
+    }
+  });
+
+  assert.ok(queryCommandNames.includes('read-order'));
+
+  queryCommand('read-order', ['run-123', '--session', 'session-abc']);
+
+  assert.deepEqual(seenArgs, { runId: 'run-123', options: { sessionId: 'session-abc' } });
+  assert.deepEqual(JSON.parse(output.text()), { ok: true, question: 'read-order', run_id: 'run-123' });
+});
+
+test('observability query command requires a run id for read-order', () => {
+  const { queryCommand } = createObservabilityQueryCommand({
+    stdout: createOutput().stdout,
+    readOrderQuery: () => { throw new Error('should not be called'); }
+  });
+
+  assert.throws(() => queryCommand('read-order', []), /read-order requires a run id/);
+});
+
+for (const [command, dependencyName] of [
+  ['slow-scripts', 'slowScriptsQuery'],
+  ['repeated-tools', 'repeatedToolsQuery'],
+  ['co-activation', 'coActivationQuery']
+]) {
+  test(`observability query command dispatches ${command} to its architecture-ledger query with --ledger and --top`, () => {
+    const output = createOutput();
+    let seenArgs = null;
+    const dependencies = {
+      stdout: output.stdout,
+      [dependencyName](ledgerDir, options) {
+        seenArgs = { ledgerDir, options };
+        return { ok: true, question: command };
+      }
+    };
+    const { queryCommand, queryCommandNames } = createObservabilityQueryCommand(dependencies);
+
+    assert.ok(queryCommandNames.includes(command));
+
+    queryCommand(command, ['--ledger', '/tmp/ledger-dir', '--top', '5']);
+
+    assert.deepEqual(seenArgs, { ledgerDir: '/tmp/ledger-dir', options: { top: 5 } });
+    assert.deepEqual(JSON.parse(output.text()), { ok: true, question: command });
+  });
+
+  test(`observability query command requires --ledger for ${command}`, () => {
+    const { queryCommand } = createObservabilityQueryCommand({
+      stdout: createOutput().stdout,
+      [dependencyName]: () => { throw new Error('should not be called'); }
+    });
+
+    assert.throws(() => queryCommand(command, []), new RegExp(`${command} requires --ledger`));
+  });
+}
+
+test('observability query command aliases model-tokens to the token-rollup-audit query without duplicating logic', () => {
+  const output = createOutput();
+  let calls = 0;
+  const { queryCommand, queryCommandNames } = createObservabilityQueryCommand({
+    stdout: output.stdout,
+    parseLastArg(args, fallback) {
+      assert.equal(fallback, '7d');
+      return fallback;
+    },
+    tokenRollupAuditQuery(last) {
+      calls += 1;
+      return `token-rollup-query-for-${last}`;
+    },
+    workspaceId: '11111111-1111-1111-1111-111111111111'
+  });
+
+  assert.ok(queryCommandNames.includes('model-tokens'));
+
+  queryCommand('model-tokens', []);
+
+  assert.equal(calls, 1);
+  assert.deepEqual(JSON.parse(output.text()), {
+    workspace_id: '11111111-1111-1111-1111-111111111111',
+    query: 'token-rollup-query-for-7d',
+    target_warning: null
+  });
+});
+
+test('observability query command surfaces a Log Analytics vs Kusto target warning on canned KQL queries', () => {
+  const output = createOutput();
+  const { queryCommand } = createObservabilityQueryCommand({
+    stdout: output.stdout,
+    parseLastArg: (args, fallback) => fallback,
+    fieldCatalogQuery: () => 'the-query',
+    logAnalyticsTargetWarning(workspaceId) {
+      assert.equal(workspaceId, 'https://mycluster.kusto.windows.net');
+      return 'looks like a Kusto cluster, not Log Analytics';
+    },
+    workspaceId: 'https://mycluster.kusto.windows.net'
+  });
+
+  queryCommand('fields', []);
+
+  assert.deepEqual(JSON.parse(output.text()), {
+    workspace_id: 'https://mycluster.kusto.windows.net',
+    query: 'the-query',
+    target_warning: 'looks like a Kusto cluster, not Log Analytics'
+  });
+});
+
 test('alert command writes recommendation output through injected stdout', () => {
   const output = createOutput();
   const { alertCommand } = createAlertCommand({

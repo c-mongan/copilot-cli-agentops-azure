@@ -105,3 +105,44 @@ test('ask context drops payload fields and preserves unknown usage as null', t =
   assert.equal(result.evidence.insights[0].Rule, 'TOOL_THRASH');
   assert.doesNotMatch(JSON.stringify(result), /RUN_CANARY|EVENT_CANARY|TOOL_CANARY|INSIGHT_CANARY|RECOMMENDATION_CANARY|TIMELINE_CANARY/);
 });
+
+test('ask context prompt explicitly surfaces open architecture hypothesis cards when insights rows are present', t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-arch-insights-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const runsFile = writeJsonlFixture(path.join(root, 'runs.jsonl'), [{
+    TimeGenerated: '2026-06-03T12:00:00Z', RunId: 'run-arch', SessionId: 'session-arch', TraceId: 'trace-arch'
+  }]);
+  // Shape matches `agentops architecture --out <dir>/AgentOpsInsights_CL.jsonl`
+  // (toInsightsRow in architecture/report.js) exactly.
+  const insightsFile = writeJsonlFixture(path.join(root, 'insights.jsonl'), [
+    { TimeGenerated: '2026-06-03T11:00:00Z', RunId: 'run-arch', InsightId: 'insight-1', Rule: 'TOOL_THRASH', ArchitectureVersion: 'abc123', Numerator: 4, Denominator: 10, CoverageRuns: 12, Status: 'open' },
+    { TimeGenerated: '2026-06-03T11:05:00Z', RunId: 'run-arch', InsightId: 'insight-2', Rule: 'SKILL_PAIR_COACTIVATED', ArchitectureVersion: 'abc123', Numerator: 9, Denominator: 12, CoverageRuns: 12, Status: 'open' }
+  ]);
+
+  const result = buildV2AskContext({ runId: 'run-arch', runsFile, insightsFile });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.evidence.insights.length, 2);
+  assert.equal(result.evidence.insights[0].ArchitectureVersion, 'abc123');
+  assert.equal(result.evidence.insights[0].CoverageRuns, 12);
+  assert.ok(result.evidence.insights[0].TimeGenerated);
+  assert.match(result.prompt, /2 architecture hypothesis card\(s\) are open/);
+  assert.match(result.prompt, /TOOL_THRASH/);
+  assert.match(result.prompt, /SKILL_PAIR_COACTIVATED/);
+  assert.match(result.prompt, /Not a verdict/);
+});
+
+test('ask context prompt states no architecture hypotheses are open when the insights bundle is empty', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-no-arch-insights-'));
+  try {
+    const runsFile = writeJsonlFixture(path.join(tempDir, 'runs.jsonl'), [{
+      TimeGenerated: '2026-06-03T12:00:00Z', RunId: 'run-no-insights', SessionId: 'session-x', TraceId: 'trace-x'
+    }]);
+    const result = buildV2AskContext({ runId: 'run-no-insights', runsFile });
+    assert.equal(result.ok, true);
+    assert.equal(result.evidence.insights.length, 0);
+    assert.match(result.prompt, /Architecture hypotheses: none open for this run in this bundle\./);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});

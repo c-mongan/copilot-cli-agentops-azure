@@ -1,8 +1,39 @@
+// Every KQL builder in this file targets AZURE MONITOR LOGS (a Log Analytics
+// workspace), queried through the `AppDependencies`/`AppTraces`/`AppEvents`/
+// `AppMetrics` App Insights tables. That is a different product, endpoint and
+// identifier shape from AZURE DATA EXPLORER (ADX) Kusto clusters/databases,
+// even though both use the Kusto Query Language and so can look identical as
+// raw KQL text. A Log Analytics workspace ID is a GUID, not a Kusto cluster
+// URI, and the table names above do not exist in an ADX database. A
+// configured MCP server merely being named or labelled "Kusto" does NOT
+// establish that it can run a Log Analytics query, or that it is pointed at
+// this workspace at all — callers must verify the actual configured
+// endpoint/operation before trusting one of these canned queries to run
+// against it. `logAnalyticsTargetWarning` below is a cheap, local sanity
+// check against that specific failure mode (an obviously ADX-shaped target
+// where a Log Analytics workspace GUID is expected) — it is not capability
+// negotiation with the MCP server, which would be disproportionate here.
 const fs = require('node:fs');
 const path = require('node:path');
 const { repoRoot } = require('./paths');
 const { escapeKqlString, validateKqlDuration } = require('./kql');
 const { contentLikeKeys, safeAttributeKeys } = require('./privacy');
+
+const logAnalyticsWorkspaceIdPattern = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
+function logAnalyticsTargetWarning(workspaceId) {
+  const value = String(workspaceId || '').trim();
+  if (!value) {
+    return 'No Log Analytics workspace ID is configured. These queries target Azure Monitor Logs (a Log Analytics workspace), not an Azure Data Explorer Kusto cluster, and cannot run without one.';
+  }
+  if (/kusto\.windows\.net/i.test(value) || /^https?:\/\//i.test(value)) {
+    return `Configured target "${value}" looks like an Azure Data Explorer Kusto cluster URI, not a Log Analytics workspace ID. These queries read Azure Monitor Logs tables (AppDependencies/AppTraces/AppEvents/AppMetrics) via a Log Analytics workspace GUID, not an ADX cluster endpoint. Verify the configured MCP server/endpoint actually exposes Log Analytics query access before trusting this query to run.`;
+  }
+  if (!logAnalyticsWorkspaceIdPattern.test(value)) {
+    return `Configured target "${value}" does not look like a Log Analytics workspace ID (expected a GUID). Verify the configured MCP server/endpoint is actually an Azure Monitor Logs workspace, not an Azure Data Explorer Kusto database, before trusting this query to run.`;
+  }
+  return null;
+}
 
 const agentServiceNames = '("github-copilot", "copilot-chat", "github-copilot-cli", "codex", "openai-codex", "openai-codex-cli")';
 const baseFilter = `(Properties has "github.copilot" or Properties has "gen_ai.operation.name" or Properties has "agentops." or AppRoleName in ${agentServiceNames} or tostring(Properties["service.name"]) in ${agentServiceNames} or tostring(Properties["agent.runtime"]) in ("codex", "openai-codex-cli"))`;
@@ -299,6 +330,7 @@ module.exports = {
   fieldCatalogQuery,
   grafanaUrlWithVars,
   kqlFileQuery,
+  logAnalyticsTargetWarning,
   otelCompatibilityQuery,
   sessionFallbackPrefix,
   sessionFallbackTurn,

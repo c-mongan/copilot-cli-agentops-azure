@@ -22,6 +22,7 @@ const {
   fieldCatalogQuery,
   grafanaUrlWithVars,
   kqlFileQuery,
+  logAnalyticsTargetWarning,
   otelCompatibilityQuery,
   sessionKey,
   sessionQuery,
@@ -121,6 +122,12 @@ const {
 } = require('./benchmark-judge-guide');
 const { createBenchmarkCommand } = require('./benchmark-command');
 const { createObservabilityQueryCommand } = require('./observability-query-command');
+const {
+  coActivationQuery,
+  readOrderQuery,
+  repeatedToolsQuery,
+  slowScriptsQuery
+} = require('./local-investigation-queries');
 const {
   attributionSmokeId,
   createSmokeContext,
@@ -641,12 +648,17 @@ const {
 } = createObservabilityQueryCommand({
   attributionUsageQuery,
   buildLink,
+  coActivationQuery,
   collectorHealthQuery,
   contextPressureQuery,
   fieldCatalogQuery,
   kqlFileQuery,
+  logAnalyticsTargetWarning,
   otelCompatibilityQuery,
   parseLastArg,
+  readOrderQuery,
+  repeatedToolsQuery,
+  slowScriptsQuery,
   tokenRollupAuditQuery,
   workspaceId
 });
