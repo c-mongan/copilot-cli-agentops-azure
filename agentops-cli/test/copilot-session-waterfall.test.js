@@ -408,3 +408,170 @@ test('deltas without correlation identifiers are counted but never joined to ano
   assert.match(renderSessionWaterfall(items, 'fixture'), /2 uncorrelated stream deltas not linked/);
   assert.doesNotMatch(renderSessionWaterfall(items, 'fixture'), /orphan text|orphan/);
 });
+
+test('a successful direct cat of an undeclared repo path becomes an unsupported reference-read row', () => {
+  const reference = '.github/skills/build-check/references/guide.md';
+  const undeclaredPath = 'docs/architecture-notes.md';
+  const root = fixtureAttachment([
+    { name: 'build-check', references: [{ path: reference }] }
+  ]);
+  try {
+    const { rows } = sessionWaterfall([
+      { type: 'tool.execution_start', timestamp: '2026-01-01T00:00:01.000Z', data: { toolCallId: 'call-undeclared', toolName: 'bash', arguments: { command: `cat ${undeclaredPath}` } } },
+      { type: 'tool.execution_complete', timestamp: '2026-01-01T00:00:02.000Z', data: { toolCallId: 'call-undeclared', toolName: 'bash', success: true, shellExecution: { exitCode: 0 } } }
+    ], [], { repoRoot: root });
+    const row = rows.find(candidate => candidate.kind === 'reference.read');
+    assert.ok(row, 'expected an unsupported reference-read row for an undeclared shell cat');
+    assert.equal(row.label, `reference (undeclared): ${undeclaredPath}`);
+    assert.equal(row.details.referenceName, undeclaredPath);
+    assert.equal(row.details.readCount, 1);
+    assert.equal(row.details.declared, false);
+    assert.deepEqual(row.details.toolCallLink, { evidence: 'exact', toolCallId: 'call-undeclared' });
+    assert.deepEqual(row.details.owningSkillLink, { evidence: 'unsupported', skillName: '', candidates: [] });
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('failed, compound, and repo-escaping shell reads never become unsupported reference rows', () => {
+  const root = fixtureAttachment([]);
+  try {
+    const { rows } = sessionWaterfall([
+      { type: 'tool.execution_start', timestamp: '2026-01-01T00:00:01.000Z', data: { toolCallId: 'call-failed', toolName: 'bash', arguments: { command: 'cat docs/private.md' } } },
+      { type: 'tool.execution_complete', timestamp: '2026-01-01T00:00:02.000Z', data: { toolCallId: 'call-failed', toolName: 'bash', success: false, shellExecution: { exitCode: 1 } } },
+      { type: 'tool.execution_start', timestamp: '2026-01-01T00:00:03.000Z', data: { toolCallId: 'call-compound', toolName: 'bash', arguments: { command: 'cat docs/private.md && printf PRIVATE_MARKER' } } },
+      { type: 'tool.execution_complete', timestamp: '2026-01-01T00:00:04.000Z', data: { toolCallId: 'call-compound', toolName: 'bash', success: true, shellExecution: { exitCode: 0 } } },
+      { type: 'tool.execution_start', timestamp: '2026-01-01T00:00:05.000Z', data: { toolCallId: 'call-escaping', toolName: 'bash', arguments: { command: 'cat ../outside-repo.md' } } },
+      { type: 'tool.execution_complete', timestamp: '2026-01-01T00:00:06.000Z', data: { toolCallId: 'call-escaping', toolName: 'bash', success: true, shellExecution: { exitCode: 0 } } }
+    ], [], { repoRoot: root });
+    assert.equal(rows.filter(row => row.kind === 'reference.read').length, 0);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('a reference read nested under another in-flight tool call keeps its parentToolCallId and lane attribution', () => {
+  const reference = '.github/skills/build-check/references/guide.md';
+  const root = fixtureAttachment([
+    { name: 'build-check', references: [{ path: reference }] }
+  ]);
+  try {
+    const { rows } = sessionWaterfall([
+      { type: 'skill.invoked', timestamp: '2026-01-01T00:00:00.000Z', data: { name: 'build-check' } },
+      { type: 'tool.execution_start', timestamp: '2026-01-01T00:00:01.000Z', data: { toolCallId: 'outer-call', toolName: 'orchestrate' } },
+      { type: 'tool.execution_start', timestamp: '2026-01-01T00:00:01.500Z', data: { toolCallId: 'nested-read', parentToolCallId: 'outer-call', toolName: 'view', arguments: { path: reference } } },
+      { type: 'tool.execution_complete', timestamp: '2026-01-01T00:00:02.000Z', data: { toolCallId: 'nested-read', success: true } },
+      { type: 'tool.execution_complete', timestamp: '2026-01-01T00:00:03.000Z', data: { toolCallId: 'outer-call', success: true } }
+    ], [], { repoRoot: root });
+    const row = rows.find(candidate => candidate.kind === 'reference.read');
+    assert.equal(row.details.parentToolCallId, 'outer-call');
+    assert.equal(row.lane, 'github-copilot-cli');
+    assert.deepEqual(row.details.owningSkillLink, { evidence: 'inferred', skillName: 'build-check', candidates: ['build-check'] });
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('ownership attribution follows the currently-active declaring skill set across A/B/A rereads, not a stale snapshot from the first read', () => {
+  const reference = '.github/skills/shared/references/guide.md';
+  const root = fixtureAttachment([
+    { name: 'checker-a', references: [{ path: reference }] },
+    { name: 'checker-b', references: [{ path: reference }] }
+  ]);
+  try {
+    const { rows } = sessionWaterfall([
+      { type: 'skill.invoked', timestamp: '2026-01-01T00:00:00.000Z', data: { name: 'checker-a' } },
+      { type: 'tool.execution_start', timestamp: '2026-01-01T00:00:01.000Z', data: { toolCallId: 'read-1', toolName: 'view', arguments: { path: reference } } },
+      { type: 'skill.invoked', timestamp: '2026-01-01T00:00:02.000Z', data: { name: 'checker-b' } },
+      { type: 'tool.execution_start', timestamp: '2026-01-01T00:00:03.000Z', data: { toolCallId: 'read-2', toolName: 'view', arguments: { path: reference } } },
+      { type: 'skill.invoked', timestamp: '2026-01-01T00:00:04.000Z', data: { name: 'checker-a' } },
+      { type: 'tool.execution_start', timestamp: '2026-01-01T00:00:05.000Z', data: { toolCallId: 'read-3', toolName: 'view', arguments: { path: reference } } }
+    ], [], { repoRoot: root });
+    const references = rows.filter(row => row.kind === 'reference.read');
+    assert.equal(references.length, 3);
+    assert.deepEqual(references.map(row => row.details.readCount), [1, 2, 3]);
+    assert.deepEqual(references[0].details.owningSkillLink, { evidence: 'inferred', skillName: 'checker-a', candidates: ['checker-a'] });
+    assert.deepEqual(references[1].details.owningSkillLink, { evidence: 'ambiguous', skillName: '', candidates: ['checker-a', 'checker-b'] });
+    assert.deepEqual(references[2].details.owningSkillLink, { evidence: 'ambiguous', skillName: '', candidates: ['checker-a', 'checker-b'] });
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('genuinely concurrent same-skill invocations across merged agent lanes racing against a tied read report unknown rather than an invented tiebreak', () => {
+  const reference = '.github/skills/worker-skill/references/guide.md';
+  const root = fixtureAttachment([
+    { name: 'worker-skill', references: [{ path: reference }] }
+  ]);
+  try {
+    const { rows } = sessionWaterfall([
+      { type: 'subagent.started', timestamp: '2026-01-01T00:00:00.000Z', agentId: 'worker-1', data: { toolCallId: 'delegate-1', agentName: 'fixture-worker' } },
+      { type: 'subagent.started', timestamp: '2026-01-01T00:00:00.000Z', agentId: 'worker-2', data: { toolCallId: 'delegate-2', agentName: 'fixture-worker' } },
+      { type: 'skill.invoked', timestamp: '2026-01-01T00:00:01.000Z', agentId: 'worker-1', data: { name: 'worker-skill', parentToolCallId: 'delegate-1' } },
+      { type: 'skill.invoked', timestamp: '2026-01-01T00:00:01.000Z', agentId: 'worker-2', data: { name: 'worker-skill', parentToolCallId: 'delegate-2' } },
+      { type: 'tool.execution_start', timestamp: '2026-01-01T00:00:01.000Z', agentId: 'worker-1', data: { toolCallId: 'worker-read', parentToolCallId: 'delegate-1', toolName: 'view', arguments: { path: reference } } }
+    ], [], { repoRoot: root });
+    const row = rows.find(candidate => candidate.kind === 'reference.read');
+    assert.deepEqual(row.details.owningSkillLink, { evidence: 'unknown', skillName: '', candidates: ['worker-skill'] });
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('sessionWaterfall returns a structured per-component-type coverage breakdown additive to existing scalar fields', () => {
+  const reference = '.github/skills/build-check/references/guide.md';
+  const missingReference = '.github/skills/build-check/references/unread.md';
+  const root = fixtureAttachment([
+    { name: 'build-check', references: [{ path: reference }, { path: missingReference }] }
+  ]);
+  try {
+    const result = sessionWaterfall([
+      { type: 'skill.invoked', timestamp: '2026-01-01T00:00:00.000Z', data: { name: 'build-check' } },
+      { type: 'tool.execution_start', timestamp: '2026-01-01T00:00:01.000Z', data: { toolCallId: 'read-1', toolName: 'view', arguments: { path: reference } } },
+      { type: 'tool.execution_start', timestamp: '2026-01-01T00:00:02.000Z', data: { toolCallId: 'call-undeclared', toolName: 'bash', arguments: { command: 'cat docs/other.md' } } },
+      { type: 'tool.execution_complete', timestamp: '2026-01-01T00:00:03.000Z', data: { toolCallId: 'call-undeclared', toolName: 'bash', success: true, shellExecution: { exitCode: 0 } } },
+      { type: 'tool.execution_start', timestamp: '2026-01-01T00:00:04.000Z', data: { toolCallId: 'call-mcp', toolName: 'hindsight-hindsight_search_knowledge_pages', mcpServerName: 'hindsight', mcpToolName: 'hindsight_search_knowledge_pages', arguments: { query: 'fixture' } } },
+      { type: 'tool.execution_complete', timestamp: '2026-01-01T00:00:05.000Z', data: { toolCallId: 'orphan-completion', success: true } }
+    ], [], { repoRoot: root });
+    assert.deepEqual(result.coverage.referenceRead, { observed: 1, missing: 1, unsupported: 1 });
+    assert.deepEqual(result.coverage.toolCall, { observed: 4, missing: 3, unsupported: 0 });
+    assert.deepEqual(result.coverage.mcp, { observed: 1, missing: 0, unsupported: 0 });
+    assert.deepEqual(result.coverage.script, { observed: 0, missing: 0, unsupported: 0 });
+    assert.equal(typeof result.coverageGaps, 'number');
+    assert.equal(typeof result.unresolvedRows, 'number');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('reference coverage missing count is null, not zero, when no reference manifest was supplied', () => {
+  const result = sessionWaterfall([], [], { repoRoot: process.cwd(), referencePaths: new Set(), skillReferences: new Map() });
+  assert.equal(result.coverage.referenceRead.missing, null);
+});
+
+test('two independent sessionWaterfall calls in the same process never leak reference counts or skill candidates between runs', () => {
+  const reference = '.github/skills/build-check/references/guide.md';
+  const root = fixtureAttachment([
+    { name: 'build-check', references: [{ path: reference }] }
+  ]);
+  try {
+    const sessionA = [
+      { type: 'skill.invoked', timestamp: '2026-01-01T00:00:00.000Z', data: { name: 'build-check' } },
+      { type: 'tool.execution_start', timestamp: '2026-01-01T00:00:01.000Z', data: { toolCallId: 'a-read-1', toolName: 'view', arguments: { path: reference } } },
+      { type: 'tool.execution_start', timestamp: '2026-01-01T00:00:02.000Z', data: { toolCallId: 'a-read-2', toolName: 'view', arguments: { path: reference } } }
+    ];
+    const sessionB = [
+      { type: 'tool.execution_start', timestamp: '2026-01-01T00:00:01.000Z', data: { toolCallId: 'b-read-1', toolName: 'view', arguments: { path: reference } } }
+    ];
+    const resultA = sessionWaterfall(sessionA, [], { repoRoot: root });
+    const resultB = sessionWaterfall(sessionB, [], { repoRoot: root });
+    const referencesA = resultA.rows.filter(row => row.kind === 'reference.read');
+    const referencesB = resultB.rows.filter(row => row.kind === 'reference.read');
+    assert.deepEqual(referencesA.map(row => row.details.readCount), [1, 2]);
+    assert.equal(referencesB.length, 1);
+    assert.equal(referencesB[0].details.readCount, 1);
+    assert.deepEqual(referencesB[0].details.owningSkillLink, { evidence: 'missing', skillName: '', candidates: [] });
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});

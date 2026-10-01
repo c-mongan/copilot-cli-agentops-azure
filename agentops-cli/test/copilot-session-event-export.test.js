@@ -4,7 +4,7 @@ const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 
-const { projectSessionEvents, writeSessionEvents } = require('../src/lib/copilot/session-event-export');
+const { directShellPathRead, projectSessionEvents, writeSessionEvents } = require('../src/lib/copilot/session-event-export');
 
 test('session event export links observed reference reads without exporting event payloads', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-event-export-'));
@@ -126,6 +126,46 @@ test('session event export does not mark failed, compound, or undeclared shell r
     assert.equal(completions.length, 3);
     assert.ok(completions.every(row => row.ReferenceName === ''));
     assert.ok(!JSON.stringify(rows).includes('PRIVATE_MARKER'));
+    assert.ok(!JSON.stringify(rows).includes('private/unlisted.md'));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('directShellPathRead resolves a safe undeclared single-file cat read without requiring manifest declaration', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-event-export-'));
+  try {
+    const started = { type: 'tool.execution_start', data: { toolName: 'bash', arguments: { command: 'cat private/unlisted.md' } } };
+    const completed = { type: 'tool.execution_complete', data: { toolName: 'bash', success: true, shellExecution: { exitCode: 0 } } };
+    assert.equal(directShellPathRead(completed, root, started.data), 'private/unlisted.md');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('directShellPathRead stays empty for failed, compound, or repo-escaping reads', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-event-export-'));
+  try {
+    const failed = { type: 'tool.execution_complete', data: { toolName: 'bash', success: false, shellExecution: { exitCode: 1 } } };
+    const compoundStart = { data: { arguments: { command: 'cat private/unlisted.md && printf PRIVATE_MARKER' } } };
+    const compound = { type: 'tool.execution_complete', data: { toolName: 'bash', success: true, shellExecution: { exitCode: 0 } } };
+    const escapingStart = { data: { arguments: { command: 'cat ../outside-repo.md' } } };
+    assert.equal(directShellPathRead(failed, root, { arguments: { command: 'cat private/unlisted.md' } }), '');
+    assert.equal(directShellPathRead(compound, root, compoundStart.data), '');
+    assert.equal(directShellPathRead(compound, root, escapingStart.data), '');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('operationFields never exposes an undeclared path through ReferenceName', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-event-export-'));
+  try {
+    const rows = projectSessionEvents([
+      { type: 'tool.execution_start', timestamp: '2026-01-01T00:00:01Z', data: { toolCallId: 'call-undeclared', toolName: 'bash', arguments: { command: 'cat private/unlisted.md' } } },
+      { type: 'tool.execution_complete', timestamp: '2026-01-01T00:00:02Z', data: { toolCallId: 'call-undeclared', toolName: 'bash', success: true, shellExecution: { exitCode: 0 } } }
+    ], { sessionId: 'session-synthetic', runId: 'run-synthetic', repoRoot: root });
+    assert.ok(rows.every(row => row.ReferenceName === ''));
     assert.ok(!JSON.stringify(rows).includes('private/unlisted.md'));
   } finally {
     fs.rmSync(root, { recursive: true, force: true });

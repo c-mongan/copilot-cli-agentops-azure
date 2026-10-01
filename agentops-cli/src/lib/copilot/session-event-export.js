@@ -24,13 +24,21 @@ function safeText(value, maximum = 200) {
     : '';
 }
 
-function safeRepoPath(value, repoRoot, referencePaths) {
+// Resolves `value` to a repo-relative path only when it stays inside repoRoot
+// (no absolute escape, no `../` traversal). Declaration-agnostic: callers decide
+// whether the resolved path needs to be in a reference manifest.
+function safeRepoRelativePath(value, repoRoot) {
   const input = safeText(value, 2048);
   if (!input) return '';
   const absolute = path.isAbsolute(input) ? path.resolve(input) : path.resolve(repoRoot, input);
   const relative = path.relative(repoRoot, absolute).split(path.sep).join('/');
   if (!relative || relative.startsWith('../') || path.isAbsolute(relative)) return '';
-  return referencePaths.has(relative) ? relative : '';
+  return relative;
+}
+
+function safeRepoPath(value, repoRoot, referencePaths) {
+  const relative = safeRepoRelativePath(value, repoRoot);
+  return relative && referencePaths.has(relative) ? relative : '';
 }
 
 function attachmentReferencePaths(repoRoot) {
@@ -67,7 +75,11 @@ function attachmentSkillReferences(repoRoot) {
   }
 }
 
-function directShellReferenceRead(command, toolName, event, repoRoot, referencePaths) {
+// Parses a direct, single-file `cat <path>` shell read (successful, not compound)
+// and returns the raw path argument it targeted, or '' if the command doesn't
+// match that exact shape. Shared by the declared-reference check below and by
+// the undeclared-but-safe-path check used only by the local waterfall engine.
+function parseDirectCatPath(command, toolName, event) {
   if (toolName !== 'bash' || event.type !== 'tool.execution_complete') return '';
   const data = event.data || {};
   const exitCode = data.shellExecution?.exitCode;
@@ -75,8 +87,25 @@ function directShellReferenceRead(command, toolName, event, repoRoot, referenceP
   if (!succeeded) return '';
   const text = safeText(command, 8192).trim();
   const match = /^cat\s+(?:--\s+)?(?:"([^"\r\n]+)"|'([^'\r\n]+)'|([^\s;&|<>`$()]+))\s*$/.exec(text);
-  const filePath = match?.[1] || match?.[2] || match?.[3] || '';
-  return safeRepoPath(filePath, repoRoot, referencePaths);
+  return match?.[1] || match?.[2] || match?.[3] || '';
+}
+
+function directShellReferenceRead(command, toolName, event, repoRoot, referencePaths) {
+  return safeRepoPath(parseDirectCatPath(command, toolName, event), repoRoot, referencePaths);
+}
+
+// Undeclared-but-safe counterpart of directShellReferenceRead: resolves the same
+// direct single-file `cat <path>` shape to a safe repo-relative path WITHOUT
+// requiring it to be in the declared reference manifest. Used only by
+// session-waterfall.js to surface "read observed, not a declared reference" rows
+// locally (evidence: 'unsupported'). Deliberately NOT wired into operationFields/
+// ReferenceName so the Azure telemetry CL export never leaks undeclared read paths.
+function directShellPathRead(event, repoRoot, prior = {}) {
+  const data = event.data || {};
+  const toolName = safeText(data.toolName || prior.toolName || '');
+  const args = data.arguments && typeof data.arguments === 'object' ? data.arguments : prior.arguments;
+  const rawCommand = safeText(args?.command || data.shellExecution?.command || prior.shellExecution?.command || '', 8192);
+  return safeRepoRelativePath(parseDirectCatPath(rawCommand, toolName, event), repoRoot);
 }
 
 // Mirrors the DurationNs null-preserving pattern used for spans: absent/unparseable
@@ -219,6 +248,7 @@ function writeSessionEvents(events, sessionId, runId, outputPath, options = {}) 
 module.exports = {
   attachmentReferencePaths,
   attachmentSkillReferences,
+  directShellPathRead,
   eventId,
   operationFields,
   projectSessionEvents,

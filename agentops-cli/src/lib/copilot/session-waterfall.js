@@ -1,7 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const { attachmentReferencePaths, attachmentSkillReferences, operationFields } = require('./session-event-export');
+const { attachmentReferencePaths, attachmentSkillReferences, directShellPathRead, operationFields } = require('./session-event-export');
 
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, character => ({
@@ -71,35 +71,60 @@ function sessionWaterfall(events = [], nativeSpans = [], options = {}) {
   const invokedSkillsByLane = new Map();
   const referenceReadCounts = new Map();
   const referenceToolCalls = new Set();
+  const mcpToolCallIds = new Set();
   let suppressedEvents = 0;
   let unmatchedDeltas = 0;
 
-  const owningSkillLink = (lane, referenceName, time, index) => {
+  // Shared evidence labels: exact / logical / inferred / ambiguous / missing / unsupported / unknown.
+  const determineOwningSkillLink = (lane, referenceName, time, index) => {
     const declaringSkills = new Set(skillReferences.get(referenceName) || []);
     const candidates = [];
+    // Tracks, per candidate skill name, the distinct agentIds whose invocation of that
+    // name tied the read's own timestamp. When a single name has 2+ distinct agentIds
+    // at that tie, the only reason it counted as "earlier" was the array-index
+    // tiebreak across what are really concurrent, independently-ordered event streams
+    // sharing a lane (e.g. two subagents with the same display name) — that index
+    // reflects incidental array position, not genuine source order, so the ownership
+    // determination must say 'unknown' rather than invent a confident 'inferred' pick.
+    const tiedAgentsByName = new Map();
     for (const invocation of invokedSkillsByLane.get(lane) || []) {
       const earlier = invocation.time < time || invocation.time === time && invocation.index < index;
-      if (earlier && declaringSkills.has(invocation.name) && !candidates.includes(invocation.name)) {
-        candidates.push(invocation.name);
+      if (!earlier || !declaringSkills.has(invocation.name)) continue;
+      if (!candidates.includes(invocation.name)) candidates.push(invocation.name);
+      if (invocation.time === time) {
+        const agentIds = tiedAgentsByName.get(invocation.name) || new Set();
+        agentIds.add(invocation.agentId || '');
+        tiedAgentsByName.set(invocation.name, agentIds);
       }
     }
-    if (candidates.length === 1) return { evidence: 'inferred', skillName: candidates[0], candidates };
+    if (candidates.length === 1) {
+      const tiedAgents = tiedAgentsByName.get(candidates[0]);
+      if (tiedAgents && tiedAgents.size > 1) return { evidence: 'unknown', skillName: '', candidates };
+      return { evidence: 'inferred', skillName: candidates[0], candidates };
+    }
     if (candidates.length > 1) return { evidence: 'ambiguous', skillName: '', candidates };
     return { evidence: 'missing', skillName: '', candidates: [] };
   };
 
-  const addReferenceReadRow = ({ event, index, time, lane, referenceName, toolCallId, parentToolCallId }) => {
+  const addReferenceReadRow = ({ event, index, time, lane, referenceName, toolCallId, parentToolCallId, declared = true }) => {
     if (!referenceName || !toolCallId) return;
     const countKey = `${lane}\u0000${referenceName}`;
     const readCount = (referenceReadCounts.get(countKey) || 0) + 1;
     referenceReadCounts.set(countKey, readCount);
+    // Undeclared-but-safe reads never get an ownership guess: there is no declaring
+    // skill to attribute them to, so the evidence label is 'unsupported' — distinct
+    // from 'missing' (a declared reference manifest entry with zero declaring-skill
+    // evidence) because this path was never declared/sanctioned at all.
+    const owningSkillLink = declared
+      ? determineOwningSkillLink(lane, referenceName, time, index)
+      : { evidence: 'unsupported', skillName: '', candidates: [] };
     rows.push({
       index,
       start: time,
       end: time,
       lane,
       kind: 'reference.read',
-      label: `reference: ${referenceName}`,
+      label: declared ? `reference: ${referenceName}` : `reference (undeclared): ${referenceName}`,
       status: 'observed',
       source: 'session event',
       details: {
@@ -108,8 +133,9 @@ function sessionWaterfall(events = [], nativeSpans = [], options = {}) {
         toolCallId,
         parentToolCallId: parentToolCallId || '',
         agentId: event.agentId || '',
+        declared,
         toolCallLink: { evidence: 'exact', toolCallId },
-        owningSkillLink: owningSkillLink(lane, referenceName, time, index)
+        owningSkillLink
       }
     });
   };
@@ -161,6 +187,7 @@ function sessionWaterfall(events = [], nativeSpans = [], options = {}) {
       if (stream) row.details = { ...data, toolCallStream: { chunks: stream.count, firstAt: stream.first, lastAt: stream.last } };
       if (data.toolCallId) pendingTools.set(data.toolCallId, row);
       const operation = operationFields(event, repoRoot, referencePaths);
+      if (operation.McpServerName && data.toolCallId) mcpToolCallIds.add(data.toolCallId);
       if (operation.ReferenceName && data.toolCallId) {
         referenceToolCalls.add(data.toolCallId);
         row.details = safeReferenceToolStart({ ...data, toolCallStream: row.details.toolCallStream }, operation.ReferenceName);
@@ -183,6 +210,7 @@ function sessionWaterfall(events = [], nativeSpans = [], options = {}) {
         started.end = time;
         started.status = failed ? 'failed' : 'completed';
         started.details = { start: priorDetails, completion: data };
+        if (operation.McpServerName && data.toolCallId) mcpToolCallIds.add(data.toolCallId);
         if (operation.ReferenceName && data.toolCallId && !referenceToolCalls.has(data.toolCallId)) {
           referenceToolCalls.add(data.toolCallId);
           addReferenceReadRow({
@@ -194,6 +222,25 @@ function sessionWaterfall(events = [], nativeSpans = [], options = {}) {
             toolCallId: data.toolCallId,
             parentToolCallId: priorDetails.parentToolCallId || data.parentToolCallId || ''
           });
+        } else if (!operation.ReferenceName && !failed && data.toolCallId && !referenceToolCalls.has(data.toolCallId)) {
+          // A safe, repo-relative shell read that is NOT in the declared reference
+          // manifest. Stays invisible (as before) for failed/compound/escaping reads —
+          // directShellPathRead enforces the exact same safety boundary as the
+          // declared-reference check, it just doesn't require manifest membership.
+          const undeclaredPath = directShellPathRead(event, repoRoot, priorDetails);
+          if (undeclaredPath) {
+            referenceToolCalls.add(data.toolCallId);
+            addReferenceReadRow({
+              event,
+              index,
+              time,
+              lane: started.lane,
+              referenceName: undeclaredPath,
+              toolCallId: data.toolCallId,
+              parentToolCallId: priorDetails.parentToolCallId || data.parentToolCallId || '',
+              declared: false
+            });
+          }
         }
         if (priorDetails.referenceRead || operation.ReferenceName) {
           started.details = { start: priorDetails, completion: safeReferenceToolCompletion(data) };
@@ -204,6 +251,7 @@ function sessionWaterfall(events = [], nativeSpans = [], options = {}) {
       row.label = data.toolName || 'unknown tool';
       row.status = failed ? 'failed' : 'completed, start not observed';
       const operation = operationFields(event, repoRoot, referencePaths);
+      if (operation.McpServerName && data.toolCallId) mcpToolCallIds.add(data.toolCallId);
       if (operation.ReferenceName && data.toolCallId && !referenceToolCalls.has(data.toolCallId)) {
         referenceToolCalls.add(data.toolCallId);
         row.details = safeReferenceToolCompletion(data);
@@ -216,6 +264,22 @@ function sessionWaterfall(events = [], nativeSpans = [], options = {}) {
           toolCallId: data.toolCallId,
           parentToolCallId: data.parentToolCallId || ''
         });
+      } else if (!operation.ReferenceName && !failed && data.toolCallId && !referenceToolCalls.has(data.toolCallId)) {
+        const undeclaredPath = directShellPathRead(event, repoRoot);
+        if (undeclaredPath) {
+          referenceToolCalls.add(data.toolCallId);
+          row.details = safeReferenceToolCompletion(data);
+          addReferenceReadRow({
+            event,
+            index,
+            time,
+            lane: row.lane,
+            referenceName: undeclaredPath,
+            toolCallId: data.toolCallId,
+            parentToolCallId: data.parentToolCallId || '',
+            declared: false
+          });
+        }
       }
     } else if (type === 'hook.start') {
       row.label = `hook: ${data.hookType || 'unknown'}`;
@@ -296,7 +360,7 @@ function sessionWaterfall(events = [], nativeSpans = [], options = {}) {
       const skillName = normalizedSkillName(data.name || data.skillName || data.skill_name || '');
       if (skillName) {
         const lane = row.lane;
-        invokedSkillsByLane.set(lane, [...(invokedSkillsByLane.get(lane) || []), { name: skillName, time, index }]);
+        invokedSkillsByLane.set(lane, [...(invokedSkillsByLane.get(lane) || []), { name: skillName, time, index, agentId: event.agentId || '' }]);
       }
     }
     rows.push(row);
@@ -407,7 +471,57 @@ function sessionWaterfall(events = [], nativeSpans = [], options = {}) {
   const invalidTimestamps = events.length - ordered.length;
   const unresolvedRows = rows.filter(row => row.status === 'incomplete' || row.status.includes('not observed')).length;
   const coverageGaps = unresolvedRows + invalidTimestamps + unmatchedDeltas;
-  return { rows, first: Number.isFinite(first) ? first : 0, last: Number.isFinite(last) ? last : 0, durationMs: rows.length ? Math.max(1, last - first) : 1, invalidTimestamps, suppressedEvents, unmatchedDeltas, unresolvedRows, coverageGaps, nativeSpans: nativeSpans.filter(span => span.match !== 'run-linked-script').length, scriptSpans: nativeSpans.filter(span => span.match === 'run-linked-script').length, nativeToolJoins: exactToolCallJoins, exactToolCallJoins, inferredScriptToolLinks };
+  const scriptSpanCount = nativeSpans.filter(span => span.match === 'run-linked-script').length;
+  const coverage = buildCoverageBreakdown({ rows, referencePaths, mcpToolCallIds, scriptSpanCount });
+  return { rows, first: Number.isFinite(first) ? first : 0, last: Number.isFinite(last) ? last : 0, durationMs: rows.length ? Math.max(1, last - first) : 1, invalidTimestamps, suppressedEvents, unmatchedDeltas, unresolvedRows, coverageGaps, nativeSpans: nativeSpans.filter(span => span.match !== 'run-linked-script').length, scriptSpans: scriptSpanCount, nativeToolJoins: exactToolCallJoins, exactToolCallJoins, inferredScriptToolLinks, coverage };
+}
+
+// Structured per-component-type coverage breakdown, additive to the flat scalar
+// coverage fields above (coverageGaps, unresolvedRows, etc., unchanged for
+// backward compatibility). Shape: { referenceRead, toolCall, script, mcp }, each
+// { observed, missing, unsupported }:
+//   - observed: count of distinct, actually-captured occurrences of this component
+//     type in this run (what instrumentation evidence exists for).
+//   - missing: count of declared-but-never-observed instances, computed only when a
+//     declaration source for that component type was supplied this run — otherwise
+//     `null`, so a manifest-free run never reports "0 missing" as if it had verified
+//     full coverage against a manifest it never saw.
+//   - unsupported: count of observed occurrences that have capture evidence but fall
+//     outside the declared/sanctioned contract for that component type. Always 0
+//     where no such concept is wired up yet (script, mcp) rather than a fabricated
+//     non-zero guess.
+//
+// referenceRead: observed/missing are counted as DISTINCT reference paths (not raw
+//   read counts — rereads of the same path are not "more coverage"); observed =
+//   distinct declared paths read at least once; missing = declared manifest paths
+//   never read this run (null when no manifest was supplied, i.e. referencePaths is
+//   empty); unsupported = distinct undeclared-but-safe paths read via direct shell
+//   `cat` (see the `unsupported` evidence label on those rows).
+// toolCall: observed = rows representing any captured tool-call evidence (a
+//   resolved start+completion row, a completion-only orphan row, or a request-only
+//   row reconstructed purely from streamed deltas); missing = rows among those
+//   whose start or completion evidence was never captured (status 'incomplete' or
+//   containing 'not observed'); unsupported = 0 (no undeclared-tool-call concept).
+// script: observed = run-linked script spans captured this run; missing = 0 (no
+//   declared-script manifest is cross-referenced yet); unsupported = 0.
+// mcp: observed = distinct tool calls this run that resolved to an MCP server;
+//   missing = 0 (no declared-MCP-server manifest is cross-referenced yet);
+//   unsupported = 0.
+function buildCoverageBreakdown({ rows, referencePaths, mcpToolCallIds, scriptSpanCount }) {
+  const referenceRows = rows.filter(row => row.kind === 'reference.read');
+  const declaredObservedPaths = new Set(referenceRows.filter(row => row.details.declared).map(row => row.details.referenceName));
+  const unsupportedObservedPaths = new Set(referenceRows.filter(row => !row.details.declared).map(row => row.details.referenceName));
+  const referenceMissing = referencePaths.size > 0
+    ? [...referencePaths].filter(referencePath => !declaredObservedPaths.has(referencePath)).length
+    : null;
+  const toolCallRows = rows.filter(row => row.kind === 'tool.execution_start' || row.kind === 'tool.execution_complete' || row.kind === 'tool.request');
+  const toolCallMissing = toolCallRows.filter(row => row.status === 'incomplete' || row.status.includes('not observed')).length;
+  return {
+    referenceRead: { observed: declaredObservedPaths.size, missing: referenceMissing, unsupported: unsupportedObservedPaths.size },
+    toolCall: { observed: toolCallRows.length, missing: toolCallMissing, unsupported: 0 },
+    script: { observed: scriptSpanCount, missing: 0, unsupported: 0 },
+    mcp: { observed: mcpToolCallIds.size, missing: 0, unsupported: 0 }
+  };
 }
 
 function failureEvidence(rows, index) {
