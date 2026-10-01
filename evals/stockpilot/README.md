@@ -3,8 +3,8 @@
 Local/fixture-only adaptation of the Code with Claude 2026
 `agent-decomposition` workshop's StockPilot agent to Copilot CLI
 conventions, for the AgentOps architecture engine's eventual Vally
-single-change experiment loop. **No live Vally/Copilot trial has run.
-No model call was made anywhere in this directory.** See
+single-change experiment loop. The initial implementation was fixture-only. Live smoke and experiment trials
+subsequently ran; see [live evidence](../../docs/research/2026-10-01-agentops-live-followup.md). See
 `../../.superpowers/sdd/2026-09-30-agentops-overnight-build/task-9-report.md`
 for the full task report, scope boundary, and self-review.
 
@@ -44,3 +44,19 @@ it is not a live trial.
 ```bash
 node --test evals/stockpilot/test/*.test.js
 ```
+
+## Full live corpus
+
+Generate the pinned 12-task specification, then run it serially against synthetic
+workspaces and grade actual sink artifacts:
+
+```sh
+node evals/stockpilot/scripts/full-corpus.js spec /path/to/new-eval.json
+evals/stockpilot/node_modules/.bin/vally eval --eval-spec /path/to/new-eval.json --workers 1 --runs 1 --max-retries 0 --workspace /path/to/synthetic-workspaces --output-dir /path/to/results
+node evals/stockpilot/scripts/full-corpus.js grade /path/to/results.jsonl /path/to/synthetic-workspaces
+```
+
+The Vally output pattern checks only execution output. The final command applies
+the authoritative 12-task graders to actual synthetic sink files and fails on
+missing/duplicate tasks, malformed sinks, or failing outcomes. It makes no model
+calls. Verify included model access before the live execution step.

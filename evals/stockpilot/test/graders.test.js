@@ -63,7 +63,7 @@ test('R1 exact_match: FAILs on a harness/tooling error regardless of any text', 
 // --- R2 set_match --------------------------------------------------------------
 
 test('R2 set_match: PASSes when the full expected SKU set is present', () => {
-  const [status] = grade(taskById('R2'), baseResult({ finalText: 'Below reorder point: SKU-0183.' }));
+  const [status] = grade(taskById('R2'), baseResult({ finalText: `Below reorder point: ${[...graders.expectedValue({ source: 'computed_low_stock' })].join(', ')}.` }));
   assert.equal(status, PASS);
 });
 

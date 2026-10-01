@@ -49,6 +49,7 @@ test('copilot session command library parses args and renders enrichment summary
     runId: 'run-1',
     repo: null,
     copilotHome: null,
+    expectationsFile: null,
     upload: false,
     yes: false,
     help: false,
@@ -643,4 +644,10 @@ test('native launch preserves resume/connect and explicit session arguments', as
       assert.deepEqual(actualArgs, commandArgs);
     }
   } finally { process.exitCode = previousExitCode; }
+});
+
+test('launch expectations parse separately from forwarded Copilot arguments', () => {
+  const parsed = parseCopilotSessionArgs(['launch', '--expectations', 'manifest.json', '--', '-p', 'synthetic']);
+  assert.equal(parsed.expectationsFile, 'manifest.json');
+  assert.deepEqual(parsed.commandArgs, ['-p', 'synthetic']);
 });

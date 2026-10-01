@@ -39,3 +39,5 @@ record: one trial per variant, both output graders passed, and both variants
 made 11 tool calls. That does not establish a tool-thrash effect or justify a
 refactoring decision. No candidate was accepted or merged. The proof and its
 limits are in `docs/research/2026-10-01-agentops-live-followup.md`.
+
+The October 2 follow-up adds `inconclusive/stockpilot-repeated-tool-thrash-20261002.json`: three live trials per variant, all six verified against actual synthetic sink files. Median tool calls were 9 versus 10, below the predeclared 20% effect threshold. No change was accepted. See [the verification report](../docs/research/2026-10-02-agentops-verification.md).

@@ -176,3 +176,25 @@ This is real, concrete proof (not merely a schema guess) that:
 
 No agent ran, no model was called, and no token budget was spent
 producing this output — `--dry-run` only resolves and plans.
+
+## 2026-10-02 compatibility follow-up
+
+Native CLI 1.0.91 reproduced intermittent `Skill not found` with the synthetic
+MCP server: one of three minimal probes failed both skill calls. Three probes
+without that server passed. The pinned package's `npm-loader.js --no-auto-update
+--version` independently reported CLI **1.0.85**; three otherwise equivalent
+MCP-enabled probes passed with that executable. This is a bounded tested
+alternative, not proof that the upstream race is repaired or impossible.
+
+An observed launch can select the pinned executable explicitly without changing
+the user's installed CLI or global settings:
+
+```sh
+COPILOT_CLI_BIN="$PWD/evals/stockpilot/node_modules/@github/copilot/npm-loader.js" \
+  node agentops-cli/src/index.js copilot-session launch --repo /path/to/synthetic-repo \
+  -- --no-auto-update --model gpt-5.4-mini -p 'synthetic task'
+```
+
+Use the installed locked evaluation dependencies. This does not move Vally into
+the core CLI dependency tree. Package and native/SDK runtime identities remain
+separate. See the 2026-10-02 verification report for full-corpus and capture proof.

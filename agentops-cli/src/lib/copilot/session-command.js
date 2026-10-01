@@ -1,3 +1,4 @@
+const { loadComponentExpectations } = require('./component-evidence');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -46,6 +47,7 @@ function parseCopilotSessionArgs(args = []) {
     runId: optionValue(optionArgs, '--run-id'),
     repo: optionValue(optionArgs, '--repo'),
     copilotHome: optionValue(optionArgs, '--copilot-home'),
+    expectationsFile: optionValue(optionArgs, '--expectations'),
     upload: optionArgs.includes('--upload'),
     yes: optionArgs.includes('--yes'),
     help: optionArgs.includes('--help') || optionArgs.includes('-h'),
@@ -82,6 +84,7 @@ function incompatibleInheritedOtelSettings(env) {
 async function launchObservedCopilot(options = {}, dependencies = {}) {
   if (options.upload && !options.yes) throw new Error('copilot-session launch --upload requires --yes; omit --upload to keep evidence local');
   if (options.yes && !options.upload) throw new Error('copilot-session launch --yes requires --upload');
+  const expectations = loadComponentExpectations(options.expectationsFile);
   const env = dependencies.env || process.env;
   const otelConflicts = incompatibleInheritedOtelSettings(env);
   if (otelConflicts.length) {
@@ -163,6 +166,7 @@ async function launchObservedCopilot(options = {}, dependencies = {}) {
         env: scopedDeliveryEnv,
         otelFiles: [scopedCollector.receiptPath],
         upload: Boolean(options.upload),
+        expectations,
         lifecycle: { collector: result.collectorFailed ? 'failed' : 'completed', process: result.signal || result.cancelled ? 'cancelled' : 'completed' }
       });
     }
@@ -283,7 +287,7 @@ async function copilotSessionCommand(args = [], dependencies = {}) {
   const options = parseCopilotSessionArgs(args);
   if (options.subcommand === 'launch' && options.help) {
     const stdout = dependencies.stdout || process.stdout;
-    stdout.write('agentops copilot-session launch [--repo <git-repo>] [--copilot-home <path>] [--upload --yes] [--json] -- [copilot-args...]\n');
+    stdout.write('agentops copilot-session launch [--repo <git-repo>] [--copilot-home <path>] [--expectations <manifest.json>] [--upload --yes] [--json] -- [copilot-args...]\n');
     stdout.write('Starts one process-scoped Copilot CLI observation run. Evidence stays local unless --upload --yes is explicit.\n');
     stdout.write('Azure upload requires a complete project-scoped target or all three explicit Azure target environment values.\n');
     return { ok: true, action: 'help' };

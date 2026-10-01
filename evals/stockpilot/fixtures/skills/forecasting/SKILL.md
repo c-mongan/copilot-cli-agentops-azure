@@ -88,6 +88,12 @@ Promos are the most common cause of under-ordering. When `promo_next_month=1`
 or the task mentions a promo:
 
 - **Do not** rely on rolling-mean alone — that's pre-promo demand.
+- In this synthetic fixture, read `evals/stockpilot/fixtures/data/promo_history.csv`
+  for comparable analogs. For SKU-0116, the July analog has 200 baseline units
+  and 400 promotional units: apply the observed 2× ratio to the current
+  30-day baseline. This ratio already includes the seasonal period; do not
+  multiply it by another seasonal factor. SKUs absent from this file have no
+  comparable promo evidence.
 - Look for a historical analog (same SKU, comparable promo in the last 12
   months) and use *that* uplift. If none exists, set
   `flags: ["promo_uplift_uncertain"]` and a confidence well under 0.6.

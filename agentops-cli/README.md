@@ -271,3 +271,23 @@ the owned launcher and its process group. Signals are forwarded, cancellation
 has a bounded kill fallback, and child exit status is preserved. Fresh launches
 pin a session ID to prevent attribution to another concurrent session. Resume
 and connect commands retain their existing arguments.
+
+### Independent stimulus expectations
+
+`copilot-session launch --expectations /path/to/manifest.json -- ...` accepts a
+bounded local manifest before execution:
+
+```json
+{"scope":"stimulus","components":{"skills":{"expected":2,"supported":true}}}
+```
+
+Supported components are agents, skills, references, scripts, tools, and models.
+Expected counts use the receipt definitions displayed in Runs: distinct activated
+skills, unique reference/tool-call IDs, unique delegated agent IDs, and unique
+script/model span IDs. Supply nonnegative integer counts and explicit supported
+booleans. The manifest hash is retained; unrelated fields are excluded.
+Runs displays attempted, observed, completed, failed, pending, expected, and
+missing counts. An expected zero is distinguishable from unknown. This manifest
+proves only the declared stimulus; it never marks global capture complete or
+permits an absence recommendation. Unsupported, unattempted and uncaptured
+surfaces remain unknown unless independently established.

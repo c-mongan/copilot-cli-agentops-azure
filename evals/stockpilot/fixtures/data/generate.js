@@ -117,8 +117,12 @@ for (const p of PRODUCTS) {
 currentOnHand['SKU-0183|WH-EAST'] = 0; // F1 stockout
 currentOnHand['SKU-0183|WH-WEST'] = 4;
 currentOnHand['SKU-0183|WH-CENTRAL'] = 8;
-currentOnHand['SKU-0012|WH-EAST'] = 22; // F3 trivial, below rp=80
-currentOnHand['SKU-0091|WH-CENTRAL'] = 60; // below rp=70
+currentOnHand['SKU-0012|WH-EAST'] = 22; // F3: aggregate below rp=80
+currentOnHand['SKU-0012|WH-WEST'] = 8;
+currentOnHand['SKU-0012|WH-CENTRAL'] = 12;
+currentOnHand['SKU-0091|WH-EAST'] = 4;
+currentOnHand['SKU-0091|WH-WEST'] = 8;
+currentOnHand['SKU-0091|WH-CENTRAL'] = 20; // aggregate below rp=70
 currentOnHand['SKU-0042|WH-EAST'] = 312; // R1 known answer, above rp=60
 
 for (let d = 0; d < DAYS; d += 1) {
@@ -143,6 +147,7 @@ function writeCsv(file, rows) {
 }
 
 const HERE = __dirname;
+writeCsv(path.join(HERE, 'promo_history.csv'), [{ sku: 'SKU-0116', period: '2025-07', baseline_units: 200, promo_units: 400, comparable_next_month: 1 }]);
 writeCsv(path.join(HERE, 'products.csv'), PRODUCTS);
 writeCsv(path.join(HERE, 'suppliers.csv'), SUPPLIERS);
 writeCsv(path.join(HERE, 'supplier_catalog.csv'), supplierCatalog);

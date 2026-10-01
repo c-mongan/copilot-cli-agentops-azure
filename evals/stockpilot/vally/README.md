@@ -167,3 +167,7 @@ these records as trajectory-derived, preserves measured zero versus unknown
 usage, and never asserts complete capture or an architecture version. Existing
 run directories are preserved. Keep the original Vally results separately for
 grading and review.
+
+The full 12-task runner is documented in [the fixture README](../README.md#full-live-corpus).
+Its task/sink postgrade is mandatory; the Vally nonempty-output check alone is
+not correctness proof. Synthetic planning time is pinned to the fixture snapshot.

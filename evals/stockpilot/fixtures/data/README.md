@@ -15,6 +15,7 @@ days so every row can be inspected by a human reviewer.
 | `suppliers.csv` | `supplier_id, name, lead_time_days, reliability` | 5 |
 | `supplier_catalog.csv` | `sku, supplier_id, unit_price, min_order_qty` | 39 |
 | `sales_history.csv` | `date, sku, units_sold` (14 days, 2026-06-02..2026-06-15) | 210 |
+| `promo_history.csv` | `sku, period, baseline_units, promo_units, comparable_next_month` | 1 synthetic July SKU-0116 analog |
 | `stock_levels.csv` | `date, sku, warehouse, on_hand` (14 days × 15 SKUs × 3 warehouses) | 630 |
 
 ## Engineered SKUs (task anchors, mirroring the workshop's own anchors)
@@ -32,3 +33,11 @@ Sinks (`purchase_orders.jsonl`, `outbox.jsonl`, `erp_writes.jsonl`) are not
 included here — they are created under `../sinks/` only when a run appends
 to them. Do not pre-create empty sink files; a grader checking "no artifact
 produced" should see them absent until a real run writes to them.
+
+The synthetic planning date is **2026-06-15**; “next month” means July 2026.
+Three SKUs are below reorder point after summing all warehouses: SKU-0183,
+SKU-0012, and SKU-0091. This population supports the F3 contract requiring at
+least three distinct alerts. The July SKU-0116 promo analog records a 2× ratio,
+including the seasonal period; SKU-0091 has no comparable promo history and
+still requires low-confidence escalation. These are planted synthetic inputs,
+not measured customer inventory or evidence of actual future demand.

@@ -1,3 +1,4 @@
+const { componentEvidence } = require('./component-evidence');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
 const path = require('node:path');
@@ -29,6 +30,10 @@ function ensurePrivateDirectory(directory, options = {}) {
     throw new Error('session export directory must be a real directory, not a symlink or file');
   }
   fs.chmodSync(directory, 0o700);
+}
+
+function eventExportRows(outputDir) {
+  return fs.readFileSync(path.join(outputDir, 'AgentOpsEvents_CL.jsonl'), 'utf8').split(/\r?\n/).filter(Boolean).map(JSON.parse);
 }
 
 function deliverCopilotSession(options = {}) {
@@ -106,6 +111,8 @@ function deliverCopilotSession(options = {}) {
     // Native event presence proves observation, not completeness of each surface.
     coverage: Object.fromEntries(['agents', 'skills', 'references', 'scripts', 'tools', 'models'].map(kind => [kind, 'unknown'])),
     evidenceComplete: false,
+    coverageEvidence: componentEvidence(eventExportRows(outputDir), spans, options.expectations),
+    expectationManifest: options.expectations ? { scope: options.expectations.scope, sha256: options.expectations.sha256 } : null,
     nativeEventCount: sessionEvents.length,
     createdAt: new Date().toISOString()
   };

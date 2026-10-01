@@ -128,6 +128,7 @@ function loadLedgerFromDirectory(ledgerDir, options = {}) {
       evidenceTier: context.evidenceTier || 'unknown',
       evidenceComplete,
       coverage,
+      coverageEvidence: context.coverageEvidence || {},
       lifecycle: context.lifecycle || { collector: 'unknown', process: 'unknown' },
       taskContract: context.taskContract || null,
       outcomeFailed: Boolean(context.outcomeFailed),
