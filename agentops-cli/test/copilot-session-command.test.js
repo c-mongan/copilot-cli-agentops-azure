@@ -43,6 +43,7 @@ test('copilot session command library parses args and renders enrichment summary
     output: 'view.html',
     allowContent: true,
     synthetic: false,
+    confirm: false,
     sidecarFile: 'sidecar-events.jsonl',
     otelFiles: ['native.jsonl', 'script.jsonl'],
     runId: 'run-1',
@@ -115,6 +116,67 @@ test('content export labels local restriction and unverified synthetic declarati
   assert.equal(report.synthetic_provenance, 'user_declared_unverified');
   assert.equal(report.redaction_status, 'best_effort_redacted');
   assert.equal(fs.statSync(output).mode & 0o777, 0o600);
+});
+
+test('delete-content previews by default, only deletes the exact file with --confirm, and never claims Azure deletion', t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-delete-content-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const eventsFile = path.join(root, 'events.jsonl');
+  const output = path.join(root, 'AgentOpsContent_CL.jsonl');
+  fs.writeFileSync(eventsFile, `${JSON.stringify({
+    type: 'user.message', timestamp: '2026-01-01T00:00:00Z', data: { content: 'synthetic question' }
+  })}\n`);
+  const exported = spawnSync(process.execPath, [
+    path.resolve(__dirname, '../src/index.js'), 'copilot-session', 'export-content', 'session-delete-test',
+    '--file', eventsFile, '--allow-content', '--synthetic', '--output', output, '--run-id', 'run-delete-test', '--json'
+  ], { encoding: 'utf8' });
+  assert.equal(exported.status, 0, exported.stderr);
+
+  const preview = spawnSync(process.execPath, [
+    path.resolve(__dirname, '../src/index.js'), 'copilot-session', 'delete-content', 'session-delete-test',
+    '--file', output, '--run-id', 'run-delete-test', '--json'
+  ], { encoding: 'utf8' });
+  assert.equal(preview.status, 0, preview.stderr);
+  const previewReport = JSON.parse(preview.stdout);
+  assert.equal(previewReport.mode, 'preview');
+  assert.equal(previewReport.deleted, false);
+  assert.equal(previewReport.scope, 'local_only');
+  assert.equal(previewReport.azure_deletion_claimed, false);
+  assert.ok(fs.existsSync(output), 'preview-by-default must not delete the file');
+
+  const confirmed = spawnSync(process.execPath, [
+    path.resolve(__dirname, '../src/index.js'), 'copilot-session', 'delete-content', 'session-delete-test',
+    '--file', output, '--run-id', 'run-delete-test', '--confirm', '--json'
+  ], { encoding: 'utf8' });
+  assert.equal(confirmed.status, 0, confirmed.stderr);
+  const confirmedReport = JSON.parse(confirmed.stdout);
+  assert.equal(confirmedReport.mode, 'confirmed');
+  assert.equal(confirmedReport.deleted, true);
+  assert.equal(confirmedReport.azure_deletion_claimed, false);
+  assert.ok(!fs.existsSync(output), 'confirmed deletion must remove the exact selected file');
+});
+
+test('delete-content refuses deletion when the file is not exclusive to the selected session/run', t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-delete-content-mismatch-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const eventsFile = path.join(root, 'events.jsonl');
+  const output = path.join(root, 'AgentOpsContent_CL.jsonl');
+  fs.writeFileSync(eventsFile, `${JSON.stringify({
+    type: 'user.message', timestamp: '2026-01-01T00:00:00Z', data: { content: 'synthetic question' }
+  })}\n`);
+  const exported = spawnSync(process.execPath, [
+    path.resolve(__dirname, '../src/index.js'), 'copilot-session', 'export-content', 'session-a',
+    '--file', eventsFile, '--allow-content', '--synthetic', '--output', output, '--run-id', 'run-a', '--json'
+  ], { encoding: 'utf8' });
+  assert.equal(exported.status, 0, exported.stderr);
+
+  const mismatched = spawnSync(process.execPath, [
+    path.resolve(__dirname, '../src/index.js'), 'copilot-session', 'delete-content', 'session-b',
+    '--file', output, '--run-id', 'run-a', '--confirm', '--json'
+  ], { encoding: 'utf8' });
+  assert.notEqual(mismatched.status, 0);
+  assert.match(mismatched.stderr, /not exclusive/);
+  assert.ok(fs.existsSync(output), 'a mismatched run/session must never be deleted');
 });
 
 test('native Copilot launch scopes strict OTel to the real CLI process and keeps Azure upload explicit', async () => {
@@ -237,6 +299,27 @@ test('copilot-session view joins payload-free per-stream delivery state by run a
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
+});
+
+test('copilot-session view defaults to metadata-only HTML', t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-view-metadata-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const eventsFile = path.join(root, 'events.jsonl');
+  const output = path.join(root, 'view.html');
+  fs.writeFileSync(eventsFile, [
+    { type: 'user.message', timestamp: '2026-01-01T00:00:00Z', data: { content: 'PROMPT_CANARY' } },
+    { type: 'tool.execution_start', timestamp: '2026-01-01T00:00:01Z', data: { toolCallId: 'call-1', toolName: 'bash', arguments: { command: 'ARGUMENT_CANARY' } } },
+    { type: 'tool.execution_complete', timestamp: '2026-01-01T00:00:02Z', data: { toolCallId: 'call-1', success: false, result: 'RESULT_CANARY' } }
+  ].map(row => JSON.stringify(row)).join('\n') + '\n');
+  const result = spawnSync(process.execPath, [
+    path.resolve(__dirname, '../src/index.js'), 'copilot-session', 'view',
+    '--file', eventsFile, '--output', output, '--json'
+  ], { encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+  const html = fs.readFileSync(output, 'utf8');
+  assert.match(html, /Metadata only/);
+  assert.match(html, /Failure detail/);
+  assert.doesNotMatch(html, /PROMPT_CANARY|ARGUMENT_CANARY|RESULT_CANARY/);
 });
 
 test('native Copilot launch fails before invocation if its strict per-run Collector cannot start', async () => {

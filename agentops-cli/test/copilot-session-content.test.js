@@ -4,7 +4,7 @@ const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 
-const { contentRowsFromSession, writeSessionContent } = require('../src/lib/copilot/session-content');
+const { contentDeletionPreview, contentRowsFromSession, CONTENT_VALUE_MAX_BYTES, deleteSessionContent, writeSessionContent } = require('../src/lib/copilot/session-content');
 
 const events = [
   { type: 'user.message', timestamp: '2026-01-01T00:00:00Z', data: { content: 'Why did the run fail?' } },
@@ -56,3 +56,83 @@ test('restricted content export redacts common secrets before persistence', () =
   assert.match(serialized, /\[REDACTED\]/);
   assert.ok(rows.every(row => row.RedactionStatus === 'best_effort_redacted'));
 });
+
+test('oversized content is truncated with a visible marker instead of being silently dropped or kept whole', () => {
+  const oversized = 'A'.repeat(CONTENT_VALUE_MAX_BYTES + 1024);
+  const oversizedEvents = [
+    { type: 'user.message', timestamp: '2026-01-01T00:00:00Z', data: { content: oversized } },
+    { type: 'assistant.message', timestamp: '2026-01-01T00:00:01Z', data: { content: 'short reply', model: 'test-model' } }
+  ];
+  const rows = contentRowsFromSession(oversizedEvents, 'session-test');
+  assert.equal(rows.length, 2);
+  const [promptRow, responseRow] = rows;
+  assert.equal(promptRow.Truncated, true);
+  assert.ok(Buffer.byteLength(promptRow.PromptText) <= CONTENT_VALUE_MAX_BYTES);
+  assert.ok(promptRow.PromptText.length < oversized.length);
+  assert.equal(promptRow.ContentLength, Buffer.byteLength(promptRow.PromptText));
+  assert.equal(responseRow.Truncated, false);
+});
+
+test('delete-content preview reports what would be removed without deleting anything', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-content-delete-'));
+  try {
+    const output = path.join(directory, 'AgentOpsContent_CL.jsonl');
+    writeSessionContent(events, 'session-test', output, 'run-a');
+    const preview = contentDeletionPreview(output, 'session-test', 'run-a');
+    assert.equal(preview.exists, true);
+    assert.equal(preview.rows, 4);
+    assert.ok(fs.existsSync(output), 'preview must not delete the file');
+    const deletePreview = deleteSessionContent(output, 'session-test', 'run-a');
+    assert.equal(deletePreview.mode, 'preview');
+    assert.equal(deletePreview.deleted, false);
+    assert.ok(fs.existsSync(output), 'default (no confirm) must not delete the file');
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('delete-content with confirm removes only the exact selected session/run file', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-content-delete-confirm-'));
+  try {
+    const selected = path.join(directory, 'selected', 'AgentOpsContent_CL.jsonl');
+    const other = path.join(directory, 'other', 'AgentOpsContent_CL.jsonl');
+    fs.mkdirSync(path.dirname(selected), { recursive: true });
+    fs.mkdirSync(path.dirname(other), { recursive: true });
+    writeSessionContent(events, 'session-test', selected, 'run-a');
+    writeSessionContent(events, 'session-test', other, 'run-b');
+    const result = deleteSessionContent(selected, 'session-test', 'run-a', { confirm: true });
+    assert.equal(result.mode, 'confirmed');
+    assert.equal(result.deleted, true);
+    assert.ok(!fs.existsSync(selected), 'the selected run file must be deleted');
+    assert.ok(fs.existsSync(other), 'an unrelated run file must never be touched');
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('delete-content refuses a file that is not exclusively the selected session/run', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-content-delete-mismatch-'));
+  try {
+    const output = path.join(directory, 'AgentOpsContent_CL.jsonl');
+    writeSessionContent(events, 'session-test', output, 'run-a');
+    assert.throws(() => contentDeletionPreview(output, 'session-test', 'run-other'), /not exclusive/);
+    assert.throws(() => deleteSessionContent(output, 'session-test', 'run-other', { confirm: true }), /not exclusive/);
+    assert.ok(fs.existsSync(output), 'a mismatched file must never be deleted');
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('delete-content requires the AgentOpsContent_CL.jsonl file name and reports a missing file without throwing in preview mode', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-content-delete-naming-'));
+  try {
+    assert.throws(() => contentDeletionPreview(path.join(directory, 'other.jsonl'), 'session-test', 'run-a'), /AgentOpsContent_CL/);
+    const missing = contentDeletionPreview(path.join(directory, 'AgentOpsContent_CL.jsonl'), 'session-test', 'run-a');
+    assert.equal(missing.exists, false);
+    assert.equal(missing.rows, 0);
+    assert.throws(() => deleteSessionContent(path.join(directory, 'AgentOpsContent_CL.jsonl'), 'session-test', 'run-a', { confirm: true }), /not found/);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+

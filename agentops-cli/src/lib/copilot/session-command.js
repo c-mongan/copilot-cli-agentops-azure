@@ -24,7 +24,7 @@ const {
 const { writeSessionWaterfall } = require('./session-waterfall');
 const { defaultReceiptFiles, readSessionOtelSpans } = require('./session-otel');
 const { enrichSpansWithSessionToolContext, readSessionSpanRows, writeSessionSpans } = require('./session-span-export');
-const { writeSessionContent } = require('./session-content');
+const { deleteSessionContent, writeSessionContent } = require('./session-content');
 const { writeSessionEvents } = require('./session-event-export');
 const { readSessionOutbox } = require('./session-delivery-outbox');
 
@@ -40,6 +40,7 @@ function parseCopilotSessionArgs(args = []) {
     output: optionValue(optionArgs, '--output'),
     allowContent: optionArgs.includes('--allow-content'),
     synthetic: optionArgs.includes('--synthetic'),
+    confirm: optionArgs.includes('--confirm'),
     sidecarFile: optionValue(optionArgs, '--sidecar'),
     otelFiles: optionValues(optionArgs, '--otel-file'),
     runId: optionValue(optionArgs, '--run-id'),
@@ -287,6 +288,34 @@ async function copilotSessionCommand(args = [], dependencies = {}) {
       redaction_status: 'best_effort_redacted',
       ...result
     }, options.json, value => `Restricted local content rows: ${value.rows} in ${value.output} · synthetic origin declared by user, unverified · best-effort redaction\n`);
+    return;
+  }
+  if (options.subcommand === 'delete-content') {
+    if (!options.sessionId) throw new Error('copilot-session delete-content requires <session-id>');
+    if (!options.file) throw new Error('copilot-session delete-content requires --file <dir>/AgentOpsContent_CL.jsonl');
+    const runId = options.runId || options.sessionId;
+    const result = deleteSessionContent(options.file, options.sessionId, runId, { confirm: options.confirm });
+    writeJsonOrRender({
+      ok: true,
+      session_id: options.sessionId,
+      run_id: runId,
+      scope: 'local_only',
+      azure_deletion_claimed: false,
+      ...result
+    }, options.json, value => [
+      'Restricted local content retention',
+      `Session: ${value.session_id}`,
+      `Run: ${value.run_id}`,
+      `File: ${value.file}`,
+      `Rows selected: ${value.rows}`,
+      value.mode === 'preview'
+        ? 'Preview only — nothing deleted. Re-run with --confirm to delete this exact file.'
+        : value.deleted
+          ? 'Deleted (local only).'
+          : 'File was not found; nothing deleted.',
+      'Scope: this exact session/run file only — no directory-wide wipe, no other run touched.',
+      'This is LOCAL-only deletion and makes no claim about any Azure-side copy.'
+    ].join('\n') + '\n');
     return;
   }
   if (options.subcommand === 'export-spans') {

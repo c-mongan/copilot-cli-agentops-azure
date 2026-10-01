@@ -123,6 +123,7 @@ Core commands:
   copilot-session export-events <session-id> --run-id <id> --output <dir>/AgentOpsEvents_CL.jsonl [--file <events.jsonl>] [--json]
   copilot-session collect <session-id> --run-id <id> [--repo <git-repo>] [--copilot-home <path>] [--otel-file <receipt.jsonl>] [--upload --yes] [--json]
   copilot-session export-content <session-id> --output <dir>/AgentOpsContent_CL.jsonl --allow-content --synthetic [--file <events.jsonl>] [--run-id <id>] [--json]
+  copilot-session delete-content <session-id> --file <dir>/AgentOpsContent_CL.jsonl [--run-id <id>] [--confirm] [--json]\n  Local-only retention: previews by default; --confirm deletes only the exact selected session/run file. Makes no claim about Azure-side deletion.
   schema validate|print [--file <json>]
   security audit|posture [--json] [--fail-on-warning]
   dashboard validate|links-check|filters-check|ux-check|content-check|kql-check|verify|import [--last <duration>] [--live] [--yes] [--all] [--folder <name>] [--resource-group <rg>] [--grafana-name <name>]
