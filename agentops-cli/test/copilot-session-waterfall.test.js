@@ -614,3 +614,132 @@ test('two independent sessionWaterfall calls in the same process never leak refe
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('summary surfaces model identity and treats partially-measured tokens as visible unknown, never a silent zero', () => {
+  const nativeSpans = [{
+    start: Date.parse('2026-01-01T00:00:01.000Z'), end: Date.parse('2026-01-01T00:00:02.000Z'),
+    traceId: 'trace-model', spanId: 'span-model', operation: 'chat', agent: 'copilot',
+    modelRequested: 'gpt-4', modelActual: 'gpt-4', provider: 'openai',
+    inputTokens: 120, outputTokens: null, failed: false
+  }];
+  const html = renderSessionWaterfall([], 'model-fixture', { nativeSpans });
+  assert.match(html, /Model requests/);
+  assert.match(html, /gpt-4/);
+  assert.match(html, /openai/);
+  assert.match(html, />120</);
+  assert.match(html, /1\/1 requests measured/);
+  assert.match(html, /Unknown/);
+  assert.match(html, /0 of 1 requests measured/);
+});
+
+test('summary shows model and token metrics as not observed, never as a fabricated zero, when no model-bearing spans exist', () => {
+  const html = renderSessionWaterfall([], 'no-model-fixture', {});
+  assert.match(html, /Model requests[^<]*·[^<]*not observed in available evidence|not observed in available evidence/);
+  assert.doesNotMatch(html, /<strong>0<\/strong>\s*<span>[^<]*[Mm]odel requests/);
+  assert.doesNotMatch(html, /<strong>0<\/strong>\s*<span>[^<]*[Ii]nput tokens/);
+});
+
+test('summary reports retries as explicitly not tracked rather than fabricating a zero count', () => {
+  const html = renderSessionWaterfall([], 'retry-fixture', {});
+  assert.match(html, /Retries/);
+  assert.match(html, /Not tracked/);
+  assert.match(html, /no retry signal is captured/);
+});
+
+test('summary states the effective privacy/capture profile distinctly for metadata-only and full-content modes', () => {
+  const metadataHtml = renderSessionWaterfall([], 'privacy-metadata', { metadataOnly: true });
+  assert.match(metadataHtml, /Privacy profile/);
+  assert.match(metadataHtml, /<strong>Metadata only<\/strong>/);
+  const fullHtml = renderSessionWaterfall([], 'privacy-full', { metadataOnly: false });
+  assert.match(fullHtml, /Privacy profile/);
+  assert.match(fullHtml, /<strong>Full content<\/strong>/);
+});
+
+test('undeclared reference reads get a distinct accessible badge so a reviewer cannot mistake them for a declared, sanctioned read', () => {
+  const undeclaredPath = 'docs/architecture-notes.md';
+  const root = fixtureAttachment([]);
+  try {
+    const html = renderSessionWaterfall([
+      { type: 'tool.execution_start', timestamp: '2026-01-01T00:00:01.000Z', data: { toolCallId: 'call-undeclared', toolName: 'bash', arguments: { command: `cat ${undeclaredPath}` } } },
+      { type: 'tool.execution_complete', timestamp: '2026-01-01T00:00:02.000Z', data: { toolCallId: 'call-undeclared', toolName: 'bash', success: true, shellExecution: { exitCode: 0 } } }
+    ], 'undeclared-badge', { repoRoot: root });
+    assert.match(html, /class="evidence-badge evidence-unsupported"[^>]*>Undeclared/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('ambiguous concurrent-ownership reference reads get a distinct accessible badge so they are not mistaken for a confidently-attributed read', () => {
+  const reference = '.github/skills/worker-skill/references/guide.md';
+  const root = fixtureAttachment([
+    { name: 'worker-skill', references: [{ path: reference }] }
+  ]);
+  try {
+    const html = renderSessionWaterfall([
+      { type: 'subagent.started', timestamp: '2026-01-01T00:00:00.000Z', agentId: 'worker-1', data: { toolCallId: 'delegate-1', agentName: 'fixture-worker' } },
+      { type: 'subagent.started', timestamp: '2026-01-01T00:00:00.000Z', agentId: 'worker-2', data: { toolCallId: 'delegate-2', agentName: 'fixture-worker' } },
+      { type: 'skill.invoked', timestamp: '2026-01-01T00:00:01.000Z', agentId: 'worker-1', data: { name: 'worker-skill', parentToolCallId: 'delegate-1' } },
+      { type: 'skill.invoked', timestamp: '2026-01-01T00:00:01.000Z', agentId: 'worker-2', data: { name: 'worker-skill', parentToolCallId: 'delegate-2' } },
+      { type: 'tool.execution_start', timestamp: '2026-01-01T00:00:01.000Z', agentId: 'worker-1', data: { toolCallId: 'worker-read', parentToolCallId: 'delegate-1', toolName: 'view', arguments: { path: reference } } }
+    ], 'unknown-badge', { repoRoot: root });
+    assert.match(html, /class="evidence-badge evidence-unknown"[^>]*>Ownership unknown/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('coverage by component section renders observed/missing/unsupported, distinguishing not-tracked (null) from a verified zero and from a real gap', () => {
+  const reference = '.github/skills/build-check/references/guide.md';
+  const missingReference = '.github/skills/build-check/references/unread.md';
+  const root = fixtureAttachment([
+    { name: 'build-check', references: [{ path: reference }, { path: missingReference }] }
+  ]);
+  try {
+    const html = renderSessionWaterfall([
+      { type: 'skill.invoked', timestamp: '2026-01-01T00:00:00.000Z', data: { name: 'build-check' } },
+      { type: 'tool.execution_start', timestamp: '2026-01-01T00:00:01.000Z', data: { toolCallId: 'read-1', toolName: 'view', arguments: { path: reference } } },
+      { type: 'tool.execution_start', timestamp: '2026-01-01T00:00:02.000Z', data: { toolCallId: 'call-undeclared', toolName: 'bash', arguments: { command: 'cat docs/other.md' } } },
+      { type: 'tool.execution_complete', timestamp: '2026-01-01T00:00:03.000Z', data: { toolCallId: 'call-undeclared', toolName: 'bash', success: true, shellExecution: { exitCode: 0 } } }
+    ], 'coverage-fixture', { repoRoot: root });
+    assert.match(html, /Coverage by component/);
+    assert.match(html, /Not tracked/);
+    // script/mcp missing is always null (no declared-manifest concept) -> "Not tracked", never "0".
+    assert.doesNotMatch(html, /<dt>Missing<\/dt>\s*<dd[^>]*>0<\/dd>\s*<\/div>\s*<div><dt>Unsupported/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('coverage section shows a verified zero missing distinctly from not-tracked when a manifest is fully satisfied', () => {
+  const reference = '.github/skills/build-check/references/guide.md';
+  const root = fixtureAttachment([
+    { name: 'build-check', references: [{ path: reference }] }
+  ]);
+  try {
+    const html = renderSessionWaterfall([
+      { type: 'skill.invoked', timestamp: '2026-01-01T00:00:00.000Z', data: { name: 'build-check' } },
+      { type: 'tool.execution_start', timestamp: '2026-01-01T00:00:01.000Z', data: { toolCallId: 'read-1', toolName: 'view', arguments: { path: reference } } }
+    ], 'coverage-fully-covered', { repoRoot: root });
+    assert.match(html, /Reference reads/);
+    assert.match(html, /<dt>Missing<\/dt><dd class="">0<\/dd>/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('a text search box exists alongside category filters and composes with them without breaking hash deep-linking', () => {
+  const nativeSpans = [{ start: Date.parse('2026-01-01T00:00:01.000Z'), end: Date.parse('2026-01-01T00:00:02.000Z'), traceId: 'trace-1', spanId: 'span-1', operation: 'execute_tool', toolName: 'bash', toolCallId: 'call-1', agent: 'copilot', failed: true }];
+  const html = renderSessionWaterfall([], 'search-fixture', { nativeSpans });
+  assert.match(html, /<input[^>]*id="row-search"[^>]*aria-label="Search[^"]*"/);
+  assert.match(html, /data-filter="failed"/);
+  assert.match(html, /matchesSearch/);
+  assert.match(html, /function showTarget/);
+  assert.match(html, /filter\('all'\)/);
+});
+
+test('Architecture and Compare navigation is an inert placeholder note, never a fabricated link to nonexistent pages', () => {
+  const html = renderSessionWaterfall([], 'nav-placeholder-fixture', {});
+  assert.match(html, /Architecture and Compare views/);
+  assert.doesNotMatch(html, /<a[^>]*>\s*Architecture[^<]*<\/a>/);
+  assert.doesNotMatch(html, /<a[^>]*>\s*Compare[^<]*<\/a>/);
+});
