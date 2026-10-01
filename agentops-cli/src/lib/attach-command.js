@@ -357,17 +357,20 @@ function renderAttachResult(result) {
 function readJsonlRows(file) {
   try {
     const stat = fs.lstatSync(file);
-    if (stat.isSymbolicLink() || !stat.isFile() || stat.size > 20 * 1024 * 1024) return [];
-    return fs.readFileSync(file, 'utf8').split(/\r?\n/).filter(Boolean).flatMap(line => {
+    if (stat.isSymbolicLink() || !stat.isFile() || stat.size > 20 * 1024 * 1024) return { rows: [], invalid: 1 };
+    const result = { rows: [], invalid: 0 };
+    for (const line of fs.readFileSync(file, 'utf8').split(/\r?\n/).filter(Boolean)) {
       try {
         const row = JSON.parse(line);
-        return row && typeof row === 'object' && !Array.isArray(row) ? [row] : [];
+        if (row && typeof row === 'object' && !Array.isArray(row)) result.rows.push(row);
+        else result.invalid += 1;
       } catch {
-        return [];
+        result.invalid += 1;
       }
-    });
-  } catch {
-    return [];
+    }
+    return result;
+  } catch (error) {
+    return { rows: [], invalid: error.code === 'ENOENT' ? 0 : 1 };
   }
 }
 
@@ -381,6 +384,7 @@ function observedCoverage(root, architecture, options = {}) {
   let scannedRuns = 0;
   let scannedBytes = 0;
   let scanTruncated = false;
+  let invalidEvidenceRows = 0;
   const attachment = readOwnedAttachment(root);
   try {
     const directoryStat = fs.lstatSync(runsDirectory);
@@ -429,13 +433,16 @@ function observedCoverage(root, architecture, options = {}) {
         continue;
       }
       scannedBytes += evidenceSizes.reduce((sum, size) => sum + size, 0);
-      for (const row of readJsonlRows(eventsPath)) {
+      const eventEvidence = readJsonlRows(eventsPath);
+      const spanEvidence = readJsonlRows(spansPath);
+      invalidEvidenceRows += eventEvidence.invalid + spanEvidence.invalid;
+      for (const row of eventEvidence.rows) {
         if (row.AgentName) observed.agents.add(row.AgentName);
         if (row.SubAgentName) observed.agents.add(row.SubAgentName);
         if (row.SkillName) observed.skills.add(row.SkillName);
         if (row.ReferenceName) observed.referenceFiles.add(row.ReferenceName);
       }
-      for (const row of readJsonlRows(spansPath)) {
+      for (const row of spanEvidence.rows) {
         if (row.ScriptName) observed.scriptFiles.add(row.ScriptName);
       }
     }
@@ -463,9 +470,13 @@ function observedCoverage(root, architecture, options = {}) {
     unassociatedHistoricalRuns: unassociatedRuns,
     priorAttachmentRuns,
     scanTruncated,
+    invalidEvidenceRows,
+    evidenceScanComplete: !scanTruncated && invalidEvidenceRows === 0,
     executionObserved: associatedRuns > 0 && Object.values(categories).some(category => category.observed > 0),
     categories,
-    note: scanTruncated
+    note: invalidEvidenceRows
+      ? 'Some local evidence rows were malformed or unreadable; coverage is incomplete. Not observed does not mean unused.'
+      : scanTruncated
       ? 'The bounded local scan was truncated; observed counts may be incomplete. Not observed does not mean unused.'
       : associatedRuns
         ? 'Observed means a matching local run export contains this inventoried name. Not observed does not mean unused.'

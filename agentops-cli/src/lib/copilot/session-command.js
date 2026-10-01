@@ -133,12 +133,15 @@ async function launchObservedCopilot(options = {}, dependencies = {}) {
       });
     }
     if (result.error) throw result.error;
+    const exitCode = result.status === null ? 1 : result.status;
+    const uploadAccepted = !options.upload || evidence?.state === 'azure_acknowledged';
     const output = {
       runId,
       sessionId: summary?.sessionId || '',
       copilotPath: resolved.path,
-      exitCode: result.status === null ? 1 : result.status,
+      exitCode,
       signal: result.signal || '',
+      ok: exitCode === 0 && uploadAccepted,
       evidence
     };
     writeJsonOrRender(output, options.json, value => [
@@ -150,7 +153,7 @@ async function launchObservedCopilot(options = {}, dependencies = {}) {
       ...(value.evidence?.outputDir ? [`Local evidence: ${value.evidence.outputDir}`] : []),
       ...(options.upload ? [] : ['Azure: not requested; evidence remains local'])
     ].join('\n') + '\n');
-    process.exitCode = output.exitCode;
+    process.exitCode = output.exitCode || (uploadAccepted ? 0 : 1);
     return output;
   } finally {
     await scopedCollector.stop({ remove: true });
@@ -276,7 +279,14 @@ async function copilotSessionCommand(args = [], dependencies = {}) {
     const eventsFile = options.file || defaultSessionEventsPath(options.sessionId);
     const sessionId = options.sessionId || path.basename(path.dirname(eventsFile));
     const result = writeSessionContent(readCopilotSessionEvents(eventsFile), sessionId, options.output, options.runId || sessionId);
-    writeJsonOrRender({ ok: true, session_id: sessionId, ...result }, options.json, value => `Synthetic content rows: ${value.rows} in ${value.output}\n`);
+    writeJsonOrRender({
+      ok: true,
+      session_id: sessionId,
+      privacy_profile: 'restricted_local',
+      synthetic_provenance: 'user_declared_unverified',
+      redaction_status: 'best_effort_redacted',
+      ...result
+    }, options.json, value => `Restricted local content rows: ${value.rows} in ${value.output} · synthetic origin declared by user, unverified · best-effort redaction\n`);
     return;
   }
   if (options.subcommand === 'export-spans') {

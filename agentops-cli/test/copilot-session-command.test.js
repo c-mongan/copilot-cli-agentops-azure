@@ -97,6 +97,26 @@ test('copilot-session launch help works through the executable CLI', () => {
   }
 });
 
+test('content export labels local restriction and unverified synthetic declaration', t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-restricted-content-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const eventsFile = path.join(root, 'events.jsonl');
+  const output = path.join(root, 'AgentOpsContent_CL.jsonl');
+  fs.writeFileSync(eventsFile, `${JSON.stringify({
+    type: 'user.message', timestamp: '2026-01-01T00:00:00Z', data: { content: 'synthetic question' }
+  })}\n`);
+  const result = spawnSync(process.execPath, [
+    path.resolve(__dirname, '../src/index.js'), 'copilot-session', 'export-content',
+    '--file', eventsFile, '--allow-content', '--synthetic', '--output', output, '--json'
+  ], { encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.privacy_profile, 'restricted_local');
+  assert.equal(report.synthetic_provenance, 'user_declared_unverified');
+  assert.equal(report.redaction_status, 'best_effort_redacted');
+  assert.equal(fs.statSync(output).mode & 0o777, 0o600);
+});
+
 test('native Copilot launch scopes strict OTel to the real CLI process and keeps Azure upload explicit', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-native-launch-'));
   const copilotHome = path.join(root, 'copilot-home');
@@ -235,6 +255,33 @@ test('native Copilot launch requires explicit confirmation before Azure upload',
     collector: { status: async () => { collectorChecked = true; return {}; } }
   }), /--upload requires --yes/);
   assert.equal(collectorChecked, false);
+});
+
+test('native launch reports requested upload failure even when Copilot exits zero', async () => {
+  const previousExitCode = process.exitCode;
+  try {
+    const result = await launchObservedCopilot({
+      upload: true, yes: true, commandArgs: ['--version'], json: true
+    }, {
+      env: {
+        PATH: process.env.PATH,
+        AGENTOPS_AZURE_SUBSCRIPTION_ID: 'synthetic-subscription',
+        AGENTOPS_LOGS_INGESTION_ENDPOINT: 'https://synthetic.ingest.monitor.azure.com',
+        AGENTOPS_DCR_IMMUTABLE_ID: 'dcr-synthetic'
+      },
+      resolveCopilotBinary: () => ({ ok: true, path: '/usr/local/bin/copilot' }),
+      startScopedStrictCollector: async () => ({ endpoint: 'http://127.0.0.1:14320', receiptPath: '/private/receipt.jsonl', stop: async () => {} }),
+      snapshotCopilotSessions: () => new Map(),
+      changedCopilotSession: () => ({ sessionId: 'pending-session' }),
+      spawnSync: () => ({ status: 0, signal: null }),
+      deliverCopilotSession: () => ({ state: 'local_pending', events: 1, spans: 0, reason: 'collector offline' })
+    });
+    assert.equal(result.exitCode, 0);
+    assert.equal(result.ok, false);
+    assert.equal(process.exitCode, 1);
+  } finally {
+    process.exitCode = previousExitCode;
+  }
 });
 
 test('native Copilot upload scopes project subscription approval to post-run delivery only', async () => {

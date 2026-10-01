@@ -43,3 +43,16 @@ test('synthetic content export creates a private non-overwriting JSONL file', ()
     fs.rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test('restricted content export redacts common secrets before persistence', () => {
+  const privateEvents = [
+    { type: 'user.message', timestamp: '2026-01-01T00:00:00Z', data: { content: 'Authorization: Bearer bearer-canary PASSWORD=password-canary' } },
+    { type: 'tool.execution_start', timestamp: '2026-01-01T00:00:01Z', data: { toolCallId: 'call-secret', toolName: 'request', arguments: { api_key: 'key-canary', nested: { clientSecret: 'nested-canary' } } } },
+    { type: 'assistant.message', timestamp: '2026-01-01T00:00:02Z', data: { content: '{"api_key":"json-canary"}' } }
+  ];
+  const rows = contentRowsFromSession(privateEvents, 'session-test');
+  const serialized = JSON.stringify(rows);
+  assert.doesNotMatch(serialized, /bearer-canary|password-canary|key-canary|nested-canary|json-canary/);
+  assert.match(serialized, /\[REDACTED\]/);
+  assert.ok(rows.every(row => row.RedactionStatus === 'best_effort_redacted'));
+});

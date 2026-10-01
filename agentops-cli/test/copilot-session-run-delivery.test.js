@@ -143,6 +143,25 @@ test('coverage command joins a delivered synthetic run to its exact attached inv
   assert.equal(result.inventoryMatchesAttachment, true);
 });
 
+test('coverage reports malformed local evidence instead of treating it as complete', t => {
+  const fixture = prepareSession(t, { attached: true, configured: false });
+  attachCommand(['--repo', fixture.repo, '--yes', '--json'], { stdout: { write() {} } });
+  const runId = 'run-malformed-coverage';
+  const delivered = deliverCopilotSession({
+    summary: { sessionId: fixture.sessionId }, runId, copilotHome: fixture.copilotHome,
+    agentopsHome: fixture.agentopsHome, cwd: fixture.repo, env: fixture.env,
+    projectConfigPath: fixture.projectConfigPath, otelFiles: fixture.otelFiles,
+    upload: false
+  });
+  fs.appendFileSync(path.join(delivered.outputDir, 'AgentOpsEvents_CL.jsonl'), '{bad json\n');
+  const result = coverageCommand(['--repo', fixture.repo, '--json'], {
+    agentopsHome: fixture.agentopsHome, stdout: { write() {} }
+  });
+  assert.equal(result.runtime.invalidEvidenceRows, 1);
+  assert.equal(result.runtime.evidenceScanComplete, false);
+  assert.match(result.runtime.note, /malformed/);
+});
+
 test('post-run delivery exports private metadata and uploads both streams to the project DCR', t => {
   const fixture = prepareSession(t);
   const uris = [];

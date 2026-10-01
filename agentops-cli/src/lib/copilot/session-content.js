@@ -2,9 +2,33 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 
+function redactContent(value) {
+  if (typeof value === 'string') {
+    if (/^\s*[\[{]/.test(value)) {
+      try {
+        const parsed = JSON.parse(value);
+        if (parsed && typeof parsed === 'object') return JSON.stringify(redactContent(parsed));
+      } catch {}
+    }
+    return value
+      .replace(/(Authorization\s*[:=]\s*Bearer\s+)[^\s"',;]+/gi, '$1[REDACTED]')
+      .replace(/(\b[A-Z0-9_]*(?:PASSWORD|SECRET|TOKEN|API_KEY|CONNECTION_STRING)[A-Z0-9_]*\s*[:=]\s*)("[^"]*"|'[^']*'|[^\s,;]+)/gi, '$1[REDACTED]');
+  }
+  if (Array.isArray(value)) return value.map(redactContent);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [
+      key,
+      /(?:password|secret|token|api[_-]?key|authorization|connection[_-]?string)/i.test(key)
+        ? '[REDACTED]' : redactContent(item)
+    ]));
+  }
+  return value;
+}
+
 function contentText(value) {
   if (value === undefined || value === null) return '';
-  return typeof value === 'string' ? value : JSON.stringify(value);
+  const safeValue = redactContent(value);
+  return typeof safeValue === 'string' ? safeValue : JSON.stringify(safeValue);
 }
 
 function contentRowsFromSession(events, sessionId, runId = sessionId) {
@@ -33,7 +57,7 @@ function contentRowsFromSession(events, sessionId, runId = sessionId) {
       ToolName: toolName,
       ToolCallId: toolCallId,
       ModelActual: model,
-      RedactionStatus: 'synthetic_unredacted',
+      RedactionStatus: 'best_effort_redacted',
       ContentHash: crypto.createHash('sha256').update(content).digest('hex'),
       ContentLength: Buffer.byteLength(content),
       SchemaVersion: '2'
