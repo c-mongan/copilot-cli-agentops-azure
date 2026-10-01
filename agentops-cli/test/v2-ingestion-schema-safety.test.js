@@ -64,6 +64,21 @@ test('AgentOpsSpans schema stays in sync across v2-ingestion, eval-spans, and mi
   }
 });
 
+test('AgentOpsInsights schema accepts additive architecture hypothesis evidence', () => {
+  const start = bicep.indexOf("name: 'AgentOpsInsights_CL'");
+  const end = bicep.indexOf("name: 'AgentOpsRecommendations_CL'", start);
+  const schema = bicep.slice(start, end);
+  const expected = {
+    Rule: 'string', ArchitectureVersion: 'string', Numerator: 'long',
+    Denominator: 'long', CoverageRuns: 'long', Status: 'string',
+    ComponentRefs: 'dynamic', Evidence: 'dynamic'
+  };
+  for (const [name, type] of Object.entries(expected)) {
+    assert.match(schema, new RegExp(`name: '${name}', type: '${type}'`));
+  }
+  assert.match(bicep, /streamDeclarations: toObject\(v2Tables/);
+});
+
 test('v2 Bicep declares each custom table once and spans use the exported outcome column', () => {
   const tableNames = [...bicep.matchAll(/^\s*name: '(AgentOps[A-Za-z0-9]+_CL)'$/gm)].map(match => match[1]);
   assert.equal(tableNames.length, new Set(tableNames).size);

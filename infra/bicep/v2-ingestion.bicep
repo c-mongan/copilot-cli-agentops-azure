@@ -316,6 +316,15 @@ var v2Tables = [
       { name: 'Title', type: 'string' }
       { name: 'Summary', type: 'string' }
       { name: 'SuggestedNextStep', type: 'string' }
+      { name: 'Rule', type: 'string' }
+      { name: 'ArchitectureVersion', type: 'string' }
+      { name: 'Numerator', type: 'long' }
+      { name: 'Denominator', type: 'long' }
+      { name: 'CoverageRuns', type: 'long' }
+      { name: 'Status', type: 'string' }
+      { name: 'ComponentRefs', type: 'dynamic' }
+      // Metadata only: config version, units, uncertainty, and bounded evidence IDs.
+      { name: 'Evidence', type: 'dynamic' }
       { name: 'SchemaVersion', type: 'string' }
     ]
   }
