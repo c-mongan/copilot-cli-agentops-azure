@@ -3,34 +3,39 @@ const path = require('node:path');
 
 const { attachmentReferencePaths, attachmentSkillReferences, directShellPathRead, operationFields } = require('./session-event-export');
 
-// Field names that carry raw captured content (prompts, tool arguments/results,
-// terminal output and their streamed-delta equivalents) rather than structural
-// metadata. Used only when a caller opts into `options.metadataOnly` — the
-// default (opt-out) rendering stays exactly as before so existing full-content
-// callers/tests are unaffected.
 const RAW_CONTENT_FIELD_NAMES = new Set([
   'content', 'arguments', 'result', 'output', 'deltaContent', 'inputDelta',
   'argumentsPreview', 'partialContent'
 ]);
 const METADATA_ONLY_PLACEHOLDER = '[content redacted \u2014 metadata-only view; pass --allow-content to render full payload locally]';
+const SAFE_METADATA_FIELD_NAMES = new Set([
+  'agentId', 'agentName', 'candidates', 'chunks', 'declared', 'durationMs',
+  'end', 'evidence', 'exitCode', 'firstAt', 'lastAt', 'linkType', 'match',
+  'mcpServerName', 'mcpToolName', 'model', 'modelActual', 'modelRequested',
+  'name', 'nativeOtel', 'owningSkillLink', 'parentAgentId', 'parentSpanId',
+  'parentToolCallId', 'provider', 'readCount', 'referenceName', 'runtimeName',
+  'runtimeVersion', 'scriptLinkEvidence', 'scriptName', 'skillName', 'source',
+  'spanId', 'start', 'status', 'success', 'toolCallEvidence',
+  'toolCallEvidenceLinks', 'toolCallId', 'toolCallLink', 'toolCallStream',
+  'toolName', 'traceId', 'completion', 'shellExecution', 'startAt', 'stepName',
+  'inputTokens', 'outputTokens', 'cacheReadTokens', 'cacheWriteTokens'
+]);
 
-// Deep-clones `value`, replacing any raw-content field (regardless of nesting
-// depth, e.g. `details.start.arguments` or `details.completion.result`) with a
-// fixed placeholder. Leaves every other field (toolCallId, toolName, status,
-// timestamps, counts, etc.) untouched, so the metadata-only timeline keeps all
-// of its structural/forensic value while never embedding captured content.
+// An allowlist keeps future Copilot payload fields out of default HTML exports.
 function redactRawContent(value) {
   if (Array.isArray(value)) return value.map(redactRawContent);
   if (value && typeof value === 'object') {
     const redacted = {};
     for (const [key, nested] of Object.entries(value)) {
-      redacted[key] = RAW_CONTENT_FIELD_NAMES.has(key) && nested !== undefined && nested !== null && nested !== ''
-        ? METADATA_ONLY_PLACEHOLDER
-        : redactRawContent(nested);
+      if (RAW_CONTENT_FIELD_NAMES.has(key)) {
+        redacted[key] = METADATA_ONLY_PLACEHOLDER;
+      } else if (SAFE_METADATA_FIELD_NAMES.has(key)) {
+        redacted[key] = redactRawContent(nested);
+      }
     }
     return redacted;
   }
-  return value;
+  return typeof value === 'string' && value.length > 200 ? '[metadata value omitted: exceeds 200 characters]' : value;
 }
 
 function escapeHtml(value) {

@@ -78,6 +78,21 @@ test('local waterfall escapes rich content and writes owner-only file without ov
   }
 });
 
+test('metadata-only waterfall omits unknown future payload fields', () => {
+  const fixture = [
+    { type: 'tool.execution_start', timestamp: '2026-01-01T00:00:00Z', data: { toolCallId: 'call-1', toolName: 'bash', arguments: { command: 'ARG_CANARY' } } },
+    { type: 'tool.execution_complete', timestamp: '2026-01-01T00:00:01Z', data: {
+      toolCallId: 'call-1', success: false, result: 'RESULT_CANARY',
+      shellExecution: { exitCode: 1, stderr: 'STDERR_CANARY' },
+      futurePayload: { body: 'FUTURE_CANARY' }
+    } }
+  ];
+  const html = renderSessionWaterfall(fixture, 'safe-session', { metadataOnly: true });
+  assert.match(html, /Metadata only/);
+  assert.match(html, /call-1/);
+  assert.doesNotMatch(html, /ARG_CANARY|RESULT_CANARY|STDERR_CANARY|FUTURE_CANARY/);
+});
+
 test('failure-first view links preceding context and exact native evidence', () => {
   const failureEvents = [
     { type: 'user.message', timestamp: '2026-01-01T00:00:00.000Z', data: { content: 'Fix the build' } },
