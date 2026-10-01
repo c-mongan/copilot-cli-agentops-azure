@@ -155,6 +155,85 @@ test('owned script spans require an explicit exact run ID and remain logical lin
   }
 });
 
+test('native receipt preserves requested/response model, provider, and measured usage tokens distinctly', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-otel-telemetry-contract-'));
+  try {
+    const file = path.join(directory, 'receipt.jsonl');
+    const span = (spanId, attributes) => ({
+      type: 'span', traceId: 'trace-contract', spanId, name: 'gen_ai.chat',
+      startTimeUnixNano: '1767225601000000000', endTimeUnixNano: '1767225602000000000',
+      attributes: [attr('gen_ai.conversation.id', 'session-a'), attr('gen_ai.operation.name', 'chat'), ...attributes]
+    });
+    fs.writeFileSync(file, [
+      span('span-full', [
+        attr('gen_ai.request.model', 'gpt-requested'),
+        attr('gen_ai.response.model', 'gpt-actual'),
+        attr('gen_ai.provider.name', 'fixture-provider'),
+        attr('gen_ai.usage.input_tokens', '123'),
+        attr('gen_ai.usage.output_tokens', '45'),
+        attr('gen_ai.usage.cache_read.input_tokens', '10'),
+        attr('gen_ai.usage.cache_creation.input_tokens', '5')
+      ]),
+      span('span-unknown', []),
+      span('span-zero', [
+        attr('gen_ai.usage.input_tokens', '0'),
+        attr('gen_ai.usage.output_tokens', '0')
+      ])
+    ].map(JSON.stringify).join('\n'));
+
+    const result = readSessionOtelSpans('session-a', [file]);
+    assert.equal(result.spans.length, 3);
+    const [full, unknown, zero] = result.spans;
+
+    assert.equal(full.modelRequested, 'gpt-requested');
+    assert.equal(full.modelActual, 'gpt-actual');
+    assert.equal(full.model, 'gpt-actual', 'legacy Model remains response-model-falls-back-to-request-model');
+    assert.equal(full.provider, 'fixture-provider');
+    assert.equal(full.inputTokens, 123);
+    assert.equal(full.outputTokens, 45);
+    assert.equal(full.cacheReadTokens, 10);
+    assert.equal(full.cacheWriteTokens, 5);
+
+    assert.equal(unknown.modelRequested, '');
+    assert.equal(unknown.modelActual, '');
+    assert.equal(unknown.provider, '');
+    assert.equal(unknown.inputTokens, null, 'unmeasured token count must stay null, not collapse to 0');
+    assert.equal(unknown.outputTokens, null);
+    assert.equal(unknown.cacheReadTokens, null);
+    assert.equal(unknown.cacheWriteTokens, null);
+
+    assert.equal(zero.inputTokens, 0, 'a measured zero token count must remain 0, distinct from absent/null');
+    assert.equal(zero.outputTokens, 0);
+    assert.equal(zero.cacheReadTokens, null);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('unrecognized OTLP attribute keys are silently dropped, never forwarded into parsed spans', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-otel-canary-'));
+  try {
+    const file = path.join(directory, 'receipt.jsonl');
+    fs.writeFileSync(file, `${JSON.stringify({ resourceSpans: [{ scopeSpans: [{ spans: [{
+      traceId: 'trace-canary', spanId: 'span-canary', name: 'gen_ai.chat',
+      startTimeUnixNano: '1767225601000000000', endTimeUnixNano: '1767225602000000000',
+      attributes: [
+        attr('gen_ai.conversation.id', 'session-a'),
+        attr('gen_ai.operation.name', 'chat'),
+        attr('some.future.unrecognized.attribute', 'LEAK_CANARY_VALUE'),
+        attr('agentops.not_yet_invented.field', 'LEAK_CANARY_VALUE_2')
+      ]
+    }] }] }] })}\n`);
+    const result = readSessionOtelSpans('session-a', [file]);
+    assert.equal(result.invalid, 0);
+    assert.equal(result.spans.length, 1);
+    const serialized = JSON.stringify(result.spans);
+    assert.doesNotMatch(serialized, /LEAK_CANARY_VALUE/);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test('strictly redacted Collector names still identify attached script spans by safe attributes', () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-redacted-script-otel-'));
   try {

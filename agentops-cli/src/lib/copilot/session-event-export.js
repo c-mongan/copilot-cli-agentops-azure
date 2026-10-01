@@ -79,6 +79,14 @@ function directShellReferenceRead(command, toolName, event, repoRoot, referenceP
   return safeRepoPath(filePath, repoRoot, referencePaths);
 }
 
+// Mirrors the DurationNs null-preserving pattern used for spans: absent/unparseable
+// stays null so "never measured" cannot be confused with a measured zero.
+function nullableTokenCount(value) {
+  if (value === undefined || value === null) return null;
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 ? number : null;
+}
+
 function operationFields(event, repoRoot, referencePaths, prior = {}) {
   const data = event.data || {};
   const toolName = safeText(data.toolName || prior.toolName || '');
@@ -120,9 +128,13 @@ function operationFields(event, repoRoot, referencePaths, prior = {}) {
     SubAgentName: event.type.startsWith('subagent.') ? safeText(data.agentName || data.agentDisplayName || '', 200) : '',
     ParentAgentName: '',
     ExitCode: shellExitCode === null ? undefined : shellExitCode,
+    ModelRequested: safeText(data.requestedModel || '', 200),
     ModelActual: safeText(data.newModel || data.currentModel || data.model || '', 200),
-    InputTokens: Number(data.tokenDetails?.input?.tokenCount || 0),
-    OutputTokens: Number(data.tokenDetails?.output?.tokenCount || 0),
+    Provider: safeText(data.provider || '', 200),
+    InputTokens: nullableTokenCount(data.tokenDetails?.input?.tokenCount),
+    OutputTokens: nullableTokenCount(data.tokenDetails?.output?.tokenCount),
+    CacheReadTokens: nullableTokenCount(data.tokenDetails?.cache_read?.tokenCount),
+    CacheWriteTokens: nullableTokenCount(data.tokenDetails?.cache_write?.tokenCount),
     DurationMs: Number(data.durationMs || 0),
     ErrorType: status === 'failed' ? (event.type === 'subagent.failed' ? 'subagent_failed' : shellExitCode !== null && shellExitCode !== 0 ? 'shell_exit_code' : 'operation_failed') : ''
   };
@@ -179,8 +191,10 @@ function projectSessionEvents(events = [], { sessionId, runId, repoRoot = proces
       EventName: type,
       SpanName: type,
       ...operation,
-      InputTokens: Number.isSafeInteger(operation.InputTokens) ? operation.InputTokens : 0,
-      OutputTokens: Number.isSafeInteger(operation.OutputTokens) ? operation.OutputTokens : 0,
+      InputTokens: operation.InputTokens === null ? null : (Number.isSafeInteger(operation.InputTokens) ? operation.InputTokens : null),
+      OutputTokens: operation.OutputTokens === null ? null : (Number.isSafeInteger(operation.OutputTokens) ? operation.OutputTokens : null),
+      CacheReadTokens: operation.CacheReadTokens === null ? null : (Number.isSafeInteger(operation.CacheReadTokens) ? operation.CacheReadTokens : null),
+      CacheWriteTokens: operation.CacheWriteTokens === null ? null : (Number.isSafeInteger(operation.CacheWriteTokens) ? operation.CacheWriteTokens : null),
       DurationMs: Number.isSafeInteger(operation.DurationMs) ? operation.DurationMs : 0,
       ContentCaptureSignal: false,
       ContentCaptureMode: 'off',

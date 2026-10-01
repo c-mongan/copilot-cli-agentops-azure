@@ -5,6 +5,15 @@ const { AGENTOPS_SCHEMA_VERSION } = require('../schema/agentops-attributes');
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const SESSION_SPAN_MAX_BYTES = 20 * 1024 * 1024;
 
+// Mirrors the DurationNs null-preserving pattern: absent/unparseable stays
+// null so "never measured" cannot be confused with a measured zero, on
+// either the write (span.* -> Row) or read-back (Row -> span.*) side.
+function nullableTokenCount(value) {
+  if (value === null || value === undefined) return null;
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 ? number : null;
+}
+
 function sessionToolContext(events = []) {
   let mainAgent = '';
   const agentById = new Map();
@@ -136,9 +145,16 @@ function spanRowsFromOtelSpans(spans, sessionId, runId) {
       ScriptRuntimeVersion: span.scriptRuntimeVersion || '',
       ScriptRuntimeImplementation: span.scriptRuntimeImplementation || '',
       ScriptLoaderName: span.scriptLoaderName || '',
+      // Legacy/display-only: response model falling back to the requested model. Do not
+      // use this to assert actual identity; ModelRequested/ModelActual below do that.
       Model: span.model || '',
-      InputTokens: Number.isFinite(Number(span.inputTokens)) ? Number(span.inputTokens) : 0,
-      OutputTokens: Number.isFinite(Number(span.outputTokens)) ? Number(span.outputTokens) : 0,
+      ModelRequested: span.modelRequested || '',
+      ModelActual: span.modelActual || '',
+      Provider: span.provider || '',
+      InputTokens: nullableTokenCount(span.inputTokens),
+      OutputTokens: nullableTokenCount(span.outputTokens),
+      CacheReadTokens: nullableTokenCount(span.cacheReadTokens),
+      CacheWriteTokens: nullableTokenCount(span.cacheWriteTokens),
       ErrorType: span.errorType || '',
       DurationMs: durationNs === null
         ? Math.max(0, Math.round(span.end - span.start))
@@ -257,6 +273,13 @@ function readSessionSpanRows(runDirectory, runId, sessionId) {
       scriptLoaderName: String(row.ScriptLoaderName || ''),
       stepName: String(row.StepName || ''),
       model: String(row.Model || ''),
+      modelRequested: String(row.ModelRequested || ''),
+      modelActual: String(row.ModelActual || ''),
+      provider: String(row.Provider || ''),
+      inputTokens: nullableTokenCount(row.InputTokens),
+      outputTokens: nullableTokenCount(row.OutputTokens),
+      cacheReadTokens: nullableTokenCount(row.CacheReadTokens),
+      cacheWriteTokens: nullableTokenCount(row.CacheWriteTokens),
       failed: String(row.Outcome || '').toLowerCase() === 'failed',
       errorType: String(row.ErrorType || ''),
       match: script ? 'run-linked-script' : 'exact-session',

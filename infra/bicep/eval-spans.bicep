@@ -41,8 +41,13 @@ var spanColumns = [
   { name: 'DurationMs', type: 'long' }
   { name: 'DurationNs', type: 'long' }
   { name: 'Model', type: 'string' }
+  { name: 'ModelRequested', type: 'string' }
+  { name: 'ModelActual', type: 'string' }
+  { name: 'Provider', type: 'string' }
   { name: 'InputTokens', type: 'long' }
   { name: 'OutputTokens', type: 'long' }
+  { name: 'CacheReadTokens', type: 'long' }
+  { name: 'CacheWriteTokens', type: 'long' }
   { name: 'SchemaVersion', type: 'string' }
   { name: 'ParentToolCallId', type: 'string' }
   { name: 'McpServerName', type: 'string' }
@@ -82,7 +87,7 @@ resource spansRule 'Microsoft.Insights/dataCollectionRules@2022-06-01' = {
       {
         streams: ['Custom-AgentOpsSpans_CL']
         destinations: ['agentops-eval-spans']
-        transformKql: 'source | project TimeGenerated, RunId, SessionId, TraceId, SpanId, ParentSpanId, SpanName, OperationName, AgentName, ToolName, ToolCallId, ScriptName, ScriptRuntimeName=tostring(ScriptRuntimeName), ScriptRuntimeVersion=tostring(ScriptRuntimeVersion), ScriptRuntimeImplementation=tostring(ScriptRuntimeImplementation), ScriptLoaderName=tostring(ScriptLoaderName), StepName, EventName, SkillName, LinkType, Outcome, ErrorType, DurationMs, DurationNs, Model, InputTokens, OutputTokens, SchemaVersion, ParentToolCallId, McpServerName, McpToolName'
+        transformKql: 'source | project TimeGenerated, RunId, SessionId, TraceId, SpanId, ParentSpanId, SpanName, OperationName, AgentName, ToolName, ToolCallId, ScriptName, ScriptRuntimeName=tostring(ScriptRuntimeName), ScriptRuntimeVersion=tostring(ScriptRuntimeVersion), ScriptRuntimeImplementation=tostring(ScriptRuntimeImplementation), ScriptLoaderName=tostring(ScriptLoaderName), StepName, EventName, SkillName, LinkType, Outcome, ErrorType, DurationMs, DurationNs, Model, ModelRequested, ModelActual, Provider, InputTokens, OutputTokens, CacheReadTokens, CacheWriteTokens, SchemaVersion, ParentToolCallId, McpServerName, McpToolName'
         outputStream: 'Custom-AgentOpsSpans_CL'
       }
     ]

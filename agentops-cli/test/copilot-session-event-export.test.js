@@ -183,3 +183,40 @@ test('session event export carries only safe start metadata onto completion rows
   assert.equal(Object.hasOwn(mcp, 'ExitCode'), false);
   assert.doesNotMatch(JSON.stringify(rows), /PRIVATE_ARGUMENT|PRIVATE_MCP_ARGUMENT|PRIVATE_TOOL_RESULT|PRIVATE_MCP_RESULT|fail\.py/);
 });
+
+test('session event export preserves requested model, provider, and measured usage tokens distinctly from absent', () => {
+  const rows = projectSessionEvents([
+    { type: 'tool.execution_complete', timestamp: '2026-01-01T00:00:00Z', data: {
+      toolCallId: 'call-full', requestedModel: 'gpt-requested', provider: 'fixture-provider',
+      tokenDetails: {
+        input: { tokenCount: 123 }, output: { tokenCount: 45 },
+        cache_read: { tokenCount: 10 }, cache_write: { tokenCount: 5 }
+      }
+    } },
+    { type: 'tool.execution_complete', timestamp: '2026-01-01T00:00:01Z', data: { toolCallId: 'call-unknown' } },
+    { type: 'tool.execution_complete', timestamp: '2026-01-01T00:00:02Z', data: {
+      toolCallId: 'call-zero',
+      tokenDetails: { input: { tokenCount: 0 }, output: { tokenCount: 0 } }
+    } }
+  ], { sessionId: 'session-synthetic', runId: 'run-synthetic', referencePaths: new Set() });
+  const [full, unknown, zero] = rows;
+
+  assert.equal(full.ModelRequested, 'gpt-requested');
+  assert.equal(full.Provider, 'fixture-provider');
+  assert.equal(full.InputTokens, 123);
+  assert.equal(full.OutputTokens, 45);
+  assert.equal(full.CacheReadTokens, 10);
+  assert.equal(full.CacheWriteTokens, 5);
+
+  assert.equal(unknown.ModelRequested, '');
+  assert.equal(unknown.Provider, '');
+  assert.equal(unknown.InputTokens, null, 'unmeasured token count must stay null, not collapse to 0');
+  assert.equal(unknown.OutputTokens, null);
+  assert.equal(unknown.CacheReadTokens, null);
+  assert.equal(unknown.CacheWriteTokens, null);
+  assert.match(JSON.stringify(unknown), /"InputTokens":null/);
+
+  assert.equal(zero.InputTokens, 0, 'a measured zero token count must remain 0, distinct from absent/null');
+  assert.equal(zero.OutputTokens, 0);
+  assert.equal(zero.CacheReadTokens, null);
+});

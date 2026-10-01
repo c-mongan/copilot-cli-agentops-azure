@@ -48,7 +48,7 @@ var runtimeColumns = [
   { name: 'ScriptLoaderName', type: 'string' }
 ]
 var runtimeColumnNames = [for column in runtimeColumns: column.name]
-var spansTransformKql = 'source | project TimeGenerated, RunId, SessionId, TraceId, SpanId, ParentSpanId, SpanName, OperationName, AgentName, ToolName, ToolCallId, ToolCallEvidence, ScriptName, ScriptRuntimeName=tostring(ScriptRuntimeName), ScriptRuntimeVersion=tostring(ScriptRuntimeVersion), ScriptRuntimeImplementation=tostring(ScriptRuntimeImplementation), ScriptLoaderName=tostring(ScriptLoaderName), StepName, EventName, SkillName, LinkType, Outcome, ErrorType, DurationMs, DurationNs, Model, InputTokens, OutputTokens, SchemaVersion, ParentToolCallId, McpServerName, McpToolName'
+var spansTransformKql = 'source | project TimeGenerated, RunId, SessionId, TraceId, SpanId, ParentSpanId, SpanName, OperationName, AgentName, ToolName, ToolCallId, ToolCallEvidence, ScriptName, ScriptRuntimeName=tostring(ScriptRuntimeName), ScriptRuntimeVersion=tostring(ScriptRuntimeVersion), ScriptRuntimeImplementation=tostring(ScriptRuntimeImplementation), ScriptLoaderName=tostring(ScriptLoaderName), StepName, EventName, SkillName, LinkType, Outcome, ErrorType, DurationMs, DurationNs, Model, ModelRequested, ModelActual, Provider, InputTokens, OutputTokens, CacheReadTokens, CacheWriteTokens, SchemaVersion, ParentToolCallId, McpServerName, McpToolName'
 
 var additiveDcrColumns = concat(
   filter(currentStreamDeclarations[spansStream].columns, column => !contains(runtimeColumnNames, column.name)),

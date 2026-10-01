@@ -15,6 +15,21 @@ function attributeValue(attributes, key) {
   return value?.stringValue ?? value?.intValue ?? value?.boolValue ?? '';
 }
 
+// Unlike attributeValue() (which returns '' for both "absent" and "present but
+// empty", a contract all of its other callers rely on), this distinguishes a
+// genuinely missing attribute from a measured value, so token/usage counts
+// that are never reported can stay null instead of collapsing to 0.
+function attributePresent(attributes, key) {
+  if (attributes && !Array.isArray(attributes)) return Object.prototype.hasOwnProperty.call(attributes, key);
+  return Array.isArray(attributes) && attributes.some(attribute => attribute.key === key);
+}
+
+function numericAttributeOrNull(attributes, key) {
+  if (!attributePresent(attributes, key)) return null;
+  const number = Number(attributeValue(attributes, key));
+  return Number.isFinite(number) && number >= 0 ? number : null;
+}
+
 function millisecondTime(nanoseconds) {
   try {
     const value = Number(BigInt(nanoseconds)) / 1000000;
@@ -255,7 +270,12 @@ function readSessionOtelSpans(sessionId, files = defaultReceiptFiles(), options 
           operation: String(attributeValue(attributes, 'gen_ai.operation.name') || span.name || 'unknown'),
           toolName: String(attributeValue(attributes, 'gen_ai.tool.name') || ''),
           toolCallId: String(attributeValue(attributes, 'gen_ai.tool.call.id') || ''),
+          // Legacy/display-only: falls back to the requested model when no response model was observed.
+          // modelRequested/modelActual below are the fields that assert actual request/response identity.
           model: String(attributeValue(attributes, 'gen_ai.response.model') || attributeValue(attributes, 'gen_ai.request.model') || ''),
+          modelRequested: String(attributeValue(attributes, 'gen_ai.request.model') || ''),
+          modelActual: String(attributeValue(attributes, 'gen_ai.response.model') || ''),
+          provider: String(attributeValue(attributes, 'gen_ai.provider.name') || ''),
           agent: String(attributeValue(attributes, 'gen_ai.agent.name') || attributeValue(attributes, 'agentops.agent.name') || 'native OTel'),
           scriptName,
           stepName,
@@ -267,8 +287,12 @@ function readSessionOtelSpans(sessionId, files = defaultReceiptFiles(), options 
           runId: String(runId || (exactSession ? options.runId : '') || ''),
           sessionId: String(conversationId || (exactSession ? sessionId : '') || ''),
           errorType: String(attributeValue(attributes, 'error.type') || ''),
-          inputTokens: attributeValue(attributes, 'gen_ai.usage.input_tokens'),
-          outputTokens: attributeValue(attributes, 'gen_ai.usage.output_tokens'),
+          // Null (not 0) when the attribute was never reported, so "unmeasured" stays
+          // distinguishable from a genuinely measured zero all the way through the ledger.
+          inputTokens: numericAttributeOrNull(attributes, 'gen_ai.usage.input_tokens'),
+          outputTokens: numericAttributeOrNull(attributes, 'gen_ai.usage.output_tokens'),
+          cacheReadTokens: numericAttributeOrNull(attributes, 'gen_ai.usage.cache_read.input_tokens'),
+          cacheWriteTokens: numericAttributeOrNull(attributes, 'gen_ai.usage.cache_creation.input_tokens'),
           failed: Number(span.status?.code) === 2 || Boolean(attributeValue(attributes, 'error.type')),
           events,
           sourceFile: path.basename(file)

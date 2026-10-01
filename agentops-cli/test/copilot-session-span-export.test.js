@@ -293,6 +293,103 @@ test('run span ledger restores exact-run native and script spans without duplica
   }
 });
 
+test('span export and ledger reload preserve requested/response model, provider, and measured usage tokens', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-span-telemetry-contract-'));
+  try {
+    const output = path.join(directory, 'AgentOpsSpans_CL.jsonl');
+    const spans = [
+      {
+        start: 1767225601000, end: 1767225602000, traceId: 'trace-full', spanId: 'span-full',
+        spanName: 'gen_ai.chat', operation: 'chat', match: 'exact-session',
+        model: 'gpt-actual', modelRequested: 'gpt-requested', modelActual: 'gpt-actual', provider: 'fixture-provider',
+        inputTokens: 123, outputTokens: 45, cacheReadTokens: 10, cacheWriteTokens: 5
+      },
+      {
+        start: 1767225601000, end: 1767225602000, traceId: 'trace-unknown', spanId: 'span-unknown',
+        spanName: 'gen_ai.chat', operation: 'chat', match: 'exact-session',
+        model: '', modelRequested: '', modelActual: '', provider: '',
+        inputTokens: null, outputTokens: null, cacheReadTokens: null, cacheWriteTokens: null
+      },
+      {
+        start: 1767225601000, end: 1767225602000, traceId: 'trace-zero', spanId: 'span-zero',
+        spanName: 'gen_ai.chat', operation: 'chat', match: 'exact-session',
+        inputTokens: 0, outputTokens: 0
+      }
+    ];
+    const rows = spanRowsFromOtelSpans(spans, 'session-a', 'run-a');
+    assert.equal(rows[0].ModelRequested, 'gpt-requested');
+    assert.equal(rows[0].ModelActual, 'gpt-actual');
+    assert.equal(rows[0].Model, 'gpt-actual');
+    assert.equal(rows[0].Provider, 'fixture-provider');
+    assert.equal(rows[0].InputTokens, 123);
+    assert.equal(rows[0].OutputTokens, 45);
+    assert.equal(rows[0].CacheReadTokens, 10);
+    assert.equal(rows[0].CacheWriteTokens, 5);
+
+    assert.equal(rows[1].ModelRequested, '');
+    assert.equal(rows[1].InputTokens, null, 'unmeasured input tokens must serialize as null, not 0');
+    assert.equal(rows[1].OutputTokens, null);
+    assert.equal(rows[1].CacheReadTokens, null);
+    assert.equal(rows[1].CacheWriteTokens, null);
+    assert.match(JSON.stringify(rows[1]), /"InputTokens":null/);
+
+    assert.equal(rows[2].InputTokens, 0, 'a measured zero must stay 0, distinct from absent/null');
+    assert.equal(rows[2].OutputTokens, 0);
+    assert.equal(rows[2].CacheReadTokens, null);
+
+    const written = writeSessionSpans(spans, 'session-a', 'run-a', output);
+    assert.equal(written.rows, 3);
+    const reloaded = readSessionSpanRows(directory, 'run-a', 'session-a');
+    const byTraceId = Object.fromEntries(reloaded.spans.map(span => [span.traceId, span]));
+
+    assert.equal(byTraceId['trace-full'].modelRequested, 'gpt-requested');
+    assert.equal(byTraceId['trace-full'].modelActual, 'gpt-actual');
+    assert.equal(byTraceId['trace-full'].provider, 'fixture-provider');
+    assert.equal(byTraceId['trace-full'].inputTokens, 123);
+    assert.equal(byTraceId['trace-full'].outputTokens, 45);
+    assert.equal(byTraceId['trace-full'].cacheReadTokens, 10);
+    assert.equal(byTraceId['trace-full'].cacheWriteTokens, 5);
+
+    assert.equal(byTraceId['trace-unknown'].inputTokens, null, 'reload must not coerce an absent token count to 0');
+    assert.equal(byTraceId['trace-unknown'].outputTokens, null);
+    assert.equal(byTraceId['trace-unknown'].cacheReadTokens, null);
+    assert.equal(byTraceId['trace-unknown'].cacheWriteTokens, null);
+
+    assert.equal(byTraceId['trace-zero'].inputTokens, 0);
+    assert.equal(byTraceId['trace-zero'].outputTokens, 0);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('span ledger reload of an old-shape row missing every new telemetry field still parses without throwing', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-span-ledger-legacy-'));
+  try {
+    const file = path.join(directory, 'AgentOpsSpans_CL.jsonl');
+    const oldRow = {
+      TimeGenerated: '2026-01-01T00:00:00.000Z', RunId: 'run-a', SessionId: 'session-a',
+      TraceId: 'trace-legacy', SpanId: 'span-legacy', SpanName: 'gen_ai.chat',
+      OperationName: 'chat', AgentName: '', ToolName: '', ToolCallId: '',
+      Model: 'legacy-model', InputTokens: 7, OutputTokens: 2,
+      DurationNs: null, DurationMs: 10, Outcome: 'ok', LinkType: 'native-session'
+    };
+    fs.writeFileSync(file, `${JSON.stringify(oldRow)}\n`, { mode: 0o600 });
+    assert.doesNotThrow(() => readSessionSpanRows(directory, 'run-a', 'session-a'));
+    const result = readSessionSpanRows(directory, 'run-a', 'session-a');
+    assert.equal(result.spans.length, 1);
+    assert.equal(result.spans[0].model, 'legacy-model');
+    assert.equal(result.spans[0].modelRequested, '');
+    assert.equal(result.spans[0].modelActual, '');
+    assert.equal(result.spans[0].provider, '');
+    assert.equal(result.spans[0].inputTokens, 7, 'old numeric fields must still load correctly');
+    assert.equal(result.spans[0].outputTokens, 2);
+    assert.equal(result.spans[0].cacheReadTokens, null, 'columns the old row never had must come back null, not 0');
+    assert.equal(result.spans[0].cacheWriteTokens, null);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test('session OTel reader accepts OTLP JSON attribute value wrappers for run-linked scripts', () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-otel-json-'));
   try {

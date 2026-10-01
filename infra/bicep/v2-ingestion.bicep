@@ -31,7 +31,7 @@ param ingestionPrincipalType string = 'User'
 var destinationName = 'agentops-log-analytics'
 var tablePlan = 'Analytics'
 var effectiveRetentionInDays = retentionInDays < 4 ? 4 : retentionInDays
-var spansTransformKql = 'source | project TimeGenerated, RunId, SessionId, TraceId, SpanId, ParentSpanId, SpanName, OperationName, AgentName, ToolName, ToolCallId, ToolCallEvidence, ScriptName, ScriptRuntimeName=tostring(ScriptRuntimeName), ScriptRuntimeVersion=tostring(ScriptRuntimeVersion), ScriptRuntimeImplementation=tostring(ScriptRuntimeImplementation), ScriptLoaderName=tostring(ScriptLoaderName), StepName, EventName, SkillName, LinkType, Outcome, ErrorType, DurationMs, DurationNs, Model, InputTokens, OutputTokens, SchemaVersion, ParentToolCallId, McpServerName, McpToolName'
+var spansTransformKql = 'source | project TimeGenerated, RunId, SessionId, TraceId, SpanId, ParentSpanId, SpanName, OperationName, AgentName, ToolName, ToolCallId, ToolCallEvidence, ScriptName, ScriptRuntimeName=tostring(ScriptRuntimeName), ScriptRuntimeVersion=tostring(ScriptRuntimeVersion), ScriptRuntimeImplementation=tostring(ScriptRuntimeImplementation), ScriptLoaderName=tostring(ScriptLoaderName), StepName, EventName, SkillName, LinkType, Outcome, ErrorType, DurationMs, DurationNs, Model, ModelRequested, ModelActual, Provider, InputTokens, OutputTokens, CacheReadTokens, CacheWriteTokens, SchemaVersion, ParentToolCallId, McpServerName, McpToolName'
 var v2Tables = [
   {
     name: 'AgentOpsRunSummary_CL'
@@ -177,8 +177,13 @@ var v2Tables = [
       { name: 'DurationMs', type: 'long' }
       { name: 'DurationNs', type: 'long' }
       { name: 'Model', type: 'string' }
+      { name: 'ModelRequested', type: 'string' }
+      { name: 'ModelActual', type: 'string' }
+      { name: 'Provider', type: 'string' }
       { name: 'InputTokens', type: 'long' }
       { name: 'OutputTokens', type: 'long' }
+      { name: 'CacheReadTokens', type: 'long' }
+      { name: 'CacheWriteTokens', type: 'long' }
       { name: 'SchemaVersion', type: 'string' }
       { name: 'ParentToolCallId', type: 'string' }
       { name: 'McpServerName', type: 'string' }
