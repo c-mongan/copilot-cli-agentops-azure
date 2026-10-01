@@ -31,7 +31,18 @@ function componentPairs(architecture = {}) {
 }
 
 function architectureVersion(architecture = {}) {
-  const lines = componentPairs(architecture).map(entry => `${entry.kind}\t${entry.path}\t${entry.sha256}`);
+  // Hash input is restricted to exactly (path, sha256) pairs per the binding
+  // plan ruling, sorted by path then sha256 for a stable total order.
+  // `kind` (and ownerSkillPath) stay on componentPairs() for other internal
+  // ownership logic, but must not leak into the hashed bytes.
+  const lines = componentPairs(architecture)
+    .map(entry => ({ path: entry.path, sha256: entry.sha256 }))
+    .sort((a, b) => {
+      const byPath = String(a.path || '').localeCompare(String(b.path || ''));
+      if (byPath !== 0) return byPath;
+      return String(a.sha256 || '').localeCompare(String(b.sha256 || ''));
+    })
+    .map(entry => `${entry.path}\t${entry.sha256}`);
   return sha256Hex(lines.join('\n'));
 }
 
