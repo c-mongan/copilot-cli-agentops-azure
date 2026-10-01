@@ -502,10 +502,12 @@ function sessionWaterfall(events = [], nativeSpans = [], options = {}) {
 //   row reconstructed purely from streamed deltas); missing = rows among those
 //   whose start or completion evidence was never captured (status 'incomplete' or
 //   containing 'not observed'); unsupported = 0 (no undeclared-tool-call concept).
-// script: observed = run-linked script spans captured this run; missing = 0 (no
-//   declared-script manifest is cross-referenced yet); unsupported = 0.
+// script: observed = run-linked script spans captured this run; missing = null (no
+//   declared-script manifest exists anywhere in this codebase to cross-reference
+//   against, so missing is never fabricated as 0); unsupported = 0.
 // mcp: observed = distinct tool calls this run that resolved to an MCP server;
-//   missing = 0 (no declared-MCP-server manifest is cross-referenced yet);
+//   missing = null (no declared-MCP-server manifest exists anywhere in this
+//   codebase to cross-reference against, so missing is never fabricated as 0);
 //   unsupported = 0.
 function buildCoverageBreakdown({ rows, referencePaths, mcpToolCallIds, scriptSpanCount }) {
   const referenceRows = rows.filter(row => row.kind === 'reference.read');
@@ -519,8 +521,8 @@ function buildCoverageBreakdown({ rows, referencePaths, mcpToolCallIds, scriptSp
   return {
     referenceRead: { observed: declaredObservedPaths.size, missing: referenceMissing, unsupported: unsupportedObservedPaths.size },
     toolCall: { observed: toolCallRows.length, missing: toolCallMissing, unsupported: 0 },
-    script: { observed: scriptSpanCount, missing: 0, unsupported: 0 },
-    mcp: { observed: mcpToolCallIds.size, missing: 0, unsupported: 0 }
+    script: { observed: scriptSpanCount, missing: null, unsupported: 0 },
+    mcp: { observed: mcpToolCallIds.size, missing: null, unsupported: 0 }
   };
 }
 

@@ -535,8 +535,8 @@ test('sessionWaterfall returns a structured per-component-type coverage breakdow
     ], [], { repoRoot: root });
     assert.deepEqual(result.coverage.referenceRead, { observed: 1, missing: 1, unsupported: 1 });
     assert.deepEqual(result.coverage.toolCall, { observed: 4, missing: 3, unsupported: 0 });
-    assert.deepEqual(result.coverage.mcp, { observed: 1, missing: 0, unsupported: 0 });
-    assert.deepEqual(result.coverage.script, { observed: 0, missing: 0, unsupported: 0 });
+    assert.deepEqual(result.coverage.mcp, { observed: 1, missing: null, unsupported: 0 });
+    assert.deepEqual(result.coverage.script, { observed: 0, missing: null, unsupported: 0 });
     assert.equal(typeof result.coverageGaps, 'number');
     assert.equal(typeof result.unresolvedRows, 'number');
   } finally {
