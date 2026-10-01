@@ -61,10 +61,32 @@ function uniqueRunId() {
   return `native_run_${Date.now()}_${crypto.randomBytes(5).toString('hex')}`;
 }
 
+function incompatibleInheritedOtelSettings(env) {
+  const names = [
+    'OTEL_EXPORTER_OTLP_TRACES_ENDPOINT',
+    'OTEL_EXPORTER_OTLP_HEADERS',
+    'OTEL_EXPORTER_OTLP_TRACES_HEADERS',
+    'OTEL_EXPORTER_OTLP_CERTIFICATE',
+    'OTEL_EXPORTER_OTLP_TRACES_CERTIFICATE',
+    'OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE',
+    'OTEL_EXPORTER_OTLP_TRACES_CLIENT_CERTIFICATE',
+    'OTEL_EXPORTER_OTLP_CLIENT_KEY',
+    'OTEL_EXPORTER_OTLP_TRACES_CLIENT_KEY'
+  ].filter(name => typeof env[name] === 'string' && env[name].trim());
+  if (env.OTEL_EXPORTER_OTLP_TRACES_PROTOCOL && env.OTEL_EXPORTER_OTLP_TRACES_PROTOCOL !== 'http/protobuf') {
+    names.push('OTEL_EXPORTER_OTLP_TRACES_PROTOCOL');
+  }
+  return names;
+}
+
 async function launchObservedCopilot(options = {}, dependencies = {}) {
   if (options.upload && !options.yes) throw new Error('copilot-session launch --upload requires --yes; omit --upload to keep evidence local');
   if (options.yes && !options.upload) throw new Error('copilot-session launch --yes requires --upload');
   const env = dependencies.env || process.env;
+  const otelConflicts = incompatibleInheritedOtelSettings(env);
+  if (otelConflicts.length) {
+    throw new Error(`inherited OpenTelemetry settings conflict with the scoped local collector: ${otelConflicts.join(', ')}`);
+  }
   const cwd = options.repo || process.cwd();
   const copilotHome = options.copilotHome || env.COPILOT_HOME || path.join(os.homedir(), '.copilot');
   const projectConfigPath = projectAgentOpsConfigPath({ cwd, agentOpsHome: dependencies.agentopsHome || agentopsHome });

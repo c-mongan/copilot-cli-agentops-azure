@@ -332,6 +332,26 @@ test('native Copilot launch fails before invocation if its strict per-run Collec
   assert.equal(launched, false);
 });
 
+test('native launcher rejects inherited trace endpoint and TLS settings without exposing values', async () => {
+  let collectorStarted = false;
+  const secret = 'SECRET_ENDPOINT_VALUE';
+  await assert.rejects(launchObservedCopilot({ upload: false }, {
+    env: {
+      PATH: process.env.PATH,
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: `https://${secret}.example/v1/traces`,
+      OTEL_EXPORTER_OTLP_TRACES_CERTIFICATE: `/private/${secret}.pem`
+    },
+    resolveCopilotBinary: () => ({ ok: true, path: '/usr/local/bin/copilot' }),
+    startScopedStrictCollector: async () => { collectorStarted = true; throw new Error('must not start'); }
+  }), error => {
+    assert.match(error.message, /OTEL_EXPORTER_OTLP_TRACES_ENDPOINT/);
+    assert.match(error.message, /OTEL_EXPORTER_OTLP_TRACES_CERTIFICATE/);
+    assert.doesNotMatch(error.message, /SECRET_ENDPOINT_VALUE/);
+    return true;
+  });
+  assert.equal(collectorStarted, false);
+});
+
 test('native Copilot launch requires explicit confirmation before Azure upload', async () => {
   let collectorChecked = false;
   await assert.rejects(launchObservedCopilot({ upload: true, yes: false }, {
