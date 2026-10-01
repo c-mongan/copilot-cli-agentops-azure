@@ -2,6 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const { attachmentReferencePaths, attachmentSkillReferences, directShellPathRead, operationFields } = require('./session-event-export');
+const { redactContent } = require('./session-content');
 
 const RAW_CONTENT_FIELD_NAMES = new Set([
   'content', 'arguments', 'result', 'output', 'deltaContent', 'inputDelta',
@@ -600,6 +601,8 @@ function renderSessionWaterfall(events, sessionId, options = {}) {
   const { rows, first, durationMs, invalidTimestamps, suppressedEvents, unmatchedDeltas, unresolvedRows, coverageGaps, nativeSpans, scriptSpans, exactToolCallJoins, inferredScriptToolLinks, coverage } = sessionWaterfall(events, options.nativeSpans || [], options);
   if (options.metadataOnly) {
     for (const row of rows) row.details = redactRawContent(row.details);
+  } else {
+    for (const row of rows) row.details = redactContent(row.details);
   }
   rows.forEach((row, index) => { row.displayIndex = index; });
   const sessionFailureToolCalls = new Set(rows
@@ -615,7 +618,7 @@ function renderSessionWaterfall(events, sessionId, options = {}) {
   const failureSourceNote = 'Exact tool-call joins combine session failures with their native spans; unjoined signals stay separate.';
   const contentModeNote = options.metadataOnly
     ? 'Metadata only — prompts, tool arguments/results and other raw payload content are redacted from this local timeline. Pass --allow-content to render full captured content (persists raw content in this local HTML file).'
-    : 'Full content rendered locally — this file contains raw prompts, tool arguments/results and other captured payloads. Treat it as sensitive; it is not uploaded anywhere.';
+    : 'Restricted local content — captured prompts, tool arguments/results and other payloads are rendered with best-effort secret redaction. Treat this file as sensitive; it has no automatic local expiry and is not uploaded anywhere.';
   const incomplete = rows.filter(row => row.status === 'incomplete').length;
   const delivery = options.deliveryStatus || null;
   const deliveryLabel = status => status === 'azure_accepted'
@@ -676,7 +679,7 @@ function renderSessionWaterfall(events, sessionId, options = {}) {
   // gap, not a rendering omission, so it is reported as "not tracked" rather than guessed.
   const retryMetricHtml = '<div class="metric unknown"><strong>Not tracked</strong><span>Retries — no retry signal is captured by current instrumentation</span></div>';
   const privacyLabel = options.metadataOnly ? 'Metadata only' : 'Full content';
-  const privacyMetricHtml = `<div class="metric"><strong>${escapeHtml(privacyLabel)}</strong><span>Privacy profile — ${options.metadataOnly ? 'raw payload content redacted' : 'raw payloads retained locally'}</span></div>`;
+  const privacyMetricHtml = `<div class="metric"><strong>${escapeHtml(privacyLabel)}</strong><span>Privacy profile — ${options.metadataOnly ? 'raw payload content redacted; expiry not applicable' : 'best-effort redacted payloads retained locally; no automatic expiry'}</span></div>`;
   const deliveryStreamList = delivery ? Object.values(delivery.streams || {}) : [];
   const deliveryAccepted = deliveryStreamList.filter(stream => stream?.status === 'azure_accepted').length;
   const deliverySummaryMetricHtml = delivery

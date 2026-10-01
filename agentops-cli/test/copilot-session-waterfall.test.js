@@ -681,9 +681,23 @@ test('summary states the effective privacy/capture profile distinctly for metada
   const metadataHtml = renderSessionWaterfall([], 'privacy-metadata', { metadataOnly: true });
   assert.match(metadataHtml, /Privacy profile/);
   assert.match(metadataHtml, /<strong>Metadata only<\/strong>/);
+  assert.match(metadataHtml, /expiry not applicable/);
   const fullHtml = renderSessionWaterfall([], 'privacy-full', { metadataOnly: false });
   assert.match(fullHtml, /Privacy profile/);
   assert.match(fullHtml, /<strong>Full content<\/strong>/);
+  assert.match(fullHtml, /no automatic expiry/);
+});
+
+test('full-content HTML redacts common secrets before persisting captured payloads', () => {
+  const html = renderSessionWaterfall([
+    { type: 'user.message', timestamp: '2026-01-01T00:00:01.000Z', data: { content: 'Authorization: Bearer fixture-secret-value' } },
+    { type: 'tool.execution_start', timestamp: '2026-01-01T00:00:02.000Z', data: {
+      toolCallId: 'secret-tool', toolName: 'bash', arguments: { command: 'echo safe', API_KEY: 'fixture-api-secret' }
+    } }
+  ], 'restricted-secret-fixture', { metadataOnly: false });
+  assert.doesNotMatch(html, /fixture-secret-value|fixture-api-secret/);
+  assert.match(html, /Bearer \[REDACTED\]/);
+  assert.match(html, /echo safe/);
 });
 
 test('undeclared reference reads get a distinct accessible badge so a reviewer cannot mistake them for a declared, sanctioned read', () => {

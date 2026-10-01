@@ -39,6 +39,7 @@ function redactContent(value) {
     return Object.fromEntries(Object.entries(value).map(([key, item]) => [
       key,
       /(?:password|secret|token|api[_-]?key|authorization|connection[_-]?string)/i.test(key)
+        && !/^(?:input|output|cacheRead|cacheWrite)Tokens$/i.test(key)
         ? '[REDACTED]' : redactContent(item)
     ]));
   }
@@ -168,5 +169,6 @@ module.exports = {
   contentDeletionPreview,
   contentRowsFromSession,
   deleteSessionContent,
+  redactContent,
   writeSessionContent
 };
