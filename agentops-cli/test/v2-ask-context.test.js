@@ -132,6 +132,29 @@ test('ask context prompt explicitly surfaces open architecture hypothesis cards 
   assert.match(result.prompt, /Not a verdict/);
 });
 
+test('ask context prompt carries defensive wording for a DECLARED_NOT_OBSERVED insight row, not just the bare rule name and numbers', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-arch-defensive-'));
+  try {
+    const runsFile = writeJsonlFixture(path.join(root, 'runs.jsonl'), [{
+      TimeGenerated: '2026-06-03T12:00:00Z', RunId: 'run-dno', SessionId: 'session-dno', TraceId: 'trace-dno'
+    }]);
+    const insightsFile = writeJsonlFixture(path.join(root, 'insights.jsonl'), [
+      { TimeGenerated: '2026-06-03T11:00:00Z', RunId: 'run-dno', InsightId: 'insight-dno', Rule: 'DECLARED_NOT_OBSERVED', ArchitectureVersion: 'abc123', Numerator: 0, Denominator: 23, CoverageRuns: 23, Status: 'open' }
+    ]);
+
+    const result = buildV2AskContext({ runId: 'run-dno', runsFile, insightsFile });
+
+    assert.equal(result.ok, true);
+    // Must not surface a bare Rule=/Numerator=/Denominator= triple with no
+    // accompanying defensive framing anywhere a chat consumer would read it.
+    assert.match(result.prompt, /not grounds to drop it|not .*safe to remove|review it.*don.t delete/i);
+    assert.ok(result.evidence.insights[0].Guidance, 'insight row should carry a defensive guidance sentence');
+    assert.match(result.evidence.insights[0].Guidance, /not .*(unused|safe to remove)/i);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('ask context prompt states no architecture hypotheses are open when the insights bundle is empty', () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-no-arch-insights-'));
   try {

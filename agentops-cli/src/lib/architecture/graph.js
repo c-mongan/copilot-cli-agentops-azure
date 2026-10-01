@@ -205,7 +205,11 @@ function joinObserved(graph, run = {}) {
   return {
     runId: run.runId,
     architectureVersion: run.architectureVersion || graph.architectureVersion,
-    evidenceComplete: run.evidenceComplete !== false,
+    // Finding 2 (overnight whole-branch review): a genuinely missing/unknown
+    // evidenceComplete signal must NOT be treated as "complete" — only an
+    // explicit `true` (itself derived upstream from an affirmative, observable
+    // capture signal, e.g. non-empty events) counts.
+    evidenceComplete: run.evidenceComplete === true,
     taskContract: run.taskContract || null,
     outcomeFailed: Boolean(run.outcomeFailed),
     compactionObserved: compaction || Boolean(run.compactionObserved),

@@ -20,6 +20,29 @@ function escapeKqlString(value) {
   return String(value || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 }
 
+// Finding 3 (overnight whole-branch review): a chat consumer seeing a bare
+// `Rule=DECLARED_NOT_OBSERVED, Numerator=0, Denominator=23` row with no
+// accompanying framing could reasonably (mis)infer the component is unused
+// and safe to remove — exactly the failure mode Task 6's architecture engine
+// built defensive card wording to prevent (see RULE_METADATA in
+// architecture/findings.js), which was getting lost once it was selected
+// down to bare numeric/enum fields here. This is a small FIXED lookup of one
+// defensive sentence per rule name, keyed off `Rule`, rather than widening
+// the shared safe-metadata regex (safe-metadata.js's SuggestedNextStep text
+// contains characters like `;` that regex intentionally excludes everywhere
+// else) or passing the card's own free-text SuggestedNextStep through.
+const ARCHITECTURE_RULE_GUIDANCE = Object.freeze({
+  DECLARED_NOT_OBSERVED: 'Zero observations across covered runs. This does not mean the component is unused or safe to remove — review it, don\'t delete it automatically.',
+  REFERENCE_NEAR_MANDATORY: 'This reference is read on almost every activation of its skill. Not proof it must be inlined — confirm with a single-change experiment before changing SKILL.md.',
+  SKILL_PAIR_COACTIVATED: 'These two skills activate together almost every time. Not proof they should be merged — investigate before changing either skill.',
+  TOOL_THRASH: 'This tool repeats without confirmed state progress. May be a legitimate retry pattern — verify before assuming it is wasteful or broken.',
+  MECHANICAL_LLM_STEP: 'A model call appears where a deterministic script was declared. Confirm with a protected Vally experiment before replacing the model-driven step.'
+});
+
+function architectureGuidanceForRule(rule) {
+  return ARCHITECTURE_RULE_GUIDANCE[rule] || 'This is a hypothesis card, not a verdict — review before acting on it.';
+}
+
 function v2RunReplayUrl(run) {
   const links = legacy.openLinksSummary({ session: { id: run.SessionId || run.RunId, grafana_url: null } });
   const base = links.v2_replay_url || '';
@@ -102,10 +125,19 @@ function buildV2AskContext(options = {}) {
   // (Task 6's engine) already carry exactly these fields — Rule/ArchitectureVersion/
   // Numerator/Denominator/CoverageRuns/Status — so this selection is a deliberate
   // convention match, not a coincidence. Pass that file as --insights to surface it here.
-  const insightsEvidence = topRows(insights, 10).map(row => selectMetadata(row, ['TimeGenerated', 'RunId', 'InsightId', 'Rule', 'ArchitectureVersion', 'Numerator', 'Denominator', 'CoverageRuns', 'Status']));
+  // `Guidance` is added afterward (fixed text, not row-derived) so a chat
+  // consumer never sees bare numbers/enum without the card's defensive framing.
+  const insightsEvidence = topRows(insights, 10).map(row => {
+    const selected = selectMetadata(row, ['TimeGenerated', 'RunId', 'InsightId', 'Rule', 'ArchitectureVersion', 'Numerator', 'Denominator', 'CoverageRuns', 'Status']);
+    return { ...selected, Guidance: architectureGuidanceForRule(selected.Rule) };
+  });
   const architectureRules = [...new Set(insightsEvidence.map(row => row.Rule).filter(Boolean))];
+  const architectureGuidanceLines = [...new Set(insightsEvidence.map(row => row.Guidance).filter(Boolean))];
   const architectureSummaryLine = insightsEvidence.length > 0
-    ? `${insightsEvidence.length} architecture hypothesis card(s) are open for this run (rules: ${architectureRules.join(', ') || 'unknown'}) — see Evidence.insights below for Numerator/Denominator/CoverageRuns/Status per card. Not a verdict.`
+    ? [
+      `${insightsEvidence.length} architecture hypothesis card(s) are open for this run (rules: ${architectureRules.join(', ') || 'unknown'}) — see Evidence.insights below for Numerator/Denominator/CoverageRuns/Status per card. Not a verdict.`,
+      ...architectureGuidanceLines
+    ].join('\n')
     : 'Architecture hypotheses: none open for this run in this bundle.';
 
   const prompt = [

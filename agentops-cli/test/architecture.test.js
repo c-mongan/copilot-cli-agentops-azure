@@ -497,6 +497,146 @@ test('loadLedgerFromDirectory reads attachment.json plus per-run subdirectories'
   }
 });
 
+// --- Finding 1 (overnight whole-branch review): the real recorder's output
+// layout -----------------------------------------------------------------
+//
+// session-run-delivery.js writes:
+//   <repoRoot>/.agentops/attachment.json (+ .attachment-receipt.json)
+//   <agentopsHome>/runs/<runId>/run-context.json
+//   <agentopsHome>/runs/<runId>/AgentOpsEvents_CL.jsonl
+// This is a HAND-BUILT fixture shaped exactly like that real output (real
+// field names, real directory split between repo root and runs dir), built
+// using the same attach-command.js helpers the real recorder uses, so the
+// loader is exercised against the actual integration surface, not another
+// fixture-only shape.
+function writeRealAttachment(repoRoot, architecture) {
+  const { attachmentManifest, writeAttachment, readOwnedAttachment } = require('../src/lib/attach-command');
+  const manifest = { ...attachmentManifest(repoRoot), architecture };
+  writeAttachment(repoRoot, manifest);
+  const owned = readOwnedAttachment(repoRoot);
+  assert.equal(owned.ok, true, owned.error);
+  return owned;
+}
+
+function writeRealRun(runsDir, id, { attachmentManifestSha256, events = [] }) {
+  const runDir = path.join(runsDir, id);
+  fs.mkdirSync(runDir, { recursive: true });
+  const runContext = {
+    managedBy: 'copilot-agentops',
+    schemaVersion: 1,
+    runId: id,
+    sessionId: `session-${id}`,
+    repositoryRootHash: crypto.createHash('sha256').update('repo-root-placeholder').digest('hex').slice(0, 16),
+    attachmentManifestSha256,
+    createdAt: new Date().toISOString()
+  };
+  fs.writeFileSync(path.join(runDir, 'run-context.json'), `${JSON.stringify(runContext, null, 2)}\n`);
+  fs.writeFileSync(
+    path.join(runDir, 'AgentOpsEvents_CL.jsonl'),
+    events.length ? `${events.map(event => JSON.stringify(event)).join('\n')}\n` : ''
+  );
+  return runDir;
+}
+
+function realShapedEvent(sequence, agentName, skillName) {
+  return {
+    TimeGenerated: new Date().toISOString(),
+    Sequence: sequence,
+    EventId: `session_event_${sequence}`,
+    ParentEventId: '',
+    AgentId: agentName,
+    ParentAgentId: '',
+    ParentToolCallId: '',
+    RunId: '',
+    SessionId: '',
+    TraceId: '',
+    EventName: 'skill.invoked',
+    SpanName: 'skill.invoked',
+    Status: 'observed',
+    ToolName: '',
+    ToolCallId: '',
+    McpServerName: '',
+    McpToolName: '',
+    CommandName: '',
+    ReferenceName: '',
+    ScriptName: '',
+    AgentName: agentName,
+    SkillName: skillName,
+    SubAgentName: '',
+    ParentAgentName: '',
+    ModelRequested: '',
+    ModelActual: '',
+    Provider: '',
+    InputTokens: null,
+    OutputTokens: null,
+    CacheReadTokens: null,
+    CacheWriteTokens: null,
+    DurationMs: 0,
+    ErrorType: '',
+    ContentCaptureSignal: false,
+    ContentCaptureMode: 'off',
+    PrivacyMode: 'strict',
+    Surface: 'cli',
+    SchemaVersion: '2'
+  };
+}
+
+test('loadLedgerFromDirectory loads the real recorder output layout (repo-root attachment.json, run-context.json, AgentOpsEvents_CL.jsonl) without throwing', () => {
+  const repoRoot = fs.mkdtempSync(path.join(process.cwd(), '.tmp-arch-real-repo-'));
+  const runsDir = fs.mkdtempSync(path.join(process.cwd(), '.tmp-arch-real-runs-'));
+  try {
+    const inventory = baseInventory();
+    const owned = writeRealAttachment(repoRoot, inventory);
+    writeRealRun(runsDir, 'run-real-001', {
+      attachmentManifestSha256: owned.receipt.manifestSha256,
+      events: [realShapedEvent(1, 'reviewer', 'retrieve')]
+    });
+
+    const loaded = loadLedgerFromDirectory(runsDir, { repoRoot });
+    assert.equal(loaded.runs.length, 1);
+    assert.equal(loaded.runs[0].runId, 'run-real-001');
+    assert.equal(loaded.runs[0].events.length, 1);
+    assert.equal(loaded.runs[0].evidenceComplete, true);
+    assert.equal(loaded.attachment.architecture.agents.length, inventory.agents.length);
+
+    const result = computeArchitecture({ attachment: loaded.attachment, runs: loaded.runs });
+    assert.ok(result.report.architectureVersion);
+    assert.equal(typeof result.report.coverageRuns, 'number');
+    assert.ok(Array.isArray(result.report.cards));
+  } finally {
+    fs.rmSync(repoRoot, { recursive: true, force: true });
+    fs.rmSync(runsDir, { recursive: true, force: true });
+  }
+});
+
+// --- Finding 2: evidenceComplete must not default to "complete" ----------
+test('real-shaped runs with zero captured events must not count toward the DECLARED_NOT_OBSERVED denominator', () => {
+  const repoRoot = fs.mkdtempSync(path.join(process.cwd(), '.tmp-arch-empty-repo-'));
+  const runsDir = fs.mkdtempSync(path.join(process.cwd(), '.tmp-arch-empty-runs-'));
+  try {
+    const inventory = baseInventory();
+    const owned = writeRealAttachment(repoRoot, inventory);
+    // 12 real-shaped runs whose run-context.json never carries an
+    // evidenceComplete field (the real recorder never writes one) AND whose
+    // AgentOpsEvents_CL.jsonl is empty (no events were actually captured) —
+    // exactly the "no real coverage evidence" reproduction from the review.
+    for (let i = 0; i < 12; i += 1) {
+      writeRealRun(runsDir, runId('empty', i), { attachmentManifestSha256: owned.receipt.manifestSha256, events: [] });
+    }
+    const loaded = loadLedgerFromDirectory(runsDir, { repoRoot });
+    assert.equal(loaded.runs.length, 12);
+    assert.ok(loaded.runs.every(run => run.evidenceComplete === false), 'runs with no captured events must not be marked evidence-complete');
+
+    const result = computeArchitecture({ attachment: loaded.attachment, runs: loaded.runs });
+    assert.equal(result.report.coverageRuns, 0);
+    assert.equal(result.report.insufficientEvidence, true);
+    assert.ok(!result.report.cards.some(card => card.rule === 'DECLARED_NOT_OBSERVED'), 'no DECLARED_NOT_OBSERVED card should fire from zero real coverage evidence');
+  } finally {
+    fs.rmSync(repoRoot, { recursive: true, force: true });
+    fs.rmSync(runsDir, { recursive: true, force: true });
+  }
+});
+
 test('architectureCommand help and flag parse', () => {
   const inventory = baseInventory();
   const tempRoot = fs.mkdtempSync(path.join(process.cwd(), '.tmp-arch-cmd-'));

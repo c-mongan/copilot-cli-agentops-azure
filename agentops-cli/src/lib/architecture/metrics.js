@@ -38,7 +38,15 @@ function proportionRow(numerator, denominator, coverageRuns, architectureVersion
 }
 
 function matchesArchitecture(graph, run) {
-  return run.architectureVersion === graph.architectureVersion && run.evidenceComplete !== false;
+  // Finding 2 (overnight whole-branch review): a run only counts toward any
+  // coverage denominator with AFFIRMATIVE evidence it was fully captured
+  // (evidenceComplete === true). A missing/unknown flag must never silently
+  // pass as "complete" — that previously let runs with zero real coverage
+  // evidence inflate denominators and fire false-positive-risk cards such as
+  // DECLARED_NOT_OBSERVED. See architecture-command.js's loader for how the
+  // real recorder's run-context.json (which never stamps this flag) derives
+  // it from an observable signal instead.
+  return run.architectureVersion === graph.architectureVersion && run.evidenceComplete === true;
 }
 
 function eligibleRuns(graph, joinedRuns) {

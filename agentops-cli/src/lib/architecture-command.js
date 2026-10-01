@@ -3,6 +3,7 @@ const path = require('node:path');
 
 const { hasFlag, optionValue } = require('./args');
 const { writeJsonOrRender } = require('./command-output');
+const { readOwnedAttachment } = require('./attach-command');
 const { buildStaticGraph, joinLedger } = require('./architecture/graph');
 const { computeAllMetrics } = require('./architecture/metrics');
 const { evaluateFindings } = require('./architecture/findings');
@@ -41,12 +42,56 @@ function readJsonlSafe(file) {
   }
 }
 
-function loadLedgerFromDirectory(ledgerDir) {
-  const attachmentPath = path.join(ledgerDir, 'attachment.json');
-  const attachment = readJsonSafe(attachmentPath);
-  if (!attachment || !attachment.architecture) {
-    throw new Error(`architecture requires an attachment manifest at ${attachmentPath}; detected missing or malformed inventory`);
+// Locates the attachment manifest. Two layouts are supported:
+//   1. Fixture-only layout (Task 6's test suite): <ledgerDir>/attachment.json,
+//      holding `{ architecture }` directly.
+//   2. The REAL recorder's layout (attach-command.js / session-run-delivery.js):
+//      the manifest lives at the REPO ROOT under .agentops/attachment.json,
+//      not inside the ledger/runs directory. `--ledger` typically points at
+//      <agentopsHome>/runs, which is unrelated to the repo root, so this is
+//      read via readOwnedAttachment(repoRoot) — the same ownership-verified
+//      helper attach-command.js's own coverage command reuses — rather than
+//      re-implementing manifest parsing here.
+// The fixture layout is tried first so existing ledger fixtures keep working
+// unchanged; the repo-root attachment is the fallback used by real runs.
+function loadAttachmentManifest(ledgerDir, repoRoot) {
+  const fixturePath = path.join(ledgerDir, 'attachment.json');
+  const fixtureAttachment = readJsonSafe(fixturePath);
+  if (fixtureAttachment && fixtureAttachment.architecture) {
+    return { attachment: fixtureAttachment, path: fixturePath };
   }
+  const owned = readOwnedAttachment(repoRoot);
+  if (owned.ok && owned.manifest && owned.manifest.architecture) {
+    return { attachment: owned.manifest, path: owned.paths.manifest };
+  }
+  return { attachment: null, path: fixturePath, error: owned.error };
+}
+
+// Reads per-run context. The real recorder writes `run-context.json`
+// (session-run-delivery.js); Task 6's fixtures write `context.json`. Its real
+// fields are `{managedBy, schemaVersion, runId, sessionId, repositoryRootHash,
+// attachmentManifestSha256, createdAt}` — none of which are
+// architectureVersion/taskContract/outcomeFailed/compactionObserved, so those
+// are treated as genuinely absent (not pre-stamped) rather than required.
+function readRunContext(runDir) {
+  return readJsonSafe(path.join(runDir, 'run-context.json')) || readJsonSafe(path.join(runDir, 'context.json')) || {};
+}
+
+// Reads per-run events. The real recorder writes `AgentOpsEvents_CL.jsonl`
+// (session-event-export.js); Task 6's fixtures write `events.jsonl`.
+function readRunEvents(runDir) {
+  const realPath = path.join(runDir, 'AgentOpsEvents_CL.jsonl');
+  const fixturePath = path.join(runDir, 'events.jsonl');
+  return readJsonlSafe(fs.existsSync(realPath) ? realPath : fixturePath);
+}
+
+function loadLedgerFromDirectory(ledgerDir, options = {}) {
+  const repoRoot = options.repoRoot || process.cwd();
+  const located = loadAttachmentManifest(ledgerDir, repoRoot);
+  if (!located.attachment) {
+    throw new Error(`architecture requires an attachment manifest at ${located.path} (fixture ledger) or a real AgentOps attachment at the repo root .agentops/attachment.json under ${repoRoot} (${located.error || 'not found'}); detected missing or malformed inventory`);
+  }
+  const attachment = located.attachment;
   const runs = [];
   let invalidTotal = 0;
   let entries;
@@ -59,13 +104,21 @@ function loadLedgerFromDirectory(ledgerDir) {
     if (!entry.isDirectory()) continue;
     if (!/^[A-Za-z0-9_.:-]{1,128}$/.test(entry.name)) continue;
     const runDir = path.join(ledgerDir, entry.name);
-    const context = readJsonSafe(path.join(runDir, 'context.json')) || {};
-    const { rows: events, invalid } = readJsonlSafe(path.join(runDir, 'events.jsonl'));
+    const context = readRunContext(runDir);
+    const { rows: events, invalid } = readRunEvents(runDir);
     invalidTotal += invalid;
+    // Finding 2: evidenceComplete must never silently default to "complete".
+    // The real recorder's run-context.json never stamps this flag at all, so
+    // a genuinely missing flag is resolved from an affirmative, observable
+    // signal instead — whether this run actually captured any events — not
+    // from an absence-means-yes assumption. An explicit boolean on the
+    // fixture's context.json (if present) is still honoured as-is.
+    const explicitEvidenceComplete = typeof context.evidenceComplete === 'boolean' ? context.evidenceComplete : null;
+    const evidenceComplete = explicitEvidenceComplete !== null ? explicitEvidenceComplete : events.length > 0;
     runs.push({
       runId: entry.name,
       architectureVersion: context.architectureVersion || null,
-      evidenceComplete: context.evidenceComplete !== false,
+      evidenceComplete,
       taskContract: context.taskContract || null,
       outcomeFailed: Boolean(context.outcomeFailed),
       compactionObserved: Boolean(context.compactionObserved),
@@ -107,8 +160,8 @@ function renderText(report) {
 }
 
 function printHelp(stdout) {
-  stdout.write('agentops architecture [--ledger <dir>] [--json] [--out <dir>] [--upload]\n');
-  stdout.write('Reads a run ledger (default: current attachment under ~/.agentops/runs), joins it with the static architecture inventory, and emits the deterministic metrics plus hypothesis cards for the 5 in-scope rules. --upload previews the Azure Logs Ingestion row set only; it does not upload until an operator wires the live DCR path.\n');
+  stdout.write('agentops architecture [--ledger <dir>] [--repo <dir>] [--json] [--out <dir>] [--upload]\n');
+  stdout.write('Reads a run ledger (default: current attachment under ~/.agentops/runs), joins it with the static architecture inventory, and emits the deterministic metrics plus hypothesis cards for the 5 in-scope rules. The ledger\'s attachment manifest is read from <dir>/attachment.json if present, otherwise from the real AgentOps attachment at the repo root (.agentops/attachment.json under --repo, default: current directory). Per-run data accepts both the real recorder\'s run-context.json/AgentOpsEvents_CL.jsonl and the fixture context.json/events.jsonl layout. --upload previews the Azure Logs Ingestion row set only; it does not upload until an operator wires the live DCR path.\n');
 }
 
 function architectureCommand(args = [], dependencies = {}) {
@@ -118,9 +171,10 @@ function architectureCommand(args = [], dependencies = {}) {
     return { ok: true, action: 'help' };
   }
   const ledgerDir = optionValue(args, '--ledger');
-  if (!ledgerDir) throw new Error('architecture requires --ledger <dir> pointing to a run ledger with attachment.json plus per-run subdirectories (events.jsonl, context.json)');
+  if (!ledgerDir) throw new Error('architecture requires --ledger <dir> pointing to a run ledger (either a fixture ledger with attachment.json plus per-run events.jsonl/context.json, or the real recorder\'s <agentopsHome>/runs directory with per-run run-context.json/AgentOpsEvents_CL.jsonl)');
   const resolvedLedger = path.resolve(ledgerDir);
-  const { attachment, runs, invalidLedgerRows } = loadLedgerFromDirectory(resolvedLedger);
+  const repoRoot = path.resolve(optionValue(args, '--repo') || process.cwd());
+  const { attachment, runs, invalidLedgerRows } = loadLedgerFromDirectory(resolvedLedger, { repoRoot });
   const outDir = optionValue(args, '--out');
   const result = computeArchitecture({ attachment, runs, options: { invalidLedgerRows } });
   let written = null;
@@ -133,6 +187,7 @@ function architectureCommand(args = [], dependencies = {}) {
     ok: true,
     action: 'architecture',
     ledger: resolvedLedger,
+    repo: repoRoot,
     out_dir: written ? path.dirname(written.jsonPath) : null,
     files: written,
     architecture_version: result.report.architectureVersion,
