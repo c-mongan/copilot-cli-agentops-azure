@@ -73,6 +73,17 @@ test('oversized content is truncated with a visible marker instead of being sile
   assert.equal(responseRow.Truncated, false);
 });
 
+test('restricted content truncation stays within the byte cap at a UTF-8 boundary', () => {
+  const unicode = 'A'.repeat(CONTENT_VALUE_MAX_BYTES - 1) + '😊😊';
+  const rows = contentRowsFromSession([
+    { type: 'user.message', timestamp: '2026-01-01T00:00:00Z', data: { content: unicode } }
+  ], 'session-test');
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].Truncated, true);
+  assert.ok(Buffer.byteLength(rows[0].PromptText, 'utf8') <= CONTENT_VALUE_MAX_BYTES);
+  assert.doesNotMatch(rows[0].PromptText, /�/);
+});
+
 test('delete-content preview reports what would be removed without deleting anything', () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-content-delete-'));
   try {
@@ -135,4 +146,3 @@ test('delete-content requires the AgentOpsContent_CL.jsonl file name and reports
     fs.rmSync(directory, { recursive: true, force: true });
   }
 });
-

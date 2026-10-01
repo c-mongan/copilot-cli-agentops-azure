@@ -15,7 +15,11 @@ const CONTENT_VALUE_MAX_BYTES = 256 * 1024;
 function truncateToByteLimit(text, maxBytes) {
   const buffer = Buffer.from(text, 'utf8');
   if (buffer.length <= maxBytes) return text;
-  return buffer.subarray(0, maxBytes).toString('utf8');
+  const decoder = new TextDecoder('utf-8', { fatal: true });
+  for (let size = maxBytes; size >= Math.max(0, maxBytes - 3); size -= 1) {
+    try { return decoder.decode(buffer.subarray(0, size)); } catch {}
+  }
+  throw new Error('could not truncate restricted content at a UTF-8 boundary');
 }
 
 function redactContent(value) {
