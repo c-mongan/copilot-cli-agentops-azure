@@ -639,6 +639,37 @@ test('summary shows model and token metrics as not observed, never as a fabricat
   assert.doesNotMatch(html, /<strong>0<\/strong>\s*<span>[^<]*[Ii]nput tokens/);
 });
 
+test('summary counts distinct chat requests without adding an aggregate agent span or duplicate delivery', () => {
+  const start = Date.parse('2026-01-01T00:00:01.000Z');
+  const span = (spanId, operation, inputTokens, outputTokens) => ({
+    start, end: start + 1000, traceId: 'trace-usage', spanId, operation,
+    agent: 'copilot', modelRequested: 'gpt-4', modelActual: 'gpt-4',
+    inputTokens, outputTokens, failed: false
+  });
+  const html = renderSessionWaterfall([], 'usage-fixture', { nativeSpans: [
+    span('parent', 'invoke_agent', 100, 20),
+    span('chat-a', 'chat', 60, 12),
+    span('chat-b', 'chat', 40, 8),
+    span('chat-a', 'chat', 60, 12)
+  ] });
+  assert.match(html, /<strong>2<\/strong><span>Model requests/);
+  assert.match(html, /<strong>100<\/strong><span>Input tokens · 2\/2 requests measured/);
+  assert.match(html, /<strong>20<\/strong><span>Output tokens · 2\/2 requests measured/);
+  assert.match(html, /<strong>3<\/strong><span>Exact-session native spans/);
+});
+
+test('summary labels agent-only token usage as aggregate span evidence', () => {
+  const start = Date.parse('2026-01-01T00:00:01.000Z');
+  const html = renderSessionWaterfall([], 'agent-aggregate-fixture', { nativeSpans: [{
+    start, end: start + 1000, traceId: 'trace-agent', spanId: 'span-agent',
+    operation: 'invoke_agent', agent: 'copilot', modelRequested: 'gpt-4',
+    inputTokens: 100, outputTokens: null, failed: false
+  }] });
+  assert.match(html, /Model-bearing spans \(request count unavailable\)/);
+  assert.match(html, /Input tokens · 1\/1 spans measured/);
+  assert.match(html, /Output tokens — 0 of 1 spans measured/);
+});
+
 test('summary reports retries as explicitly not tracked rather than fabricating a zero count', () => {
   const html = renderSessionWaterfall([], 'retry-fixture', {});
   assert.match(html, /Retries/);

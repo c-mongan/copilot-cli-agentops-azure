@@ -77,7 +77,15 @@ function safeReferenceToolCompletion(data) {
   return safe;
 }
 
-function sessionWaterfall(events = [], nativeSpans = [], options = {}) {
+function sessionWaterfall(events = [], inputSpans = [], options = {}) {
+  const seenSpanIds = new Set();
+  const nativeSpans = inputSpans.filter(span => {
+    if (!span.traceId || !span.spanId) return true;
+    const key = `${span.traceId}:${span.spanId}`;
+    if (seenSpanIds.has(key)) return false;
+    seenSpanIds.add(key);
+    return true;
+  });
   const repoRoot = path.resolve(options.repoRoot || process.cwd());
   const referencePaths = options.referencePaths || attachmentReferencePaths(repoRoot);
   const skillReferences = options.skillReferences || attachmentSkillReferences(repoRoot);
@@ -627,7 +635,24 @@ function renderSessionWaterfall(events, sessionId, options = {}) {
   // with zero model-bearing spans is treated as "not observed" rather than a fabricated
   // "0 model requests", since an agent session always makes at least one model call; a
   // zero here almost always means missing receipt evidence, not a genuinely model-free run.
-  const modelRows = rows.filter(row => row.source === 'native OTel' && (row.details?.modelRequested || row.details?.modelActual));
+  const modelSpanRows = rows.filter(row => row.source === 'native OTel' && (row.details?.modelRequested || row.details?.modelActual));
+  // An invoke_agent span can report an aggregate of its chat children. Prefer
+  // individual chat requests when present, and never count a delivered span ID
+  // twice. If only an agent aggregate exists, label it as span evidence rather
+  // than claiming a count of model requests.
+  const chatRows = modelSpanRows.filter(row => row.kind === 'chat');
+  const selectedModelRows = chatRows.length ? chatRows : modelSpanRows;
+  const seenModelSpans = new Set();
+  const modelRows = selectedModelRows.filter(row => {
+    const traceId = row.details?.traceId;
+    const spanId = row.details?.spanId;
+    if (!traceId || !spanId) return true;
+    const key = `${traceId}:${spanId}`;
+    if (seenModelSpans.has(key)) return false;
+    seenModelSpans.add(key);
+    return true;
+  });
+  const modelUnit = chatRows.length ? 'requests' : 'spans';
   const requestedModels = [...new Set(modelRows.map(row => row.details.modelRequested).filter(Boolean))];
   const actualModels = [...new Set(modelRows.map(row => row.details.modelActual).filter(Boolean))];
   const providers = [...new Set(modelRows.map(row => row.details.provider).filter(Boolean))];
@@ -641,11 +666,11 @@ function renderSessionWaterfall(events, sessionId, options = {}) {
   const tokenMetricHtml = (label, totals) => modelRows.length === 0
     ? `<div class="metric unknown"><strong>Unknown</strong><span>${escapeHtml(label)} — not observed in available evidence</span></div>`
     : totals.measured === 0
-      ? `<div class="metric unknown"><strong>Unknown</strong><span>${escapeHtml(label)} — 0 of ${modelRows.length} requests measured</span></div>`
-      : `<div class="metric${totals.measured < modelRows.length ? ' gap' : ''}"><strong>${totals.sum}</strong><span>${escapeHtml(label)} · ${totals.measured}/${modelRows.length} requests measured</span></div>`;
+      ? `<div class="metric unknown"><strong>Unknown</strong><span>${escapeHtml(label)} — 0 of ${modelRows.length} ${modelUnit} measured</span></div>`
+      : `<div class="metric${totals.measured < modelRows.length ? ' gap' : ''}"><strong>${totals.sum}</strong><span>${escapeHtml(label)} · ${totals.measured}/${modelRows.length} ${modelUnit} measured</span></div>`;
   const modelMetricHtml = modelRows.length === 0
     ? `<div class="metric unknown"><strong>Unknown</strong><span>Model requests/responses — not observed in available evidence</span></div>`
-    : `<div class="metric"><strong>${modelRows.length}</strong><span>Model requests${requestedModels.length ? ` · ${escapeHtml(requestedModels.join(', '))}` : ''}${actualModels.length && actualModels.join('|') !== requestedModels.join('|') ? ` → ${escapeHtml(actualModels.join(', '))}` : ''}${providers.length ? ` (${escapeHtml(providers.join(', '))})` : ''}</span></div>`;
+    : `<div class="metric"><strong>${modelRows.length}</strong><span>${chatRows.length ? 'Model requests' : 'Model-bearing spans (request count unavailable)'}${requestedModels.length ? ` · ${escapeHtml(requestedModels.join(', '))}` : ''}${actualModels.length && actualModels.join('|') !== requestedModels.join('|') ? ` → ${escapeHtml(actualModels.join(', '))}` : ''}${providers.length ? ` (${escapeHtml(providers.join(', '))})` : ''}</span></div>`;
   // No retry signal (model-request-level or otherwise) is captured anywhere in the
   // session/OTel event model this renderer receives — this is a genuine instrumentation
   // gap, not a rendering omission, so it is reported as "not tracked" rather than guessed.
