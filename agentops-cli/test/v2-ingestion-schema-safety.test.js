@@ -45,6 +45,25 @@ test('AgentOpsSpans schema adds precise nanosecond duration without changing mil
   assert.match(evalSpansBicep, /transformKql: 'source \| project .*DurationNs/);
 });
 
+test('AgentOpsSpans schema stays in sync across v2-ingestion, eval-spans, and migrate-script-runtime-schema for model/provider/cache columns', () => {
+  const spansStart = bicep.indexOf("name: 'AgentOpsSpans_CL'");
+  const spansEnd = bicep.indexOf("name: 'AgentOpsToolCalls_CL'", spansStart);
+  const spansSchema = bicep.slice(spansStart, spansEnd);
+  const columnTypes = {
+    ModelRequested: 'string',
+    Provider: 'string',
+    CacheReadTokens: 'long',
+    CacheWriteTokens: 'long'
+  };
+  for (const [name, type] of Object.entries(columnTypes)) {
+    assert.match(spansSchema, new RegExp(`name: '${name}', type: '${type}'`));
+    assert.match(evalSpansBicep, new RegExp(`name: '${name}', type: '${type}'`));
+    assert.match(bicep, new RegExp(`var spansTransformKql = 'source \\| project .*\\b${name}\\b`));
+    assert.match(evalSpansBicep, new RegExp(`transformKql: 'source \\| project .*\\b${name}\\b`));
+    assert.match(runtimeMigrationBicep, new RegExp(`var spansTransformKql = 'source \\| project .*\\b${name}\\b`));
+  }
+});
+
 test('v2 Bicep declares each custom table once and spans use the exported outcome column', () => {
   const tableNames = [...bicep.matchAll(/^\s*name: '(AgentOps[A-Za-z0-9]+_CL)'$/gm)].map(match => match[1]);
   assert.equal(tableNames.length, new Set(tableNames).size);

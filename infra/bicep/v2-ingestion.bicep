@@ -111,7 +111,9 @@ var v2Tables = [
       { name: 'SkillName', type: 'string' }
       { name: 'SubAgentName', type: 'string' }
       { name: 'ParentAgentName', type: 'string' }
+      { name: 'ModelRequested', type: 'string' }
       { name: 'ModelActual', type: 'string' }
+      { name: 'Provider', type: 'string' }
       { name: 'InputTokens', type: 'long' }
       { name: 'OutputTokens', type: 'long' }
       { name: 'ReasoningTokens', type: 'long' }
