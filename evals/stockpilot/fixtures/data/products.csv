@@ -1,0 +1,16 @@
+sku,name,category,unit_cost,reorder_point,is_seasonal,promo_next_month
+SKU-0042,Trailhead 65L Pack,Packs,185,60,0,0
+SKU-0183,Summit Down Jacket M,Apparel,210,150,0,0
+SKU-0091,Alpine Bivy Solo,Tents & Shelter,165,70,0,1
+SKU-0012,Chain Lube Wet,Bike,9.5,80,0,0
+SKU-0057,CloudRest Pad R,Sleeping,95,120,0,0
+SKU-0116,Stratus Rain Jacket L,Apparel,140,90,1,0
+SKU-0201,Ridgeline 10x12 Tarp,Tents & Shelter,72,50,1,0
+SKU-0202,Daybreak 24L Pack,Packs,88,55,0,0
+SKU-0203,Thermal Base Top M,Apparel,48,100,0,0
+SKU-0204,Hydro Filter Straw,Water,22,65,0,0
+SKU-0205,Compact Camp Stove,Cooking,58,45,0,0
+SKU-0206,Bike Light Combo,Bike,35,70,0,0
+SKU-0207,Headlamp 300lm,Electronics,29,85,0,0
+SKU-0208,Drift Synthetic Bag 20F,Sleeping,110,60,1,0
+SKU-0209,Trail Pant 32,Apparel,68,75,0,0

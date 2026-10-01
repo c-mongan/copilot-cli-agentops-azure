@@ -1,0 +1,12 @@
+{
+  "rule": "SKILL_PAIR_COACTIVATED",
+  "componentRefs": [
+    { "kind": "skill", "name": "weekly-report", "role": "primary" },
+    { "kind": "skill", "name": "notify-templates", "role": "secondary" }
+  ],
+  "expectedBehavior": "Once real runs exist, P(notify-templates activated | weekly-report activated) should be ~1.0, while notify-templates's independent-use rate (activations without weekly-report) should stay below DEFAULTS.coactivationIndependentUseCeiling in agentops-cli/src/lib/architecture/metrics.js, since notify-templates also activates on its own for unrelated alert/email tasks in the healthy fixture.",
+  "proposedChange": "Investigate merging the two skills, or turning the secondary one into a reference loaded by the primary. (Task 6's own proposedChange text for this rule.)",
+  "specSection": "§§48-49",
+  "provenTier": "static-structure-proof-only",
+  "proofTest": "evals/stockpilot/test/fixture-architecture-proof.test.js"
+}

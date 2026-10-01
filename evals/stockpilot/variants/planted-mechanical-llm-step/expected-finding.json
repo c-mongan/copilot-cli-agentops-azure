@@ -1,0 +1,12 @@
+{
+  "rule": "MECHANICAL_LLM_STEP",
+  "componentRefs": [
+    { "kind": "skill", "name": "supplier-selection" },
+    { "kind": "script", "path": "supplier_score.py" }
+  ],
+  "expectedBehavior": "Once real runs exist with task-contract tagging (scriptCoverage: complete, deterministicSteps: [{skillName: 'supplier-selection', scriptName: 'supplier_score.py'}]), the planted variant should show >= DEFAULTS.mechanicalModelCallsThreshold assistant.turn_end events on the supplier-selection skill per run with zero script.span events for supplier_score.py, vs the healthy base which should show script.span events and no repeated model-reasoning turns for this skill.",
+  "proposedChange": "Replace the model-driven step with a direct call to the designated script; confirm with a Vally single-change experiment before refactoring. (Task 6's own proposedChange text for this rule.)",
+  "specSection": "§51",
+  "provenTier": "static-structure-proof-only",
+  "proofTest": "evals/stockpilot/test/fixture-architecture-proof.test.js"
+}

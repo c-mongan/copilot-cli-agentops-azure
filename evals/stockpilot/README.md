@@ -1,13 +1,46 @@
-# StockPilot fixtures (placeholder — Task 9)
+# StockPilot pilot fixture (Task 9)
 
-This directory is reserved by the master plan for the StockPilot-derived
-proving ground. Task 6 built the deterministic architecture engine against
-hand-built fixture ledgers in `agentops-cli/test/architecture.test.js`
-(`baseInventory`, `plantedNearMandatoryLedger`, `plantedCoactivatedLedger`,
-`plantedThrashLedger`, `plantedMechanicalLedger`, `healthyLedger`) — those
-are the four planted-flaw ledgers plus the healthy negative control the
-spec promises as the "known right answers for detection" surface.
+Local/fixture-only adaptation of the Code with Claude 2026
+`agent-decomposition` workshop's StockPilot agent to Copilot CLI
+conventions, for the AgentOps architecture engine's eventual Vally
+single-change experiment loop. **No live Vally/Copilot trial has run.
+No model call was made anywhere in this directory.** See
+`../../.superpowers/sdd/2026-09-30-agentops-overnight-build/task-9-report.md`
+for the full task report, scope boundary, and self-review.
 
-Task 9 is responsible for the full StockPilot harness and the Vally
-single-change experiment loop; this file reserves the path and documents
-the handoff so neither task reinvents the other's fixtures.
+## Map
+
+| Path | What it is |
+|---|---|
+| `PROVENANCE.md` | Exact workshop URL, pinned commit SHA, license, file-level sha256 record |
+| `LICENSE-WORKSHOP` | Verbatim copy of the workshop repo's Apache-2.0 license |
+| `ATTRIBUTION.md` | Claude/CMA → Copilot CLI plumbing mapping; what was/wasn't adapted |
+| `manifest.yaml` | Recorded effective agent/model/skill/MCP settings (declared, not observed) |
+| `fixtures/` | The healthy, decomposed StockPilot agent profile + 5 skills + synthetic CSV data |
+| `variants/` | 4 single-change planted-flaw variants (one per Task 6 architecture rule) |
+| `test/fixture-architecture-proof.test.js` | Proves the fixture's static structure is *capable* of producing each planted finding, via Task 6's own engine functions — zero model calls |
+| `graders/` | Deterministic JS graders (ported from the workshop's `evals/graders.py`) + 12-task contract + grader unit tests |
+| `package.json` / `package-lock.json` | Isolated Vally dependency pin — **not** part of `agentops-cli/package.json` |
+| `VALLY-PIN.md` | `npm view`/install/`--help`/`lint`/`--dry-run` evidence; bundled-vs-native Copilot version record |
+| `vally/` | Real Vally `eval.yaml` + `experiment.yaml` (bounded, single-worker, narrow allowlist), validated with `lint`/`--dry-run` only |
+
+## Relationship to Task 6
+
+Task 6 (commits `52567b1`/`ef8ac86`/`3261d2b`) built the architecture
+engine's own hand-built, generically-named fixture ledgers directly in
+`agentops-cli/test/architecture.test.js` to test the detection engine
+**in isolation**. This directory is a different, complementary surface:
+the actual StockPilot **application** adaptation — real agent/skill
+files a real Copilot CLI run would execute against, with StockPilot's
+own component names — for the eventual live Vally trials. The two do
+not duplicate each other; `test/fixture-architecture-proof.test.js` here
+is a *local proof* (no model calls) that this fixture's structure, once
+run for real, would be capable of producing Task 6's findings — it is
+not a replacement for Task 6's own unit tests on the engine itself, and
+it is not a live trial.
+
+## Running the local tests (zero model calls)
+
+```bash
+node --test evals/stockpilot/test/*.test.js
+```

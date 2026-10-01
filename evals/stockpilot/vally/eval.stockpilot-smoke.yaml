@@ -1,0 +1,70 @@
+# StockPilot smoke eval (Task 9, bullet 4).
+#
+# This is a REAL Vally eval spec, written against the schema documented at
+# https://microsoft.github.io/vally/reference/eval-spec/ (fetched 2026-10-01;
+# no commit pin available for a docs site, unlike the workshop source — see
+# PROVENANCE.md). It is validated locally with `vally lint` and
+# `vally experiment run --dry-run` (see ../VALLY-PIN.md for the exact
+# commands and output) — NEITHER of which executes an agent or makes a
+# model call, per Vally's own documented behavior:
+#   - `lint`: "Static checks for skills and eval specs (fast, no execution)"
+#   - `experiment run --dry-run`: "Resolve the experiment and print the plan
+#     without executing"
+# No `vally eval`, `vally experiment run` (without --dry-run), or
+# `vally compare` has been run — those would make real model calls, which
+# this task has zero budget to authorize.
+name: stockpilot-smoke
+description: >
+  Smoke-level correctness check against the StockPilot fixture (healthy
+  base). Not a full 12-task port of evals/stockpilot/graders/tasks.json —
+  see ../ATTRIBUTION.md. Exercises two tasks with Vally's own native
+  grader types (output-matches) to prove the eval spec + skill/MCP
+  allowlist resolve correctly; the authoritative, unit-tested grader logic
+  for all 12 tasks lives in ../graders/index.js and ../graders/tasks.json.
+type: regression
+
+defaults:
+  runs: 1             # bounded total-trial limit: exactly 1 trial per stimulus
+  timeout: 3m          # bounded per-trial wall-clock limit
+  model: gpt-5.5
+  executor: copilot-sdk   # Vally's bundled executor -> @github/copilot 1.0.85 / copilot-sdk 1.0.14, NOT this environment's native copilot 1.0.90 — see ../VALLY-PIN.md
+
+# No inherited host skills or MCP servers: the skills list below is the
+# ONLY thing this eval can see, and mcpServers is explicitly empty.
+agent_environment:
+  skills:
+    - ../fixtures/skills/forecasting
+    - ../fixtures/skills/notify-templates
+    - ../fixtures/skills/reorder-policy
+    - ../fixtures/skills/supplier-selection
+    - ../fixtures/skills/weekly-report
+  mcpServers: {}
+  files:
+    - src: ../fixtures/data
+      dest: evals/stockpilot/fixtures/data
+
+stimuli:
+  - name: R1-stock-lookup
+    prompt: "What's the current stock level for SKU-0042 at WH-EAST?"
+    constraints:
+      max_turns: 8          # bounded turn limit
+      max_tool_calls: 10    # bounded tool-call limit
+      max_wall_time: 60s    # bounded per-stimulus wall-clock limit
+    graders:
+      - type: output-matches
+        config:
+          pattern: '\b312\b'
+
+  - name: F2-promo-reorder-confidence
+    prompt: >
+      We need to reorder SKU-0091 — there's a promo next month. Decide the
+      quantity and either place the order or escalate. Report the forecast
+      confidence you based the decision on.
+    constraints:
+      max_turns: 15
+      max_tool_calls: 20
+      max_wall_time: 120s
+    graders:
+      - type: output-matches
+        config:
+          pattern: 'confidence[^A-Za-z]{0,10}0?\.\d{1,2}\b'

@@ -1,0 +1,116 @@
+{
+  "_provenance": "Adapted from Code with Claude 2026 agent-decomposition workshop evals/tasks.yaml (commit 0b445c70eccfe3814f7cbdcec59d5a8102e391f8, see ../PROVENANCE.md). Same task IDs/prompts/grader shapes, ported to JSON + this fixture's smaller synthetic dataset (see fixtures/data/README.md). Expected ground-truth values were recomputed against this fixture's own CSVs (see graders/index.js expectedValue), NOT copied from the workshop's larger dataset.",
+  "tasks": [
+    {
+      "id": "R1",
+      "name": "Stock lookup",
+      "prompt": "What's the current stock level for SKU-0042 at WH-EAST?",
+      "grader": "exact_match",
+      "expected": { "field": "on_hand", "sku": "SKU-0042", "warehouse": "WH-EAST" },
+      "tags": ["regression", "lookup"]
+    },
+    {
+      "id": "R2",
+      "name": "Below reorder point",
+      "prompt": "Which SKUs are below their reorder point right now (summed across warehouses)? List the SKU codes.",
+      "grader": "set_match",
+      "expected": { "source": "computed_low_stock" },
+      "tags": ["regression", "threshold"]
+    },
+    {
+      "id": "R3",
+      "name": "Create PO cheapest supplier",
+      "prompt": "Place a purchase order for 50 units of SKU-0204 from the cheapest in-stock supplier.",
+      "grader": "action_taken",
+      "expected": { "kind": "po", "sku": "SKU-0204", "qty": 50 },
+      "tags": ["regression", "write"]
+    },
+    {
+      "id": "R4",
+      "name": "Supplier lead times",
+      "prompt": "Who are the approved suppliers for SKU-0091 and what are their lead times?",
+      "grader": "set_match",
+      "expected": { "source": "suppliers_for", "sku": "SKU-0091" },
+      "tags": ["regression", "join"]
+    },
+    {
+      "id": "R5",
+      "name": "Cycle-count adjust",
+      "prompt": "Adjust stock for SKU-0012 at WH-EAST down by 5 units (cycle count correction).",
+      "grader": "action_taken",
+      "expected": { "kind": "erp", "sku": "SKU-0012" },
+      "tags": ["regression", "write"]
+    },
+    {
+      "id": "R6",
+      "name": "Single-SKU reorder rec",
+      "prompt": "Give me a reorder recommendation for SKU-0042. How many units should we order?",
+      "grader": "numeric_tolerance",
+      "expected": { "source": "reorder_qty", "sku": "SKU-0042", "tolerance_pct": 40 },
+      "tags": ["regression", "reorder"]
+    },
+    {
+      "id": "R7",
+      "name": "14-day forecast (steady)",
+      "prompt": "What's the 14-day demand forecast for SKU-0057?",
+      "grader": "numeric_tolerance",
+      "expected": { "source": "forecast", "sku": "SKU-0057", "days": 14, "tolerance_pct": 25 },
+      "tags": ["regression", "forecasting"]
+    },
+    {
+      "id": "R8",
+      "name": "Promo-month forecast",
+      "prompt": "How many units of SKU-0116 should we stock for next month, given it's seasonal and there's a promo coming up?",
+      "grader": "numeric_tolerance",
+      "expected": { "source": "forecast_promo", "sku": "SKU-0116", "days": 30, "tolerance_pct": 35, "must_mention": ["promo"] },
+      "tags": ["regression", "forecasting"]
+    },
+    {
+      "id": "R9",
+      "name": "Weekly report",
+      "prompt": "Generate the Monday inventory report for WH-EAST.",
+      "grader": "structural_report_check",
+      "expected": {
+        "required_headings": ["Stockouts", "Low Stock"],
+        "warehouse": "WH-EAST",
+        "note": "Deterministic structural approximation of the workshop's llm_judge grader; see ATTRIBUTION.md. Does not judge prose quality."
+      },
+      "tags": ["regression", "report"]
+    },
+    {
+      "id": "F1",
+      "name": "Daily low-stock sweep",
+      "prompt": "Run the daily low-stock check across all warehouses. Place purchase orders for the urgent reorders, and present the results ranked by urgency.",
+      "grader": "composite",
+      "expected": {
+        "checks": [
+          { "grader": "action_taken", "kind": "po", "sku": "SKU-0183", "min_qty": 50 },
+          { "grader": "wall_budget", "budget_ms": 270000 },
+          { "grader": "ranked_mention", "sku": "SKU-0183", "top": 3 }
+        ]
+      },
+      "tags": ["failure-mode", "context-bloat"]
+    },
+    {
+      "id": "F2",
+      "name": "Promo reorder w/ forecast",
+      "prompt": "We need to reorder SKU-0091 — there's a promo next month. Decide the quantity and either place the order or escalate. Report the forecast confidence you based the decision on.",
+      "grader": "regex_present",
+      "expected": {
+        "pattern": "confidence[^A-Za-z]{0,10}0?\\.\\d{1,2}\\b",
+        "why": "confidence stated qualitatively, not as a number"
+      },
+      "tags": ["failure-mode", "handoff-drop", "forecasting"]
+    },
+    {
+      "id": "F3",
+      "name": "Batch low-stock alerts",
+      "prompt": "Identify the most urgent low-stock SKUs and send a personalized alert for each to the ops channel. Your final reply should be a brief confirmation, not a repeat of the alert content.",
+      "grader": "efficiency",
+      "expected": { "kind": "notify", "min_count": 3 },
+      "budget_turns": 25,
+      "budget_tokens": 5000,
+      "tags": ["failure-mode", "over-orchestration"]
+    }
+  ]
+}

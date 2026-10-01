@@ -1,0 +1,51 @@
+# Effective agent/model/skill/MCP settings for the StockPilot fixture (Task 9, bullet 1)
+#
+# This records what a Copilot CLI / Vally run against this fixture would be
+# CONFIGURED to use. No run has actually executed (no live budget
+# authorized for this task) — this is the declared, intended configuration,
+# not an observed one. See evals/stockpilot/PROVENANCE.md and
+# evals/stockpilot/ATTRIBUTION.md for how each field maps back to the
+# pinned workshop source.
+
+agent:
+  profile: evals/stockpilot/fixtures/agents/stockpilot.agent.md
+  name: stockpilot
+  target: github-copilot
+  model: gpt-5.5
+  disable_model_invocation: true  # not independently user-triggerable outside an eval run
+  tools:
+    - read
+    - bash
+  mcp_servers: []  # none configured; see ATTRIBUTION.md ("owned fixture MCP" is a live-environment TODO
+
+skills:
+  root: evals/stockpilot/fixtures/skills
+  allowlist:
+    - forecasting
+    - notify-templates
+    - reorder-policy
+    - supplier-selection
+    - weekly-report
+  # Explicitly NOT on the allowlist: any skill from plugin/skills/ (this
+  # repo's own AgentOps skills) or any other host-level skill root. A real
+  # trial must verify this allowlist is exhaustive — see
+  # evals/stockpilot/vally/experiment.yaml and ATTRIBUTION.md for the
+  # "effective environment" validation procedure.
+
+data:
+  root: evals/stockpilot/fixtures/data
+  sinks_root: evals/stockpilot/fixtures/sinks  # created only by a real run; absent at rest
+  synthetic: true
+  source_schema_pinned_from: https://github.com/anthropics/cwc-workshops/tree/0b445c70eccfe3814f7cbdcec59d5a8102e391f8/agent-decomposition/data/seed.py
+
+variants:
+  healthy_base: evals/stockpilot/fixtures
+  planted:
+    - id: planted-reference-near-mandatory
+      expected_rule: REFERENCE_NEAR_MANDATORY
+    - id: planted-coactivated-skill-pair
+      expected_rule: SKILL_PAIR_COACTIVATED
+    - id: planted-mechanical-llm-step
+      expected_rule: MECHANICAL_LLM_STEP
+    - id: planted-tool-thrash
+      expected_rule: TOOL_THRASH

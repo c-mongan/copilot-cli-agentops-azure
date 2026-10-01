@@ -1,0 +1,12 @@
+{
+  "rule": "REFERENCE_NEAR_MANDATORY",
+  "componentRefs": [
+    { "kind": "skill", "name": "reorder-policy" },
+    { "kind": "reference", "path": "evals/stockpilot/fixtures/skills/reorder-policy/SKILL.md#compliance" }
+  ],
+  "expectedBehavior": "Once real runs exist, the Compliance section/paragraph should be read in close to numerator==denominator of runs where reorder-policy activates (near the DEFAULTS.referenceMandatoryRate threshold in agentops-cli/src/lib/architecture/metrics.js), vs a healthy-base rate well below that threshold because the healthy base only reads it on PO-placing runs.",
+  "proposedChange": "Promote the essential control information from this reference into SKILL.md; keep detail in the reference file. (Task 6's own proposedChange text for this rule.)",
+  "specSection": "§50",
+  "provenTier": "static-structure-proof-only",
+  "proofTest": "evals/stockpilot/test/fixture-architecture-proof.test.js"
+}

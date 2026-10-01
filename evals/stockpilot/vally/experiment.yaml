@@ -1,0 +1,52 @@
+# StockPilot single-change experiment manifest (Task 9, bullet 4).
+#
+# Real Vally experiment file against the schema at
+# https://microsoft.github.io/vally/reference/experiment-file/ (fetched
+# 2026-10-01). Validated locally with `vally experiment run --dry-run`
+# only (see ../VALLY-PIN.md) — "Resolve the experiment and print the plan
+# without executing," per Vally's own documentation. No real trial has
+# run; no model call has been made.
+#
+# This declares a controlled, single-change comparison: the healthy base
+# vs. the planted-tool-thrash variant (notify-templates with its "Batch,
+# don't spam" section removed — see
+# ../variants/planted-tool-thrash/CHANGE.md). Exactly one `vary` path
+# changes (agent_environment/skills, pointed at the one swapped skill
+# directory); everything else — model, runs, timeout, constraints, other
+# skills, MCP allowlist — is identical across variants, satisfying the
+# plan's "Keep difficulty/model/config constant where intended" bullet.
+name: stockpilot-planted-tool-thrash-single-change
+evals:
+  - eval.stockpilot-f3-thrash.yaml
+vary:
+  - /environment/skills
+baseline: healthy-base
+variants:
+  healthy-base:
+    environment:
+      skills:
+        - ../fixtures/skills/forecasting
+        - ../fixtures/skills/notify-templates
+        - ../fixtures/skills/reorder-policy
+        - ../fixtures/skills/supplier-selection
+        - ../fixtures/skills/weekly-report
+  planted-tool-thrash:
+    environment:
+      skills:
+        - ../fixtures/skills/forecasting
+        - ../variants/planted-tool-thrash/notify-templates
+        - ../fixtures/skills/reorder-policy
+        - ../fixtures/skills/supplier-selection
+        - ../fixtures/skills/weekly-report
+
+# execution.workers is NOT how concurrency is actually bounded for an
+# experiment run — per the CLI's own --help/docs, `--workers` is a CLI
+# flag (default 5) that this execution.workers block can only be
+# overridden BY, not the other way around ("`--workers` on the CLI takes
+# precedence"). The single authoritative way to get concurrency: 1 is to
+# always invoke this file with `vally experiment run --workers 1
+# experiment.yaml` — recorded here as a hard requirement, not left to
+# convention. See ../vally/README.md "Effective-environment validation
+# procedure".
+execution:
+  workers: 1
