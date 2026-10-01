@@ -2,6 +2,7 @@ const coreCommands = [
   'attach',
   'coverage',
   'detach',
+  'architecture',
   'setup',
   'install',
   'uninstall',

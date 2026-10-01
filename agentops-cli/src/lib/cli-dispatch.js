@@ -36,6 +36,7 @@ function createCliMain(dependencies = {}) {
   const directCommands = {
     attach: commands.attachCommand,
     coverage: commands.coverageCommand,
+    architecture: commands.architectureCommand,
     'ask-context': commands.askContextCommand,
     'azure-ingest': commands.azureIngestCommand,
     provision: commands.azureProvisionCommand,
