@@ -26,8 +26,10 @@ function attributePresent(attributes, key) {
 
 function numericAttributeOrNull(attributes, key) {
   if (!attributePresent(attributes, key)) return null;
-  const number = Number(attributeValue(attributes, key));
-  return Number.isFinite(number) && number >= 0 ? number : null;
+  const raw = attributeValue(attributes, key);
+  if (typeof raw !== 'number' && (typeof raw !== 'string' || !/^\d+$/.test(raw.trim()))) return null;
+  const number = Number(raw);
+  return Number.isSafeInteger(number) && number >= 0 ? number : null;
 }
 
 function millisecondTime(nanoseconds) {

@@ -178,12 +178,17 @@ test('native receipt preserves requested/response model, provider, and measured 
       span('span-zero', [
         attr('gen_ai.usage.input_tokens', '0'),
         attr('gen_ai.usage.output_tokens', '0')
+      ]),
+      span('span-invalid', [
+        attr('gen_ai.usage.input_tokens', ''),
+        attr('gen_ai.usage.output_tokens', '4.5'),
+        attr('gen_ai.usage.cache_read.input_tokens', '-1')
       ])
     ].map(JSON.stringify).join('\n'));
 
     const result = readSessionOtelSpans('session-a', [file]);
-    assert.equal(result.spans.length, 3);
-    const [full, unknown, zero] = result.spans;
+    assert.equal(result.spans.length, 4);
+    const [full, unknown, zero, invalid] = result.spans;
 
     assert.equal(full.modelRequested, 'gpt-requested');
     assert.equal(full.modelActual, 'gpt-actual');
@@ -205,6 +210,10 @@ test('native receipt preserves requested/response model, provider, and measured 
     assert.equal(zero.inputTokens, 0, 'a measured zero token count must remain 0, distinct from absent/null');
     assert.equal(zero.outputTokens, 0);
     assert.equal(zero.cacheReadTokens, null);
+
+    assert.equal(invalid.inputTokens, null, 'present but empty usage is not a measured zero');
+    assert.equal(invalid.outputTokens, null, 'fractional token usage is invalid');
+    assert.equal(invalid.cacheReadTokens, null, 'negative token usage is invalid');
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
   }
