@@ -93,6 +93,30 @@ test('metadata-only waterfall omits unknown future payload fields', () => {
   assert.doesNotMatch(html, /ARG_CANARY|RESULT_CANARY|STDERR_CANARY|FUTURE_CANARY/);
 });
 
+// Independent adversarial check of the same guarantee with a different
+// fixture (paired start/completion row so the nested `start`/`completion`
+// wrapper path is exercised too, a `shellExecution.stdout` sibling of the
+// already-covered `stderr`, and a multi-level-deep unknown field under a
+// key name nobody has ever declared safe) to confirm the allowlist genuinely
+// generalizes rather than happening to match only the field names in one
+// specific fixture.
+test('metadata-only waterfall drops a multi-level-deep unknown field and shellExecution.stdout, not just the originally reported fields', () => {
+  const fixture = [
+    { type: 'tool.execution_start', timestamp: '2026-01-01T00:00:00Z', data: { toolCallId: 'call-9', toolName: 'bash' } },
+    { type: 'tool.execution_complete', timestamp: '2026-01-01T00:00:01Z', data: {
+      toolCallId: 'call-9',
+      success: false,
+      result: 'RESULT_CANARY_9',
+      shellExecution: { exitCode: 1, stderr: 'STDERR_CANARY_9', stdout: 'STDOUT_CANARY_9' },
+      diagnosticsBundle: { trace: { payload: 'DEEP_UNKNOWN_CANARY_9' } }
+    } }
+  ];
+  const html = renderSessionWaterfall(fixture, 'safe-session-9', { metadataOnly: true });
+  assert.match(html, /Metadata only/);
+  assert.match(html, /call-9/);
+  assert.doesNotMatch(html, /RESULT_CANARY_9|STDERR_CANARY_9|STDOUT_CANARY_9|DEEP_UNKNOWN_CANARY_9/);
+});
+
 test('failure-first view links preceding context and exact native evidence', () => {
   const failureEvents = [
     { type: 'user.message', timestamp: '2026-01-01T00:00:00.000Z', data: { content: 'Fix the build' } },
