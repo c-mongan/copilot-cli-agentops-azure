@@ -107,7 +107,7 @@ function createObservabilityQueryCommand(dependencies = {}) {
       const topArg = optionValue(args, '--top');
       const top = topArg ? Number.parseInt(topArg, 10) : undefined;
       const queryFn = command === 'slow-scripts' ? slowScriptsQuery : command === 'repeated-tools' ? repeatedToolsQuery : coActivationQuery;
-      writeJson(queryFn(ledgerDir, { top }), stdout);
+      writeJson(queryFn(ledgerDir, { top, repoRoot: optionValue(args, '--repo') || process.cwd() }), stdout);
       return;
     }
 

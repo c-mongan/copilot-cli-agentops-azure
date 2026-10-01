@@ -213,7 +213,9 @@ test('native Copilot launch scopes strict OTel to the real CLI process and keeps
     });
     assert.equal(result.exitCode, 0);
     assert.equal(launch.command, '/usr/local/bin/copilot');
-    assert.deepEqual(launch.args, ['--agent', 'reviewer', '-p', 'synthetic test']);
+    assert.deepEqual(launch.args.slice(0, 4), ['--agent', 'reviewer', '-p', 'synthetic test']);
+    assert.equal(launch.args[4], '--session-id');
+    assert.match(launch.args[5], /^[a-f0-9-]{36}$/);
     assert.equal(launch.options.env.COPILOT_OTEL_ENABLED, 'true');
     assert.equal(launch.options.env.COPILOT_OTEL_CAPTURE_CONTENT, 'false');
     assert.equal(launch.options.env.AGENTOPS_PRIVACY_MODE, 'strict');
@@ -602,4 +604,43 @@ test('copilot-session export-events derives the session ID when --file is used w
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
+});
+
+for (const [label, supervised] of [['collector death', { status: 0, collectorFailed: true, cancelled: true }], ['cooperative cancellation', { status: 0, collectorFailed: false, cancelled: true }]]) {
+  test(`native launch reports ${label} as unsuccessful despite zero child exit`, async () => {
+    const previousExitCode = process.exitCode;
+    let lifecycle;
+    try {
+      const result = await launchObservedCopilot({ commandArgs: ['--version'], json: true }, {
+        env: { PATH: process.env.PATH },
+        resolveCopilotBinary: () => ({ ok: true, path: '/synthetic/copilot' }),
+        startScopedStrictCollector: async () => ({ endpoint: 'http://127.0.0.1:14320', receiptPath: '/synthetic/receipt', stop: async () => {} }),
+        snapshotCopilotSessions: () => new Map(), changedCopilotSession: () => ({ sessionId: 'synthetic-session' }),
+        superviseProcess: async () => supervised,
+        deliverCopilotSession: options => { lifecycle = options.lifecycle; return { state: 'local_pending', events: 1, spans: 0 }; }
+      });
+      assert.equal(result.ok, false);
+      assert.equal(result.exitCode, 0);
+      assert.equal(process.exitCode, 1);
+      assert.equal(lifecycle.process, 'cancelled');
+      assert.equal(lifecycle.collector, supervised.collectorFailed ? 'failed' : 'completed');
+    } finally { process.exitCode = previousExitCode; }
+  });
+}
+
+test('native launch preserves resume/connect and explicit session arguments', async () => {
+  const previousExitCode = process.exitCode;
+  try {
+    for (const commandArgs of [['--resume','existing-id'], ['-r','existing-id'], ['--continue'], ['--connect=existing-id'], ['--session-id','existing-id'], ['--session-id=existing-id']]) {
+      let actualArgs;
+      await launchObservedCopilot({ commandArgs, json: true }, {
+        env: { PATH: process.env.PATH },
+        resolveCopilotBinary: () => ({ ok: true, path: '/synthetic/copilot' }),
+        startScopedStrictCollector: async () => ({ endpoint: 'http://127.0.0.1:14320', receiptPath: '/synthetic/receipt', stop: async () => {} }),
+        snapshotCopilotSessions: () => new Map(), changedCopilotSession: () => null,
+        superviseProcess: async (command, args) => { actualArgs=args; return { status:0 }; }
+      });
+      assert.deepEqual(actualArgs, commandArgs);
+    }
+  } finally { process.exitCode = previousExitCode; }
 });

@@ -117,13 +117,15 @@ function buildReport({ graph, findings, invalidLedgerRows = 0, generatedAt = new
 }
 
 function writeReport(report, azureRows, outDir) {
-  fs.mkdirSync(outDir, { recursive: true });
+  fs.mkdirSync(outDir, { recursive: true, mode: 0o700 });
+  const stat = fs.lstatSync(outDir);
+  if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error('report output must be a real directory');
   const jsonPath = path.join(outDir, 'architecture-report.json');
   const markdownPath = path.join(outDir, 'architecture-report.md');
   const insightsPath = path.join(outDir, 'AgentOpsInsights_CL.jsonl');
-  fs.writeFileSync(jsonPath, `${JSON.stringify(report, null, 2)}\n`);
-  fs.writeFileSync(markdownPath, renderMarkdown(report));
-  fs.writeFileSync(insightsPath, azureRows.map(row => JSON.stringify(row)).join('\n') + (azureRows.length > 0 ? '\n' : ''));
+  fs.writeFileSync(jsonPath, `${JSON.stringify(report, null, 2)}\n`, { flag: 'wx', mode: 0o600 });
+  fs.writeFileSync(markdownPath, renderMarkdown(report), { flag: 'wx', mode: 0o600 });
+  fs.writeFileSync(insightsPath, azureRows.map(row => JSON.stringify(row)).join('\n') + (azureRows.length > 0 ? '\n' : ''), { flag: 'wx', mode: 0o600 });
   return { jsonPath, markdownPath, insightsPath };
 }
 

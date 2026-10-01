@@ -134,7 +134,7 @@ function writeLedger(root, inventory, runs) {
   for (const run of runs) {
     const runDir = path.join(root, run.runId);
     fs.mkdirSync(runDir, { recursive: true });
-    fs.writeFileSync(path.join(runDir, 'context.json'), JSON.stringify({ architectureVersion: null }));
+    fs.writeFileSync(path.join(runDir, 'context.json'), JSON.stringify({ architectureVersion: require('../src/lib/architecture/graph').architectureVersion(inventory), evidenceComplete: true, coverage: Object.fromEntries(['agents', 'skills', 'references', 'scripts', 'tools', 'models'].map(kind => [kind, 'complete'])) }));
     fs.writeFileSync(path.join(runDir, 'events.jsonl'), `${run.events.map(e => JSON.stringify(e)).join('\n')}\n`);
   }
 }
@@ -215,5 +215,22 @@ test('coActivationQuery surfaces the co-activated skill pair', t => {
 test('slowScriptsQuery propagates a clear error when the ledger has no attachment manifest', t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-missing-ledger-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  assert.throws(() => slowScriptsQuery(root, {}), /attachment manifest/);
+  assert.throws(() => slowScriptsQuery(root, { repoRoot: root }), /attachment manifest/);
+});
+
+test('investigation metrics exclude populated ledgers without affirmative capture coverage', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-partial-query-'));
+  try {
+    const inventory = architectureInventory();
+    writeLedger(root, inventory, buildMixedLedger(inventory));
+    for (const dir of fs.readdirSync(root, {withFileTypes:true}).filter(entry=>entry.isDirectory())) {
+      const file = path.join(root, dir.name, 'context.json');
+      const context = JSON.parse(fs.readFileSync(file));
+      delete context.evidenceComplete;
+      delete context.coverage;
+      fs.writeFileSync(file, JSON.stringify(context));
+    }
+    assert.equal(slowScriptsQuery(root).scripts.length, 0);
+    assert.equal(repeatedToolsQuery(root).coverage_runs, 0);
+  } finally { fs.rmSync(root, {recursive:true,force:true}); }
 });

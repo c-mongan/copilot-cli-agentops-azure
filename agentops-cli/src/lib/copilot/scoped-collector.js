@@ -100,6 +100,11 @@ async function startScopedStrictCollector(options = {}) {
     env
   });
   fs.closeSync(logFd);
+  // Attach immediately: a Collector can fail between spawn and health readiness.
+  const exited = new Promise(resolve => {
+    child.once('exit', (code, signal) => resolve({ code, signal }));
+    child.once('error', () => resolve({ code: null, signal: '', error: 'collector process error' }));
+  });
   if (!child.pid) {
     fs.rmSync(directory, { recursive: true, force: true });
     throw new Error('Per-run strict Collector did not start a process.');
@@ -125,6 +130,7 @@ async function startScopedStrictCollector(options = {}) {
     configPath,
     directory,
     pid: child.pid,
+    exited,
     async stop({ remove = true } = {}) {
       if (!stopped) {
         stopped = true;

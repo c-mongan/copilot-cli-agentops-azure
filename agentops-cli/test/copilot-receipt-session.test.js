@@ -78,3 +78,16 @@ test('session state lookup follows COPILOT_HOME when the CLI uses an isolated ho
     else process.env.COPILOT_HOME = previous;
   }
 });
+
+test('explicit launched session identity ignores unrelated simultaneous session changes', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-bound-session-'));
+  try {
+    const before = snapshotCopilotSessions(root);
+    for (const id of ['launched-id', 'unrelated-id']) {
+      fs.mkdirSync(path.join(root,id));
+      fs.writeFileSync(path.join(root,id,'events.jsonl'),JSON.stringify({type:'session.start',data:{sessionId:id}})+'\n');
+    }
+    assert.equal(changedCopilotSession(before,root),null);
+    assert.equal(changedCopilotSession(before,root,'launched-id').sessionId,'launched-id');
+  } finally {fs.rmSync(root,{recursive:true,force:true});}
+});

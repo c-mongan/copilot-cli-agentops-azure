@@ -95,10 +95,11 @@ function readSessionSummary(file) {
   return summarizeSessionEvents(events, path.basename(path.dirname(file)));
 }
 
-function changedCopilotSession(before = new Map(), root = sessionStateDir()) {
+function changedCopilotSession(before = new Map(), root = sessionStateDir(), expectedSessionId = '') {
   const after = snapshotCopilotSessions(root);
   const changed = [...after.entries()]
-    .filter(([file, mtime]) => !before.has(file) || mtime > before.get(file));
+    .filter(([file, mtime]) => (!before.has(file) || mtime > before.get(file))
+      && (!expectedSessionId || path.basename(path.dirname(file)) === expectedSessionId));
   // A shared COPILOT_HOME can change while this process runs. An mtime winner
   // does not establish which process wrote the event stream.
   if (changed.length !== 1) return null;

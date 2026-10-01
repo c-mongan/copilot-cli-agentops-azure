@@ -2,7 +2,6 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const childProcess = require('node:child_process');
 
 const legacy = require('../../legacy');
 const { optionValue, optionValues, parseJsonFlag } = require('../args');
@@ -13,6 +12,7 @@ const { configuredCloudValues, projectAgentOpsConfigPath } = require('../agentop
 const { resolveCopilotBinary } = require('../copilot-resolver');
 const { attachedScriptEnvironment } = require('./script-observation');
 const { startScopedStrictCollector } = require('./scoped-collector');
+const { superviseProcess } = require('./process-supervisor');
 const { changedCopilotSession, snapshotCopilotSessions } = require('./receipt-session');
 const { deliverCopilotSession } = require('./session-run-delivery');
 const {
@@ -113,6 +113,13 @@ async function launchObservedCopilot(options = {}, dependencies = {}) {
   const startCollector = dependencies.startScopedStrictCollector || startScopedStrictCollector;
   const scopedCollector = await startCollector({ agentopsHome: dependencies.agentopsHome || agentopsHome });
   const runId = options.runId || uniqueRunId();
+  const commandArgs = options.commandArgs || [];
+  const suppliedSessionIndex = commandArgs.indexOf('--session-id');
+  const inlineSession = commandArgs.find(arg => arg.startsWith('--session-id='));
+  const resumes = commandArgs.some(arg => ['--resume', '-r', '--continue', '--connect'].includes(arg) || arg.startsWith('--resume=') || arg.startsWith('--connect='));
+  const expectedSessionId = suppliedSessionIndex >= 0 ? commandArgs[suppliedSessionIndex + 1]
+    : inlineSession ? inlineSession.slice('--session-id='.length) : resumes ? '' : crypto.randomUUID();
+  const launchArgs = suppliedSessionIndex >= 0 || inlineSession || !expectedSessionId ? commandArgs : [...commandArgs, '--session-id', expectedSessionId];
   try {
     const endpoint = scopedCollector.endpoint;
     const runEnv = {
@@ -134,13 +141,16 @@ async function launchObservedCopilot(options = {}, dependencies = {}) {
     const observedEnv = attachedScriptEnvironment({ env: runEnv, cwd, runId, agentopsRoot, collectorMode: 'auto' });
     const sessionRoot = path.join(copilotHome, 'session-state');
     const snapshot = (dependencies.snapshotCopilotSessions || snapshotCopilotSessions)(sessionRoot);
-    const spawnSync = dependencies.spawnSync || childProcess.spawnSync;
-    const result = spawnSync(resolved.path, options.commandArgs || [], { cwd, env: observedEnv, stdio: 'inherit' });
+    // Legacy injected synchronous runner is retained for existing embedders/tests.
+    // Production always uses asynchronous supervision.
+    const result = dependencies.spawnSync
+      ? dependencies.spawnSync(resolved.path, launchArgs, { cwd, env: observedEnv, stdio: 'inherit' })
+      : await (dependencies.superviseProcess || superviseProcess)(resolved.path, launchArgs, { cwd, env: observedEnv, stdio: 'inherit' }, scopedCollector, dependencies);
 
     // Graceful Collector shutdown flushes the final OTel batches to its
     // strict-redacted local receipt before delivery reads that file.
     await scopedCollector.stop({ remove: false });
-    const summary = (dependencies.changedCopilotSession || changedCopilotSession)(snapshot, sessionRoot);
+    const summary = (dependencies.changedCopilotSession || changedCopilotSession)(snapshot, sessionRoot, expectedSessionId);
     let evidence = null;
     if (summary?.sessionId) {
       const deliver = dependencies.deliverCopilotSession || deliverCopilotSession;
@@ -152,7 +162,8 @@ async function launchObservedCopilot(options = {}, dependencies = {}) {
         agentopsHome: dependencies.agentopsHome || agentopsHome,
         env: scopedDeliveryEnv,
         otelFiles: [scopedCollector.receiptPath],
-        upload: Boolean(options.upload)
+        upload: Boolean(options.upload),
+        lifecycle: { collector: result.collectorFailed ? 'failed' : 'completed', process: result.signal || result.cancelled ? 'cancelled' : 'completed' }
       });
     }
     if (result.error) throw result.error;
@@ -164,7 +175,9 @@ async function launchObservedCopilot(options = {}, dependencies = {}) {
       copilotPath: resolved.path,
       exitCode,
       signal: result.signal || '',
-      ok: exitCode === 0 && uploadAccepted,
+      ok: exitCode === 0 && uploadAccepted && !result.collectorFailed && !result.cancelled,
+      cancelled: Boolean(result.cancelled),
+      collectorStatus: result.collectorFailed ? 'failed' : 'completed',
       evidence
     };
     writeJsonOrRender(output, options.json, value => [
@@ -176,7 +189,7 @@ async function launchObservedCopilot(options = {}, dependencies = {}) {
       ...(value.evidence?.outputDir ? [`Local evidence: ${value.evidence.outputDir}`] : []),
       ...(options.upload ? [] : ['Azure: not requested; evidence remains local'])
     ].join('\n') + '\n');
-    process.exitCode = output.exitCode || (uploadAccepted ? 0 : 1);
+    process.exitCode = output.exitCode || (output.ok ? 0 : 1);
     return output;
   } finally {
     await scopedCollector.stop({ remove: true });

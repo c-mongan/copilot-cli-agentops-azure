@@ -38,14 +38,7 @@ function proportionRow(numerator, denominator, coverageRuns, architectureVersion
 }
 
 function matchesArchitecture(graph, run) {
-  // Finding 2 (overnight whole-branch review): a run only counts toward any
-  // coverage denominator with AFFIRMATIVE evidence it was fully captured
-  // (evidenceComplete === true). A missing/unknown flag must never silently
-  // pass as "complete" — that previously let runs with zero real coverage
-  // evidence inflate denominators and fire false-positive-risk cards such as
-  // DECLARED_NOT_OBSERVED. See architecture-command.js's loader for how the
-  // real recorder's run-context.json (which never stamps this flag) derives
-  // it from an observable signal instead.
+  // Unknown or partial capture cannot establish a metric denominator.
   return run.architectureVersion === graph.architectureVersion && run.evidenceComplete === true;
 }
 
@@ -277,27 +270,21 @@ function scriptHealth(graph, joinedRuns) {
 
 function subagentContribution(graph, joinedRuns) {
   const covered = eligibleRuns(graph, joinedRuns);
-  const rows = [];
-  let totalRunDuration = 0;
-  let totalSubagentDuration = 0;
-  let totalRunTokens = 0;
-  let totalSubagentTokens = 0;
-  for (const run of covered) {
-    totalRunDuration += run.runTotals.durationMs;
-    totalRunTokens += run.runTotals.input + run.runTotals.output;
-    totalSubagentDuration += run.subagentDurationMs.total;
-    totalSubagentTokens += run.subagentTokens.input + run.subagentTokens.output;
-    rows.push({
-      runId: run.runId,
-      durationShare: run.runTotals.durationMs > 0 ? run.subagentDurationMs.total / run.runTotals.durationMs : 0,
-      tokenShare: (run.runTotals.input + run.runTotals.output) > 0 ? (run.subagentTokens.input + run.subagentTokens.output) / (run.runTotals.input + run.runTotals.output) : 0
-    });
-  }
+  const durationRuns = covered.filter(run => run.runTotals.durationMs !== null && run.subagentDurationMs.total !== null);
+  const tokenRuns = covered.filter(run => [run.runTotals.input, run.runTotals.output, run.subagentTokens.input, run.subagentTokens.output].every(value => value !== null));
+  const ratio = (part, total) => total > 0 ? part / total : null;
   return {
-    perRun: rows,
+    perRun: covered.map(run => ({
+      runId: run.runId,
+      durationShare: durationRuns.includes(run) ? ratio(run.subagentDurationMs.total, run.runTotals.durationMs) : null,
+      tokenShare: tokenRuns.includes(run) ? ratio(run.subagentTokens.input + run.subagentTokens.output, run.runTotals.input + run.runTotals.output) : null
+    })),
     aggregate: {
-      durationShare: totalRunDuration > 0 ? totalSubagentDuration / totalRunDuration : 0,
-      tokenShare: totalRunTokens > 0 ? totalSubagentTokens / totalRunTokens : 0,
+      durationShare: ratio(durationRuns.reduce((sum, run) => sum + run.subagentDurationMs.total, 0), durationRuns.reduce((sum, run) => sum + run.runTotals.durationMs, 0)),
+      tokenShare: ratio(tokenRuns.reduce((sum, run) => sum + run.subagentTokens.input + run.subagentTokens.output, 0), tokenRuns.reduce((sum, run) => sum + run.runTotals.input + run.runTotals.output, 0)),
+      durationBasis: 'sum-of-event-durations-not-wall-time',
+      usageCoverageRuns: tokenRuns.length,
+      durationCoverageRuns: durationRuns.length,
       coverageRuns: covered.length,
       architectureVersion: graph.architectureVersion
     }

@@ -596,7 +596,7 @@ test('loadLedgerFromDirectory loads the real recorder output layout (repo-root a
     assert.equal(loaded.runs.length, 1);
     assert.equal(loaded.runs[0].runId, 'run-real-001');
     assert.equal(loaded.runs[0].events.length, 1);
-    assert.equal(loaded.runs[0].evidenceComplete, true);
+    assert.equal(loaded.runs[0].evidenceComplete, false, 'one event does not prove complete capture');
     assert.equal(loaded.attachment.architecture.agents.length, inventory.agents.length);
 
     const result = computeArchitecture({ attachment: loaded.attachment, runs: loaded.runs });
@@ -647,7 +647,7 @@ test('architectureCommand help and flag parse', () => {
     for (let i = 0; i < 12; i += 1) {
       const d = path.join(tempRoot, runId('cmd', i));
       fs.mkdirSync(d);
-      fs.writeFileSync(path.join(d, 'context.json'), JSON.stringify({ architectureVersion: avHash }));
+      fs.writeFileSync(path.join(d, 'context.json'), JSON.stringify({ architectureVersion: avHash, evidenceComplete: true, coverage: Object.fromEntries(["agents", "skills", "references", "scripts", "tools", "models"].map(kind => [kind, "complete"])) }));
       fs.writeFileSync(path.join(d, 'events.jsonl'), JSON.stringify(skillActivationEvent(1, 'reviewer', 'retrieve')) + '\n' +
         JSON.stringify(referenceReadEvent(2, 'reviewer', 'retrieve', inventory.skills[0].references[0].path)) + '\n');
     }
@@ -702,4 +702,16 @@ test('duplicate delivery across the full fixture does not inflate planted counts
     .find(row => row.reference === inventory.skills[0].references[0].path);
   assert.equal(baseMetric.numerator, doubleMetric.numerator);
   assert.equal(baseMetric.denominator, doubleMetric.denominator);
+});
+
+test('architecture keeps unknown measurements null and excludes them from contribution shares', () => {
+  const event = normalizeEvent({ EventName: 'assistant.message', InputTokens: null, OutputTokens: 0 });
+  assert.equal(event.InputTokens, null);
+  assert.equal(event.OutputTokens, 0);
+  assert.equal(event.DurationMs, null);
+  const graph = buildStaticGraph(baseInventory());
+  const { joined } = joinLedger(graph, [{runId:'unknown-usage',architectureVersion:graph.architectureVersion,evidenceComplete:true,events:[event]}]);
+  const metrics = computeAllMetrics(graph, joined);
+  assert.equal(metrics.subagentContribution.perRun[0].tokenShare, null);
+  assert.equal(metrics.subagentContribution.aggregate.usageCoverageRuns, 0);
 });

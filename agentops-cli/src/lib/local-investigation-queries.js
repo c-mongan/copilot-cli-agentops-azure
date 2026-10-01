@@ -113,7 +113,7 @@ function readOrderQuery(runId, options = {}) {
 // Each renders a short, focused top-N answer instead of the full report.
 function loadMetricsLedger(ledgerDir, options = {}) {
   const loadLedgerFromDirectoryFn = options.loadLedgerFromDirectory || loadLedgerFromDirectory;
-  const { attachment, runs, invalidLedgerRows } = loadLedgerFromDirectoryFn(ledgerDir);
+  const { attachment, runs, invalidLedgerRows } = loadLedgerFromDirectoryFn(ledgerDir, { repoRoot: options.repoRoot || process.cwd() });
   const graph = buildStaticGraph(attachment.architecture);
   const normalisedRuns = runs.map(run => ({ ...run, architectureVersion: run.architectureVersion || graph.architectureVersion }));
   const { joined, invalid } = joinLedger(graph, normalisedRuns);

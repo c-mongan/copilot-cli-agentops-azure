@@ -8,6 +8,9 @@ const { buildStaticGraph, joinLedger } = require('./architecture/graph');
 const { computeAllMetrics } = require('./architecture/metrics');
 const { evaluateFindings } = require('./architecture/findings');
 const { buildReport, renderMarkdown, writeReport } = require('./architecture/report');
+const { loadExperiments, writeViews } = require('./architecture/views');
+const { readSessionSpanRows } = require('./copilot/session-span-export');
+const { readSessionOutbox } = require('./copilot/session-delivery-outbox');
 
 const repoRoot = path.resolve(__dirname, '..', '..', '..');
 
@@ -82,7 +85,9 @@ function readRunContext(runDir) {
 function readRunEvents(runDir) {
   const realPath = path.join(runDir, 'AgentOpsEvents_CL.jsonl');
   const fixturePath = path.join(runDir, 'events.jsonl');
-  return readJsonlSafe(fs.existsSync(realPath) ? realPath : fixturePath);
+  const result = readJsonlSafe(fs.existsSync(realPath) ? realPath : fixturePath);
+  const rows = result.rows.filter(row => typeof (row.EventName || row.event_name) === 'string' && (row.EventName || row.event_name).trim());
+  return { rows, invalid: result.invalid + result.rows.length - rows.length };
 }
 
 function loadLedgerFromDirectory(ledgerDir, options = {}) {
@@ -107,23 +112,36 @@ function loadLedgerFromDirectory(ledgerDir, options = {}) {
     const context = readRunContext(runDir);
     const { rows: events, invalid } = readRunEvents(runDir);
     invalidTotal += invalid;
-    // Finding 2: evidenceComplete must never silently default to "complete".
-    // The real recorder's run-context.json never stamps this flag at all, so
-    // a genuinely missing flag is resolved from an affirmative, observable
-    // signal instead — whether this run actually captured any events — not
-    // from an absence-means-yes assumption. An explicit boolean on the
-    // fixture's context.json (if present) is still honoured as-is.
+    // Older contexts have unknown coverage. Partial or malformed capture cannot
+    // establish absence, even when an older writer stamped evidenceComplete.
     const explicitEvidenceComplete = typeof context.evidenceComplete === 'boolean' ? context.evidenceComplete : null;
-    const evidenceComplete = explicitEvidenceComplete !== null ? explicitEvidenceComplete : events.length > 0;
+    const coverage = context.coverage || {};
+    const componentsComplete = ['agents', 'skills', 'references', 'scripts', 'tools', 'models']
+      .every(component => coverage[component] === 'complete');
+    const evidenceComplete = explicitEvidenceComplete !== false && invalid === 0 && events.length > 0
+      && componentsComplete
+      && !Object.values(coverage).some(value => value !== 'complete');
     runs.push({
       runId: entry.name,
-      architectureVersion: context.architectureVersion || null,
+      sessionId: context.sessionId || '',
+      architectureVersion: context.architectureVersion || 'unknown',
       evidenceComplete,
+      coverage,
+      lifecycle: context.lifecycle || { collector: 'unknown', process: 'unknown' },
       taskContract: context.taskContract || null,
       outcomeFailed: Boolean(context.outcomeFailed),
       compactionObserved: Boolean(context.compactionObserved),
       events
     });
+    const run = runs[runs.length - 1];
+    try { run.deliveryStatus = readSessionOutbox(runDir); } catch { run.deliveryStatus = null; }
+    if (options.copilotHome && /^[A-Za-z0-9-]{1,100}$/.test(run.sessionId)) {
+      const native = readJsonlSafe(path.join(options.copilotHome, 'session-state', run.sessionId, 'events.jsonl'));
+      if (native.invalid === 0 && native.rows.find(row => row.type === 'session.start')?.data?.sessionId === run.sessionId) {
+        run.nativeEvents = native.rows;
+        try { run.nativeSpans = readSessionSpanRows(runDir, run.runId, run.sessionId).spans; } catch { run.nativeSpans = []; }
+      }
+    }
   }
   return { attachment, runs, invalidLedgerRows: invalidTotal };
 }
@@ -160,7 +178,7 @@ function renderText(report) {
 }
 
 function printHelp(stdout) {
-  stdout.write('agentops architecture [--ledger <dir>] [--repo <dir>] [--json] [--out <dir>] [--upload]\n');
+  stdout.write('agentops architecture [--ledger <dir>] [--repo <dir>] [--json] [--out <dir>] [--experiments <dir>] [--copilot-home <dir>] [--upload]\n');
   stdout.write('Reads a run ledger (default: current attachment under ~/.agentops/runs), joins it with the static architecture inventory, and emits the deterministic metrics plus hypothesis cards for the 5 in-scope rules. The ledger\'s attachment manifest is read from <dir>/attachment.json if present, otherwise from the real AgentOps attachment at the repo root (.agentops/attachment.json under --repo, default: current directory). Per-run data accepts both the real recorder\'s run-context.json/AgentOpsEvents_CL.jsonl and the fixture context.json/events.jsonl layout. --upload previews the Azure Logs Ingestion row set only; it does not upload until an operator wires the live DCR path.\n');
 }
 
@@ -174,13 +192,14 @@ function architectureCommand(args = [], dependencies = {}) {
   if (!ledgerDir) throw new Error('architecture requires --ledger <dir> pointing to a run ledger (either a fixture ledger with attachment.json plus per-run events.jsonl/context.json, or the real recorder\'s <agentopsHome>/runs directory with per-run run-context.json/AgentOpsEvents_CL.jsonl)');
   const resolvedLedger = path.resolve(ledgerDir);
   const repoRoot = path.resolve(optionValue(args, '--repo') || process.cwd());
-  const { attachment, runs, invalidLedgerRows } = loadLedgerFromDirectory(resolvedLedger, { repoRoot });
+  const { attachment, runs, invalidLedgerRows } = loadLedgerFromDirectory(resolvedLedger, { repoRoot, copilotHome: optionValue(args, '--copilot-home') });
   const outDir = optionValue(args, '--out');
   const result = computeArchitecture({ attachment, runs, options: { invalidLedgerRows } });
   let written = null;
   if (outDir) {
     const resolvedOutDir = path.resolve(outDir);
     written = writeReport(result.report, result.azureRows, resolvedOutDir);
+    written.views = writeViews(result.report, runs, loadExperiments(optionValue(args, '--experiments')), resolvedOutDir, { repoRoot });
   }
   const upload = hasFlag(args, '--upload');
   const payload = {

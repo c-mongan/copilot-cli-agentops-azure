@@ -5,6 +5,7 @@ const path = require('node:path');
 const { configuredCloudValues, projectAgentOpsConfigPath } = require('../agentops-config');
 const { gitRoot, readOwnedAttachment } = require('../attach-command');
 const { agentopsHome } = require('../paths');
+const { architectureVersion } = require('../architecture/graph');
 const { defaultReceiptFiles, readSessionOtelSpans } = require('./session-otel');
 const { readCopilotSessionEvents } = require('./session-enricher');
 const { writeSessionEvents } = require('./session-event-export');
@@ -100,6 +101,12 @@ function deliverCopilotSession(options = {}) {
     sessionId,
     repositoryRootHash: crypto.createHash('sha256').update(repoRoot).digest('hex').slice(0, 16),
     attachmentManifestSha256: attachment.ok ? attachment.receipt.manifestSha256 : '',
+    architectureVersion: attachment.ok ? architectureVersion(attachment.manifest.architecture) : null,
+    lifecycle: options.lifecycle || { collector: 'unknown', process: 'unknown' },
+    // Native event presence proves observation, not completeness of each surface.
+    coverage: Object.fromEntries(['agents', 'skills', 'references', 'scripts', 'tools', 'models'].map(kind => [kind, 'unknown'])),
+    evidenceComplete: false,
+    nativeEventCount: sessionEvents.length,
     createdAt: new Date().toISOString()
   };
   fs.writeFileSync(runContextPath, `${JSON.stringify(runContext, null, 2)}\n`, { flag: 'wx', mode: 0o600 });

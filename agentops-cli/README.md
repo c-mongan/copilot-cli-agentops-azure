@@ -243,3 +243,31 @@ Start with `workflows show orchestrate` when the user does not know which AgentO
 `alert recommend` prints proposal-only alert threshold guidance for the disabled Azure Monitor rules.
 
 `saved-view` stores repeat investigations in `~/.agentops/views.json` by default, or at the path set by `AGENTOPS_VIEWS_PATH` when defined.
+
+### Local Runs, Architecture, and Compare
+
+Generate linked metadata-only pages from an existing ledger and its repository:
+
+```sh
+agentops architecture --ledger ~/.agentops/runs --repo /path/to/repo \
+  --experiments /path/to/experiments --out /path/to/new-report-directory
+```
+
+Open `runs.html`, `architecture.html`, or `compare.html` in the output directory.
+Search runs and hypotheses, follow run evidence links, and filter stored experiment
+outcomes. Add `--copilot-home /path/to/copilot-home` to link native session replays.
+Those replays read the current session file; stored span receipts retain their
+original capture window. Later events may have no corresponding captured span.
+Output files are private and existing files are never overwritten.
+
+Coverage is affirmative per component: agents, skills, references, scripts, tools,
+and models must each be `complete`, with no malformed event rows. Historical
+records and runs without that evidence remain unknown and cannot support an
+absence finding. A successful collector or captured event alone does not prove
+complete observation. Missing usage stays unknown; measured zero stays zero.
+
+Observed launches use asynchronous process supervision. Collector death cancels
+the owned launcher and its process group. Signals are forwarded, cancellation
+has a bounded kill fallback, and child exit status is preserved. Fresh launches
+pin a session ID to prevent attribution to another concurrent session. Resume
+and connect commands retain their existing arguments.

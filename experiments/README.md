@@ -21,3 +21,20 @@ directory with real trial results requires explicit live-budget
 authorization and an actual `vally experiment run` (without `--dry-run`)
 — out of scope for Task 9, documented as blocked in
 `.superpowers/sdd/2026-09-30-agentops-overnight-build/task-9-report.md`.
+
+## Compare view record contract
+
+The local product reads bounded JSON records under `accepted/`, `rejected/`, and
+`inconclusive/`. It excludes malformed records, symlinks, and status mismatches.
+Each record has `id`, `status`, `evidenceTier`, `change`, `reason`, `baseline`, and
+`candidate`. Each side may contain `architectureVersion`, `configurationVersion`,
+`passed`, `trials`, `durationMs`, `inputTokens`, `outputTokens`, `usageCoverage`, and
+`runIds`. Missing fields render as unknown. Efficiency comparisons require matching
+recorded configuration versions. Displaying an accepted record does not approve,
+apply, or merge a change.
+
+As of 2026-10-01, these directories still contain no executed Vally experiment
+results. Browser verification used explicitly synthetic records for all three
+outcomes. The fresh native capture exercise did not establish a Vally trial;
+its model budget incident and partial evidence are recorded in
+`docs/research/2026-10-01-agentops-verification.md`.

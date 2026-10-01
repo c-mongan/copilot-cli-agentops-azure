@@ -11,56 +11,51 @@ change — that remains a separate target-authorized step (see
 (when to roll back an agent/skill/model/instruction change based on eval
 regressions); this doc is only about the Log Analytics/DCR schema itself.
 
-## Prerequisites to apply this additive migration
+## Prerequisites and safe preview
 
-Reuse the same environment variables and guard already enforced by
-`scripts/azure-what-if.sh` and `scripts/lib/azure-subscription-guard.sh` —
-do not invent new ones:
+Use an explicit approved subscription, resource group, existing workspace,
+DCE/DCR names, and the existing retention and tags. Verify the subscription's
+remaining credit and spending protection before writes. Save the current table
+schemas and DCR definition for recovery.
 
-- `AGENTOPS_AZURE_SUBSCRIPTION_ID`: the subscription the deployment targets.
-  The guard refuses to run if this is unset.
-- `AGENTOPS_APPROVED_AZURE_SUBSCRIPTION_IDS`: comma-separated allow-list; the
-  target subscription must appear here or the guard exits closed (exit code
-  2) before any Azure call is made.
-- An active `az login` session whose `az account show` subscription ID
-  matches `AGENTOPS_AZURE_SUBSCRIPTION_ID` exactly (the guard calls
-  `az account set --subscription` explicitly rather than trusting whatever
-  subscription happens to be active).
-- `AZURE_RESOURCE_GROUP` (defaults to `rg-copilot-agentops-dev`) must already
-  exist — `scripts/azure-what-if.sh` checks `az group exists` and tells you
-  to run `scripts/azure-prereqs.sh` first if it does not.
-- RBAC: the identity running the deployment needs write access to the
-  Log Analytics workspace, its Data Collection Rule(s)/Endpoint, and the
-  resource group (Contributor or an equivalent custom role scoped to those
-  resource types) — additive table/column changes are applied as part of
-  the normal `main.bicep` deployment group, not a separate permission tier.
+**Do not use `scripts/azure-what-if.sh` or deploy `main.bicep` for this migration.**
+That script previews the full infrastructure template, which can move the
+existing Application Insights component to another workspace. Deploy
+`v2-ingestion.bicep` directly against the existing synthetic resource group.
 
-## Produce the preview/what-if command
+The verified 1 October 2026 target is subscription
+`0222a208-955a-45fd-b6d8-ca4704421bf0`, resource group
+`rg-copilot-agentops-synthetic-pilot-20260930`, workspace
+`law-copilot-agentops-eval-eval930`, DCE `dce-copilot-agentops-eval930`, and
+DCR `dcr-copilot-agentops-eval930-v2`. Its custom tables retain seven days;
+the workspace default is thirty days. Preserve these separate settings.
 
-`scripts/azure-what-if.sh` already runs `az deployment group what-if` against
-`infra/bicep/main.bicep` (which includes `v2-ingestion.bicep`) with the full
-parameter set, so the additive architecture columns are previewed
-automatically — no new script is needed. With the prerequisites above met,
-preview the change with:
+Prepare a Bicep parameter JSON file containing the current DCR/endpoint tags.
+Then preview with the exact target and unchanged retention:
 
 ```sh
-AGENTOPS_AZURE_SUBSCRIPTION_ID=<sub-id> \
-AGENTOPS_APPROVED_AZURE_SUBSCRIPTION_IDS=<sub-id> \
-./scripts/azure-what-if.sh
+az deployment group what-if \
+  --subscription 0222a208-955a-45fd-b6d8-ca4704421bf0 \
+  --resource-group rg-copilot-agentops-synthetic-pilot-20260930 \
+  --template-file infra/bicep/v2-ingestion.bicep \
+  --parameters workspaceName=law-copilot-agentops-eval-eval930 \
+    environmentName=eval930 baseName=copilot-agentops retentionInDays=7 \
+    @preserved-tags.parameters.json
 ```
 
-Without those two variables set, the script fails closed before making any
-Azure call:
+Review columns **by name and type**, not array position. Existing names/types,
+retention, tags, destinations and networking must remain unchanged. Reject
+resource deletion or unexpected creation. Azure what-if can report omission of
+the service-generated DCE `immutableId`; verify its value remains unchanged
+after deployment. Do not add role assignments when existing access suffices.
 
-```
-$ ./scripts/azure-what-if.sh
-ERROR: set AGENTOPS_AZURE_SUBSCRIPTION_ID before any Azure write or privileged lookup.
-```
-
-(exit code 2). This was verified locally with no credentials configured —
-see `.superpowers/sdd/2026-09-30-agentops-overnight-build/task-8-report.md`
-for the captured output. No live Azure call was attempted as part of this
-task.
+For an authorized apply, use the reviewed command with `create` replacing
+`what-if`, and a unique deployment name. Read back the DCR and table schemas.
+New ingestion fields may not propagate immediately: the first accepted batch
+can arrive with new fields absent. Never resend an accepted or uncertain batch.
+After propagation, use a new, explicitly labelled small canary batch with new
+IDs and assert each field by exact-ID query. Deployment success and upload
+acceptance do not establish field-level readback.
 
 ## Cost notes
 

@@ -235,9 +235,9 @@ for (const [command, dependencyName] of [
 
     assert.ok(queryCommandNames.includes(command));
 
-    queryCommand(command, ['--ledger', '/tmp/ledger-dir', '--top', '5']);
+    queryCommand(command, ['--ledger', '/tmp/ledger-dir', '--top', '5', '--repo', '/tmp/fixture-repo']);
 
-    assert.deepEqual(seenArgs, { ledgerDir: '/tmp/ledger-dir', options: { top: 5 } });
+    assert.deepEqual(seenArgs, { ledgerDir: '/tmp/ledger-dir', options: { top: 5, repoRoot: '/tmp/fixture-repo' } });
     assert.deepEqual(JSON.parse(output.text()), { ok: true, question: command });
   });
 

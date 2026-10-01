@@ -90,6 +90,12 @@ function buildStaticGraph(architecture = {}) {
   };
 }
 
+function measurement(value) {
+  if (value === null || value === undefined || value === '' || typeof value === 'boolean') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+
 function normalizeEvent(row = {}) {
   if (!row || typeof row !== 'object') return null;
   const eventName = String(row.EventName || row.event_name || '').trim();
@@ -110,9 +116,9 @@ function normalizeEvent(row = {}) {
     ScriptName: String(row.ScriptName || ''),
     ToolName: String(row.ToolName || ''),
     ToolCallId: String(row.ToolCallId || ''),
-    DurationMs: Number.isFinite(Number(row.DurationMs)) ? Number(row.DurationMs) : 0,
-    InputTokens: Number.isFinite(Number(row.InputTokens)) ? Number(row.InputTokens) : 0,
-    OutputTokens: Number.isFinite(Number(row.OutputTokens)) ? Number(row.OutputTokens) : 0,
+    DurationMs: measurement(row.DurationMs),
+    InputTokens: measurement(row.InputTokens),
+    OutputTokens: measurement(row.OutputTokens),
     ResultState: row.ResultState === undefined ? null : row.ResultState,
     ArgHash: row.ArgHash === undefined || row.ArgHash === null ? null : String(row.ArgHash),
     ContextCompaction: row.ContextCompaction === true || row.EventName === 'session.compaction',
@@ -153,16 +159,16 @@ function joinObserved(graph, run = {}) {
   const isSubagent = event => Boolean(event.ParentAgentId) || Boolean(event.SubAgentName);
 
   for (const event of dedupedEvents) {
-    runTotals.input += event.InputTokens;
-    runTotals.output += event.OutputTokens;
-    runTotals.durationMs += event.DurationMs;
+    runTotals.input = runTotals.input === null || event.InputTokens === null ? null : runTotals.input + event.InputTokens;
+    runTotals.output = runTotals.output === null || event.OutputTokens === null ? null : runTotals.output + event.OutputTokens;
+    runTotals.durationMs = runTotals.durationMs === null || event.DurationMs === null ? null : runTotals.durationMs + event.DurationMs;
     if (event.ContextCompaction) compaction = true;
     if (event.AgentName) {
       agentsObserved.add(event.AgentName);
       if (isSubagent(event)) {
-        subagentTokens.input += event.InputTokens;
-        subagentTokens.output += event.OutputTokens;
-        subagentDurationMs.total += event.DurationMs;
+        subagentTokens.input = subagentTokens.input === null || event.InputTokens === null ? null : subagentTokens.input + event.InputTokens;
+        subagentTokens.output = subagentTokens.output === null || event.OutputTokens === null ? null : subagentTokens.output + event.OutputTokens;
+        subagentDurationMs.total = subagentDurationMs.total === null || event.DurationMs === null ? null : subagentDurationMs.total + event.DurationMs;
       }
     }
     if (event.SkillName) {
@@ -207,9 +213,9 @@ function joinObserved(graph, run = {}) {
     architectureVersion: run.architectureVersion || graph.architectureVersion,
     // Finding 2 (overnight whole-branch review): a genuinely missing/unknown
     // evidenceComplete signal must NOT be treated as "complete" — only an
-    // explicit `true` (itself derived upstream from an affirmative, observable
-    // capture signal, e.g. non-empty events) counts.
+    // explicit completeness assertion with valid captured rows counts.
     evidenceComplete: run.evidenceComplete === true,
+    coverage: run.coverage || {},
     taskContract: run.taskContract || null,
     outcomeFailed: Boolean(run.outcomeFailed),
     compactionObserved: compaction || Boolean(run.compactionObserved),
