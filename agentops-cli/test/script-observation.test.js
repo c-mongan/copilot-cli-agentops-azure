@@ -448,3 +448,42 @@ test('overlapping and repeated invocations of inventoried scripts within one run
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('automatic Python observation keeps SystemExit outcome unknown and records uncaught errors', async () => {
+  const payloads = [];
+  const server = http.createServer((request, response) => {
+    const chunks = [];
+    request.on('data', chunk => chunks.push(chunk));
+    request.on('end', () => {
+      payloads.push({ contentType: request.headers['content-type'], bodyBase64: Buffer.concat(chunks).toString('base64') });
+      response.writeHead(200); response.end('{}');
+    });
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const root = fixtureRepo();
+  try {
+    const cases = [['exit.py', 'import sys; sys.exit(7)\n', 7, 'unknown'], ['ok.py', 'print("ok")\n', 0, 'unknown'], ['caught.py', 'import sys\ntry: sys.exit(7)\nexcept SystemExit: print("caught")\n', 0, 'unknown'], ['error.py', 'raise ValueError("PRIVATE_ERROR_CANARY")\n', 1, 'failed']];
+    for (const [name, code] of cases) fs.writeFileSync(path.join(root, '.github/skills/demo/scripts', name), code);
+    attachCommand(['--repo', root, '--yes', '--json'], { stdout: { write() {} } });
+    const env = attachedScriptEnvironment({ env: process.env, cwd: root, runId: 'python-outcome-test', agentopsRoot: repoRoot });
+    env.AGENTOPS_SCRIPT_OTLP_ENDPOINT = `http://127.0.0.1:${server.address().port}/v1/traces`;
+    for (const [name, , exit, outcome] of cases) {
+      payloads.length = 0;
+      const result = await new Promise((resolve, reject) => {
+        const child = spawn('python3', [path.join(root, '.github/skills/demo/scripts', name)], { cwd: root, env, stdio: 'ignore' });
+        child.once('close', status => resolve(status)); child.once('error', reject);
+      });
+      assert.equal(result, exit);
+      assert.equal(payloads.length, 1);
+      const receipt = path.join(root, 'receipt.jsonl');
+      fs.writeFileSync(receipt, payloads.map(row => JSON.stringify(row)).join('\n'));
+      const parsed = readSessionOtelSpans('synthetic-session', [receipt], { runId: 'python-outcome-test' });
+      const rows = spanRowsFromOtelSpans(parsed.spans, 'synthetic-session', 'python-outcome-test');
+      assert.equal(rows[0].Outcome, outcome);
+      assert.ok(!JSON.stringify(rows).includes('PRIVATE_ERROR_CANARY'));
+    }
+  } finally {
+    await new Promise(resolve => server.close(resolve));
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});

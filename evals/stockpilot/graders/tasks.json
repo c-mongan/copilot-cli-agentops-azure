@@ -97,7 +97,7 @@
       "prompt": "We need to reorder SKU-0091 — there's a promo next month. Decide the quantity and either place the order or escalate. Report the forecast confidence you based the decision on.",
       "grader": "regex_present",
       "expected": {
-        "pattern": "confidence[^A-Za-z]{0,10}0?\\.\\d{1,2}\\b",
+        "pattern": "confidence[^A-Za-z]{0,10}(?:(?:was|is|of)[^A-Za-z]{0,10})?0?\\.\\d{1,2}\\b",
         "why": "confidence stated qualitatively, not as a number"
       },
       "tags": ["failure-mode", "handoff-drop", "forecasting"]

@@ -160,7 +160,7 @@ function spanRowsFromOtelSpans(spans, sessionId, runId) {
         ? Math.max(0, Math.round(span.end - span.start))
         : Math.round(Number(durationNs) / 1000000),
       DurationNs: durationNs === null ? null : Number(durationNs),
-      Outcome: span.failed ? 'failed' : 'ok',
+      Outcome: span.failed ? 'failed' : span.outcome === 'unknown' ? 'unknown' : 'ok',
       LinkType: span.match === 'run-linked-script' ? 'run-id-logical-link' : 'native-session',
       SchemaVersion: AGENTOPS_SCHEMA_VERSION
     };
@@ -281,6 +281,7 @@ function readSessionSpanRows(runDirectory, runId, sessionId) {
       cacheReadTokens: nullableTokenCount(row.CacheReadTokens),
       cacheWriteTokens: nullableTokenCount(row.CacheWriteTokens),
       failed: String(row.Outcome || '').toLowerCase() === 'failed',
+      outcome: String(row.Outcome || '').toLowerCase(),
       errorType: String(row.ErrorType || ''),
       match: script ? 'run-linked-script' : 'exact-session',
       runId,

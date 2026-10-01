@@ -144,3 +144,26 @@ need, not an empirical result:
   compare` must never be the default acceptance path** — `--require-pass`
   against the deterministic graders in `../graders/index.js` (ported from
   the workshop's own deterministic graders) is.
+
+## Live follow-up on 2026-10-01
+
+The earlier zero-execution statements above describe the initial handoff.
+With renewed model authorization, the pinned executor ran two smoke tasks and
+one trial for each experiment variant. See
+`docs/research/2026-10-01-agentops-live-followup.md` for actual outcomes and limits.
+The smoke confidence pattern now accepts numeric confidence in ordinary prose
+and Markdown emphasis; qualitative claims and unrelated numbers still fail.
+Full fixture assets are staged because the skills invoke their supplied scripts
+using repository-relative paths.
+
+Export selected Vally trajectory metadata to an existing AgentOps ledger:
+
+```sh
+node evals/stockpilot/scripts/export-agentops-ledger.js /path/to/results.jsonl /path/to/ledger/runs
+```
+
+The exporter excludes prompts, arguments, results, and final answers. It labels
+these records as trajectory-derived, preserves measured zero versus unknown
+usage, and never asserts complete capture or an architecture version. Existing
+run directories are preserved. Keep the original Vally results separately for
+grading and review.

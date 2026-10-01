@@ -302,3 +302,15 @@ test('grade(): every task grader short-circuits to FAIL on a harness error befor
     assert.match(why, /^error:/, `task ${task.id}'s failure reason did not surface the harness error`);
   }
 });
+
+test('F2 numeric confidence accepts ordinary prose and Markdown emphasis', () => {
+  for (const finalText of ['forecast confidence was **0.41**', 'Confidence is 0.41.', 'confidence of 0.41', 'confidence: 0.41']) {
+    assert.equal(grade(taskById('F2'), baseResult({ finalText }))[0], PASS);
+  }
+});
+
+test('F2 confidence rejects unrelated numbers and qualitative claims', () => {
+  for (const finalText of ['confidence was low; order 450 units', 'confidence was uncertain. SKU sales were 0.41 units', '0.41 units; confidence is qualitative']) {
+    assert.equal(grade(taskById('F2'), baseResult({ finalText }))[0], FAIL);
+  }
+});

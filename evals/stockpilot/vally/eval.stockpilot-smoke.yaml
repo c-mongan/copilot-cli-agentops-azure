@@ -40,8 +40,8 @@ agent_environment:
     - ../fixtures/skills/weekly-report
   mcpServers: {}
   files:
-    - src: ../fixtures/data
-      dest: evals/stockpilot/fixtures/data
+    - src: ../fixtures
+      dest: evals/stockpilot/fixtures
 
 stimuli:
   - name: R1-stock-lookup
@@ -67,4 +67,4 @@ stimuli:
     graders:
       - type: output-matches
         config:
-          pattern: 'confidence[^A-Za-z]{0,10}0?\.\d{1,2}\b'
+          pattern: '(?i)confidence[^A-Za-z]{0,10}(?:(?:was|is|of)[^A-Za-z]{0,10})?0?\.\d{1,2}\b'

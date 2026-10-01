@@ -54,7 +54,7 @@ class ScriptObservation:
 
 
 @contextmanager
-def observe_script(name):
+def observe_script(name, *, outcome_unknown=False):
     """Create script and step spans only for an explicitly observed run.
 
     AGENTOPS_SCRIPT_OTLP_ENDPOINT must be HTTPS or a loopback HTTP endpoint.
@@ -144,6 +144,7 @@ def observe_script(name):
                 "agentops.script.runtime.name": "python",
                 "agentops.script.runtime.version": platform.python_version(),
                 "agentops.script.runtime.implementation": platform.python_implementation(),
+                **({"agentops.outcome": "unknown"} if outcome_unknown else {}),
             },
             "record_exception": False,
             "set_status_on_exception": False,

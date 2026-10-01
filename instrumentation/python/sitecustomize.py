@@ -63,7 +63,10 @@ def _start_observation():
     try:
         from agentops_script import observe_script
 
-        manager = observe_script(script_name)
+        # CPython does not call excepthook for SystemExit. An atexit callback
+        # cannot distinguish normal exit from sys.exit(7), so it must not
+        # assert success. The launching shell supplies the process exit result.
+        manager = observe_script(script_name, outcome_unknown=True)
         manager.__enter__()
     except Exception:
         # Telemetry setup must never prevent an owned script from running.

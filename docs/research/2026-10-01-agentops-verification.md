@@ -173,3 +173,10 @@ absence findings or automatic refactoring decisions are supported.
 All named logs/artifacts are under
 `/Volumes/SanDisk Archive/Agent-Workspace/scratch/`. Unrelated pre-existing dirty
 plans and research files were preserved and excluded from the local commit.
+
+## Subsequent live follow-up
+
+The [live follow-up](2026-10-01-agentops-live-followup.md) records later user
+authorization removing the model-invocation cap, repaired Python outcomes, actual
+Vally execution, successful native stimulus capture and synthetic Azure readback.
+This report remains the historical record of the initial verification.

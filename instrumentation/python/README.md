@@ -24,3 +24,11 @@ The explicit Copilot launcher passes a unique `AGENTOPS_RUN_ID`, the Collector t
 The shared run ID proves that the script and Copilot spans came from the same opted-in launch. It does **not** prove that a particular Copilot tool call was the script's parent. The viewer labels this as a logical link. If a valid W3C `TRACEPARENT` is present in the script environment, the helper continues it; otherwise it starts a new trace. It never invents a parent from timestamps or file paths.
 
 Invalid telemetry settings produce a short stderr diagnostic and leave script work running. Error spans contain the exception type, not the exception message. The startup hook creates a process root span; it does not infer function calls or internal steps. Add named steps where they answer a real debugging question. Node scripts receive the same repo-wide manifest-hash-gated automatic root span through `instrumentation/node/preload.cjs`; named Node steps use `instrumentation/node/agentops-script.cjs`. TypeScript support depends on the runtime launching the inventoried file directly; other loader modes remain to be tested. A fresh attached Copilot CLI run proved Python standard-library fallback spans, and Azure readback confirmed the root and skill Python script links. Enterprise readiness gates remain open.
+
+Automatic `sitecustomize` spans report an unknown outcome when no uncaught
+exception reaches `sys.excepthook`. CPython bypasses that hook for `SystemExit`,
+so an `atexit` callback cannot prove success, including for `sys.exit(7)`.
+The launcher's shell event is the source of the process exit code. Uncaught
+ordinary exceptions still mark the span failed. Explicit `observe_script`
+contexts continue to observe exceptions raised inside their context. This avoids
+changing script behavior or installing a global trace/debugger hook.

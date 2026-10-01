@@ -33,8 +33,9 @@ Each record has `id`, `status`, `evidenceTier`, `change`, `reason`, `baseline`, 
 recorded configuration versions. Displaying an accepted record does not approve,
 apply, or merge a change.
 
-As of 2026-10-01, these directories still contain no executed Vally experiment
-results. Browser verification used explicitly synthetic records for all three
-outcomes. The fresh native capture exercise did not establish a Vally trial;
-its model budget incident and partial evidence are recorded in
-`docs/research/2026-10-01-agentops-verification.md`.
+The initial handoff contained no executed experiment results. The renewed live
+run now has one real `inconclusive/stockpilot-live-tool-thrash-20261001.json`
+record: one trial per variant, both output graders passed, and both variants
+made 11 tool calls. That does not establish a tool-thrash effect or justify a
+refactoring decision. No candidate was accepted or merged. The proof and its
+limits are in `docs/research/2026-10-01-agentops-live-followup.md`.

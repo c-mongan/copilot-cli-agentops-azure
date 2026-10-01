@@ -296,6 +296,7 @@ function readSessionOtelSpans(sessionId, files = defaultReceiptFiles(), options 
           cacheReadTokens: numericAttributeOrNull(attributes, 'gen_ai.usage.cache_read.input_tokens'),
           cacheWriteTokens: numericAttributeOrNull(attributes, 'gen_ai.usage.cache_creation.input_tokens'),
           failed: Number(span.status?.code) === 2 || Boolean(attributeValue(attributes, 'error.type')),
+          outcome: attributeValue(attributes, 'agentops.outcome') === 'unknown' ? 'unknown' : '',
           events,
           sourceFile: path.basename(file)
         });

@@ -464,7 +464,7 @@ function sessionWaterfall(events = [], inputSpans = [], options = {}) {
       lane: isScript ? `Script · ${span.scriptName || 'owned script'}` : `OTel · ${span.agent}`,
       kind: span.operation,
       label,
-      status: span.failed ? 'failed' : 'completed',
+      status: span.failed ? 'failed' : span.outcome === 'unknown' ? 'unknown' : 'completed',
       source: isScript ? 'script OTel' : 'native OTel',
       details: isScript ? {
         ...span,
@@ -513,7 +513,7 @@ function sessionWaterfall(events = [], inputSpans = [], options = {}) {
   const first = rows.reduce((earliest, row) => Math.min(earliest, row.start), Infinity);
   const last = rows.reduce((latest, row) => Math.max(latest, row.end), -Infinity);
   const invalidTimestamps = events.length - ordered.length;
-  const unresolvedRows = rows.filter(row => row.status === 'incomplete' || row.status.includes('not observed')).length;
+  const unresolvedRows = rows.filter(row => row.status === 'unknown' || row.status === 'incomplete' || row.status.includes('not observed')).length;
   const coverageGaps = unresolvedRows + invalidTimestamps + unmatchedDeltas;
   const scriptSpanCount = nativeSpans.filter(span => span.match === 'run-linked-script').length;
   const coverage = buildCoverageBreakdown({ rows, referencePaths, mcpToolCallIds, scriptSpanCount });
