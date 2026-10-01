@@ -30,6 +30,7 @@ function safeWrapperEvent(event = {}) {
   };
   if (event.CollectorMode) row.CollectorMode = String(event.CollectorMode).slice(0, 20);
   if (Number.isInteger(event.ExitCode)) row.ExitCode = event.ExitCode;
+  if (event.Signal) row.Signal = String(event.Signal).slice(0, 20);
   if (event.FallbackUnobserved !== undefined) row.FallbackUnobserved = Boolean(event.FallbackUnobserved);
   if (event.Reason || event.Error) row.ReasonCategory = event.EventName === 'agentops.collector.start_failed'
     || event.EventName === 'agentops.wrapper.fallback_unobserved'

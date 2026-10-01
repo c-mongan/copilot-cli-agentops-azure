@@ -33,12 +33,13 @@ function safeReceiptName(value = '') {
   return /^[A-Za-z0-9_.:/@+-]{1,200}$/.test(text) ? text : '';
 }
 
-function renderCopilotReceipt({ envelope, exitCode, privacy = 'strict', requestedPrivacy = privacy, fallbackUnobserved = false, deliveryState = 'native_best_effort', sessionDelivery = null, replayUrl = '', summary = null, wallDurationMs = 0, agent = '' }) {
+function renderCopilotReceipt({ envelope, exitCode, privacy = 'strict', requestedPrivacy = privacy, fallbackUnobserved = false, deliveryState = 'native_best_effort', sessionDelivery = null, replayUrl = '', summary = null, wallDurationMs = 0, agent = '', signal = '' }) {
   const completed = Number(exitCode) === 0;
+  const safeSignal = safeReceiptName(signal);
   const lines = [
     '',
     'AgentOps receipt',
-    `Result      ${completed ? 'Completed' : 'Needs attention'} · exit ${Number.isInteger(exitCode) ? exitCode : 1}`,
+    `Result      ${completed ? 'Completed' : 'Needs attention'} · exit ${Number.isInteger(exitCode) ? exitCode : 1}${safeSignal ? ` · terminated by signal ${safeSignal}` : ''}`,
     `Copilot     ${summary?.sessionId || 'session details pending'}`,
     `Delivery    ${receiptDeliveryText(fallbackUnobserved ? 'unobserved' : deliveryState)}`,
     ...(sessionDelivery ? [`Evidence    ${sessionDelivery.streams
@@ -189,6 +190,7 @@ async function copilotCommand(args = []) {
     ...baseEvent,
     EventName: 'agentops.run.end',
     ExitCode: result.status === null ? 1 : result.status,
+    Signal: result.signal || '',
     Error: result.error ? result.error.message : '',
     FallbackUnobserved: fallbackUnobserved
   });
@@ -208,7 +210,8 @@ async function copilotCommand(args = []) {
       replayUrl: wrapperReplayUrl(summary?.sessionId ? { runId: '__all', sessionId: summary.sessionId } : envelope),
       summary,
       wallDurationMs,
-      agent: requestedAgent
+      agent: requestedAgent,
+      signal: result.signal || ''
     }));
   }
 }

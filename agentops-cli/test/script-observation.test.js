@@ -374,3 +374,77 @@ test('Node script output and exit status match with telemetry off, on, and unava
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('overlapping and repeated invocations of inventoried scripts within one run are traced distinctly, never aliased', async () => {
+  const requests = [];
+  const server = http.createServer((request, response) => {
+    const chunks = [];
+    request.on('data', chunk => chunks.push(chunk));
+    request.on('end', () => {
+      requests.push(JSON.parse(Buffer.concat(chunks).toString('utf8')));
+      response.writeHead(200);
+      response.end('{}');
+    });
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const root = fixtureRepo();
+  try {
+    const scriptsDir = path.join(root, 'scripts');
+    const scriptA = path.join(scriptsDir, 'overlap-a.js');
+    const scriptB = path.join(scriptsDir, 'overlap-b.js');
+    fs.mkdirSync(scriptsDir, { recursive: true });
+    // Each script waits briefly so concurrent child processes genuinely overlap in wall-clock time
+    // rather than happening to run sequentially fast enough to look concurrent.
+    fs.writeFileSync(scriptA, "const { step } = require('agentops-script.cjs');\nstep('work-a', () => new Promise(r => setTimeout(r, 40)));\nconsole.log('overlap-a-done');\n");
+    fs.writeFileSync(scriptB, "const { step } = require('agentops-script.cjs');\nstep('work-b', () => new Promise(r => setTimeout(r, 10)));\nconsole.log('overlap-b-done');\n");
+    attachCommand(['--repo', root, '--yes', '--json'], { stdout: { write() {} } });
+    const env = attachedScriptEnvironment({
+      env: { PATH: process.env.PATH, OTEL_EXPORTER_OTLP_ENDPOINT: `http://127.0.0.1:${server.address().port}` },
+      cwd: root,
+      runId: 'synthetic-overlap-run',
+      agentopsRoot: repoRoot
+    });
+    const execute = script => new Promise((resolve, reject) => {
+      const child = spawn(process.execPath, [script], { cwd: root, env, stdio: ['ignore', 'pipe', 'pipe'] });
+      let stdout = '';
+      let stderr = '';
+      child.stdout.on('data', chunk => { stdout += chunk; });
+      child.stderr.on('data', chunk => { stderr += chunk; });
+      child.on('error', reject);
+      child.on('close', (code, signal) => resolve({ code, signal, stdout, stderr }));
+    });
+
+    // Two concurrent invocations of the SAME script, plus one concurrent invocation of a DIFFERENT
+    // script, all launched together so their child processes genuinely overlap.
+    const [repeatOne, repeatTwo, other] = await Promise.all([
+      execute(scriptA),
+      execute(scriptA),
+      execute(scriptB)
+    ]);
+
+    assert.equal(repeatOne.code, 0, repeatOne.stderr);
+    assert.equal(repeatTwo.code, 0, repeatTwo.stderr);
+    assert.equal(other.code, 0, other.stderr);
+    assert.equal(repeatOne.stdout.trim(), 'overlap-a-done');
+    assert.equal(repeatTwo.stdout.trim(), 'overlap-a-done');
+    assert.equal(other.stdout.trim(), 'overlap-b-done');
+
+    assert.equal(requests.length, 3, 'each overlapping invocation must export its own trace batch, not be collapsed into another');
+    const rootSpans = requests.map(request => request.resourceSpans[0].scopeSpans[0].spans.find(span => span.name === 'agentops.script'));
+    const traceIds = rootSpans.map(span => span.traceId);
+    const spanIds = rootSpans.map(span => span.spanId);
+    assert.equal(new Set(traceIds).size, 3, 'overlapping invocations must not share a trace ID');
+    assert.equal(new Set(spanIds).size, 3, 'overlapping invocations must not share a root span ID');
+
+    const scriptNames = requests.map(request => request.resourceSpans[0].scopeSpans[0].spans
+      .find(span => span.name === 'agentops.script.step').attributes
+      .find(item => item.key === 'agentops.script.name').value.stringValue);
+    const scriptACount = scriptNames.filter(name => name === 'scripts/overlap-a.js').length;
+    const scriptBCount = scriptNames.filter(name => name === 'scripts/overlap-b.js').length;
+    assert.equal(scriptACount, 2, 'both repeated invocations of script A must be individually attributed to script A');
+    assert.equal(scriptBCount, 1, 'the concurrent different script must be attributed to script B, not aliased to A');
+  } finally {
+    await new Promise(resolve => server.close(resolve));
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});

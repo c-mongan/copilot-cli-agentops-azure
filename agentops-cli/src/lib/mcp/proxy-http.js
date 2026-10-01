@@ -18,8 +18,50 @@ function createMcpHttpProxyObserver(options = {}) {
   const pending = new Map();
   const rows = [];
 
+  function emitRow(request, { status, errorType = '', outputResult = undefined }) {
+    const row = {
+      TimeGenerated: new Date().toISOString(),
+      RunId: runId,
+      TraceId: traceId,
+      SpanId: request.spanId,
+      McpSessionId: sessionId,
+      McpServerName: serverName,
+      McpServerHash: stableHashJson(serverName, 'mcp_server'),
+      McpClientName: options.clientName || 'http-client',
+      McpTransport: options.transport || 'http',
+      ToolName: request.toolName,
+      ToolType: request.risk,
+      ToolRisk: request.risk,
+      Allowed: request.allowed,
+      DeniedReason: '',
+      Sandboxed: Boolean(options.sandboxed),
+      Status: status,
+      DurationMs: Math.max(0, Date.now() - request.started),
+      OutputSizeBytes: jsonByteSize(outputResult),
+      ResultSizeBytes: jsonByteSize(outputResult),
+      ArgsSchemaHash: request.argsSchemaHash,
+      ErrorType: errorType
+    };
+    rows.push(row);
+    if (options.onObservation) options.onObservation(row);
+    return row;
+  }
+
+  function observeCancellation(message) {
+    const requestId = message.params?.requestId;
+    if (requestId === undefined || requestId === null) return { message, observed: false };
+    const key = String(requestId);
+    if (!pending.has(key)) return { message, observed: false };
+    const request = pending.get(key);
+    pending.delete(key);
+    emitRow(request, { status: 'cancelled' });
+    return { message, observed: false };
+  }
+
   function observeRequest(message = {}) {
-    if (!message || message.method !== 'tools/call') return { message, observed: false };
+    if (!message) return { message, observed: false };
+    if (message.method === 'notifications/cancelled') return observeCancellation(message);
+    if (message.method !== 'tools/call') return { message, observed: false };
     const toolName = toolNameFromMessage(message);
     const context = injectTraceContext(message);
     const id = jsonRpcId(message) || context.context.spanId;
@@ -40,32 +82,11 @@ function createMcpHttpProxyObserver(options = {}) {
     const request = pending.get(id);
     pending.delete(id);
     const failed = Boolean(message.error);
-    const row = {
-      TimeGenerated: new Date().toISOString(),
-      RunId: runId,
-      TraceId: traceId,
-      SpanId: request.spanId,
-      McpSessionId: sessionId,
-      McpServerName: serverName,
-      McpServerHash: stableHashJson(serverName, 'mcp_server'),
-      McpClientName: options.clientName || 'http-client',
-      McpTransport: options.transport || 'http',
-      ToolName: request.toolName,
-      ToolType: request.risk,
-      ToolRisk: request.risk,
-      Allowed: request.allowed,
-      DeniedReason: '',
-      Sandboxed: Boolean(options.sandboxed),
-      Status: failed ? 'failed' : 'success',
-      DurationMs: Math.max(0, Date.now() - request.started),
-      OutputSizeBytes: jsonByteSize(message.result),
-      ResultSizeBytes: jsonByteSize(message.result),
-      ArgsSchemaHash: request.argsSchemaHash,
-      ErrorType: failed ? String(message.error?.code || 'mcp_error') : ''
-    };
-    rows.push(row);
-    if (options.onObservation) options.onObservation(row);
-    return row;
+    return emitRow(request, {
+      status: failed ? 'failed' : 'success',
+      errorType: failed ? String(message.error?.code || 'mcp_error') : '',
+      outputResult: message.result
+    });
   }
 
   function observeExchange(request = {}, response = {}) {
