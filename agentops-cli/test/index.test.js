@@ -9080,10 +9080,13 @@ test('field catalog query discovers Properties keys', () => {
   const query = fieldCatalogQuery('14d');
   assert.match(query, /ago\(14d\)/);
   assert.match(query, /bag_keys\(Properties\)/);
-  assert.match(query, /example_values/);
+  assert.match(query, /summarize observed=count\(\) by field/);
+  assert.doesNotMatch(query, /example_values|tostring\(Properties\[field\]\)/);
   assert.match(query, /content_risk/);
   assert.match(query, /exact_content_keys/);
   assert.match(query, /sensitive-key-family/);
+  assert.match(query, /\| take 200$/);
+  assert.throws(() => fieldCatalogQuery('14d) | take 100000'), /duration/);
 });
 
 test('context pressure query ranks inefficient sessions', () => {
