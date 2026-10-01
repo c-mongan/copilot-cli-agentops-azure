@@ -341,7 +341,12 @@ async function copilotSessionCommand(args = [], dependencies = {}) {
   }
   if (options.subcommand === 'view') {
     if (!options.sessionId && !options.file) throw new Error('copilot-session view requires <session-id> or --file <events.jsonl>');
-    if (!options.allowContent) throw new Error('copilot-session view includes prompts and tool payloads; pass --allow-content for an approved local session');
+    // Default is metadata-only: prompts, tool arguments/results and other raw
+    // payload content are redacted from the rendered timeline. --allow-content
+    // opts into the full-content rendering that previously was the only mode
+    // (and still persists raw content to the local HTML file — see the
+    // in-page warning session-waterfall.js renders for that mode).
+    const metadataOnly = !options.allowContent;
     const eventsFile = options.file || defaultSessionEventsPath(options.sessionId);
     const sessionId = options.sessionId || path.basename(path.dirname(eventsFile));
     const sessionEvents = readCopilotSessionEvents(eventsFile);
@@ -367,8 +372,11 @@ async function copilotSessionCommand(args = [], dependencies = {}) {
         }
       }
     }
-    const output = writeSessionWaterfall(sessionEvents, sessionId, options.output, { nativeSpans: joinedSpans, deliveryStatus });
-    writeJsonOrRender({ ok: true, session_id: sessionId, output, native_spans: joinedSpans.filter(span => span.match === 'exact-session').length, run_linked_script_spans: joinedSpans.filter(span => span.match === 'run-linked-script').length, native_receipt_files: native.files.length, invalid_native_records: invalidNativeRecords }, options.json, result => `Local waterfall: ${result.output} · ${result.native_spans} native OTel spans · ${result.run_linked_script_spans} run-linked script spans\n`);
+    const output = writeSessionWaterfall(sessionEvents, sessionId, options.output, { nativeSpans: joinedSpans, deliveryStatus, metadataOnly });
+    const contentWarning = metadataOnly
+      ? 'Metadata only: prompts, tool arguments/results and other raw content are redacted. Pass --allow-content to render full content (persists raw content in this local HTML file).'
+      : 'Full content rendered: this local HTML file contains raw prompts, tool arguments/results and other captured payloads. Treat it as sensitive.';
+    writeJsonOrRender({ ok: true, session_id: sessionId, output, content_mode: metadataOnly ? 'metadata_only' : 'full_content_local_only', content_warning: contentWarning, native_spans: joinedSpans.filter(span => span.match === 'exact-session').length, run_linked_script_spans: joinedSpans.filter(span => span.match === 'run-linked-script').length, native_receipt_files: native.files.length, invalid_native_records: invalidNativeRecords }, options.json, result => `Local waterfall: ${result.output} · ${result.native_spans} native OTel spans · ${result.run_linked_script_spans} run-linked script spans\n${result.content_warning}\n`);
     return;
   }
   const result = await buildCopilotSessionEnrichment(options);

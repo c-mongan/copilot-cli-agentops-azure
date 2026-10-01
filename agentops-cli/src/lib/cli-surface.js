@@ -118,7 +118,7 @@ Core commands:
   copilot [copilot-args...]
   copilot-session enrich <session-id> [--file <events.jsonl>] [--sidecar <sidecar-events.jsonl>] [--dry-run] [--json]
   copilot-session launch [--repo <git-repo>] [--copilot-home <path>] [--upload --yes] [--json] -- [copilot-args...]\n  Azure upload needs a complete project target or explicit subscription, endpoint, and DCR environment values.
-  copilot-session view <session-id> --output <local.html> --allow-content [--file <events.jsonl>] [--otel-file <native-receipt.jsonl>] [--run-id <id>] [--json]
+  copilot-session view <session-id> --output <local.html> [--allow-content] [--file <events.jsonl>] [--otel-file <native-receipt.jsonl>] [--run-id <id>] [--json]\n  Default is metadata-only (raw prompts/tool arguments/results redacted). --allow-content renders full captured content and persists it in the local HTML file.
   copilot-session export-spans <session-id> --run-id <id> --output <dir>/AgentOpsSpans_CL.jsonl [--file <events.jsonl>] [--otel-file <receipt.jsonl>] [--json]
   copilot-session export-events <session-id> --run-id <id> --output <dir>/AgentOpsEvents_CL.jsonl [--file <events.jsonl>] [--json]
   copilot-session collect <session-id> --run-id <id> [--repo <git-repo>] [--copilot-home <path>] [--otel-file <receipt.jsonl>] [--upload --yes] [--json]
