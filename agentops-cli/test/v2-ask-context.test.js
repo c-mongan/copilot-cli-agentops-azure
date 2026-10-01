@@ -73,10 +73,35 @@ test('buildV2AskContext creates a metadata-only bundle for the latest run', () =
     assert.equal(result.last_recommendation.benchmark_run_id, 'bench-latest');
     assert.match(result.replay_url, /var-run_id=run-latest/);
     assert.match(result.kql_query, /union isfuzzy=true AppDependencies/);
+    assert.doesNotMatch(result.kql_query, /\| project[^\n]*\bProperties\b/);
     assert.match(result.prompt, /metadata in this bundle/);
     assert.doesNotMatch(JSON.stringify(result), /SECRET_FAKE_TEST_VALUE|gen_ai\.input\.messages/);
     assert.match(renderV2AskContext(result), /AgentOps ask context/);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
+});
+
+test('ask context drops payload fields and preserves unknown usage as null', t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-safe-ask-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const files = {
+    runsFile: writeJsonlFixture(path.join(root, 'runs.jsonl'), [{
+      TimeGenerated: '2026-06-03T12:00:00Z', RunId: 'run-safe', SessionId: 'session-safe',
+      TraceId: 'trace-safe', InputTokens: null, CacheReadTokens: null, ContextWindowPct: null,
+      PromptText: 'RUN_CANARY'
+    }]),
+    eventsFile: writeJsonlFixture(path.join(root, 'events.jsonl'), [{ RunId: 'run-safe', EventName: 'tool.execution_complete', ToolName: 'password=TIMELINE_CANARY', PromptText: 'EVENT_CANARY' }]),
+    toolsFile: writeJsonlFixture(path.join(root, 'tools.jsonl'), [{ RunId: 'run-safe', ToolCallId: 'call-safe', ToolName: 'bash', Status: 'error', Arguments: 'TOOL_CANARY' }]),
+    insightsFile: writeJsonlFixture(path.join(root, 'insights.jsonl'), [{ RunId: 'run-safe', Rule: 'TOOL_THRASH', Status: 'open', Evidence: { prompt: 'INSIGHT_CANARY' } }]),
+    recommendationsFile: writeJsonlFixture(path.join(root, 'recommendations.jsonl'), [{ RunId: 'run-safe', Action: 'review', Severity: 'medium', NextAction: 'RECOMMENDATION_CANARY' }])
+  };
+  const result = buildV2AskContext({ ...files, runId: 'run-safe' });
+  assert.equal(result.ok, true);
+  assert.equal(result.run.InputTokens, null);
+  assert.equal(result.run.CacheReadTokens, null);
+  assert.equal(result.run.ContextWindowPct, null);
+  assert.equal(result.evidence.failed_tools[0].ToolCallId, 'call-safe');
+  assert.equal(result.evidence.insights[0].Rule, 'TOOL_THRASH');
+  assert.doesNotMatch(JSON.stringify(result), /RUN_CANARY|EVENT_CANARY|TOOL_CANARY|INSIGHT_CANARY|RECOMMENDATION_CANARY|TIMELINE_CANARY/);
 });
