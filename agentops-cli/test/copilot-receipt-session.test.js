@@ -55,6 +55,18 @@ test('changed session detection selects the newest created or updated event stre
   assert.equal(summary.model, 'gpt-5.6-sol');
 });
 
+test('changed session detection refuses ambiguous concurrent sessions', t => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-ambiguous-session-'));
+  t.after(() => fs.rmSync(home, { recursive: true, force: true }));
+  const root = path.join(home, 'session-state');
+  for (const sessionId of ['session-a', 'session-b']) {
+    const directory = path.join(root, sessionId);
+    fs.mkdirSync(directory, { recursive: true });
+    fs.writeFileSync(path.join(directory, 'events.jsonl'), `${JSON.stringify({ type: 'session.start', data: { sessionId } })}\n`);
+  }
+  assert.equal(changedCopilotSession(new Map(), root), null);
+});
+
 test('session state lookup follows COPILOT_HOME when the CLI uses an isolated home', () => {
   const previous = process.env.COPILOT_HOME;
   const isolatedHome = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-isolated-copilot-home-'));

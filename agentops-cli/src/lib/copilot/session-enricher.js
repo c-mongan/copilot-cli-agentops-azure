@@ -13,7 +13,8 @@ function safeName(value, fallback = '') {
 }
 
 function defaultSessionEventsPath(sessionId, home = os.homedir()) {
-  const safeSessionId = safeName(sessionId);
+  const safeSessionId = typeof sessionId === 'string' && /^[A-Za-z0-9_-]{1,100}$/.test(sessionId)
+    ? sessionId : '';
   if (!safeSessionId) throw new Error('session id is required');
   const sessionStateRoot = process.env.COPILOT_HOME
     ? path.join(process.env.COPILOT_HOME, 'session-state')

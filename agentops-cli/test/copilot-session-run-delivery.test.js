@@ -82,6 +82,34 @@ function prepareSession(t, { withSpans = true, configured = true, attached = fal
   return { root, repo, copilotHome, agentopsHome, sessionId, otelFiles, projectConfigPath, env };
 }
 
+test('delivery rejects a session ID that escapes the Copilot session directory', t => {
+  const fixture = prepareSession(t, { configured: false });
+  assert.throws(() => deliverCopilotSession({
+    summary: { sessionId: '..' }, runId: 'safe-run', copilotHome: fixture.copilotHome,
+    agentopsHome: fixture.agentopsHome, cwd: fixture.repo, upload: false
+  }), /safe Copilot session ID/);
+});
+
+test('delivery rejects a run ID that resolves to the runs directory', t => {
+  const fixture = prepareSession(t, { configured: false });
+  assert.throws(() => deliverCopilotSession({
+    summary: { sessionId: fixture.sessionId }, runId: '..', copilotHome: fixture.copilotHome,
+    agentopsHome: fixture.agentopsHome, cwd: fixture.repo, upload: false
+  }), /safe AgentOps run ID/);
+});
+
+test('delivery rejects an event-supplied session ID different from the selected directory', t => {
+  const fixture = prepareSession(t, { configured: false });
+  const file = path.join(fixture.copilotHome, 'session-state', fixture.sessionId, 'events.jsonl');
+  const events = fs.readFileSync(file, 'utf8').trim().split('\n').map(line => JSON.parse(line));
+  events[0].data.sessionId = 'different-session';
+  fs.writeFileSync(file, `${events.map(event => JSON.stringify(event)).join('\n')}\n`);
+  assert.throws(() => deliverCopilotSession({
+    summary: { sessionId: fixture.sessionId }, runId: 'safe-run', copilotHome: fixture.copilotHome,
+    agentopsHome: fixture.agentopsHome, cwd: fixture.repo, upload: false
+  }), /does not match selected session/);
+});
+
 test('coverage command joins a delivered synthetic run to its exact attached inventory', t => {
   const fixture = prepareSession(t, { attached: true, configured: false });
   attachCommand(['--repo', fixture.repo, '--yes', '--json'], { stdout: { write() {} } });

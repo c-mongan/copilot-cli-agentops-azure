@@ -57,6 +57,10 @@ test('copilot session paths reject unsafe session ids and preserve safe ids', ()
       () => defaultSessionEventsPath('../bad session', '/tmp/home'),
       /session id is required/
     );
+    assert.throws(
+      () => defaultSessionEventsPath('../valid', '/tmp/home'),
+      /session id is required/
+    );
     assert.equal(
       defaultSessionEventsPath('session_123', '/tmp/home'),
       path.join('/tmp/home', '.copilot', 'session-state', 'session_123', 'events.jsonl')

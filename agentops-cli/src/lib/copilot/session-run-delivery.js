@@ -13,7 +13,7 @@ const { drainSessionOutboxes, initializeSessionOutbox, readSessionOutbox } = req
 
 function safeRunId(value) {
   const text = String(value || '');
-  if (!/^[A-Za-z0-9_.:-]{1,128}$/.test(text)) throw new Error('session delivery requires a safe AgentOps run ID');
+  if (!/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/.test(text)) throw new Error('session delivery requires a safe AgentOps run ID');
   return text;
 }
 
@@ -33,14 +33,22 @@ function ensurePrivateDirectory(directory, options = {}) {
 function deliverCopilotSession(options = {}) {
   const summary = options.summary;
   if (!summary?.sessionId) return { state: 'native_best_effort', reason: 'no changed Copilot session was detected' };
+  const selectedSessionId = String(summary.sessionId);
+  if (!/^[A-Za-z0-9-]{1,100}$/.test(selectedSessionId)) {
+    throw new Error('session delivery requires a safe Copilot session ID');
+  }
 
   const runId = safeRunId(options.runId);
   const copilotHome = options.copilotHome || process.env.COPILOT_HOME || path.join(require('node:os').homedir(), '.copilot');
-  const eventsFile = path.join(copilotHome, 'session-state', summary.sessionId, 'events.jsonl');
+  const eventsFile = path.join(copilotHome, 'session-state', selectedSessionId, 'events.jsonl');
   if (!fs.existsSync(eventsFile)) return { state: 'native_best_effort', reason: 'Copilot session event file was not found' };
 
   const sessionEvents = readCopilotSessionEvents(eventsFile);
-  const sessionId = sessionEvents.find(event => event.type === 'session.start')?.data?.sessionId || summary.sessionId;
+  const eventSessionId = sessionEvents.find(event => event.type === 'session.start')?.data?.sessionId;
+  if (eventSessionId && eventSessionId !== selectedSessionId) {
+    throw new Error('session start ID does not match selected session directory');
+  }
+  const sessionId = selectedSessionId;
   const cwd = options.cwd || process.cwd();
   const env = options.env || process.env;
   const home = path.resolve(options.agentopsHome || agentopsHome);
