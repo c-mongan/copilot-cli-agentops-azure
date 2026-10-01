@@ -79,6 +79,7 @@ The master plan is the delivery and acceptance authority. The full requirements 
 5. [MCP observability proxy](mcp-observability-proxy.md)
 6. [Azure V2 ingestion](azure-v2-ingestion.md)
 7. [Azure production hardening](azure-production-hardening.md)
+8. [Azure schema migration recovery](azure-schema-migration-recovery.md)
 
 ### Coding Agent Or LLM
 

@@ -529,7 +529,15 @@ function insightsNormalize() {
     "| extend PatternRuns=tolong(column_ifexists('PatternRuns', long(null)))",
     "| extend PatternDimension=tostring(column_ifexists('PatternDimension', ''))",
     "| extend BaselineValue=todouble(column_ifexists('BaselineValue', real(null)))",
-    "| extend CurrentValue=todouble(column_ifexists('CurrentValue', real(null)))"
+    "| extend CurrentValue=todouble(column_ifexists('CurrentValue', real(null)))",
+    "| extend Rule=tostring(column_ifexists('Rule', ''))",
+    "| extend ArchitectureVersion=tostring(column_ifexists('ArchitectureVersion', ''))",
+    "| extend Numerator=tolong(column_ifexists('Numerator', long(null)))",
+    "| extend Denominator=tolong(column_ifexists('Denominator', long(null)))",
+    "| extend CoverageRuns=tolong(column_ifexists('CoverageRuns', long(null)))",
+    "| extend Status=tostring(column_ifexists('Status', ''))",
+    "| extend ComponentRefs=column_ifexists('ComponentRefs', dynamic([]))",
+    "| extend Evidence=column_ifexists('Evidence', dynamic({}))"
   ].join(' ');
 }
 
@@ -943,7 +951,7 @@ const dashboards = {
 
   '09-insights-regressions.json': dashboard('agentops-v2-insights-regressions', 'Insights & Regressions', [
     textPanel(1, 'What changed?', 0, 0, 24, 2, `## Insights & Regressions\nCost, latency, failure, policy, eval, model, and instruction/config regressions. ${emptyState}`),
-    tablePanel(10, 'Latest insights', 0, 2, 24, 10, `${q.insights} | project TimeGenerated, InsightType, Severity, Summary, RunId, RepoHash, ModelActual, ToolName, BaselineValue, CurrentValue, ConfigHash, PatternRuns, SuggestedNextStep | order by TimeGenerated desc | take 500`),
+    tablePanel(10, 'Latest insights', 0, 2, 24, 10, `${q.insights} | project TimeGenerated, InsightType, Severity, Summary, RunId, RepoHash, ModelActual, ToolName, BaselineValue, CurrentValue, ConfigHash, PatternRuns, SuggestedNextStep, Rule, ArchitectureVersion, Numerator, Denominator, CoverageRuns, Status, ComponentRefs, Evidence | order by TimeGenerated desc | take 500`),
     tablePanel(11, 'Recurring patterns', 0, 12, 24, 8, `${q.insights} | where isnotempty(PatternId) or InsightType startswith 'recurring-' | extend OpenPattern='Pattern', OpenReplay='Replay' | project TimeGenerated, InsightType, Severity, PatternRuns, PatternDimension, PatternKey, Summary, SuggestedNextStep, OpenPattern, OpenReplay, RunId, RepoHash, ModelActual, ToolName, CurrentValue | order by PatternRuns desc, TimeGenerated desc | take 100`),
     timeseriesPanel(20, 'Insight volume', 0, 20, 12, 8, `${q.insights} | summarize Insights=count() by TimeGenerated=bin(TimeGenerated, $__interval), Severity | order by TimeGenerated asc`),
     tablePanel(21, 'Regression evidence', 12, 20, 12, 8, `${q.insights} | where InsightType has 'regression' or InsightType has 'anomaly' | project TimeGenerated, InsightType, Severity, RepoHash, ModelActual, ToolName, BaselineValue, CurrentValue, ConfigHash, Summary | order by TimeGenerated desc | take 100`),
