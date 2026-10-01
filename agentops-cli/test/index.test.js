@@ -8620,6 +8620,24 @@ test('link trace builds OperationId query', () => {
   assert.match(result.query, /OperationId == "op-456"/);
 });
 
+test('session and trace links bound results and project only explicit metadata', () => {
+  for (const [kind, id] of [['session', 'conv-1'], ['trace', 'trace-1']]) {
+    const query = buildLink(kind, id, { last: '2h' }).query;
+    assert.match(query, /\| take 200$/);
+    assert.doesNotMatch(query, /, Properties\s*\n/);
+    assert.match(query, /model_actual/);
+    assert.match(query, /input_tokens/);
+  }
+});
+
+test('session and trace links validate lookback and escape exact IDs', () => {
+  for (const kind of ['session', 'trace']) {
+    assert.throws(() => buildLink(kind, 'safe', { last: '1h) | take 100000' }), /duration/);
+    const query = buildLink(kind, 'id\\"quoted', { last: '2h' }).query;
+    assert.match(query, /id\\\\\\"quoted/);
+  }
+});
+
 test('latest summarizes a fixture session in plain language', () => {
   const summary = latestSessionSummary({ filePath: path.join(root, 'fixtures', 'sample-otel', 'tool-failure.ndjson.fixture') });
   const output = renderLatest(summary);
