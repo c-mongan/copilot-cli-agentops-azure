@@ -74,8 +74,9 @@ function loadAttachmentManifest(ledgerDir, repoRoot) {
 // (session-run-delivery.js); Task 6's fixtures write `context.json`. Its real
 // fields are `{managedBy, schemaVersion, runId, sessionId, repositoryRootHash,
 // attachmentManifestSha256, createdAt}` — none of which are
-// architectureVersion/taskContract/outcomeFailed/compactionObserved, so those
-// are treated as genuinely absent (not pre-stamped) rather than required.
+// architectureVersion/configurationVersion/taskContract/outcomeFailed/
+// compactionObserved, so those are treated as genuinely absent (not
+// pre-stamped) rather than required.
 function readRunContext(runDir) {
   return readJsonSafe(path.join(runDir, 'run-context.json')) || readJsonSafe(path.join(runDir, 'context.json')) || {};
 }
@@ -125,6 +126,8 @@ function loadLedgerFromDirectory(ledgerDir, options = {}) {
       runId: entry.name,
       sessionId: context.sessionId || '',
       architectureVersion: context.architectureVersion || 'unknown',
+      configurationVersion: context.configurationVersion || null,
+      taskId: context.taskId || context.taskContract?.taskId || null,
       evidenceTier: context.evidenceTier || 'unknown',
       evidenceComplete,
       coverage,

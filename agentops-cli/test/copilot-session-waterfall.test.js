@@ -688,6 +688,25 @@ test('summary states the effective privacy/capture profile distinctly for metada
   assert.match(fullHtml, /no automatic expiry/);
 });
 
+test('privacy summary distinguishes excluded payloads, missing fields, and unknown source truncation', () => {
+  const supplied = [
+    { type: 'user.message', timestamp: '2026-01-01T00:00:01.000Z', data: { content: 'PRIVACY_SUMMARY_CANARY' } },
+    { type: 'assistant.message', timestamp: '2026-01-01T00:00:02.000Z', data: {} },
+    { type: 'tool.execution_start', timestamp: '2026-01-01T00:00:03.000Z', data: { toolCallId: 'privacy', toolName: 'bash', arguments: {} } },
+    { type: 'tool.execution_complete', timestamp: '2026-01-01T00:00:04.000Z', data: { toolCallId: 'privacy', success: false } }
+  ];
+  const metadata = renderSessionWaterfall(supplied, 'privacy-summary', { metadataOnly: true });
+  assert.match(metadata, /Payload excluded from this HTML/);
+  assert.match(metadata, /Source content capture and truncation are unknown/);
+  assert.doesNotMatch(metadata, /PRIVACY_SUMMARY_CANARY/);
+  const restricted = renderSessionWaterfall(supplied, 'privacy-summary', { metadataOnly: false });
+  assert.match(restricted, /2 payload fields available in supplied events; 2 expected fields missing/);
+  assert.match(restricted, /Source completeness and truncation are unknown/);
+  assert.match(restricted, /Access scope: local filesystem/);
+  assert.match(restricted, /owner-only permissions \(0600\)/);
+  assert.match(restricted, /Removing this HTML does not remove source receipts or Azure records/);
+});
+
 test('full-content HTML redacts common secrets before persisting captured payloads', () => {
   const html = renderSessionWaterfall([
     { type: 'user.message', timestamp: '2026-01-01T00:00:01.000Z', data: { content: 'Authorization: Bearer fixture-secret-value' } },

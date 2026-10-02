@@ -1,4 +1,11 @@
-const { DEFAULTS, computeAllMetrics, eligibleRuns } = require('./metrics');
+const {
+  DEFAULTS,
+  computeAllMetrics,
+  evidenceMetadata,
+  eventIds,
+  metricEligibleCohorts,
+  metricEligibleRuns
+} = require('./metrics');
 
 const RULE_METADATA = Object.freeze({
   REFERENCE_NEAR_MANDATORY: {
@@ -29,14 +36,14 @@ const RULE_METADATA = Object.freeze({
 });
 
 let cardCounter = 0;
-function nextCardId(rule) {
+function nextCardId(rule, cohortId = null) {
   cardCounter += 1;
-  return `${rule}_${Date.now().toString(36)}_${cardCounter}`;
+  return `${rule}_${cohortId ? cohortId.slice(0, 12) : 'cohort-unknown'}_${Date.now().toString(36)}_${cardCounter}`;
 }
 
 function hypothesisCard({ rule, componentRefs, metricEvidence, representativeRunIds, coverageLimits, proposedChange, rejectionTest = 'pending', status = 'open', subStatus = null, title = null, summary = null }) {
   return {
-    id: nextCardId(rule),
+    id: nextCardId(rule, metricEvidence?.cohortId),
     rule,
     status,
     subStatus,
@@ -48,6 +55,19 @@ function hypothesisCard({ rule, componentRefs, metricEvidence, representativeRun
     coverageLimits,
     proposedChange: proposedChange || RULE_METADATA[rule]?.proposedChange,
     rejectionTest
+  };
+}
+
+function metricContract(row = {}) {
+  return {
+    unit: row.unit || 'unknown',
+    configurationVersion: row.configurationVersion || null,
+    configurationVersions: row.configurationVersions || [],
+    taskId: row.taskId || null,
+    taskIds: row.taskIds || [],
+    cohortId: row.cohortId || null,
+    evidenceIds: row.evidenceIds || [],
+    coverage: row.coverage || null
   };
 }
 
@@ -65,6 +85,7 @@ function referenceNearMandatoryRule(graph, metrics) {
         { kind: 'reference', path: row.reference, ownerSkills: row.ownerSkills, ambiguousOwnership: row.ambiguousOwnership }
       ],
       metricEvidence: {
+        ...metricContract(row),
         numerator: row.numerator,
         denominator: row.denominator,
         coverageRuns: row.coverageRuns,
@@ -84,15 +105,16 @@ function referenceNearMandatoryRule(graph, metrics) {
 function skillPairCoactivatedRule(graph, metrics) {
   const independentByTarget = new Map();
   for (const row of (metrics.independentUse || [])) {
-    independentByTarget.set(`${row.skill}|${row.otherSkill}`, row);
+    independentByTarget.set(`${row.cohortId || 'unknown'}|${row.skill}|${row.otherSkill}`, row);
   }
   const cards = [];
   for (const row of (metrics.skillCoactivation || [])) {
     const pBGA = row.pBGivenA;
     const pAGB = row.pAGivenB;
     if (!pBGA.sufficient || !pAGB.sufficient) continue;
-    const independentB = independentByTarget.get(`${row.skillB}|${row.skillA}`);
-    const independentA = independentByTarget.get(`${row.skillA}|${row.skillB}`);
+    const cohortId = pBGA.cohortId || 'unknown';
+    const independentB = independentByTarget.get(`${cohortId}|${row.skillB}|${row.skillA}`);
+    const independentA = independentByTarget.get(`${cohortId}|${row.skillA}|${row.skillB}`);
     const bHasIndependent = independentB && independentB.sufficient && independentB.rate !== null;
     const aHasIndependent = independentA && independentA.sufficient && independentA.rate !== null;
     const bothCoact = pBGA.rate >= DEFAULTS.coactivationRate && pAGB.rate >= DEFAULTS.coactivationRate;
@@ -110,6 +132,7 @@ function skillPairCoactivatedRule(graph, metrics) {
         { kind: 'skill', name: row.skillB, role: primary === row.skillB ? 'primary' : 'secondary' }
       ],
       metricEvidence: {
+        ...metricContract(pBGA),
         pBGivenA: pBGA,
         pAGivenB: pAGB,
         independentUseOfSecondary: secondary === row.skillB ? independentB : independentA,
@@ -136,6 +159,7 @@ function toolThrashRule(graph, metrics) {
         : `Tool ${row.tool} repeated ≥${DEFAULTS.thrashConsecutive} times in a row in ${row.numerator}/${row.denominator} covered runs. No explicit result-state evidence was present; this is suspected repetition, not confirmed thrash.`,
       componentRefs: [{ kind: 'tool', name: row.tool }],
       metricEvidence: {
+        ...metricContract(row),
         numerator: row.numerator,
         denominator: row.denominator,
         coverageRuns: row.coverageRuns,
@@ -154,21 +178,24 @@ function toolThrashRule(graph, metrics) {
 }
 
 function mechanicalLlmStepRule(graph, joinedRuns, metrics) {
-  const covered = eligibleRuns(graph, joinedRuns);
   const perStep = new Map();
-  for (const run of covered) {
-    if (!run.taskContract || !Array.isArray(run.taskContract.deterministicSteps)) continue;
-    if (run.taskContract.scriptCoverage !== 'complete') continue;
-    for (const step of run.taskContract.deterministicSteps) {
-      const key = `${step.skillName}|${step.scriptName}`;
-      if (!perStep.has(key)) perStep.set(key, { triggered: 0, total: 0, representatives: [], step });
-      const entry = perStep.get(key);
-      entry.total += 1;
-      const modelCalls = run.modelCallsBySkill.get(step.skillName) || 0;
-      const scriptSeen = run.scriptCalls.some(call => call.script === step.scriptName);
-      if (!scriptSeen && modelCalls >= DEFAULTS.mechanicalModelCallsThreshold) {
-        entry.triggered += 1;
-        if (entry.representatives.length < 5) entry.representatives.push(run.runId);
+  for (const cohort of metricEligibleCohorts(graph, joinedRuns)) {
+    for (const run of cohort.runs) {
+      if (!run.taskContract || !Array.isArray(run.taskContract.deterministicSteps)) continue;
+      if (run.taskContract.scriptCoverage !== 'complete') continue;
+      for (const step of run.taskContract.deterministicSteps) {
+        const key = `${cohort.cohortId}|${step.skillName}|${step.scriptName}`;
+        if (!perStep.has(key)) perStep.set(key, { triggered: 0, total: 0, representatives: [], evidenceIds: [], runs: [], step });
+        const entry = perStep.get(key);
+        entry.total += 1;
+        entry.runs.push(run);
+        const modelCalls = run.modelCallsBySkill.get(step.skillName) || 0;
+        const scriptSeen = run.scriptCalls.some(call => call.script === step.scriptName);
+        if (!scriptSeen && modelCalls >= DEFAULTS.mechanicalModelCallsThreshold) {
+          entry.triggered += 1;
+          if (entry.representatives.length < 5) entry.representatives.push(run.runId);
+          entry.evidenceIds.push(...eventIds([run], event => event.SkillName === step.skillName && ['assistant.turn_end', 'model.response', 'assistant.message'].includes(event.EventName)));
+        }
       }
     }
   }
@@ -186,9 +213,10 @@ function mechanicalLlmStepRule(graph, joinedRuns, metrics) {
         { kind: 'script', path: entry.step.scriptName }
       ],
       metricEvidence: {
+        ...evidenceMetadata(entry.runs, entry.evidenceIds, 'runs'),
         numerator: entry.triggered,
         denominator: entry.total,
-        coverageRuns: covered.length,
+        coverageRuns: entry.runs.length,
         rate,
         architectureVersion: graph.architectureVersion
       },
@@ -204,15 +232,15 @@ function mechanicalLlmStepRule(graph, joinedRuns, metrics) {
 }
 
 function declaredNotObservedRule(graph, metrics) {
-  const dvo = metrics.declaredVsObserved;
-  if (!dvo || !dvo.sufficient) return [];
   const cards = [];
-  const summarise = (kind, name, extra = {}) => hypothesisCard({
+  const populations = metrics.declaredVsObserved?.cohorts || [metrics.declaredVsObserved];
+  const summarise = (dvo, kind, name, extra = {}) => hypothesisCard({
     rule: 'DECLARED_NOT_OBSERVED',
     subStatus: 'informational',
     summary: `${kind} ${name} is declared in the inventory but was not observed in any of the ${dvo.coverageRuns} covered runs under architecture version ${dvo.architectureVersion.slice(0, 12)}.`,
     componentRefs: [{ kind, name, ...extra }],
     metricEvidence: {
+      ...metricContract(dvo),
       numerator: 0,
       denominator: dvo.coverageRuns,
       coverageRuns: dvo.coverageRuns,
@@ -221,18 +249,22 @@ function declaredNotObservedRule(graph, metrics) {
     representativeRunIds: [],
     coverageLimits: { minRuns: DEFAULTS.minRuns, note: 'Not observed does not mean unused — attach the next observed run and recheck.' }
   });
-  for (const agent of dvo.notObserved.agents) cards.push(summarise('agent', agent.name, { path: agent.path }));
-  for (const skill of dvo.notObserved.skills) cards.push(summarise('skill', skill.name, { path: skill.path }));
-  for (const ref of dvo.notObserved.references) cards.push(summarise('reference', ref.path, { ownerSkill: ref.ownerSkill }));
-  for (const script of dvo.notObserved.scripts) cards.push(summarise('script', script.path, { ownerSkills: script.ownerSkills }));
+  for (const dvo of populations) {
+    if (!dvo || !dvo.sufficient) continue;
+    for (const agent of dvo.notObserved.agents) cards.push(summarise(dvo, 'agent', agent.name, { path: agent.path }));
+    for (const skill of dvo.notObserved.skills) cards.push(summarise(dvo, 'skill', skill.name, { path: skill.path }));
+    for (const ref of dvo.notObserved.references) cards.push(summarise(dvo, 'reference', ref.path, { ownerSkill: ref.ownerSkill }));
+    for (const script of dvo.notObserved.scripts) cards.push(summarise(dvo, 'script', script.path, { ownerSkills: script.ownerSkills }));
+  }
   return cards;
 }
 
 function evaluateFindings(graph, joinedRuns, options = {}) {
   cardCounter = 0;
   const metrics = options.metrics || computeAllMetrics(graph, joinedRuns, options);
-  const covered = eligibleRuns(graph, joinedRuns);
-  const insufficientEvidence = covered.length < DEFAULTS.minRuns;
+  const covered = metricEligibleRuns(graph, joinedRuns);
+  const cohorts = metricEligibleCohorts(graph, joinedRuns);
+  const insufficientEvidence = !cohorts.some(cohort => cohort.runs.length >= DEFAULTS.minRuns);
   const cards = [];
   if (!insufficientEvidence) {
     cards.push(
@@ -246,6 +278,7 @@ function evaluateFindings(graph, joinedRuns, options = {}) {
   return {
     architectureVersion: graph.architectureVersion,
     coverageRuns: covered.length,
+    cohorts: metrics.cohorts,
     insufficientEvidence,
     cards,
     metrics,

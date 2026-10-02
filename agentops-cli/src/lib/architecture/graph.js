@@ -96,16 +96,51 @@ function measurement(value) {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
 }
 
+function textOrNull(value) {
+  if (value === undefined || value === null || value === '') return null;
+  return String(value);
+}
+
+function affirmativeReferenceRead(event) {
+  if (!event.ReferenceName) return false;
+  const eventName = event.EventName.toLowerCase();
+  const status = event.StatusRecorded ? event.Status.toLowerCase() : null;
+  if (eventName === 'tool.execution_start') return false;
+  if (['failed', 'error', 'partial', 'started', 'pending', 'cancelled', 'canceled', 'ambiguous', 'unknown', 'unobserved'].includes(status)) return false;
+  if (eventName === 'tool.execution_complete') {
+    // Old fixture rows did not carry Status. The event name itself was their
+    // terminal success signal; retain that compatibility without accepting an
+    // explicitly non-terminal or failed lifecycle state.
+    return status === null || ['completed', 'complete', 'success', 'succeeded', 'ok', 'passed'].includes(status);
+  }
+  if (!['skill.context_delivered_ref', 'reference.read'].includes(eventName)) return false;
+  if (status !== null && !['completed', 'complete', 'success', 'succeeded', 'ok', 'passed', 'observed'].includes(status)) return false;
+  // Legacy reference events predate lifecycle fields. Their event type is the
+  // affirmative read/delivery receipt, so they remain eligible.
+  return true;
+}
+
 function normalizeEvent(row = {}) {
   if (!row || typeof row !== 'object') return null;
   const eventName = String(row.EventName || row.event_name || '').trim();
   if (!eventName) return null;
   return {
     EventId: String(row.EventId || ''),
+    ParentEventId: String(row.ParentEventId || ''),
+    TimeGenerated: textOrNull(row.TimeGenerated || row.time_generated || row.timestamp),
+    Source: textOrNull(row.Source || row.source || row.Surface || row.surface),
+    Surface: textOrNull(row.Surface || row.surface),
+    SchemaVersion: textOrNull(row.SchemaVersion || row.schema_version),
+    ConfigurationVersion: textOrNull(row.ConfigurationVersion || row.configurationVersion || row.configuration_version),
+    TaskId: textOrNull(row.TaskId || row.taskId || row.task_id),
+    RunId: String(row.RunId || ''),
+    SessionId: String(row.SessionId || ''),
+    TraceId: String(row.TraceId || ''),
     Sequence: Number.isFinite(Number(row.Sequence)) ? Number(row.Sequence) : null,
     EventName: eventName,
     SpanName: String(row.SpanName || eventName),
     Status: String(row.Status || 'observed'),
+    StatusRecorded: row.Status !== undefined && row.Status !== null && row.Status !== '',
     AgentId: String(row.AgentId || ''),
     AgentName: String(row.AgentName || ''),
     ParentAgentId: String(row.ParentAgentId || ''),
@@ -150,6 +185,7 @@ function joinObserved(graph, run = {}) {
   const modelCallsBySkill = new Map();
   const skillActivationOrder = [];
   const perSkillRefs = new Map();
+  const seenReferenceReads = new Set();
   const subagentTokens = { input: 0, output: 0 };
   const subagentDurationMs = { total: 0 };
   const runTotals = { input: 0, output: 0, durationMs: 0 };
@@ -176,12 +212,22 @@ function joinObserved(graph, run = {}) {
       skillsObserved.add(event.SkillName);
       if (event.AgentId) lastSkillByAgent.set(event.AgentId, event.SkillName);
     }
-    if (event.ReferenceName) {
-      const owningSkill = event.SkillName || lastSkillByAgent.get(event.AgentId) || null;
-      refsRead.push({ reference: event.ReferenceName, afterSkill: owningSkill });
-      if (owningSkill) {
-        if (!perSkillRefs.has(owningSkill)) perSkillRefs.set(owningSkill, new Set());
-        perSkillRefs.get(owningSkill).add(event.ReferenceName);
+    if (affirmativeReferenceRead(event)) {
+      const readKey = event.ToolCallId || event.EventId || `${event.ReferenceName}:${event.Sequence}`;
+      if (!seenReferenceReads.has(readKey)) {
+        seenReferenceReads.add(readKey);
+        const owningSkill = event.SkillName || lastSkillByAgent.get(event.AgentId) || null;
+        refsRead.push({
+          reference: event.ReferenceName,
+          afterSkill: owningSkill,
+          eventId: event.EventId || null,
+          timeGenerated: event.TimeGenerated,
+          source: event.Source
+        });
+        if (owningSkill) {
+          if (!perSkillRefs.has(owningSkill)) perSkillRefs.set(owningSkill, new Set());
+          perSkillRefs.get(owningSkill).add(event.ReferenceName);
+        }
       }
     }
     if (event.ScriptName) {
@@ -189,7 +235,8 @@ function joinObserved(graph, run = {}) {
         script: event.ScriptName,
         skill: event.SkillName || lastSkillByAgent.get(event.AgentId) || null,
         status: event.Status,
-        durationMs: event.DurationMs
+        durationMs: event.DurationMs,
+        eventId: event.EventId || null
       });
     }
     if (event.ToolName && (event.EventName === 'tool.execution_start' || event.EventName === 'tool.execution_complete')) {
@@ -199,7 +246,8 @@ function joinObserved(graph, run = {}) {
         status: event.Status,
         resultState: event.ResultState,
         argHash: event.ArgHash,
-        eventName: event.EventName
+        eventName: event.EventName,
+        eventId: event.EventId || null
       });
     }
     if (event.EventName === 'assistant.turn_end' || event.EventName === 'model.response' || event.EventName === 'assistant.message') {
@@ -208,9 +256,19 @@ function joinObserved(graph, run = {}) {
     }
   }
 
+  const eventConfigurationVersions = [...new Set(dedupedEvents.map(event => event.ConfigurationVersion).filter(Boolean))];
+  const recordedConfigurationVersion = textOrNull(run.configurationVersion);
+  const eventTaskIds = [...new Set(dedupedEvents.map(event => event.TaskId).filter(Boolean))];
+  const recordedTaskId = textOrNull(run.taskId) || textOrNull(run.taskContract?.taskId);
+  const configurationVersions = [...new Set([recordedConfigurationVersion, ...eventConfigurationVersions].filter(Boolean))].sort();
+  const taskIds = [...new Set([recordedTaskId, ...eventTaskIds].filter(Boolean))].sort();
   return {
     runId: run.runId,
     architectureVersion: run.architectureVersion || graph.architectureVersion,
+    configurationVersion: configurationVersions.length === 1 ? configurationVersions[0] : null,
+    configurationVersions,
+    taskId: taskIds.length === 1 ? taskIds[0] : null,
+    taskIds,
     // Finding 2 (overnight whole-branch review): a genuinely missing/unknown
     // evidenceComplete signal must NOT be treated as "complete" — only an
     // explicit completeness assertion with valid captured rows counts.

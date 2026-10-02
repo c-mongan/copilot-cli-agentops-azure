@@ -63,8 +63,29 @@ All launches completed with the scoped collector lifecycle completed and no
 invalid native records. Stimulus missing counts are zero; global evidenceComplete
 remains false. CLI exit 0 is distinct from the rejected synthetic release.
 
-These new runs were not uploaded to Azure and their generated HTML was not
-browser-verified in this step. Existing Azure/screenshots proof is documented
-in [the earlier report](2026-10-02-agentops-multi-agent-azure-e2e.md); it must not
-be relabelled as proof of these new runs. No experiment was merged, no proposed
+The new runs were browser-verified at 1440×1000 and 390×844: run search,
+native-session replay, failed tool receipts, script spans, component receipt
+counts, and Runs/Architecture/Compare navigation. Mobile document width stayed
+within the viewport, the synthetic privacy canary was absent, and the owned
+browser recorded no console or page errors. Architecture correctly retained
+unknown global coverage and emitted no hypotheses from these live runs.
+
+Fresh Azure REST readback matched all fields of 100 previously uploaded rows
+(47 events and 53 spans), with no missing or unexpected rows. A separate
+read-only Azure MCP stdio invocation returned five exact rows for the earlier
+`agentops_e2e_20261002_v2_agentops-ci-pattern-smoke` run. The resolved MCP version
+was `3.0.0-beta.49`; the operation was `monitor_workspace_log_query`, distinct
+from Azure Data Explorer's Kusto router. These checks used the existing
+Visual Studio Enterprise subscription and workspace.
+
+The new agent-pattern runs remain local and pending Azure delivery. The
+subscription was freshly confirmed Enabled with spendingLimit On. Remaining
+credit could not be refreshed: applicable portal inspection was unreliable,
+and the attempted billing APIs did not support this MOSP subscription. A 404
+is not a credit balance. New uploads remain held under the authorized spending
+constraints. Earlier Azure frontend screenshots remain earlier-run proof.
+
+The local screenshot gallery is `screenshots.html` under the artifact root;
+readback audits are `azure-existing-fresh-field-audit.json` and
+`mcp-read-proof/azure-mcp-stdio-proof.json`. No experiment was merged, no proposed
 refactor was applied, and no infrastructure or production deployment occurred.

@@ -40,6 +40,14 @@ function toInsightsRow(card, { timeGenerated = new Date().toISOString() } = {}) 
     Evidence: {
       interval: evidence.interval || null,
       rate: evidence.rate !== undefined ? evidence.rate : (denominator && numerator !== null ? numerator / denominator : null),
+      unit: evidence.unit || 'unknown',
+      configurationVersion: evidence.configurationVersion || null,
+      configurationVersions: evidence.configurationVersions || [],
+      taskId: evidence.taskId || null,
+      taskIds: evidence.taskIds || [],
+      cohortId: evidence.cohortId || null,
+      coverage: evidence.coverage || null,
+      evidenceIds: evidence.evidenceIds || [],
       subStatus: card.subStatus || null,
       representativeRunIds: card.representativeRunIds || [],
       coverageLimits: card.coverageLimits || null,
@@ -51,12 +59,24 @@ function toInsightsRow(card, { timeGenerated = new Date().toISOString() } = {}) 
 }
 
 function renderMarkdown(report) {
-  const { architectureVersion, coverageRuns, cards, metrics, insufficientEvidence } = report;
+  const { architectureVersion, configurationVersion, configurationVersions, coverageRuns, cards, metrics, insufficientEvidence } = report;
   const lines = [];
   lines.push('# AgentOps architecture report', '');
   lines.push(`Architecture version: \`${architectureVersion.slice(0, 16)}…\``);
+  lines.push(`Execution configuration version: ${configurationVersion ? `\`${configurationVersion}\`` : `unknown or mixed (${(configurationVersions || []).join(', ') || 'none recorded'})`}`);
   lines.push(`Covered runs: ${coverageRuns}`);
+  lines.push(`Observed complete runs: ${report.observedCoverageRuns ?? coverageRuns}`);
   lines.push(`Deferred rules: ${report.deferredRules.join(', ')} (metrics computed, cards not emitted this release)`, '');
+  if (report.cohorts?.length) {
+    lines.push('## Evidence cohorts', '');
+    for (const cohort of report.cohorts) {
+      const configuration = cohort.configurationVersion || `${cohort.configurationVersionStatus} (${(cohort.configurationVersions || []).join(', ') || 'none recorded'})`;
+      const task = cohort.taskId || `${cohort.taskStatus} (${(cohort.taskIds || []).join(', ') || 'none recorded'})`;
+      const metricStatus = cohort.eligibleForMetrics === false ? `excluded: ${cohort.exclusionReason}` : 'eligible';
+      lines.push(`- \`${cohort.cohortId}\`: configuration ${configuration}; task ${task}; ${cohort.coverageRuns} runs; ${metricStatus}`);
+    }
+    lines.push('');
+  }
   if (insufficientEvidence) {
     lines.push('> **Insufficient evidence.** Fewer than the minimum covered runs were available; no findings were emitted. Not observed does not mean unused.', '');
   }
@@ -69,6 +89,10 @@ function renderMarkdown(report) {
     lines.push(`- Title: ${card.title}`);
     if (card.summary) lines.push(`- Summary: ${card.summary}`);
     const ev = card.metricEvidence || {};
+    lines.push(`- Metric unit: ${ev.unit || 'unknown'}`);
+    lines.push(`- Execution configuration: ${ev.configurationVersion || `${ev.coverage?.configurationVersionStatus || 'unknown'} (${(ev.configurationVersions || []).join(', ') || 'none recorded'})`}`);
+    lines.push(`- Task cohort: ${ev.taskId || `${ev.coverage?.taskStatus || 'unknown'} (${(ev.taskIds || []).join(', ') || 'none recorded'})`}`);
+    lines.push(`- Cohort ID: ${ev.cohortId || 'unknown'}`);
     if (Number.isFinite(ev.numerator) && Number.isFinite(ev.denominator)) {
       const rate = ev.denominator > 0 ? (ev.numerator / ev.denominator * 100).toFixed(1) + '%' : 'n/a';
       lines.push(`- Evidence: ${ev.numerator}/${ev.denominator} (${rate}), coverage ${ev.coverageRuns} runs`);
@@ -78,6 +102,7 @@ function renderMarkdown(report) {
       lines.push(`- Components: ${card.componentRefs.map(ref => `${ref.kind}:${ref.name || ref.path}`).join(', ')}`);
     }
     if (card.representativeRunIds?.length) lines.push(`- Representative runs: ${card.representativeRunIds.join(', ')}`);
+    if (ev.evidenceIds?.length) lines.push(`- Exact evidence IDs: ${ev.evidenceIds.join(', ')}`);
     lines.push(`- Proposed change: ${card.proposedChange}`);
     lines.push(`- Rejection test: ${card.rejectionTest}`);
     lines.push('');
@@ -98,8 +123,16 @@ function renderMarkdown(report) {
 function buildReport({ graph, findings, invalidLedgerRows = 0, generatedAt = new Date().toISOString() }) {
   const report = {
     architectureVersion: graph.architectureVersion,
+    configurationVersion: findings.metrics?.configurationVersion || null,
+    configurationVersions: findings.metrics?.configurationVersions || [],
+    configurationVersionStatus: findings.metrics?.coverage?.configurationVersionStatus || 'unknown',
+    taskId: findings.metrics?.taskId || null,
+    taskIds: findings.metrics?.taskIds || [],
+    taskStatus: findings.metrics?.coverage?.taskStatus || 'unknown',
+    cohorts: findings.cohorts || [],
     generatedAt,
     coverageRuns: findings.coverageRuns,
+    observedCoverageRuns: findings.metrics?.observedCoverageRuns ?? findings.coverageRuns,
     insufficientEvidence: findings.insufficientEvidence,
     cards: findings.cards,
     metrics: findings.metrics,

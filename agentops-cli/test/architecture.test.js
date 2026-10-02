@@ -261,6 +261,156 @@ test('normalizeEvent drops rows missing EventName', () => {
   assert.ok(normalizeEvent({ EventName: 'skill.activated' }));
 });
 
+test('normalization preserves event provenance and only completed reference reads become observations', () => {
+  const inventory = baseInventory();
+  const graph = buildStaticGraph(inventory);
+  const reference = inventory.skills[0].references[0].path;
+  const provenance = {
+    TimeGenerated: '2026-10-02T01:02:03.000Z',
+    Source: 'copilot-native',
+    Surface: 'cli',
+    ConfigurationVersion: 'cfg-a',
+    EventId: 'read-success',
+    ParentEventId: 'parent-1',
+    RunId: 'run-provenance',
+    SessionId: 'session-provenance',
+    TraceId: 'trace-provenance'
+  };
+  const rows = [
+    skillActivationEvent(1, 'reviewer', 'retrieve'),
+    { ...provenance, EventId: 'metadata-only', Sequence: 2, EventName: 'session.metadata', Status: 'observed', AgentId: 'reviewer', SkillName: 'retrieve', ReferenceName: reference },
+    { ...provenance, EventId: 'read-start', Sequence: 3, EventName: 'tool.execution_start', Status: 'started', AgentId: 'reviewer', SkillName: 'retrieve', ReferenceName: reference, ToolCallId: 'read-1' },
+    { ...provenance, EventId: 'read-failed', Sequence: 4, EventName: 'tool.execution_complete', Status: 'failed', AgentId: 'reviewer', SkillName: 'retrieve', ReferenceName: reference, ToolCallId: 'read-1' },
+    { ...provenance, EventId: 'read-incomplete', Sequence: 5, EventName: 'tool.execution_complete', Status: 'started', AgentId: 'reviewer', SkillName: 'retrieve', ReferenceName: reference, ToolCallId: 'read-2' },
+    { ...provenance, EventId: 'read-partial', Sequence: 6, EventName: 'tool.execution_complete', Status: 'partial', AgentId: 'reviewer', SkillName: 'retrieve', ReferenceName: reference, ToolCallId: 'read-3' },
+    { ...provenance, EventId: 'read-unknown', Sequence: 7, EventName: 'tool.execution_complete', Status: 'unknown', AgentId: 'reviewer', SkillName: 'retrieve', ReferenceName: reference, ToolCallId: 'read-4' },
+    { ...provenance, EventId: 'read-success', Sequence: 8, EventName: 'tool.execution_complete', Status: 'completed', AgentId: 'reviewer', SkillName: 'retrieve', ReferenceName: reference, ToolCallId: 'read-5' },
+    { EventId: 'legacy-read', Sequence: 9, EventName: 'skill.context_delivered_ref', AgentId: 'reviewer', SkillName: 'retrieve', ReferenceName: reference },
+    { EventId: 'legacy-reference-read', Sequence: 10, EventName: 'reference.read', AgentId: 'reviewer', SkillName: 'retrieve', ReferenceName: reference }
+  ];
+  const joined = joinObserved(graph, makeRun('reference-lifecycle', rows, {
+    architectureVersion: graph.architectureVersion,
+    configurationVersion: 'cfg-a'
+  }));
+  assert.deepEqual(joined.refsRead.map(read => read.eventId), ['read-success', 'legacy-read', 'legacy-reference-read']);
+  assert.equal(joined.configurationVersion, 'cfg-a');
+  const event = joined.events.find(row => row.EventId === 'read-success');
+  assert.equal(event.TimeGenerated, provenance.TimeGenerated);
+  assert.equal(event.Source, provenance.Source);
+  assert.equal(event.ConfigurationVersion, provenance.ConfigurationVersion);
+  assert.equal(event.ParentEventId, provenance.ParentEventId);
+  assert.equal(event.SessionId, provenance.SessionId);
+  assert.equal(event.TraceId, provenance.TraceId);
+});
+
+test('reference metrics partition mixed configuration cohorts and retain exact successful evidence IDs', () => {
+  const inventory = baseInventory();
+  const graph = buildStaticGraph(inventory);
+  const reference = inventory.skills[0].references[0].path;
+  const configs = ['cfg-a', 'cfg-b', null];
+  const runs = Array.from({ length: 12 }, (_, index) => makeRun(`config-${index}`, [
+    skillActivationEvent(1, 'reviewer', 'retrieve'),
+    { ...referenceReadEvent(2, 'reviewer', 'retrieve', reference), EventId: `completed-read-${index}`, Status: 'completed' },
+    { ...referenceReadEvent(3, 'reviewer', 'retrieve', reference), EventId: `failed-read-${index}`, Status: 'failed' }
+  ], { architectureVersion: graph.architectureVersion, configurationVersion: configs[index % configs.length] }));
+  const { joined } = joinLedger(graph, runs);
+  const metrics = computeAllMetrics(graph, joined);
+  const rows = metrics.referenceLoadGivenSkill.filter(metric => metric.reference === reference);
+  assert.equal(rows.length, 3);
+  assert.equal(metrics.coverage.configurationVersionStatus, 'mixed');
+  assert.equal(metrics.coverage.taskStatus, 'unknown');
+  assert.deepEqual(metrics.configurationVersions, ['cfg-a', 'cfg-b']);
+  assert.deepEqual(rows.map(row => row.denominator).sort((a, b) => a - b), [4, 4, 4]);
+  assert.ok(rows.every(row => row.unit === 'runs' && row.evidenceIds.length === 4));
+  assert.ok(rows.flatMap(row => row.evidenceIds).every(id => id.startsWith('completed-read-')));
+  const unknown = rows.find(row => row.coverage.configurationVersionStatus === 'unknown');
+  assert.equal(unknown.configurationVersion, null);
+  assert.equal(evaluateFindings(graph, joined).insufficientEvidence, true, 'three small cohorts must not inflate a 12-run denominator');
+});
+
+test('known task cohorts partition denominators and unknown task identity stays visible', () => {
+  const inventory = baseInventory();
+  const graph = buildStaticGraph(inventory);
+  const reference = inventory.skills[0].references[0].path;
+  const runs = Array.from({ length: 12 }, (_, index) => makeRun(`task-${index}`, [
+    skillActivationEvent(1, 'reviewer', 'retrieve'),
+    { ...referenceReadEvent(2, 'reviewer', 'retrieve', reference), EventId: `task-read-${index}`, Status: 'completed' }
+  ], {
+    architectureVersion: graph.architectureVersion,
+    configurationVersion: 'cfg-a',
+    taskId: index < 6 ? 'task-a' : 'task-b'
+  }));
+  const { joined } = joinLedger(graph, runs);
+  const metrics = computeAllMetrics(graph, joined);
+  const rows = metrics.referenceLoadGivenSkill.filter(metric => metric.reference === reference);
+  assert.equal(rows.length, 2);
+  assert.deepEqual(rows.map(row => row.taskId).sort(), ['task-a', 'task-b']);
+  assert.ok(rows.every(row => row.denominator === 6 && row.coverage.taskStatus === 'known'));
+  assert.equal(evaluateFindings(graph, joined).cards.length, 0);
+
+  const unknownRuns = runs.map(run => ({ ...run, taskId: null }));
+  const { joined: unknownJoined } = joinLedger(graph, unknownRuns);
+  const unknownRow = computeAllMetrics(graph, unknownJoined).referenceLoadGivenSkill.find(metric => metric.reference === reference);
+  assert.equal(unknownRow.denominator, 12);
+  assert.equal(unknownRow.taskId, null);
+  assert.equal(unknownRow.coverage.taskStatus, 'unknown');
+});
+
+test('conflicting event and context identities stay mixed and are excluded from metric cohorts', () => {
+  const inventory = baseInventory();
+  const graph = buildStaticGraph(inventory);
+  const reference = inventory.skills[0].references[0].path;
+  const conflicting = Array.from({ length: 10 }, (_, index) => makeRun(`conflict-${index}`, [
+    { ...skillActivationEvent(1, 'reviewer', 'retrieve'), ConfigurationVersion: 'cfg-event', TaskId: 'task-event' },
+    { ...referenceReadEvent(2, 'reviewer', 'retrieve', reference), ConfigurationVersion: 'cfg-event', TaskId: 'task-event' }
+  ], {
+    architectureVersion: graph.architectureVersion,
+    configurationVersion: 'cfg-context',
+    taskId: 'task-context'
+  }));
+  const unknown = Array.from({ length: 10 }, (_, index) => makeRun(`unknown-${index}`, [
+    skillActivationEvent(1, 'reviewer', 'retrieve'),
+    referenceReadEvent(2, 'reviewer', 'retrieve', reference)
+  ], { architectureVersion: graph.architectureVersion }));
+  const { joined } = joinLedger(graph, [...conflicting, ...unknown]);
+  assert.equal(joined[0].configurationVersion, null);
+  assert.deepEqual(joined[0].configurationVersions, ['cfg-context', 'cfg-event']);
+  assert.equal(joined[0].taskId, null);
+  assert.deepEqual(joined[0].taskIds, ['task-context', 'task-event']);
+
+  const metrics = computeAllMetrics(graph, joined);
+  assert.equal(metrics.observedCoverageRuns, 20);
+  assert.equal(metrics.coverageRuns, 10);
+  assert.equal(metrics.coverage.excludedMixedIdentityRuns, 10);
+  const mixed = metrics.cohorts.find(cohort => cohort.configurationVersionStatus === 'mixed');
+  const unknownCohort = metrics.cohorts.find(cohort => cohort.configurationVersionStatus === 'unknown');
+  assert.ok(mixed && unknownCohort);
+  assert.notEqual(mixed.cohortId, unknownCohort.cohortId);
+  assert.equal(mixed.taskStatus, 'mixed');
+  assert.equal(mixed.eligibleForMetrics, false);
+  assert.match(mixed.exclusionReason, /conflicting configuration or task identity/);
+  assert.equal(unknownCohort.eligibleForMetrics, true);
+  const row = metrics.referenceLoadGivenSkill.find(metric => metric.reference === reference);
+  assert.equal(row.denominator, 10);
+  assert.equal(row.coverage.configurationVersionStatus, 'unknown');
+});
+
+test('eligible configuration cohorts emit distinct cohort-bound card IDs', () => {
+  const inventory = baseInventory();
+  const graph = buildStaticGraph(inventory);
+  const runs = plantedNearMandatoryLedger(inventory, 20).map((run, index) => ({
+    ...run,
+    architectureVersion: graph.architectureVersion,
+    configurationVersion: index < 10 ? 'cfg-a' : 'cfg-b'
+  }));
+  const { joined } = joinLedger(graph, runs);
+  const cards = evaluateFindings(graph, joined).cards.filter(card => card.rule === 'REFERENCE_NEAR_MANDATORY');
+  assert.equal(cards.length, 2);
+  assert.deepEqual(cards.map(card => card.metricEvidence.configurationVersion).sort(), ['cfg-a', 'cfg-b']);
+  assert.equal(new Set(cards.map(card => card.metricEvidence.cohortId)).size, 2);
+  for (const card of cards) assert.match(card.id, new RegExp(`^REFERENCE_NEAR_MANDATORY_${card.metricEvidence.cohortId.slice(0, 12)}_`));
+});
+
 test('wilsonInterval returns 0..0 for empty denominator and 0..1 bounds otherwise', () => {
   assert.deepEqual(wilsonInterval(0, 0), { lower: 0, upper: 0 });
   const w = wilsonInterval(9, 10);
@@ -477,6 +627,9 @@ test('toInsightsRow projects cards onto the AgentOpsInsights_CL schema', () => {
   assert.equal(row.ArchitectureVersion, graph.architectureVersion);
   assert.ok(Number.isInteger(row.Numerator));
   assert.ok(Number.isInteger(row.Denominator));
+  assert.equal(row.Evidence.unit, 'runs');
+  assert.equal(row.Evidence.coverage.evidenceCompleteRuns, 12);
+  assert.deepEqual(row.Evidence.evidenceIds, card.metricEvidence.evidenceIds);
 });
 
 test('loadLedgerFromDirectory reads attachment.json plus per-run subdirectories', () => {
@@ -486,12 +639,14 @@ test('loadLedgerFromDirectory reads attachment.json plus per-run subdirectories'
     fs.writeFileSync(path.join(tempRoot, 'attachment.json'), JSON.stringify({ architecture: inventory }));
     const runDir = path.join(tempRoot, 'run-abc');
     fs.mkdirSync(runDir);
-    fs.writeFileSync(path.join(runDir, 'context.json'), JSON.stringify({ architectureVersion: architectureVersion(inventory), taskContract: null }));
+    fs.writeFileSync(path.join(runDir, 'context.json'), JSON.stringify({ architectureVersion: architectureVersion(inventory), configurationVersion: 'cfg-loader', taskId: 'task-loader', taskContract: null }));
     fs.writeFileSync(path.join(runDir, 'events.jsonl'), [skillActivationEvent(1, 'reviewer', 'retrieve')].map(e => JSON.stringify(e)).join('\n') + '\n');
     const loaded = loadLedgerFromDirectory(tempRoot);
     assert.equal(loaded.runs.length, 1);
     assert.equal(loaded.runs[0].runId, 'run-abc');
     assert.equal(loaded.runs[0].events.length, 1);
+    assert.equal(loaded.runs[0].configurationVersion, 'cfg-loader');
+    assert.equal(loaded.runs[0].taskId, 'task-loader');
   } finally {
     fs.rmSync(tempRoot, { recursive: true, force: true });
   }
