@@ -17,7 +17,50 @@ function topRows(rows = [], count = 8) {
 }
 
 function escapeKqlString(value) {
-  return String(value || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  const safe = safeMetadataValue(value);
+  return String(safe || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
+function safeIdentity(value) {
+  const safe = safeMetadataValue(value);
+  return typeof safe === 'string' && safe.length > 0 ? safe : '';
+}
+
+function safeRunField(row, field) {
+  if (!Object.prototype.hasOwnProperty.call(row, field)) return undefined;
+  return safeMetadataValue(row[field]);
+}
+
+function usableLink(value) {
+  return typeof value === 'string'
+    && value.length <= 2048
+    && /^https?:\/\//.test(value)
+    && !/your-grafana\.grafana\.azure\.com|00000000-0000-0000-0000-000000000000/i.test(value);
+}
+
+function eventIdentity(row) {
+  return {
+    EventId: safeIdentity(row.EventId),
+    OperationId: safeIdentity(row.OperationId) || safeIdentity(row.TraceId),
+    TraceId: safeIdentity(row.TraceId),
+    ParentId: safeIdentity(row.ParentId) || safeIdentity(row.ParentEventId),
+    SpanId: safeIdentity(row.SpanId) || safeIdentity(row.Id)
+  };
+}
+
+function runMetadata(row) {
+  const fields = [
+    'TimeGenerated', 'Surface', 'RepoHash', 'BranchHash', 'TaskType', 'AgentName',
+    'SkillName', 'ParentAgentName', 'SubAgentName', 'ModelActual', 'DurationMs',
+    'InputTokens', 'OutputTokens', 'ReasoningTokens', 'CacheReadTokens',
+    'ContextWindowPct', 'TokensRemoved', 'PermissionWaitMs', 'EstimatedCostUsd',
+    'ToolCount', 'ToolFailureCount', 'ToolDeniedCount', 'TestsRan', 'TestsPassed',
+    'PrOpened', 'CiStatus', 'EvalOverall', 'RiskScore', 'PrivacyMode',
+    'ContentCaptureMode'
+  ];
+  return Object.fromEntries(fields
+    .filter(field => Object.prototype.hasOwnProperty.call(row, field))
+    .map(field => [field, safeRunField(row, field)]));
 }
 
 // Finding 3 (overnight whole-branch review): a chat consumer seeing a bare
@@ -67,6 +110,27 @@ function investigationKql(run, last = '2h') {
   ].join('\n');
 }
 
+// The native event export is ingested into a custom Log Analytics table. Keep
+// this query separate from the generic App* trace query above: AppDependencies
+// cannot resolve EventId values such as `session_event_*` from
+// AgentOpsEvents_CL. This is a prepared readback query only; this command does
+// not execute it.
+function agentOpsEventQuery(run, eventId, last = '2h') {
+  const safeRunId = safeIdentity(run.RunId);
+  const safeEventId = safeIdentity(eventId);
+  if (!safeRunId || !safeEventId) return null;
+  const runValue = escapeKqlString(safeRunId);
+  const eventValue = escapeKqlString(safeEventId);
+  return [
+    'AgentOpsEvents_CL',
+    `| where TimeGenerated > ago(${last})`,
+    `| where RunId == "${runValue}"`,
+    `| where EventId == "${eventValue}"`,
+    '| project TimeGenerated, Sequence, EventId, ParentEventId, AgentId, ParentAgentId, ParentToolCallId, ExitCode, RunId, SessionId, TraceId, EventName, SpanName, Status, ToolName, ToolCallId, McpServerName, McpToolName, CommandName, ReferenceName, ScriptName, AgentName, SkillName, SubAgentName, ParentAgentName, ModelRequested, ModelActual, Provider, InputTokens, OutputTokens, ReasoningTokens, CacheReadTokens, CacheWriteTokens, TotalTokens, DurationMs, PermissionKind, PermissionDecision, ErrorType, PrivacyMode, ContentCaptureMode, SchemaVersion',
+    '| order by TimeGenerated desc\n| take 1'
+  ].join('\n');
+}
+
 function latestRecommendation(rows = [], run = {}) {
   const matches = rows.filter(row => {
     return row.RunId === run.RunId ||
@@ -107,20 +171,88 @@ function buildV2AskContext(options = {}) {
   const evals = filterByRun(readJsonl(options.evalsFile), runId);
   const insights = filterByRun(readJsonl(options.insightsFile), runId);
   const recommendation = latestRecommendation(readJsonl(options.recommendationsFile), run);
-  const replayUrl = v2RunReplayUrl(run);
+  const displayRunId = safeIdentity(run.RunId) || 'unknown-run';
+  const displaySessionId = safeIdentity(run.SessionId) || 'unknown';
+  const displayTraceId = safeIdentity(run.TraceId) || 'unknown';
+  const linkRun = {
+    ...run,
+    RunId: displayRunId,
+    SessionId: displaySessionId === 'unknown' ? '' : displaySessionId,
+    TraceId: displayTraceId === 'unknown' ? '' : displayTraceId
+  };
+  const replayUrl = v2RunReplayUrl(linkRun);
   const last = legacy.validateKqlDuration(options.last || '2h');
-  const kql = investigationKql(run, last);
+  const kql = investigationKql(linkRun, last);
 
   const failedTools = tools.filter(row => row.Status !== 'success' || row.Allowed === false);
-  const timeline = topRows(events, 20).map(row => ({
-    time: safeMetadataValue(row.TimeGenerated) || '',
-    event: safeMetadataValue(row.EventName) || '',
-    status: safeMetadataValue(row.Status) || '',
-    tool: safeMetadataValue(row.ToolName) || '',
-    agent: safeMetadataValue(row.AgentName) || '',
-    skill: safeMetadataValue(row.SkillName) || '',
-    sub_agent: safeMetadataValue(row.SubAgentName) || ''
+  const timeline = topRows(events, 20).map(row => {
+    const identity = eventIdentity(row);
+    return {
+      time: safeMetadataValue(row.TimeGenerated) || '',
+      timestamp: safeMetadataValue(row.TimeGenerated) || '',
+      ...identity,
+      event: safeMetadataValue(row.EventName) || '',
+      status: safeMetadataValue(row.Status) || '',
+      tool: safeMetadataValue(row.ToolName) || '',
+      agent: safeMetadataValue(row.AgentName) || '',
+      skill: safeMetadataValue(row.SkillName) || '',
+      sub_agent: safeMetadataValue(row.SubAgentName) || '',
+      event_query: agentOpsEventQuery(linkRun, identity.EventId, last),
+      event_query_status: identity.EventId && safeIdentity(linkRun.RunId)
+        ? 'prepared-not-executed'
+        : 'unavailable: no safe EventId or RunId'
+    };
+  });
+  const customEventQueries = timeline.map(row => ({
+    event_id: row.EventId,
+    table: 'AgentOpsEvents_CL',
+    query_kind: 'azure-monitor-logs-custom-table',
+    status: row.event_query ? 'prepared-not-executed' : 'unavailable: no safe EventId or RunId',
+    query: row.event_query
   }));
+  const sourceEvidence = {
+    kind: options.eventsFile ? 'local-jsonl' : 'local-bundle',
+    timestamp_field: 'TimeGenerated',
+    query_kind: 'azure-monitor-logs-app-tables',
+    query_tables: ['AppDependencies', 'AppTraces', 'AppEvents'],
+    query_status: 'prepared-not-executed',
+    query: kql,
+    query_limit: 200,
+    timeline_limit: 20,
+    available_rows: events.length,
+    returned_rows: timeline.length,
+    truncated: events.length > timeline.length,
+    custom_event_table: 'AgentOpsEvents_CL',
+    custom_event_query_status: customEventQueries.some(item => item.query)
+      ? 'prepared-not-executed'
+      : 'unavailable: no safe EventId or RunId',
+    custom_event_queries: customEventQueries,
+    note: options.eventsFile
+      ? 'Rows were selected from a local metadata-only JSONL artifact. The App* query and custom-table EventId queries are prepared Azure Monitor Logs readback queries; neither was executed by this command.'
+      : 'No local events artifact was supplied. The App* query and custom-table EventId queries are prepared Azure Monitor Logs readback queries; neither was executed by this command.'
+  };
+  const runStoryLink = usableLink(replayUrl)
+    ? { label: 'Run Story', kind: 'grafana', url: replayUrl }
+    : null;
+  const traceLinks = [...new Set(timeline.map(row => row.OperationId).filter(Boolean))]
+    .slice(0, 10)
+    .map(operationId => {
+      const link = legacy.buildLink('trace', operationId, { last });
+      return {
+        operation_id: operationId,
+        label: `Trace ${operationId}`,
+        url: usableLink(link.grafana_url) ? link.grafana_url : null,
+        query: link.query,
+        query_kind: 'azure-monitor-logs-appdependencies',
+        source_table: 'AppDependencies',
+        status: 'prepared-not-executed'
+      };
+    });
+  const links = {
+    run_story: runStoryLink,
+    traces: traceLinks,
+    local_artifact: null
+  };
   // Rows written by `agentops architecture --out <dir>/AgentOpsInsights_CL.jsonl`
   // (Task 6's engine) already carry exactly these fields — Rule/ArchitectureVersion/
   // Numerator/Denominator/CoverageRuns/Status — so this selection is a deliberate
@@ -143,11 +275,11 @@ function buildV2AskContext(options = {}) {
   const prompt = [
     'Use the telemetry-investigator or AgentOps triage skill.',
     '',
-    `Investigate AgentOps run ${runId}.`,
-    `Run Story: ${replayUrl}`,
+    `Investigate AgentOps run ${displayRunId}.`,
+    runStoryLink ? `Run Story: ${runStoryLink.url}` : 'Run Story: unavailable; no verified Grafana URL is configured.',
     `Time range: ${last}`,
-    `Session: ${run.SessionId || 'unknown'}`,
-    `Trace: ${run.TraceId || 'unknown'}`,
+    `Session: ${displaySessionId}`,
+    `Trace: ${displayTraceId}`,
     `Status: ${safeMetadataValue(run.OutcomeStatus) || 'unknown'}${safeMetadataValue(run.OutcomeReason) ? ` (${safeMetadataValue(run.OutcomeReason)})` : ''}`,
     recommendation ? `Last recommendation: ${recommendation.action} (${recommendation.severity})` : 'Last recommendation: none in this bundle',
     recommendation?.benchmark_run_id ? `Benchmark run: ${recommendation.benchmark_run_id} (${recommendation.benchmark_decision || 'unknown'})` : 'Benchmark run: none in this bundle',
@@ -163,51 +295,28 @@ function buildV2AskContext(options = {}) {
 
   return {
     ok: true,
-    run_id: runId,
-    session_id: run.SessionId || '',
-    trace_id: run.TraceId || '',
-    status: run.OutcomeStatus || 'unknown',
+    run_id: displayRunId,
+    session_id: displaySessionId === 'unknown' ? '' : displaySessionId,
+    trace_id: displayTraceId === 'unknown' ? '' : displayTraceId,
+    status: safeMetadataValue(run.OutcomeStatus) || 'unknown',
     replay_url: replayUrl,
+    links,
     time_range: last,
     kql_query: kql,
+    source_query: kql,
+    source_evidence: sourceEvidence,
     grafana_url: replayUrl,
     last_recommendation: recommendation,
     benchmark_run_id: recommendation?.benchmark_run_id || '',
-    run: {
-      TimeGenerated: run.TimeGenerated,
-      Surface: run.Surface,
-      RepoHash: run.RepoHash,
-      BranchHash: run.BranchHash,
-      TaskType: run.TaskType,
-      AgentName: run.AgentName,
-      SkillName: run.SkillName || '',
-      ParentAgentName: run.ParentAgentName || '',
-      SubAgentName: run.SubAgentName || '',
-      ModelActual: run.ModelActual,
-      DurationMs: run.DurationMs,
-      InputTokens: run.InputTokens,
-      OutputTokens: run.OutputTokens,
-      ReasoningTokens: run.ReasoningTokens,
-      CacheReadTokens: run.CacheReadTokens ?? null,
-      ContextWindowPct: run.ContextWindowPct ?? null,
-      TokensRemoved: run.TokensRemoved ?? null,
-      PermissionWaitMs: run.PermissionWaitMs ?? null,
-      EstimatedCostUsd: run.EstimatedCostUsd,
-      ToolCount: run.ToolCount,
-      ToolFailureCount: run.ToolFailureCount,
-      ToolDeniedCount: run.ToolDeniedCount,
-      TestsRan: run.TestsRan,
-      TestsPassed: run.TestsPassed,
-      PrOpened: run.PrOpened,
-      CiStatus: run.CiStatus,
-      EvalOverall: run.EvalOverall,
-      RiskScore: run.RiskScore,
-      PrivacyMode: run.PrivacyMode,
-      ContentCaptureMode: run.ContentCaptureMode
-    },
+    run: runMetadata(run),
     evidence: {
+      source: sourceEvidence,
+      source_query: kql,
       timeline,
-      failed_tools: topRows(failedTools, 10).map(row => selectMetadata(row, ['TimeGenerated', 'RunId', 'ToolCallId', 'ToolName', 'Status', 'Allowed', 'DurationMs', 'ErrorType', 'McpServerName', 'McpToolName'])),
+      failed_tools: topRows(failedTools, 10).map(row => ({
+        ...selectMetadata(row, ['TimeGenerated', 'RunId', 'ToolCallId', 'ToolName', 'Status', 'Allowed', 'DurationMs', 'ErrorType', 'McpServerName', 'McpToolName']),
+        ...eventIdentity(row)
+      })),
       privacy_signals: topRows(privacy, 10).map(row => selectMetadata(row, ['TimeGenerated', 'RunId', 'EventName', 'SignalType', 'Status', 'PrivacyMode', 'ContentCaptureMode'])),
       github_outcomes: topRows(github, 5).map(row => selectMetadata(row, ['TimeGenerated', 'RunId', 'Status', 'PrNumber', 'CiStatus'])),
       evals: topRows(evals, 5).map(row => selectMetadata(row, ['TimeGenerated', 'RunId', 'EvalId', 'Status', 'Overall', 'Score'])),
@@ -230,14 +339,37 @@ function buildV2AskContext(options = {}) {
 
 function renderV2AskContext(result) {
   if (!result.ok) return `AgentOps ask context\n\n${result.error}\n`;
+  const source = result.evidence?.source || result.source_query;
+  const timelineIdentityLines = (result.evidence?.timeline || []).slice(0, 20).map(row => [
+    row.timestamp || row.time || 'unknown-time',
+    `EventId=${row.EventId || 'unknown'}`,
+    `OperationId=${row.OperationId || 'unknown'}`,
+    `ParentId=${row.ParentId || 'unknown'}`,
+    `custom-query=${row.event_query ? 'prepared-not-executed' : 'unavailable'}`
+  ].join(' '));
+  const customEventQueries = result.evidence?.source?.custom_event_queries || [];
   const lines = [
     'AgentOps ask context',
     '',
     `Run: ${result.run_id}`,
     `Status: ${result.status}`,
     `Time range: ${result.time_range}`,
-    `Replay: ${result.replay_url}`,
+    `Replay: ${result.links?.run_story?.url || 'unavailable (no verified Grafana URL is configured)'}`,
+    `Evidence source: ${source?.kind || 'unknown'}; timestamp=${source?.timestamp_field || 'unknown'}; rows=${source?.returned_rows ?? 'unknown'}/${source?.available_rows ?? 'unknown'}${source?.truncated ? ' (truncated)' : ''}.`,
     `Evidence: ${result.counts.events} events, ${result.counts.failed_tools} failed/denied tools, ${result.counts.insights} insights, ${result.counts.recommendations} recommendation`,
+    '',
+    'Timeline identity:',
+    ...(timelineIdentityLines.length > 0 ? timelineIdentityLines.map(line => `- ${line}`) : ['- none recorded in this bundle']),
+    '',
+    `Custom event evidence: ${result.evidence?.source?.custom_event_table || 'unknown table'}; ${result.evidence?.source?.custom_event_query_status || 'unknown status'}.`,
+    ...(customEventQueries.length > 0
+      ? customEventQueries.slice(0, 5).map(item => `- EventId=${item.event_id || 'unknown'}: ${item.status}; bounded exact-ID query is in JSON evidence`)
+      : ['- unavailable: no EventId rows in this bundle']),
+    '',
+    'Trace evidence links:',
+    ...(result.links?.traces?.length > 0
+      ? result.links.traces.slice(0, 5).map(link => `- ${link.label}: ${link.url || 'dashboard unavailable'} (bounded Azure Monitor Logs query is in JSON evidence)`)
+      : ['- none recorded in this bundle']),
     '',
     'Prompt:',
     result.prompt
