@@ -8,7 +8,9 @@ const { spawn } = require('node:child_process');
 const test = require('node:test');
 
 const { attachCommand } = require('../src/lib/attach-command');
-const { attachedScriptEnvironment, scriptTraceEndpoint } = require('../src/lib/copilot/script-observation');
+const { findCollectorBinary } = require('../src/lib/collector-discovery');
+const { attachedScriptEnvironment, executableOnPath, scriptTraceEndpoint } = require('../src/lib/copilot/script-observation');
+const { startScopedStrictCollector } = require('../src/lib/copilot/scoped-collector');
 const { readSessionOtelSpans } = require('../src/lib/copilot/session-otel');
 const { spanRowsFromOtelSpans } = require('../src/lib/copilot/session-span-export');
 const { buildAzureIngestPlan } = require('../src/lib/azure/v2-ingest-plan');
@@ -23,6 +25,22 @@ function fixtureRepo() {
   fs.writeFileSync(path.join(scripts, 'task.py'), 'print("synthetic")\n');
   return root;
 }
+
+test('Python interpreter lookup preserves a PATH symlink and skips executable directories', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-python-path-'));
+  try {
+    const first = path.join(root, 'first');
+    const second = path.join(root, 'second');
+    fs.mkdirSync(path.join(first, 'python3'), { recursive: true });
+    fs.mkdirSync(second);
+    const linked = path.join(second, 'python3');
+    fs.symlinkSync(process.execPath, linked);
+    assert.equal(executableOnPath('python3', [first, second].join(path.delimiter), root), linked);
+    assert.notEqual(linked, fs.realpathSync(linked));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
 
 test('attached Copilot environment scopes Python script bootstrap and exact run ID to the opted-in process', () => {
   const root = fixtureRepo();
@@ -40,10 +58,16 @@ test('attached Copilot environment scopes Python script bootstrap and exact run 
     assert.equal(env.AGENTOPS_ATTACHMENT_MANIFEST, path.join(fs.realpathSync(root), '.agentops', 'attachment.json'));
     assert.equal(env.AGENTOPS_SCRIPT_OTLP_ENDPOINT, 'http://127.0.0.1:4318/v1/traces');
     assert.deepEqual(env.PYTHONPATH.split(path.delimiter), [path.join(repoRoot, 'instrumentation', 'python'), '/existing/python']);
+    assert.equal(env.PATH.split(path.delimiter)[0], path.join(repoRoot, 'instrumentation', 'python', 'bin-python3'));
+    assert.ok(path.isAbsolute(env.AGENTOPS_REAL_PYTHON3));
+    assert.equal(env.PATH.split(path.delimiter).some(entry => fs.existsSync(path.join(entry, 'python'))), Boolean(env.AGENTOPS_REAL_PYTHON));
     assert.deepEqual(env.NODE_PATH.split(path.delimiter), [path.join(repoRoot, 'instrumentation', 'node'), '/existing/node']);
     assert.match(env.NODE_OPTIONS, new RegExp(`--require="${path.join(repoRoot, 'instrumentation', 'node', 'preload.cjs').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`));
     assert.ok(env.NODE_OPTIONS.endsWith('--max-old-space-size=4096'));
-    assert.equal(env.PATH, '/usr/bin');
+    assert.equal(env.PATH.split(path.delimiter).slice(1).join(path.delimiter), '/usr/bin');
+    const repeated = attachedScriptEnvironment({ env, cwd: root, runId: 'run-synthetic-123', agentopsRoot: repoRoot, collectorMode: 'auto' });
+    assert.equal(repeated.PATH, env.PATH);
+    assert.equal(repeated.AGENTOPS_REAL_PYTHON3, env.AGENTOPS_REAL_PYTHON3);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -449,7 +473,7 @@ test('overlapping and repeated invocations of inventoried scripts within one run
   }
 });
 
-test('automatic Python observation keeps SystemExit outcome unknown and records uncaught errors', async () => {
+test('scoped Python launcher records actual owned-script outcomes without capturing exception payloads', async () => {
   const payloads = [];
   const server = http.createServer((request, response) => {
     const chunks = [];
@@ -462,28 +486,345 @@ test('automatic Python observation keeps SystemExit outcome unknown and records 
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const root = fixtureRepo();
   try {
-    const cases = [['exit.py', 'import sys; sys.exit(7)\n', 7, 'unknown'], ['ok.py', 'print("ok")\n', 0, 'unknown'], ['caught.py', 'import sys\ntry: sys.exit(7)\nexcept SystemExit: print("caught")\n', 0, 'unknown'], ['error.py', 'raise ValueError("PRIVATE_ERROR_CANARY")\n', 1, 'failed']];
+    const cases = [
+      ['exit.py', 'import sys; sys.exit(7)\n', 7, 'failed', 'ProcessExit'],
+      ['exit-string.py', 'import sys; sys.exit("PRIVATE_SYSTEM_EXIT_CANARY")\n', 1, 'failed', 'ProcessExit'],
+      ['ok.py', 'print("ok")\n', 0, 'ok', ''],
+      ['caught.py', 'import sys\ntry: sys.exit(7)\nexcept SystemExit: print("caught")\n', 0, 'ok', ''],
+      ['error.py', 'raise ValueError("PRIVATE_ERROR_CANARY")\n', 1, 'failed', 'ProcessExit']
+    ];
     for (const [name, code] of cases) fs.writeFileSync(path.join(root, '.github/skills/demo/scripts', name), code);
     attachCommand(['--repo', root, '--yes', '--json'], { stdout: { write() {} } });
     const env = attachedScriptEnvironment({ env: process.env, cwd: root, runId: 'python-outcome-test', agentopsRoot: repoRoot });
     env.AGENTOPS_SCRIPT_OTLP_ENDPOINT = `http://127.0.0.1:${server.address().port}/v1/traces`;
-    for (const [name, , exit, outcome] of cases) {
+    const baselineEnv = { ...process.env };
+    for (const key of Object.keys(baselineEnv)) if (key.startsWith('AGENTOPS_')) delete baselineEnv[key];
+    const execute = (name, selectedEnv) => new Promise((resolve, reject) => {
+      const child = spawn('python3', [path.join(root, '.github/skills/demo/scripts', name)], { cwd: root, env: selectedEnv, stdio: ['ignore', 'pipe', 'pipe'] });
+      let stdout = '';
+      let stderr = '';
+      child.stdout.on('data', chunk => { stdout += chunk; });
+      child.stderr.on('data', chunk => { stderr += chunk; });
+      child.once('close', (code, signal) => resolve({ code, signal, stdout, stderr }));
+      child.once('error', reject);
+    });
+    for (const [name, , exit, outcome, errorType] of cases) {
       payloads.length = 0;
-      const result = await new Promise((resolve, reject) => {
-        const child = spawn('python3', [path.join(root, '.github/skills/demo/scripts', name)], { cwd: root, env, stdio: 'ignore' });
-        child.once('close', status => resolve(status)); child.once('error', reject);
-      });
-      assert.equal(result, exit);
+      const baseline = await execute(name, baselineEnv);
+      const result = await execute(name, env);
+      assert.equal(result.code, exit);
+      assert.equal(result.code, baseline.code);
+      assert.equal(result.signal, baseline.signal);
+      assert.equal(result.stdout, baseline.stdout);
+      assert.equal(result.stderr, baseline.stderr);
       assert.equal(payloads.length, 1);
       const receipt = path.join(root, 'receipt.jsonl');
       fs.writeFileSync(receipt, payloads.map(row => JSON.stringify(row)).join('\n'));
       const parsed = readSessionOtelSpans('synthetic-session', [receipt], { runId: 'python-outcome-test' });
       const rows = spanRowsFromOtelSpans(parsed.spans, 'synthetic-session', 'python-outcome-test');
+      assert.equal(rows.length, 1, `${name} should have one supervisor-derived root span`);
+      assert.equal(parsed.spans[0].processExitCode, exit);
+      assert.equal(parsed.spans[0].processSignalNumber, null);
+      assert.equal(parsed.spans[0].scriptOutcomeSource, 'supervisor-child-wait');
+      assert.equal(parsed.spans[0].scriptObserverRole, 'python-launcher');
+      assert.ok(Number.isInteger(parsed.spans[0].scriptObserverPid));
+      assert.ok(Number.isInteger(parsed.spans[0].scriptChildPid));
+      assert.notEqual(parsed.spans[0].scriptObserverPid, parsed.spans[0].scriptChildPid);
       assert.equal(rows[0].Outcome, outcome);
+      assert.equal(rows[0].ErrorType, errorType);
       assert.ok(!JSON.stringify(rows).includes('PRIVATE_ERROR_CANARY'));
+      assert.ok(!JSON.stringify(rows).includes('PRIVATE_SYSTEM_EXIT_CANARY'));
     }
   } finally {
     await new Promise(resolve => server.close(resolve));
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('scoped Python launcher forwards SIGTERM and SIGINT, reaps each child, and records signal outcomes', async t => {
+  if (process.platform === 'win32') {
+    t.skip('POSIX signal parity applies to the scoped shell shims');
+    return;
+  }
+  const payloads = [];
+  const server = http.createServer((request, response) => {
+    const chunks = [];
+    request.on('data', chunk => chunks.push(chunk));
+    request.on('end', () => {
+      payloads.push({ contentType: request.headers['content-type'], bodyBase64: Buffer.concat(chunks).toString('base64') });
+      response.writeHead(200); response.end('{}');
+    });
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const root = fixtureRepo();
+  try {
+    const childPidFile = path.join(root, 'child.pid');
+    const script = path.join(root, '.github/skills/demo/scripts/wait.py');
+    fs.writeFileSync(script, 'import os, pathlib, time\npathlib.Path(os.environ["AGENTOPS_TEST_CHILD_PID_FILE"]).write_text(str(os.getpid()))\ntime.sleep(60)\n');
+    attachCommand(['--repo', root, '--yes', '--json'], { stdout: { write() {} } });
+    for (const signalName of ['SIGTERM', 'SIGINT']) {
+      payloads.length = 0;
+      fs.rmSync(childPidFile, { force: true });
+      const runId = `python-${signalName.toLowerCase()}-test`;
+      const env = attachedScriptEnvironment({ env: { ...process.env, AGENTOPS_TEST_CHILD_PID_FILE: childPidFile }, cwd: root, runId, agentopsRoot: repoRoot });
+      env.AGENTOPS_SCRIPT_OTLP_ENDPOINT = `http://127.0.0.1:${server.address().port}/v1/traces`;
+      const started = Date.now();
+      const launched = spawn('python3', [script], { cwd: root, env, stdio: 'ignore' });
+      const resultPromise = new Promise((resolve, reject) => {
+        launched.once('close', (code, signal) => resolve({ code, signal }));
+        launched.once('error', reject);
+      });
+      for (let attempt = 0; attempt < 100 && !fs.existsSync(childPidFile); attempt += 1) {
+        await new Promise(resolve => setTimeout(resolve, 20));
+      }
+      assert.equal(fs.existsSync(childPidFile), true, 'owned child should start before cancellation');
+      const childPid = Number(fs.readFileSync(childPidFile, 'utf8'));
+      launched.kill(signalName);
+      const result = await resultPromise;
+      assert.deepEqual(result, { code: null, signal: signalName });
+      assert.ok(Date.now() - started < 5000, 'signal cleanup should stay bounded');
+      assert.throws(() => process.kill(childPid, 0), /ESRCH/);
+      assert.equal(payloads.length, 1);
+      const receipt = path.join(root, `${signalName.toLowerCase()}-receipt.jsonl`);
+      fs.writeFileSync(receipt, `${JSON.stringify(payloads[0])}\n`);
+      const parsed = readSessionOtelSpans('synthetic-session', [receipt], { runId });
+      assert.equal(parsed.spans.length, 1);
+      assert.equal(parsed.spans[0].failed, true);
+      assert.equal(parsed.spans[0].errorType, 'ProcessSignal');
+      assert.equal(parsed.spans[0].processExitCode, null);
+      assert.equal(parsed.spans[0].processSignalNumber, os.constants.signals[signalName]);
+      assert.equal(parsed.spans[0].scriptChildPid, childPid);
+    }
+  } finally {
+    await new Promise(resolve => server.close(resolve));
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('scoped Python launcher preserves a child signal handler exit code instead of forcing cancellation', async t => {
+  if (process.platform === 'win32') {
+    t.skip('POSIX signal parity applies to the scoped shell shims');
+    return;
+  }
+  const payloads = [];
+  const server = http.createServer((request, response) => {
+    const chunks = [];
+    request.on('data', chunk => chunks.push(chunk));
+    request.on('end', () => {
+      payloads.push({ contentType: request.headers['content-type'], bodyBase64: Buffer.concat(chunks).toString('base64') });
+      response.writeHead(200); response.end('{}');
+    });
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const root = fixtureRepo();
+  try {
+    const childPidFile = path.join(root, 'handled-child.pid');
+    const scripts = [0, 7].map(exitCode => {
+      const script = path.join(root, `.github/skills/demo/scripts/handle-${exitCode}.py`);
+      fs.writeFileSync(script, `import os, pathlib, signal, sys, time\npathlib.Path(os.environ["AGENTOPS_TEST_CHILD_PID_FILE"]).write_text(str(os.getpid()))\nsignal.signal(signal.SIGTERM, lambda *_: sys.exit(${exitCode}))\ntime.sleep(60)\n`);
+      return { exitCode, script };
+    });
+    attachCommand(['--repo', root, '--yes', '--json'], { stdout: { write() {} } });
+    for (const { exitCode, script } of scripts) {
+      payloads.length = 0;
+      fs.rmSync(childPidFile, { force: true });
+      const runId = `python-handled-signal-${exitCode}`;
+      const env = attachedScriptEnvironment({ env: { ...process.env, AGENTOPS_TEST_CHILD_PID_FILE: childPidFile }, cwd: root, runId, agentopsRoot: repoRoot });
+      env.AGENTOPS_SCRIPT_OTLP_ENDPOINT = `http://127.0.0.1:${server.address().port}/v1/traces`;
+      const launched = spawn('python3', [script], { cwd: root, env, stdio: 'ignore' });
+      const resultPromise = new Promise((resolve, reject) => {
+        launched.once('close', (code, signal) => resolve({ code, signal }));
+        launched.once('error', reject);
+      });
+      for (let attempt = 0; attempt < 100 && !fs.existsSync(childPidFile); attempt += 1) {
+        await new Promise(resolve => setTimeout(resolve, 20));
+      }
+      assert.equal(fs.existsSync(childPidFile), true);
+      launched.kill('SIGTERM');
+      assert.deepEqual(await resultPromise, { code: exitCode, signal: null });
+      assert.equal(payloads.length, 1);
+      const receipt = path.join(root, `handled-${exitCode}-receipt.jsonl`);
+      fs.writeFileSync(receipt, `${JSON.stringify(payloads[0])}\n`);
+      const parsed = readSessionOtelSpans('synthetic-session', [receipt], { runId });
+      assert.equal(parsed.spans[0].processExitCode, exitCode);
+      assert.equal(parsed.spans[0].processSignalNumber, null);
+      assert.equal(parsed.spans[0].failed, exitCode !== 0);
+    }
+  } finally {
+    await new Promise(resolve => server.close(resolve));
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('scoped Python launcher bounds cleanup when an owned child ignores cancellation', async t => {
+  if (process.platform === 'win32') {
+    t.skip('POSIX signal parity applies to the scoped shell shims');
+    return;
+  }
+  const payloads = [];
+  const server = http.createServer((request, response) => {
+    const chunks = [];
+    request.on('data', chunk => chunks.push(chunk));
+    request.on('end', () => {
+      payloads.push({ contentType: request.headers['content-type'], bodyBase64: Buffer.concat(chunks).toString('base64') });
+      response.writeHead(200); response.end('{}');
+    });
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const root = fixtureRepo();
+  try {
+    const childPidFile = path.join(root, 'ignored-child.pid');
+    const script = path.join(root, '.github/skills/demo/scripts/ignore-signal.py');
+    fs.writeFileSync(script, 'import os, pathlib, signal, time\npathlib.Path(os.environ["AGENTOPS_TEST_CHILD_PID_FILE"]).write_text(str(os.getpid()))\nsignal.signal(signal.SIGTERM, signal.SIG_IGN)\ntime.sleep(60)\n');
+    attachCommand(['--repo', root, '--yes', '--json'], { stdout: { write() {} } });
+    const runId = 'python-forced-cleanup-test';
+    const env = attachedScriptEnvironment({ env: { ...process.env, AGENTOPS_TEST_CHILD_PID_FILE: childPidFile }, cwd: root, runId, agentopsRoot: repoRoot });
+    env.AGENTOPS_SCRIPT_OTLP_ENDPOINT = `http://127.0.0.1:${server.address().port}/v1/traces`;
+    const launched = spawn('python3', [script], { cwd: root, env, stdio: 'ignore' });
+    const resultPromise = new Promise((resolve, reject) => {
+      launched.once('close', (code, signal) => resolve({ code, signal }));
+      launched.once('error', reject);
+    });
+    for (let attempt = 0; attempt < 100 && !fs.existsSync(childPidFile); attempt += 1) {
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+    assert.equal(fs.existsSync(childPidFile), true);
+    const childPid = Number(fs.readFileSync(childPidFile, 'utf8'));
+    const cancelledAt = Date.now();
+    launched.kill('SIGTERM');
+    assert.deepEqual(await resultPromise, { code: null, signal: 'SIGKILL' });
+    const cleanupMs = Date.now() - cancelledAt;
+    assert.ok(cleanupMs >= 1800 && cleanupMs < 5000, `cleanup took ${cleanupMs}ms`);
+    assert.throws(() => process.kill(childPid, 0), /ESRCH/);
+    assert.equal(payloads.length, 1);
+    const receipt = path.join(root, 'forced-cleanup-receipt.jsonl');
+    fs.writeFileSync(receipt, `${JSON.stringify(payloads[0])}\n`);
+    const parsed = readSessionOtelSpans('synthetic-session', [receipt], { runId });
+    assert.equal(parsed.spans[0].processSignalNumber, os.constants.signals.SIGKILL);
+    assert.equal(parsed.spans[0].errorType, 'ProcessSignal');
+  } finally {
+    await new Promise(resolve => server.close(resolve));
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('scoped Python launcher retains explicit step spans and leaves unsupported or unowned commands truthful', async () => {
+  const payloads = [];
+  const server = http.createServer((request, response) => {
+    const chunks = [];
+    request.on('data', chunk => chunks.push(chunk));
+    request.on('end', () => {
+      payloads.push({ contentType: request.headers['content-type'], bodyBase64: Buffer.concat(chunks).toString('base64') });
+      response.writeHead(200); response.end('{}');
+    });
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const root = fixtureRepo();
+  try {
+    const explicit = path.join(root, '.github/skills/demo/scripts/explicit.py');
+    fs.writeFileSync(explicit, 'from agentops_script import observe_script\nwith observe_script(".github/skills/demo/scripts/explicit.py") as observation:\n    with observation.step("bounded-work"):\n        print("explicit-ok")\n');
+    attachCommand(['--repo', root, '--yes', '--json'], { stdout: { write() {} } });
+    const runId = 'python-explicit-step-test';
+    const env = attachedScriptEnvironment({ env: process.env, cwd: root, runId, agentopsRoot: repoRoot });
+    env.AGENTOPS_SCRIPT_OTLP_ENDPOINT = `http://127.0.0.1:${server.address().port}/v1/traces`;
+    const execute = (command, args) => new Promise((resolve, reject) => {
+      const child = spawn(command, args, { cwd: root, env, stdio: ['ignore', 'pipe', 'pipe'] });
+      let stdout = '';
+      let stderr = '';
+      child.stdout.on('data', chunk => { stdout += chunk; });
+      child.stderr.on('data', chunk => { stderr += chunk; });
+      child.once('close', (code, signal) => resolve({ code, signal, stdout, stderr }));
+      child.once('error', reject);
+    });
+
+    const observed = await execute('python3', [explicit]);
+    assert.equal(observed.code, 0, observed.stderr);
+    assert.equal(observed.stdout.trim(), 'explicit-ok');
+    const receipt = path.join(root, 'explicit-receipt.jsonl');
+    fs.writeFileSync(receipt, `${payloads.map(row => JSON.stringify(row)).join('\n')}\n`);
+    let parsed = readSessionOtelSpans('synthetic-session', [receipt], { runId });
+    const supervisor = parsed.spans.find(span => span.scriptOutcomeSource === 'supervisor-child-wait');
+    const step = parsed.spans.find(span => span.stepName === 'bounded-work');
+    assert.ok(supervisor, 'direct owned command should retain its supervisor-derived root outcome');
+    assert.ok(step, 'explicit child instrumentation should retain its internal step span');
+    assert.equal(step.runId, runId);
+    assert.notEqual(step.traceId, supervisor.traceId, 'separate process instrumentation remains a logical run link, not invented parentage');
+
+    payloads.length = 0;
+    const unowned = path.join(root, 'unowned-after-attach.py');
+    fs.writeFileSync(unowned, 'print("unowned-ok")\n');
+    const plain = await execute('python3', [unowned]);
+    assert.equal(plain.code, 0, plain.stderr);
+    assert.equal(plain.stdout.trim(), 'unowned-ok');
+    assert.equal(payloads.length, 0, 'an unowned script must pass through without a fabricated root span');
+
+    const inventoried = path.join(root, '.github/skills/demo/scripts/task.py');
+    const unsupported = await execute('python3', ['-u', inventoried]);
+    assert.equal(unsupported.code, 0, unsupported.stderr);
+    assert.equal(unsupported.stdout.trim(), 'synthetic');
+    assert.equal(payloads.length, 1);
+    const unsupportedReceipt = path.join(root, 'unsupported-receipt.jsonl');
+    fs.writeFileSync(unsupportedReceipt, `${JSON.stringify(payloads[0])}\n`);
+    parsed = readSessionOtelSpans('synthetic-session', [unsupportedReceipt], { runId });
+    assert.equal(parsed.spans[0].outcome, 'unknown');
+    assert.equal(parsed.spans[0].scriptOutcomeSource, '');
+  } finally {
+    await new Promise(resolve => server.close(resolve));
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('actual scoped strict Collector retains supervisor-derived Python exit evidence', async t => {
+  const binary = findCollectorBinary();
+  if (!binary.ok) {
+    t.skip('installed Collector binary unavailable');
+    return;
+  }
+  const root = fixtureRepo();
+  let collector;
+  try {
+    const script = path.join(root, '.github/skills/demo/scripts/collector-exit.py');
+    fs.writeFileSync(script, 'from agentops_script import observe_script\nwith observe_script(".github/skills/demo/scripts/collector-exit.py") as observation:\n    with observation.step("collector-step"):\n        pass\nraise SystemExit(7)\n');
+    attachCommand(['--repo', root, '--yes', '--json'], { stdout: { write() {} } });
+    collector = await startScopedStrictCollector({
+      tempRoot: path.join(root, 'collector-runtime'),
+      findCollectorBinary: () => binary
+    });
+    const runId = 'python-strict-collector-test';
+    const env = attachedScriptEnvironment({
+      env: { ...process.env, OTEL_EXPORTER_OTLP_ENDPOINT: collector.endpoint },
+      cwd: root,
+      runId,
+      agentopsRoot: repoRoot
+    });
+    const result = await new Promise((resolve, reject) => {
+      const child = spawn('python3', [script], { cwd: root, env, stdio: 'ignore' });
+      child.once('close', (code, signal) => resolve({ code, signal }));
+      child.once('error', reject);
+    });
+    assert.deepEqual(result, { code: 7, signal: null });
+    for (let attempt = 0; attempt < 100 && fs.statSync(collector.receiptPath).size === 0; attempt += 1) {
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+    assert.ok(fs.statSync(collector.receiptPath).size > 0, fs.readFileSync(path.join(collector.directory, 'collector.log'), 'utf8'));
+    await collector.stop({ remove: false });
+    const parsed = readSessionOtelSpans('synthetic-session', [collector.receiptPath], { runId });
+    const supervisor = parsed.spans.find(span => span.scriptOutcomeSource === 'supervisor-child-wait');
+    assert.ok(supervisor, `strict Collector receipt should retain bounded supervisor provenance: ${JSON.stringify(parsed.spans)}`);
+    assert.equal(supervisor.processExitCode, 7);
+    assert.equal(supervisor.processSignalNumber, null);
+    assert.equal(supervisor.errorType, 'ProcessExit');
+    assert.equal(supervisor.failed, true);
+    assert.ok(Number.isInteger(supervisor.scriptObserverPid));
+    assert.ok(Number.isInteger(supervisor.scriptChildPid));
+    assert.notEqual(supervisor.scriptObserverPid, supervisor.scriptChildPid);
+    const step = parsed.spans.find(span => span.stepName === 'collector-step');
+    assert.ok(step, 'strict Collector receipt should retain explicit internal child steps');
+    assert.equal(step.runId, runId);
+    assert.notEqual(step.traceId, supervisor.traceId);
+    assert.ok(!fs.readFileSync(collector.receiptPath, 'utf8').includes('SystemExit'));
+  } finally {
+    if (collector) await collector.stop({ remove: true });
     fs.rmSync(root, { recursive: true, force: true });
   }
 });

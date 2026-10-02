@@ -18,7 +18,7 @@ MAX_MANIFEST_BYTES = 5 * 1024 * 1024
 MAX_SCRIPT_BYTES = 2 * 1024 * 1024
 
 
-def _attached_script_name():
+def _attached_script_name(script_value=None):
     run_id = os.environ.get("AGENTOPS_RUN_ID", "")
     session_id = os.environ.get("AGENTOPS_SESSION_ID", "")
     repo_value = os.environ.get("AGENTOPS_REPO_ROOT", "")
@@ -36,7 +36,7 @@ def _attached_script_name():
         if payload.get("managedBy") != "copilot-agentops" or payload.get("schemaVersion") != 1:
             return None
 
-        script = Path(sys.argv[0]).resolve(strict=True)
+        script = Path(script_value if script_value is not None else sys.argv[0]).resolve(strict=True)
         relative = script.relative_to(repo).as_posix()
         if script.stat().st_size > MAX_SCRIPT_BYTES:
             return None
@@ -57,6 +57,8 @@ def _attached_script_name():
 
 
 def _start_observation():
+    if os.environ.get("AGENTOPS_PYTHON_LAUNCHER_CHILD") == "1":
+        return
     script_name = _attached_script_name()
     if script_name is None:
         return

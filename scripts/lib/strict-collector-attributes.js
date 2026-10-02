@@ -12,6 +12,14 @@ const scriptRuntimeAttributes = Object.freeze([
   'agentops.script.runtime.implementation',
   'agentops.script.loader.name'
 ]);
+const scriptOutcomeAttributes = Object.freeze([
+  'agentops.outcome.source',
+  'agentops.script.observer.role',
+  'agentops.script.observer.pid',
+  'agentops.script.child.pid',
+  'process.exit.code',
+  'process.signal.number'
+]);
 const forbiddenContentAttributes = Object.freeze([
   'gen_ai.input.messages',
   'gen_ai.output.messages',
@@ -37,7 +45,9 @@ function syncContext(text, context) {
   if (!expression.test(normalized)) throw new Error(`Missing ${context} keep_keys allowlist`);
   return normalized.replace(expression, (whole, prefix, raw, suffix) => {
     const existing = JSON.parse(raw);
-    const required = context === 'span' ? [...canonicalSdkAttributes, ...scriptRuntimeAttributes] : canonicalSdkAttributes;
+    const required = context === 'span'
+      ? [...canonicalSdkAttributes, ...scriptRuntimeAttributes, ...scriptOutcomeAttributes]
+      : canonicalSdkAttributes;
     const merged = [...existing, ...required.filter(attribute => !existing.includes(attribute))];
     return `${prefix}${JSON.stringify(merged)}${suffix}`;
   });
@@ -89,6 +99,7 @@ module.exports = {
   forbiddenContentAttributes,
   repoRoot,
   resourceCorrelationAttributes,
+  scriptOutcomeAttributes,
   strictCollectorFiles,
   syncContext,
   syncResourceContext,

@@ -7,6 +7,7 @@ const {
   attributesForContext,
   canonicalSdkAttributes,
   forbiddenContentAttributes,
+  scriptOutcomeAttributes,
   strictCollectorFiles,
   syncStrictCollectorFiles
 } = require('../../scripts/lib/strict-collector-attributes');
@@ -23,6 +24,9 @@ test('every strict collector path preserves the canonical safe SDK event attribu
       }
       if (context === 'span') {
         for (const attribute of ['agentops.script.runtime.name', 'agentops.script.runtime.version', 'agentops.script.runtime.implementation', 'agentops.script.loader.name', 'gen_ai.tool.call.id']) {
+          assert.ok(allowed.includes(attribute), `${path.basename(file)} ${context} drops ${attribute}`);
+        }
+        for (const attribute of scriptOutcomeAttributes) {
           assert.ok(allowed.includes(attribute), `${path.basename(file)} ${context} drops ${attribute}`);
         }
       }

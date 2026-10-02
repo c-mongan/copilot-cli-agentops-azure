@@ -17,8 +17,8 @@ _SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 _TRACEPARENT = re.compile(r"^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$")
 
 
-def _record_error(span, error):
-    span.set_attribute("error.type", type(error).__name__)
+def _mark_failed(span, error_type):
+    span.set_attribute("error.type", str(error_type)[:128])
     try:
         from opentelemetry.trace import Status, StatusCode
         span.set_status(Status(StatusCode.ERROR))
@@ -26,10 +26,32 @@ def _record_error(span, error):
         span.set_status(2)
 
 
+def _record_error(span, error):
+    _mark_failed(span, type(error).__name__)
+
+
 class ScriptObservation:
-    def __init__(self, tracer=None, script_name=""):
+    def __init__(self, tracer=None, script_name="", root_span=None):
         self._tracer = tracer
         self._script_name = script_name
+        self._root_span = root_span
+
+    def record_process_result(self, *, exit_code=None, signal_number=None, child_pid=None):
+        """Record a launcher-observed child result without capturing output."""
+        if self._root_span is None:
+            return
+        self._root_span.set_attribute("agentops.outcome.source", "supervisor-child-wait")
+        self._root_span.set_attribute("agentops.script.observer.role", "python-launcher")
+        self._root_span.set_attribute("agentops.script.observer.pid", os.getpid())
+        if child_pid is not None:
+            self._root_span.set_attribute("agentops.script.child.pid", int(child_pid))
+        if signal_number is not None:
+            self._root_span.set_attribute("process.signal.number", int(signal_number))
+            _mark_failed(self._root_span, "ProcessSignal")
+        elif exit_code is not None:
+            self._root_span.set_attribute("process.exit.code", int(exit_code))
+            if int(exit_code) != 0:
+                _mark_failed(self._root_span, "ProcessExit")
 
     @contextmanager
     def step(self, name):
@@ -155,7 +177,7 @@ def observe_script(name, *, outcome_unknown=False):
             root_options["context"] = parent
         with tracer.start_as_current_span("agentops.script", **root_options) as span:
             try:
-                yield ScriptObservation(tracer, str(name)[:128])
+                yield ScriptObservation(tracer, str(name)[:128], span)
             except BaseException as error:
                 _record_error(span, error)
                 raise

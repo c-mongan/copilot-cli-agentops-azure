@@ -289,6 +289,12 @@ function readSessionOtelSpans(sessionId, files = defaultReceiptFiles(), options 
           runId: String(runId || (exactSession ? options.runId : '') || ''),
           sessionId: String(conversationId || (exactSession ? sessionId : '') || ''),
           errorType: String(attributeValue(attributes, 'error.type') || ''),
+          processExitCode: numericAttributeOrNull(attributes, 'process.exit.code'),
+          processSignalNumber: numericAttributeOrNull(attributes, 'process.signal.number'),
+          scriptOutcomeSource: String(attributeValue(attributes, 'agentops.outcome.source') || ''),
+          scriptObserverRole: String(attributeValue(attributes, 'agentops.script.observer.role') || ''),
+          scriptObserverPid: numericAttributeOrNull(attributes, 'agentops.script.observer.pid'),
+          scriptChildPid: numericAttributeOrNull(attributes, 'agentops.script.child.pid'),
           // Null (not 0) when the attribute was never reported, so "unmeasured" stays
           // distinguishable from a genuinely measured zero all the way through the ledger.
           inputTokens: numericAttributeOrNull(attributes, 'gen_ai.usage.input_tokens'),

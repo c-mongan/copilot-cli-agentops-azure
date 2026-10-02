@@ -524,6 +524,8 @@ test('CLI package asset copier excludes heavyweight and local-only files', () =>
   assert.equal(shouldCopy(path.join(root, 'scripts', 'check-install-smoke.js')), false);
   assert.equal(shouldCopy(path.join(root, 'packages', 'agentops-copilot-sdk', 'node_modules', 'copilot', 'index.js')), false);
   assert.equal(shouldCopy(path.join(root, 'instrumentation', 'python', 'agentops_script.py')), true);
+  assert.equal(shouldCopy(path.join(root, 'instrumentation', 'python', 'agentops_launcher.py')), true);
+  assert.equal(shouldCopy(path.join(root, 'instrumentation', 'python', 'bin-python3', 'python3')), true);
   assert.equal(shouldCopy(path.join(root, 'instrumentation', 'python', '__pycache__', 'agentops_script.pyc')), false);
   assert.equal(shouldCopy(path.join(root, 'instrumentation', 'python', 'test_agentops_script.py')), false);
   assert.equal(shouldCopy(path.join(root, 'packages', 'agentops-copilot-sdk', 'agentops-copilot-sdk-0.1.0.tgz')), false);
