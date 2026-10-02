@@ -1,4 +1,5 @@
 const { componentEvidence } = require('./component-evidence');
+const { normalizeExecutionConfiguration } = require('./execution-configuration');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
 const path = require('node:path');
@@ -99,6 +100,7 @@ function deliverCopilotSession(options = {}) {
   const uploaded = Object.values(streams).every(stream => stream.status === 'azure_accepted');
   const runContextPath = path.join(outputDir, 'run-context.json');
   const attachment = readOwnedAttachment(repoRoot);
+  const executionConfiguration = normalizeExecutionConfiguration(options.executionConfiguration);
   const runContext = {
     managedBy: 'copilot-agentops',
     schemaVersion: 1,
@@ -107,6 +109,9 @@ function deliverCopilotSession(options = {}) {
     repositoryRootHash: crypto.createHash('sha256').update(repoRoot).digest('hex').slice(0, 16),
     attachmentManifestSha256: attachment.ok ? attachment.receipt.manifestSha256 : '',
     architectureVersion: attachment.ok ? architectureVersion(attachment.manifest.architecture) : null,
+    configurationVersion: executionConfiguration.configurationVersion,
+    executionConfigurationHash: executionConfiguration.executionConfigurationHash,
+    executionConfiguration,
     lifecycle: options.lifecycle || { collector: 'unknown', process: 'unknown' },
     // Native event presence proves observation, not completeness of each surface.
     coverage: Object.fromEntries(['agents', 'skills', 'references', 'scripts', 'tools', 'models'].map(kind => [kind, 'unknown'])),

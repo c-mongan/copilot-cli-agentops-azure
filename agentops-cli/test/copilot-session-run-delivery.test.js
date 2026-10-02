@@ -6,6 +6,7 @@ const path = require('node:path');
 const test = require('node:test');
 
 const { deliverCopilotSession } = require('../src/lib/copilot/session-run-delivery');
+const { observedLaunchExecutionConfiguration } = require('../src/lib/copilot/execution-configuration');
 const { claimSessionOutbox, drainSessionOutboxes, initializeSessionOutbox, readSessionOutbox, releaseSessionOutboxClaim, sessionOutboxPrune, sessionOutboxStatus } = require('../src/lib/copilot/session-delivery-outbox');
 const { runDeliveryCommand } = require('../src/lib/delivery-command');
 const { projectAgentOpsConfigPath } = require('../src/lib/agentops-config');
@@ -196,11 +197,74 @@ test('post-run delivery exports private metadata and uploads both streams to the
   assert.equal(runContext.sessionId, fixture.sessionId);
   assert.equal(runContext.repositoryRootHash.length, 16);
   assert.equal(runContext.attachmentManifestSha256, '');
+  assert.equal(runContext.configurationVersion, null);
+  assert.equal(runContext.executionConfigurationHash, null);
+  assert.equal(runContext.executionConfiguration.source, 'unknown');
+  assert.equal(runContext.executionConfiguration.completeness, 'unknown');
   assert.equal(JSON.stringify(runContext).includes(fixture.repo), false);
   assert.equal(fs.statSync(path.join(result.outputDir, 'run-context.json')).mode & 0o777, 0o600);
   const eventFile = path.join(result.outputDir, 'AgentOpsEvents_CL.jsonl');
   assert.equal(fs.statSync(eventFile).mode & 0o777, 0o600);
   assert.doesNotMatch(fs.readFileSync(eventFile, 'utf8'), /PRIVATE_COMMAND/);
+});
+
+test('post-run delivery persists a supplied execution configuration identity and provenance', t => {
+  const fixture = prepareSession(t, { configured: false });
+  const result = deliverCopilotSession({
+    summary: { sessionId: fixture.sessionId },
+    runId: 'wrapper_run_configuration_identity',
+    copilotHome: fixture.copilotHome,
+    agentopsHome: fixture.agentopsHome,
+    cwd: fixture.repo,
+    env: fixture.env,
+    projectConfigPath: fixture.projectConfigPath,
+    otelFiles: fixture.otelFiles,
+    upload: false,
+    executionConfiguration: {
+      configurationVersion: 'c'.repeat(16),
+      completeness: 'authoritative',
+      scope: { model: 'authoritative', tools: 'authoritative', mcp: 'authoritative', skills: 'authoritative' }
+    }
+  });
+  const context = JSON.parse(fs.readFileSync(path.join(result.outputDir, 'run-context.json'), 'utf8'));
+  assert.equal(context.configurationVersion, 'c'.repeat(16));
+  assert.equal(context.executionConfigurationHash, context.configurationVersion);
+  assert.equal(context.executionConfiguration.executionConfigurationHash, context.configurationVersion);
+  assert.equal(context.executionConfiguration.source, 'supplied_identity');
+  assert.equal(context.executionConfiguration.verification, 'caller_asserted');
+  assert.equal(context.executionConfiguration.completeness, 'authoritative');
+  assert.equal(context.executionConfiguration.observedSettings, null);
+});
+
+test('post-run delivery persists only the bounded observed launch projection', t => {
+  const fixture = prepareSession(t, { configured: false });
+  const result = deliverCopilotSession({
+    summary: { sessionId: fixture.sessionId },
+    runId: 'wrapper_run_observed_configuration',
+    copilotHome: fixture.copilotHome,
+    agentopsHome: fixture.agentopsHome,
+    cwd: fixture.repo,
+    env: fixture.env,
+    projectConfigPath: fixture.projectConfigPath,
+    otelFiles: fixture.otelFiles,
+    upload: false,
+    executionConfiguration: observedLaunchExecutionConfiguration([
+      '--model', 'gpt-5.4-mini', '--allow-tool', 'read_file',
+      '--additional-mcp-config', '/private/mcp-config-with-secret.json',
+      '--secret-env-vars', 'PRIVATE_TOKEN', '-p', 'PRIVATE_PROMPT'
+    ])
+  });
+  const contextText = fs.readFileSync(path.join(result.outputDir, 'run-context.json'), 'utf8');
+  const context = JSON.parse(contextText);
+  assert.match(context.configurationVersion, /^[a-f0-9]{16}$/);
+  assert.equal(context.executionConfigurationHash, context.configurationVersion);
+  assert.equal(context.executionConfiguration.executionConfigurationHash, context.configurationVersion);
+  assert.equal(context.executionConfiguration.source, 'observed_launch_arguments');
+  assert.equal(context.executionConfiguration.completeness, 'partial');
+  assert.equal(context.executionConfiguration.scope.model, 'observed');
+  assert.equal(context.executionConfiguration.scope.mcp, 'observed');
+  assert.equal(context.executionConfiguration.observedSettings.mcp.additionalConfigCount, 1);
+  assert.doesNotMatch(contextText, /PRIVATE_PROMPT|PRIVATE_TOKEN|mcp-config-with-secret|\/private\//);
 });
 
 test('native session collection can create coverage evidence locally without uploading', t => {

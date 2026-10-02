@@ -13,6 +13,7 @@ const { receiptDeliveryText } = require('../delivery-state');
 const { createWrapperDelivery } = require('./wrapper-delivery');
 const { attachedScriptEnvironment, scriptTraceEndpoint } = require('./script-observation');
 const { deliverCopilotSession } = require('./session-run-delivery');
+const { observedLaunchExecutionConfiguration } = require('./execution-configuration');
 
 function removeAgentOpsCopilotFlags(args) {
   return withoutFlags(args, ['--collector-mode', '--privacy', '--unsafe-no-collector']);
@@ -177,7 +178,14 @@ async function copilotCommand(args = []) {
   const summary = changedCopilotSession(sessionsBefore, sessionRoot);
   let sessionDelivery = null;
   try {
-    sessionDelivery = deliverCopilotSession({ summary, runId: envelope.runId, copilotHome, cwd: process.cwd(), env: process.env });
+    sessionDelivery = deliverCopilotSession({
+      summary,
+      runId: envelope.runId,
+      copilotHome,
+      cwd: process.cwd(),
+      env: process.env,
+      executionConfiguration: observedLaunchExecutionConfiguration(observedArgs)
+    });
   } catch (error) {
     sessionDelivery = {
       state: 'local_pending',

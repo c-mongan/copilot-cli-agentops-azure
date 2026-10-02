@@ -4,7 +4,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const { architectureVersion, buildStaticGraph, joinLedger, joinObserved, normalizeEvent } = require('../src/lib/architecture/graph');
+const { architectureVersion, buildStaticGraph, joinLedger, joinObserved, normalizeEvent, normalizeExecutionConfiguration } = require('../src/lib/architecture/graph');
 const { DEFAULTS, computeAllMetrics, eligibleRuns, maxConsecutiveSameTool, wilsonInterval } = require('../src/lib/architecture/metrics');
 const { evaluateFindings } = require('../src/lib/architecture/findings');
 const { buildReport, toInsightsRow, renderMarkdown } = require('../src/lib/architecture/report');
@@ -261,15 +261,52 @@ test('normalizeEvent drops rows missing EventName', () => {
   assert.ok(normalizeEvent({ EventName: 'skill.activated' }));
 });
 
+test('configuration receipt normalization bounds controlled fields and drops private malformed strings', () => {
+  const canary = 'PRIVATE_CONFIGURATION_CANARY_'.repeat(100);
+  const normalized = normalizeExecutionConfiguration({
+    schemaVersion: 999,
+    hashAlgorithm: canary,
+    configurationVersion: canary,
+    executionConfigurationHash: 'A'.repeat(64),
+    source: canary,
+    verification: canary,
+    completeness: canary,
+    scope: { model: canary, tools: canary, mcp: canary, skills: canary },
+    observedSettings: { secret: canary }
+  });
+  assert.deepEqual(normalized, {
+    schemaVersion: null,
+    hashAlgorithm: null,
+    configurationVersion: null,
+    source: 'unknown',
+    verification: 'unknown',
+    completeness: 'unknown',
+    scope: { model: 'unknown', tools: 'unknown', mcp: 'unknown', skills: 'unknown' }
+  });
+  assert.doesNotMatch(JSON.stringify(normalized), /PRIVATE_CONFIGURATION_CANARY/);
+
+  const graph = buildStaticGraph(baseInventory());
+  const joined = joinObserved(graph, makeRun('legacy-freeform', [skillActivationEvent(1, 'reviewer', 'retrieve')], {
+    architectureVersion: graph.architectureVersion,
+    configurationVersion: 'cfg-a',
+    executionConfiguration: { hashAlgorithm: canary, configurationVersion: canary }
+  }));
+  assert.equal(joined.configurationVersion, 'cfg-a', 'legacy top-level identities remain readable');
+  assert.deepEqual(joined.configurationVersions, ['cfg-a']);
+  assert.equal(joined.executionConfiguration.hashAlgorithm, null);
+  assert.equal(joined.executionConfiguration.configurationVersion, null);
+});
+
 test('normalization preserves event provenance and only completed reference reads become observations', () => {
   const inventory = baseInventory();
   const graph = buildStaticGraph(inventory);
   const reference = inventory.skills[0].references[0].path;
+  const configurationVersion = 'a'.repeat(16);
   const provenance = {
     TimeGenerated: '2026-10-02T01:02:03.000Z',
     Source: 'copilot-native',
     Surface: 'cli',
-    ConfigurationVersion: 'cfg-a',
+    ConfigurationVersion: configurationVersion,
     EventId: 'read-success',
     ParentEventId: 'parent-1',
     RunId: 'run-provenance',
@@ -290,10 +327,30 @@ test('normalization preserves event provenance and only completed reference read
   ];
   const joined = joinObserved(graph, makeRun('reference-lifecycle', rows, {
     architectureVersion: graph.architectureVersion,
-    configurationVersion: 'cfg-a'
+    configurationVersion,
+    executionConfiguration: {
+      schemaVersion: 1,
+      hashAlgorithm: 'sha256-16',
+      configurationVersion,
+      source: 'observed_launch_arguments',
+      verification: 'locally_derived_from_arguments',
+      completeness: 'partial',
+      scope: { model: 'observed', tools: 'observed', mcp: 'unknown', skills: 'unknown' },
+      observedSettings: { model: 'safe-but-not-needed-by-architecture' }
+    }
   }));
   assert.deepEqual(joined.refsRead.map(read => read.eventId), ['read-success', 'legacy-read', 'legacy-reference-read']);
-  assert.equal(joined.configurationVersion, 'cfg-a');
+  assert.equal(joined.configurationVersion, configurationVersion);
+  assert.deepEqual(joined.executionConfiguration, {
+    schemaVersion: 1,
+    hashAlgorithm: 'sha256-16',
+    configurationVersion,
+    source: 'observed_launch_arguments',
+    verification: 'locally_derived_from_arguments',
+    completeness: 'partial',
+    scope: { model: 'observed', tools: 'observed', mcp: 'unknown', skills: 'unknown' }
+  });
+  assert.equal('observedSettings' in joined.executionConfiguration, false);
   const event = joined.events.find(row => row.EventId === 'read-success');
   assert.equal(event.TimeGenerated, provenance.TimeGenerated);
   assert.equal(event.Source, provenance.Source);
@@ -409,6 +466,41 @@ test('eligible configuration cohorts emit distinct cohort-bound card IDs', () =>
   assert.deepEqual(cards.map(card => card.metricEvidence.configurationVersion).sort(), ['cfg-a', 'cfg-b']);
   assert.equal(new Set(cards.map(card => card.metricEvidence.cohortId)).size, 2);
   for (const card of cards) assert.match(card.id, new RegExp(`^REFERENCE_NEAR_MANDATORY_${card.metricEvidence.cohortId.slice(0, 12)}_`));
+});
+
+test('identical hashes with different configuration evidence scopes remain separate cohorts', () => {
+  const inventory = baseInventory();
+  const graph = buildStaticGraph(inventory);
+  const partial = {
+    schemaVersion: 1,
+    hashAlgorithm: 'sha256-16',
+    source: 'observed_launch_arguments',
+    verification: 'locally_derived_from_arguments',
+    completeness: 'partial',
+    scope: { model: 'observed', tools: 'observed', mcp: 'unknown', skills: 'unknown' }
+  };
+  const authoritative = {
+    schemaVersion: 1,
+    hashAlgorithm: 'sha256-16',
+    source: 'supplied_identity',
+    verification: 'caller_asserted',
+    completeness: 'authoritative',
+    scope: { model: 'authoritative', tools: 'authoritative', mcp: 'authoritative', skills: 'authoritative' }
+  };
+  const runs = plantedNearMandatoryLedger(inventory, 20).map((run, index) => ({
+    ...run,
+    architectureVersion: graph.architectureVersion,
+    configurationVersion: 'a'.repeat(16),
+    executionConfiguration: index < 10 ? partial : authoritative
+  }));
+  const { joined } = joinLedger(graph, runs);
+  const metrics = computeAllMetrics(graph, joined);
+  const rows = metrics.referenceLoadGivenSkill.filter(row => row.skill === 'retrieve' && row.reference === inventory.skills[0].references[0].path);
+  assert.equal(metrics.cohorts.length, 2);
+  assert.equal(new Set(metrics.cohorts.map(cohort => cohort.cohortId)).size, 2);
+  assert.deepEqual(metrics.cohorts.map(cohort => cohort.executionConfigurationEvidence.completeness).sort(), ['authoritative', 'partial']);
+  assert.ok(rows.every(row => row.denominator === 10));
+  assert.deepEqual(rows.map(row => row.executionConfigurationEvidence.verification).sort(), ['caller_asserted', 'locally_derived_from_arguments']);
 });
 
 test('wilsonInterval returns 0..0 for empty denominator and 0..1 bounds otherwise', () => {
@@ -639,13 +731,14 @@ test('loadLedgerFromDirectory reads attachment.json plus per-run subdirectories'
     fs.writeFileSync(path.join(tempRoot, 'attachment.json'), JSON.stringify({ architecture: inventory }));
     const runDir = path.join(tempRoot, 'run-abc');
     fs.mkdirSync(runDir);
-    fs.writeFileSync(path.join(runDir, 'context.json'), JSON.stringify({ architectureVersion: architectureVersion(inventory), configurationVersion: 'cfg-loader', taskId: 'task-loader', taskContract: null }));
+    fs.writeFileSync(path.join(runDir, 'context.json'), JSON.stringify({ architectureVersion: architectureVersion(inventory), configurationVersion: 'cfg-loader', executionConfiguration: { schemaVersion: 1, hashAlgorithm: 'sha256-16', source: 'observed_launch_arguments', completeness: 'partial', scope: { model: 'observed', tools: 'unknown', mcp: 'unknown', skills: 'unknown' } }, taskId: 'task-loader', taskContract: null }));
     fs.writeFileSync(path.join(runDir, 'events.jsonl'), [skillActivationEvent(1, 'reviewer', 'retrieve')].map(e => JSON.stringify(e)).join('\n') + '\n');
     const loaded = loadLedgerFromDirectory(tempRoot);
     assert.equal(loaded.runs.length, 1);
     assert.equal(loaded.runs[0].runId, 'run-abc');
     assert.equal(loaded.runs[0].events.length, 1);
     assert.equal(loaded.runs[0].configurationVersion, 'cfg-loader');
+    assert.equal(loaded.runs[0].executionConfiguration.completeness, 'partial');
     assert.equal(loaded.runs[0].taskId, 'task-loader');
   } finally {
     fs.rmSync(tempRoot, { recursive: true, force: true });

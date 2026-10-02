@@ -46,6 +46,7 @@ function toInsightsRow(card, { timeGenerated = new Date().toISOString() } = {}) 
       taskId: evidence.taskId || null,
       taskIds: evidence.taskIds || [],
       cohortId: evidence.cohortId || null,
+      executionConfigurationEvidence: evidence.executionConfigurationEvidence || null,
       coverage: evidence.coverage || null,
       evidenceIds: evidence.evidenceIds || [],
       subStatus: card.subStatus || null,
@@ -64,6 +65,7 @@ function renderMarkdown(report) {
   lines.push('# AgentOps architecture report', '');
   lines.push(`Architecture version: \`${architectureVersion.slice(0, 16)}…\``);
   lines.push(`Execution configuration version: ${configurationVersion ? `\`${configurationVersion}\`` : `unknown or mixed (${(configurationVersions || []).join(', ') || 'none recorded'})`}`);
+  lines.push(`Execution configuration evidence: ${report.executionConfigurationEvidence?.completeness || 'unknown'} from ${report.executionConfigurationEvidence?.source || 'unknown'}`);
   lines.push(`Covered runs: ${coverageRuns}`);
   lines.push(`Observed complete runs: ${report.observedCoverageRuns ?? coverageRuns}`);
   lines.push(`Deferred rules: ${report.deferredRules.join(', ')} (metrics computed, cards not emitted this release)`, '');
@@ -73,7 +75,8 @@ function renderMarkdown(report) {
       const configuration = cohort.configurationVersion || `${cohort.configurationVersionStatus} (${(cohort.configurationVersions || []).join(', ') || 'none recorded'})`;
       const task = cohort.taskId || `${cohort.taskStatus} (${(cohort.taskIds || []).join(', ') || 'none recorded'})`;
       const metricStatus = cohort.eligibleForMetrics === false ? `excluded: ${cohort.exclusionReason}` : 'eligible';
-      lines.push(`- \`${cohort.cohortId}\`: configuration ${configuration}; task ${task}; ${cohort.coverageRuns} runs; ${metricStatus}`);
+      const executionEvidence = cohort.executionConfigurationEvidence || {};
+      lines.push(`- \`${cohort.cohortId}\`: configuration ${configuration}; task ${task}; evidence ${executionEvidence.completeness || 'unknown'} from ${executionEvidence.source || 'unknown'}; ${cohort.coverageRuns} runs; ${metricStatus}`);
     }
     lines.push('');
   }
@@ -93,6 +96,7 @@ function renderMarkdown(report) {
     lines.push(`- Execution configuration: ${ev.configurationVersion || `${ev.coverage?.configurationVersionStatus || 'unknown'} (${(ev.configurationVersions || []).join(', ') || 'none recorded'})`}`);
     lines.push(`- Task cohort: ${ev.taskId || `${ev.coverage?.taskStatus || 'unknown'} (${(ev.taskIds || []).join(', ') || 'none recorded'})`}`);
     lines.push(`- Cohort ID: ${ev.cohortId || 'unknown'}`);
+    lines.push(`- Configuration evidence: ${ev.executionConfigurationEvidence?.completeness || 'unknown'} from ${ev.executionConfigurationEvidence?.source || 'unknown'}`);
     if (Number.isFinite(ev.numerator) && Number.isFinite(ev.denominator)) {
       const rate = ev.denominator > 0 ? (ev.numerator / ev.denominator * 100).toFixed(1) + '%' : 'n/a';
       lines.push(`- Evidence: ${ev.numerator}/${ev.denominator} (${rate}), coverage ${ev.coverageRuns} runs`);
@@ -126,6 +130,7 @@ function buildReport({ graph, findings, invalidLedgerRows = 0, generatedAt = new
     configurationVersion: findings.metrics?.configurationVersion || null,
     configurationVersions: findings.metrics?.configurationVersions || [],
     configurationVersionStatus: findings.metrics?.coverage?.configurationVersionStatus || 'unknown',
+    executionConfigurationEvidence: findings.metrics?.executionConfigurationEvidence || null,
     taskId: findings.metrics?.taskId || null,
     taskIds: findings.metrics?.taskIds || [],
     taskStatus: findings.metrics?.coverage?.taskStatus || 'unknown',

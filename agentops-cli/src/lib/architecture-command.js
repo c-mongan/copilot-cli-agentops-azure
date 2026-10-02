@@ -127,6 +127,7 @@ function loadLedgerFromDirectory(ledgerDir, options = {}) {
       sessionId: context.sessionId || '',
       architectureVersion: context.architectureVersion || 'unknown',
       configurationVersion: context.configurationVersion || null,
+      executionConfiguration: context.executionConfiguration || null,
       taskId: context.taskId || context.taskContract?.taskId || null,
       evidenceTier: context.evidenceTier || 'unknown',
       evidenceComplete,

@@ -66,6 +66,7 @@ function metricContract(row = {}) {
     taskId: row.taskId || null,
     taskIds: row.taskIds || [],
     cohortId: row.cohortId || null,
+    executionConfigurationEvidence: row.executionConfigurationEvidence || null,
     evidenceIds: row.evidenceIds || [],
     coverage: row.coverage || null
   };

@@ -208,6 +208,10 @@ test('native Copilot launch scopes strict OTel to the real CLI process and keeps
       },
       deliverCopilotSession: options => {
         assert.deepEqual(options.otelFiles, ['/private/receipt.jsonl']);
+        assert.match(options.executionConfiguration.configurationVersion, /^[a-f0-9]{16}$/);
+        assert.equal(options.executionConfiguration.source, 'observed_launch_arguments');
+        assert.equal(options.executionConfiguration.completeness, 'partial');
+        assert.equal(options.executionConfiguration.scope.skills, 'observed');
         return { state: 'local_pending', sessionId: options.summary.sessionId, runId: options.runId, events: 3, spans: 2, outputDir: '/private/agentops/runs/test' };
       },
       agentopsHome: '/private/agentops'

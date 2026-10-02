@@ -101,6 +101,34 @@ function textOrNull(value) {
   return String(value);
 }
 
+function receiptConfigurationVersions(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
+  return [...new Set([value.configurationVersion, value.executionConfigurationHash]
+    .filter(candidate => typeof candidate === 'string' && /^[a-f0-9]{16,64}$/.test(candidate)))].sort();
+}
+
+function normalizeExecutionConfiguration(value) {
+  const source = ['observed_launch_arguments', 'supplied_identity', 'unknown'].includes(value?.source) ? value.source : 'unknown';
+  const verification = ['locally_derived_from_arguments', 'caller_asserted', 'unknown'].includes(value?.verification) ? value.verification : 'unknown';
+  const completeness = ['partial', 'authoritative', 'unknown'].includes(value?.completeness) ? value.completeness : 'unknown';
+  const scope = {};
+  for (const component of ['model', 'tools', 'mcp', 'skills']) {
+    const state = value?.scope?.[component];
+    scope[component] = ['authoritative', 'observed', 'unknown'].includes(state) ? state : 'unknown';
+  }
+  const hashAlgorithm = ['sha256-16', 'sha256', 'sha256-64'].includes(value?.hashAlgorithm) ? value.hashAlgorithm : null;
+  const receiptVersions = receiptConfigurationVersions(value);
+  return {
+    schemaVersion: value?.schemaVersion === 1 ? 1 : null,
+    hashAlgorithm,
+    configurationVersion: receiptVersions.length === 1 ? receiptVersions[0] : null,
+    source,
+    verification,
+    completeness,
+    scope
+  };
+}
+
 function affirmativeReferenceRead(event) {
   if (!event.ReferenceName) return false;
   const eventName = event.EventName.toLowerCase();
@@ -258,15 +286,17 @@ function joinObserved(graph, run = {}) {
 
   const eventConfigurationVersions = [...new Set(dedupedEvents.map(event => event.ConfigurationVersion).filter(Boolean))];
   const recordedConfigurationVersion = textOrNull(run.configurationVersion);
+  const receiptVersions = receiptConfigurationVersions(run.executionConfiguration);
   const eventTaskIds = [...new Set(dedupedEvents.map(event => event.TaskId).filter(Boolean))];
   const recordedTaskId = textOrNull(run.taskId) || textOrNull(run.taskContract?.taskId);
-  const configurationVersions = [...new Set([recordedConfigurationVersion, ...eventConfigurationVersions].filter(Boolean))].sort();
+  const configurationVersions = [...new Set([recordedConfigurationVersion, ...receiptVersions, ...eventConfigurationVersions].filter(Boolean))].sort();
   const taskIds = [...new Set([recordedTaskId, ...eventTaskIds].filter(Boolean))].sort();
   return {
     runId: run.runId,
     architectureVersion: run.architectureVersion || graph.architectureVersion,
     configurationVersion: configurationVersions.length === 1 ? configurationVersions[0] : null,
     configurationVersions,
+    executionConfiguration: normalizeExecutionConfiguration(run.executionConfiguration),
     taskId: taskIds.length === 1 ? taskIds[0] : null,
     taskIds,
     // Finding 2 (overnight whole-branch review): a genuinely missing/unknown
@@ -313,5 +343,6 @@ module.exports = {
   joinLedger,
   joinObserved,
   normalizeEvent,
+  normalizeExecutionConfiguration,
   sha256Hex
 };

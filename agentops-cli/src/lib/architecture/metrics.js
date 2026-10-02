@@ -48,6 +48,31 @@ function eligibleRuns(graph, joinedRuns) {
   return joinedRuns.filter(run => matchesArchitecture(graph, run));
 }
 
+function executionConfigurationEvidence(runs) {
+  const configurations = runs.map(run => run.executionConfiguration || {});
+  const values = (field, fallback = 'unknown') => [...new Set(configurations.map(configuration => configuration[field] || fallback))].sort();
+  const completenessValues = values('completeness');
+  const sources = values('source');
+  const verificationValues = values('verification');
+  const hashAlgorithms = [...new Set(configurations.map(configuration => configuration.hashAlgorithm).filter(Boolean))].sort();
+  const scope = {};
+  for (const component of ['model', 'tools', 'mcp', 'skills']) {
+    const states = [...new Set(configurations.map(configuration => configuration.scope?.[component] || 'unknown'))].sort();
+    scope[component] = states.length === 0 ? 'unknown' : states.length === 1 ? states[0] : 'mixed';
+  }
+  return {
+    completeness: completenessValues.length === 1 ? completenessValues[0] : completenessValues.length > 1 ? 'mixed' : 'unknown',
+    completenessValues,
+    source: sources.length === 1 ? sources[0] : sources.length > 1 ? 'mixed' : 'unknown',
+    sources,
+    verification: verificationValues.length === 1 ? verificationValues[0] : verificationValues.length > 1 ? 'mixed' : 'unknown',
+    verificationValues,
+    hashAlgorithm: hashAlgorithms.length === 1 ? hashAlgorithms[0] : null,
+    hashAlgorithms,
+    scope
+  };
+}
+
 function runCohort(run) {
   const configurationVersion = run.configurationVersion || null;
   const taskId = run.taskId || null;
@@ -62,7 +87,8 @@ function runCohort(run) {
     configurationVersionStatus,
     taskId,
     taskIds,
-    taskStatus
+    taskStatus,
+    executionConfiguration: run.executionConfiguration || null
   };
   return {
     ...identity,
@@ -77,7 +103,9 @@ function eligibleCohorts(graph, joinedRuns) {
     if (!groups.has(cohort.cohortId)) groups.set(cohort.cohortId, { ...cohort, runs: [] });
     groups.get(cohort.cohortId).runs.push(run);
   }
-  return [...groups.values()].sort((a, b) => a.cohortId.localeCompare(b.cohortId));
+  return [...groups.values()]
+    .map(cohort => ({ ...cohort, executionConfigurationEvidence: executionConfigurationEvidence(cohort.runs) }))
+    .sort((a, b) => a.cohortId.localeCompare(b.cohortId));
 }
 
 function metricEligibleCohorts(graph, joinedRuns) {
@@ -128,6 +156,7 @@ function evidenceMetadata(coverageRuns, evidenceIds, unit = 'runs') {
     taskId: taskStatus === 'known' ? taskIds[0] : null,
     taskIds,
     cohortId: cohortIds.length === 1 ? cohortIds[0] : null,
+    executionConfigurationEvidence: executionConfigurationEvidence(coverageRuns),
     evidenceIds: [...new Set((evidenceIds || []).filter(Boolean))],
     coverage: {
       eligibleRuns: coverageRuns.length,
@@ -586,6 +615,7 @@ function computeAllMetrics(graph, joinedRuns, options = {}) {
       taskId: cohort.taskId,
       taskIds: cohort.taskIds,
       taskStatus: cohort.taskStatus,
+      executionConfigurationEvidence: cohort.executionConfigurationEvidence,
       eligibleForMetrics: cohort.configurationVersionStatus !== 'mixed' && cohort.taskStatus !== 'mixed',
       exclusionReason: cohort.configurationVersionStatus === 'mixed' || cohort.taskStatus === 'mixed'
         ? 'conflicting configuration or task identity within a run'
@@ -612,6 +642,7 @@ module.exports = {
   contextPressure,
   declaredVsObserved,
   evidenceMetadata,
+  executionConfigurationEvidence,
   eligibleCohorts,
   eligibleRuns,
   eventIds,

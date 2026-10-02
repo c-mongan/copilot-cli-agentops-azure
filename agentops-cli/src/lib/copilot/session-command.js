@@ -16,6 +16,7 @@ const { startScopedStrictCollector } = require('./scoped-collector');
 const { superviseProcess } = require('./process-supervisor');
 const { changedCopilotSession, snapshotCopilotSessions } = require('./receipt-session');
 const { deliverCopilotSession } = require('./session-run-delivery');
+const { observedLaunchExecutionConfiguration } = require('./execution-configuration');
 const {
   defaultSessionEventsPath,
   enrichCopilotSessionEvents,
@@ -117,6 +118,7 @@ async function launchObservedCopilot(options = {}, dependencies = {}) {
   const scopedCollector = await startCollector({ agentopsHome: dependencies.agentopsHome || agentopsHome });
   const runId = options.runId || uniqueRunId();
   const commandArgs = options.commandArgs || [];
+  const executionConfiguration = observedLaunchExecutionConfiguration(commandArgs);
   const suppliedSessionIndex = commandArgs.indexOf('--session-id');
   const inlineSession = commandArgs.find(arg => arg.startsWith('--session-id='));
   const resumes = commandArgs.some(arg => ['--resume', '-r', '--continue', '--connect'].includes(arg) || arg.startsWith('--resume=') || arg.startsWith('--connect='));
@@ -167,6 +169,7 @@ async function launchObservedCopilot(options = {}, dependencies = {}) {
         otelFiles: [scopedCollector.receiptPath],
         upload: Boolean(options.upload),
         expectations,
+        executionConfiguration,
         lifecycle: { collector: result.collectorFailed ? 'failed' : 'completed', process: result.signal || result.cancelled ? 'cancelled' : 'completed' }
       });
     }
