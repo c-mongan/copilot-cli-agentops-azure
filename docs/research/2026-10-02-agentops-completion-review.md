@@ -3,6 +3,13 @@
 This review checks the original master and overnight plans, not only the new
 agent fixture. Local, live, and Azure proof remain separate.
 
+**Latest acceptance update:** The user authorized continuing without the two
+billing confirmations. The final StockPilot live capability run and the new
+synthetic Azure upload/readback have now passed. See
+[the live completion record](2026-10-02-agentops-live-completion.md).
+The held-work sections below preserve the earlier checkpoint and are superseded
+by that record; unknown capture/configuration evidence remains unknown.
+
 ## Reviewed repair
 
 The architecture join now retains timestamp, source, schema/configuration,

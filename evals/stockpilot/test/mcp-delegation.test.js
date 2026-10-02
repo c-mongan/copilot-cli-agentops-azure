@@ -46,6 +46,20 @@ test('owned MCP distinguishes planted tool failure from protocol errors', () => 
   assert.equal(respond({ jsonrpc: '2.0', method: 'notifications/initialized' }), null);
 });
 
+test('owned MCP accepts protocol request metadata without accepting new arguments', () => {
+  const params = { name: 'stock_snapshot', arguments: { sku: 'SKU-0042', warehouse: 'WH-EAST' },
+    _meta: { progressToken: 7, traceparent: 'synthetic-trace', private: 'PRIVACY_CANARY_STOCKPILOT' } };
+  const result = call('tools/call', params);
+  assert.equal(result.result.structuredContent.on_hand, 312);
+  assert.doesNotMatch(JSON.stringify(result), /PRIVACY_CANARY|traceparent|progressToken/);
+  assert.equal(call('tools/call', { name: 'unavailable_snapshot', _meta: {} }).result.isError, true);
+  for (const _meta of [null, [], 'invalid', { progressToken: {} }, { progressToken: Infinity }]) {
+    assert.equal(call('tools/call', { ...params, _meta }).error.code, -32602);
+  }
+  assert.equal(call('tools/call', { ...params, path: '/tmp' }).error.code, -32602);
+  assert.equal(call('tools/call', { ...params, arguments: { ...params.arguments, path: '/tmp' } }).error.code, -32602);
+});
+
 test('stdio MCP continues after malformed JSON and rejects input above 64 KiB', () => {
   const ping = JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'ping' });
   const result = spawnSync(process.execPath, [server], {
@@ -77,7 +91,8 @@ test('pinned MCP SDK completes initialize, list, success, and error roundtrip', 
     const listed = await client.listTools();
     assert.deepEqual(listed.tools.map(tool => tool.name), ['stock_snapshot', 'unavailable_snapshot']);
     const ok = await client.callTool({
-      name: 'stock_snapshot', arguments: { sku: 'SKU-0042', warehouse: 'WH-EAST' }
+      name: 'stock_snapshot', arguments: { sku: 'SKU-0042', warehouse: 'WH-EAST' },
+      _meta: { progressToken: 7, traceparent: 'synthetic-trace' }
     });
     const unavailable = await client.callTool({ name: 'unavailable_snapshot', arguments: {} });
     assert.equal(ok.isError, false);

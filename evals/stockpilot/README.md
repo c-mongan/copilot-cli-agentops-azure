@@ -90,6 +90,12 @@ Its output-match graders check presentation only; marker text, `312`, or an
 that the agent actually invoked either tool or delegated; that remains a later
 authorized, observed live run whose ledger must pass the semantic audit.
 
+MCP request `_meta` is accepted as protocol metadata outside the tool arguments;
+it never selects data or enters tool results. Unknown tool arguments remain
+rejected. The stimulus explicitly forwards the successful snapshot's four
+fields to the specialist because delegated contexts do not inherit the parent’s
+tool results.
+
 After exporting a captured run, validate the semantic contract separately from
 component counts:
 

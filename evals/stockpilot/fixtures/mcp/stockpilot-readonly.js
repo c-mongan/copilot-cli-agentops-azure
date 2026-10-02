@@ -90,7 +90,13 @@ function respond(message) {
   if (message.method !== 'tools/call') return protocolError(id, -32601, 'Method not found');
 
   const params = message.params;
-  if (!validateObject(params, ['name', 'arguments']) || typeof params.name !== 'string') {
+  // MCP request metadata belongs beside arguments. Runtime tracing/progress
+  // clients may add it; it never selects fixture data or enters the response.
+  const meta = params?._meta;
+  if (!validateObject(params, ['name', 'arguments', '_meta']) || typeof params.name !== 'string'
+    || (meta !== undefined && (!meta || typeof meta !== 'object' || Array.isArray(meta)))
+    || (meta?.progressToken !== undefined && typeof meta.progressToken !== 'string'
+      && !(typeof meta.progressToken === 'number' && Number.isFinite(meta.progressToken)))) {
     return protocolError(id, -32602, 'Invalid tool or arguments');
   }
   const args = params.arguments === undefined ? {} : params.arguments;

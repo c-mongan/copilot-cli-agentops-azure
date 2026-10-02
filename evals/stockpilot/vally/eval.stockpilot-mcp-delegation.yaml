@@ -39,8 +39,12 @@ stimuli:
       stockpilot-readonly stock_snapshot MCP tool exactly once for SKU-0042 at
       WH-EAST. Then call unavailable_snapshot exactly once; its failure is
       deliberate, so do not retry it. After both calls finish, delegate exactly
-      once to stock-risk-auditor and ask it to check the successful snapshot
-      against the latest matching CSV row. If the named specialist is missing,
+      once to stock-risk-auditor. Include the successful tool result's exact
+      sku, warehouse, observed_on, and on_hand values in the specialist's task
+      prompt; its context does not inherit the parent's tool results. Ask it
+      to compare those supplied values against the latest matching CSV row.
+      Copy its exact AUDIT_MATCH, AUDIT_MISMATCH, or unknown verdict into the
+      final answer. If the named specialist is missing,
       report that incompatibility rather than substituting another agent. Do not
       edit files, use shell commands, load skills, or access the network. End with
       MCP_DELEGATION_CHECK, the stock value/date, the deliberate failure, and the
