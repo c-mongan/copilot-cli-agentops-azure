@@ -198,3 +198,27 @@ COPILOT_CLI_BIN="$PWD/evals/stockpilot/node_modules/@github/copilot/npm-loader.j
 Use the installed locked evaluation dependencies. This does not move Vally into
 the core CLI dependency tree. Package and native/SDK runtime identities remain
 separate. See the 2026-10-02 verification report for full-corpus and capture proof.
+
+## 2026-10-02 owned StockPilot MCP/delegation follow-up
+
+The StockPilot specs now configure the dependency-free local
+`stockpilot-readonly` stdio MCP instead of an empty map. A separate capability
+spec stages the read-only `stock-risk-auditor` at the Copilot-owned
+`.github/agents/` path and orders MCP success, planted MCP failure, then one
+delegation. The original 12-task contract and deterministic graders are
+unchanged.
+
+With `VALLY_TELEMETRY_OPTOUT=1 DO_NOT_TRACK=1`, Vally 0.17.0 lint accepted all
+three eval specs. The two historical regression specs retain only their known
+`regression-without-baseline` advisory; the capability spec validates without a
+warning. A single-worker dry-run of `vally/experiment.yaml` resolved the same
+two single-skill-change plans without execution:
+
+```text
+healthy-base          Config hash e8b48f8c200ce35d  Eval hash cb44bf3bab41916d
+planted-tool-thrash   Config hash 1e172af3fe38c3f6  Eval hash cb44bf3bab41916d
+```
+
+Those hashes are configuration-resolution evidence only. No model call was
+made for this follow-up, and the new MCP/delegation path still requires one
+later captured live run before it can be called execution-proven.

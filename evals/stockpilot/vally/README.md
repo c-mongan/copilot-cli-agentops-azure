@@ -1,8 +1,9 @@
 # Vally harness for the StockPilot pilot (Task 9, bullets 3-4)
 
-Everything in this directory is **local, unexecuted configuration** —
-`lint` and `--dry-run` only (zero model calls, zero real trials). See
-`../VALLY-PIN.md` for the exact commands run and their full output.
+This directory contains the local Vally configuration. Historical smoke and
+experiment runs are documented in the linked research report. The newly added
+MCP/delegation spec has only local test, lint, and dry-run proof; it has not yet
+run a model. See `../VALLY-PIN.md` for version and command evidence.
 
 ## Pin (bullet 3)
 
@@ -96,11 +97,12 @@ pipeline/receiver added for Vally).
   `../VALLY-PIN.md` for the exact output, including each variant's
   distinct config hash and identical eval hash — proof the dry-run
   correctly sees this as a single-skill-directory change, nothing else).
-- **No hidden host skills or MCP servers**: both eval specs declare
-  `agent_environment.skills` as an explicit, closed list of this
-  fixture's own skill directories, and `agent_environment.mcpServers: {}`
-  (empty — no MCP server is configured; see `../ATTRIBUTION.md`'s "owned
-  fixture MCP" note for why).
+- **No hidden host skills or MCP servers**: every eval declares its skill list
+  and the sole `stockpilot-readonly` stdio server explicitly. The dedicated
+  MCP/delegation eval declares `skills: []` and stages exactly one custom agent
+  at `.github/agents/stock-risk-auditor.agent.md`. Vally 0.17.0 passes only
+  `environment.mcpServers` to the SDK and disables the hosted GitHub MCP unless
+  explicitly named; workspace `.mcp.json` is not a discovery source here.
 
 ### Effective-environment validation procedure (documented, not run live)
 
@@ -118,9 +120,11 @@ need, not an empirical result:
    skill leaked in through some path this fixture didn't anticipate
    (e.g. an ambient `.github/skills`/`plugin/skills` directory being
    picked up by the executor rather than this fixture's isolated list).
-3. Confirm `agent_environment.mcpServers: {}` by checking the same
-   trajectory for any `tool_call`/`mcp_*` event referencing a server name
-   not declared here.
+3. Confirm the trajectory names only `stockpilot-readonly`, and that the
+   dedicated stimulus has exactly one completed `stock_snapshot`, one failed
+   `unavailable_snapshot`, and then one completed `stock-risk-auditor`
+   delegation. Use `../mcp-delegation-contract.json`; counts establish only
+   that stimulus contract, not global completeness.
 4. Confirm the resolved executor really is the Vally-bundled
    `@github/copilot@1.0.85` (not the native `1.0.90`) by checking the
    trial's recorded executor/version metadata, if Vally records it in
@@ -171,3 +175,13 @@ grading and review.
 The full 12-task runner is documented in [the fixture README](../README.md#full-live-corpus).
 Its task/sink postgrade is mandatory; the Vally nonempty-output check alone is
 not correctness proof. Synthetic planning time is pinned to the fixture snapshot.
+
+## Owned MCP and delegated specialist
+
+`eval.stockpilot-mcp-delegation.yaml` provides the smallest live compatibility
+probe for the missing path: local MCP success, deliberate MCP tool error, then a
+named read-only specialist. It uses the same pinned Vally 0.17.0 executor and
+bundled Copilot CLI 1.0.85, one run, one worker, a 90-second agent cap, and no
+skills. The MCP reads only the staged synthetic CSV and has no network or write
+operation. Lint and deterministic tests prove its schema and local behavior;
+they do not prove live discovery, tool calls, delegation, or capture.

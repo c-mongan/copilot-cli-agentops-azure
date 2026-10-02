@@ -1,11 +1,8 @@
 # Effective agent/model/skill/MCP settings for the StockPilot fixture (Task 9, bullet 1)
 #
-# This records what a Copilot CLI / Vally run against this fixture would be
-# CONFIGURED to use. No run has actually executed (no live budget
-# authorized for this task) — this is the declared, intended configuration,
-# not an observed one. See evals/stockpilot/PROVENANCE.md and
-# evals/stockpilot/ATTRIBUTION.md for how each field maps back to the
-# pinned workshop source.
+# This records the declared configuration. Prior StockPilot live runs predate
+# the owned MCP/delegation addition; this file is not evidence that the new
+# path has executed. See mcp-delegation-contract.json for its scoped contract.
 
 agent:
   profile: evals/stockpilot/fixtures/agents/stockpilot.agent.md
@@ -16,7 +13,28 @@ agent:
   tools:
     - read
     - bash
-  mcp_servers: []  # none configured; see ATTRIBUTION.md ("owned fixture MCP" is a live-environment TODO
+  mcp_servers:
+    - name: stockpilot-readonly
+      type: stdio
+      command: node
+      args:
+        - evals/stockpilot/fixtures/mcp/stockpilot-readonly.js
+      timeout: 15s
+      tools:
+        - stock_snapshot
+        - unavailable_snapshot
+      read_only: true
+      network: false
+
+delegation:
+  fixture_profile: evals/stockpilot/fixtures/agents/stock-risk-auditor.agent.md
+  staged_profile: .github/agents/stock-risk-auditor.agent.md
+  name: stock-risk-auditor
+  tools:
+    - read
+  stimulus: evals/stockpilot/vally/eval.stockpilot-mcp-delegation.yaml
+  component_expectations: evals/stockpilot/expectations.mcp-delegation.json
+  semantic_contract: evals/stockpilot/mcp-delegation-contract.json
 
 skills:
   root: evals/stockpilot/fixtures/skills

@@ -6,6 +6,17 @@ const { grade, PASS, readCsv } = require('../graders');
 const tasks = require('../graders/tasks.json').tasks;
 const root = path.resolve(__dirname, '..');
 
+function mcpServers() {
+  return {
+    'stockpilot-readonly': {
+      type: 'stdio',
+      command: 'node',
+      args: ['evals/stockpilot/fixtures/mcp/stockpilot-readonly.js'],
+      timeout: '15s'
+    }
+  };
+}
+
 function makeSpec() {
   const agent = fs.readFileSync(path.join(root, 'fixtures/agents/stockpilot.agent.md'), 'utf8').split('---').slice(2).join('---');
   return {
@@ -13,7 +24,7 @@ function makeSpec() {
     defaults: { runs: 1, timeout: '3m', model: 'gpt-5.4-mini', executor: 'copilot-sdk' },
     agent_environment: {
       skills: ['forecasting', 'notify-templates', 'reorder-policy', 'supplier-selection', 'weekly-report'].map(name => path.join(root, 'fixtures/skills', name)),
-      mcpServers: {}, files: [{ src: path.join(root, 'fixtures'), dest: 'evals/stockpilot/fixtures' }]
+      mcpServers: mcpServers(), files: [{ src: path.join(root, 'fixtures'), dest: 'evals/stockpilot/fixtures' }]
     },
     stimuli: tasks.map(task => ({
       name: task.id,
@@ -96,4 +107,4 @@ if (require.main === module) {
     } else throw new Error('usage: full-corpus.js spec <new-spec.json> | grade <results.jsonl> <approved-workspace-root>');
   } catch (error) { console.error(error.message); process.exitCode = 1; }
 }
-module.exports = { makeSpec, gradeTrial };
+module.exports = { makeSpec, gradeTrial, mcpServers };

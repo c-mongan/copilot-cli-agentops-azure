@@ -20,7 +20,7 @@ primitives.
 |---|---|
 | `.claude/skills/<name>/SKILL.md` | `evals/stockpilot/fixtures/skills/<name>/SKILL.md` — same YAML-frontmatter-plus-markdown shape; frontmatter fields trimmed to this repo's own convention (`name`, `description`, `license`, `allowed-tools`) as used in `plugin/skills/*/SKILL.md` (verified by reading `plugin/skills/agentops-benchmark-gate/SKILL.md` before writing this fixture). |
 | CMA agent config (`agents/starter/agent.py` → `build_config()`, uploaded via `uv run deploy starter`) | `evals/stockpilot/fixtures/agents/stockpilot.agent.md` — a Copilot CLI custom-agent profile using this repo's existing `name`/`description`/`target: github-copilot`/`model`/`tools`/`metadata` frontmatter, verified against `plugin/agents/telemetry-investigator.agent.md` before writing. |
-| `agent_toolset_20260401` (CMA's bundled Bash/Read/Write/Task toolset) | An explicit, narrow Copilot CLI `tools:` allowlist (`read`, `bash` scoped to the fixture's own `data/` and skill `scripts/` paths) — no implicit Task/subagent delegation primitive exists in Copilot CLI's custom-agent format, so the workshop's `forecaster`/`procurement`/`writing` subagents are represented as **explicit alternative code paths inside the skill files** (e.g. the forecasting skill's "Path A: script" vs "Path B: ask the forecasting skill's documented escalation" instead of a live second agent invocation) rather than as a live delegated agent call. No live subagent call is made by this fixture at rest; any future live Vally trial would need its own authorized configuration for that. |
+| `agent_toolset_20260401` (CMA's bundled Bash/Read/Write/Task toolset) | The main StockPilot profile keeps the explicit `read`/`bash` list used by the 12-task corpus. The original workshop's broad `forecaster`/`procurement`/`writing` decomposition remains represented by skills, while one new, narrower Copilot-native path stages `.github/agents/stock-risk-auditor.agent.md` for a dedicated synthetic delegation stimulus. That specialist has only `read`, receives one exact snapshot to verify, and cannot delegate. It is an original compatibility fixture, not a claim that CMA's hosted Task primitive was ported wholesale. |
 | `uv run seed` (`data/seed.py`, Python + `random.gauss`, ~250 SKUs / ~67k rows) | Hand-written, fixed, small synthetic CSVs under `evals/stockpilot/fixtures/data/` using the same column schema (see `PROVENANCE.md`) — no Python runtime dependency, no RNG, auditable by inspection. |
 | Anthropic Messages API (`anthropic.Anthropic().messages.create(...)`) inside `agents/before/subagents.py` | Not invoked. This fixture makes **zero model calls** of any kind, by design (see the root-level scope boundary for this task). |
 | `uv run evals --agent starter` / `evals/graders.py` (Python, one `llm_judge` grader calls the Anthropic API) | `evals/stockpilot/graders/index.js` (Node, deterministic graders only — the workshop's paid `llm_judge` grader for task R9 was **not** ported; R9 is left with a `TODO` deterministic approximation, documented in `graders/index.js`, since an LLM-judged grader is explicitly out of scope and optional per the plan's `--compare` guidance). |
@@ -37,17 +37,20 @@ tools:
   - bash
 ```
 
-No `azure-mcp/*`, no `agent-grafana/*`, no network tools, and no implicit
-inheritance of host skills/MCP servers. `evals/stockpilot/fixtures/tools/legacy-tools-manifest.md`
-documents the 12 legacy tool names from `agents/before/tools.py` for
-narrative/provenance purposes only; none of those 12 Python functions are
-wired up as live Copilot CLI tools or an MCP server in this fixture. A real
-pilot would need an actual "owned fixture MCP" server exposing read-only
-CSV queries scoped to `fixtures/data/`; building and running that MCP server
-is a live-environment step this task does not perform (no live budget — see
-scope boundary). `evals/stockpilot/vally/experiment.yaml` documents the
-intended empty/narrow MCP allowlist for when that MCP exists.
+No `azure-mcp/*`, `agent-grafana/*`, remote MCP, or network tool is declared.
+The one server, `stockpilot-readonly`, is dependency-free local stdio. It
+exposes only `stock_snapshot` (latest exact SKU/warehouse lookup from the pinned
+synthetic CSV) and `unavailable_snapshot` (a planted read failure); it accepts
+no caller-selected path, writes nothing, caps a request at 64 KiB, and refuses
+a source above 1 MiB. `fixtures/tools/legacy-tools-manifest.md` still documents
+the workshop's 12 legacy Python tool names for provenance only; none is wired
+as a live tool. The Vally executor disables its hosted GitHub MCP when the eval
+does not explicitly declare that exact server name, and the specs list the one
+owned server directly rather than discovering workspace MCP configuration.
 
 ## Effective agent/model/skill/MCP settings (bullet 1 requirement)
 
-Recorded in `evals/stockpilot/manifest.yaml`.
+Recorded in `evals/stockpilot/manifest.yaml`. The dedicated sequence,
+Vally/Copilot pins, and stimulus-only coverage boundary are recorded separately
+in `evals/stockpilot/mcp-delegation-contract.json`. These are configuration and
+expectation provenance; only a captured live run can establish execution.

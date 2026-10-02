@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "scope": "stockpilot-mcp-delegation/MCP1-read-fail-delegate",
+  "provenance": {
+    "eval": "evals/stockpilot/vally/eval.stockpilot-mcp-delegation.yaml",
+    "server": "evals/stockpilot/fixtures/mcp/stockpilot-readonly.js",
+    "specialist": "evals/stockpilot/fixtures/agents/stock-risk-auditor.agent.md",
+    "componentExpectations": "evals/stockpilot/expectations.mcp-delegation.json",
+    "vally": "0.17.0",
+    "bundledCopilotCli": "1.0.85",
+    "bundledCopilotSdk": "1.0.14"
+  },
+  "configuration": {
+    "serverName": "stockpilot-readonly",
+    "transport": "stdio",
+    "network": false,
+    "readOnly": true,
+    "inputLimitBytes": 65536,
+    "dataLimitBytes": 1048576,
+    "skills": [],
+    "workspaceAgents": ["stock-risk-auditor"],
+    "disabledAmbientServer": "github-mcp-server"
+  },
+  "expectedSequence": [
+    { "kind": "mcp", "name": "stock_snapshot", "status": "completed", "count": 1 },
+    { "kind": "mcp", "name": "unavailable_snapshot", "status": "failed", "count": 1 },
+    { "kind": "delegation", "name": "stock-risk-auditor", "status": "completed", "count": 1 }
+  ],
+  "coverage": {
+    "expectedCountsProveStimulusContractOnly": true,
+    "semanticOrderRequiresLedgerAudit": true,
+    "globalCompleteness": "unknown"
+  }
+}

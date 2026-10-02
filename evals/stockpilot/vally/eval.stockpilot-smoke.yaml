@@ -29,8 +29,9 @@ defaults:
   model: gpt-5.5
   executor: copilot-sdk   # Vally's bundled executor -> @github/copilot 1.0.85 / copilot-sdk 1.0.14, NOT this environment's native copilot 1.0.90 — see ../VALLY-PIN.md
 
-# No inherited host skills or MCP servers: the skills list below is the
-# ONLY thing this eval can see, and mcpServers is explicitly empty.
+# No inherited host skills or MCP servers: the skills list below and the one
+# owned local server are the complete declared environment. The executor also
+# disables its hosted GitHub MCP unless explicitly named.
 agent_environment:
   skills:
     - ../fixtures/skills/forecasting
@@ -38,14 +39,23 @@ agent_environment:
     - ../fixtures/skills/reorder-policy
     - ../fixtures/skills/supplier-selection
     - ../fixtures/skills/weekly-report
-  mcpServers: {}
+  mcpServers:
+    stockpilot-readonly:
+      type: stdio
+      command: node
+      args:
+        - evals/stockpilot/fixtures/mcp/stockpilot-readonly.js
+      timeout: 15s
   files:
     - src: ../fixtures
       dest: evals/stockpilot/fixtures
 
 stimuli:
   - name: R1-stock-lookup
-    prompt: "What's the current stock level for SKU-0042 at WH-EAST?"
+    prompt: >
+      Call the stockpilot-readonly stock_snapshot tool once to answer: What's
+      the current stock level for SKU-0042 at WH-EAST? Do not call the planted
+      unavailable_snapshot tool for this ordinary lookup.
     constraints:
       max_turns: 8          # bounded turn limit
       max_tool_calls: 10    # bounded tool-call limit

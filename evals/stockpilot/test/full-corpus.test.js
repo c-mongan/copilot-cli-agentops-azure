@@ -9,7 +9,11 @@ test('full corpus contains each authoritative task once and isolates external in
  const spec = makeSpec();
  assert.equal(spec.stimuli.length, 12);
  assert.equal(new Set(spec.stimuli.map(row => row.name)).size, 12);
- assert.deepEqual(spec.agent_environment.mcpServers, {});
+ assert.deepEqual(Object.keys(spec.agent_environment.mcpServers), ['stockpilot-readonly']);
+ assert.deepEqual(spec.agent_environment.mcpServers['stockpilot-readonly'], {
+  type: 'stdio', command: 'node',
+  args: ['evals/stockpilot/fixtures/mcp/stockpilot-readonly.js'], timeout: '15s'
+ });
  assert.equal(spec.defaults.runs, 1);
 });
 test('full corpus grades actual sink writes and fails fabricated or malformed actions', () => {

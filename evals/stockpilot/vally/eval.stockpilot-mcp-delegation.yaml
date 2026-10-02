@@ -1,0 +1,66 @@
+# Bounded synthetic MCP + delegation stimulus. This spec is configuration only
+# until an explicitly authorized live Vally run executes it.
+name: stockpilot-mcp-delegation
+description: >
+  Exercise one successful and one deliberately failed call to the owned
+  read-only StockPilot MCP, followed by one named read-only specialist.
+type: capability
+
+scoring:
+  weights:
+    output-matches: 1
+  threshold: 1
+
+defaults:
+  runs: 1
+  timeout: 3m
+  model: gpt-5.4-mini
+  executor: copilot-sdk
+
+agent_environment:
+  skills: []
+  mcpServers:
+    stockpilot-readonly:
+      type: stdio
+      command: node
+      args:
+        - evals/stockpilot/fixtures/mcp/stockpilot-readonly.js
+      timeout: 15s
+  files:
+    - src: ../fixtures
+      dest: evals/stockpilot/fixtures
+    - src: ../fixtures/agents/stock-risk-auditor.agent.md
+      dest: .github/agents/stock-risk-auditor.agent.md
+
+stimuli:
+  - name: MCP1-read-fail-delegate
+    prompt: >
+      Work only with the staged synthetic StockPilot fixture. First call the
+      stockpilot-readonly stock_snapshot MCP tool exactly once for SKU-0042 at
+      WH-EAST. Then call unavailable_snapshot exactly once; its failure is
+      deliberate, so do not retry it. After both calls finish, delegate exactly
+      once to stock-risk-auditor and ask it to check the successful snapshot
+      against the latest matching CSV row. If the named specialist is missing,
+      report that incompatibility rather than substituting another agent. Do not
+      edit files, use shell commands, load skills, or access the network. End with
+      MCP_DELEGATION_CHECK, the stock value/date, the deliberate failure, and the
+      specialist's verdict. Missing evidence stays unknown.
+    constraints:
+      max_turns: 1
+      max_tokens: 4000
+      max_duration: 90s
+    # Presentation checks only. They do not prove that MCP calls or delegation
+    # occurred; the captured ledger must also pass audit-mcp-delegation.js.
+    graders:
+      - type: output-matches
+        name: reports-check-marker
+        config:
+          pattern: 'MCP_DELEGATION_CHECK'
+      - type: output-matches
+        name: reports-snapshot-value
+        config:
+          pattern: '\b312\b'
+      - type: output-matches
+        name: reports-specialist-verdict
+        config:
+          pattern: 'AUDIT_(?:MATCH|MISMATCH)'

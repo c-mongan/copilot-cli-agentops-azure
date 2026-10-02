@@ -26,7 +26,13 @@ agent_environment:
     - ../fixtures/skills/reorder-policy
     - ../fixtures/skills/supplier-selection
     - ../fixtures/skills/weekly-report
-  mcpServers: {}
+  mcpServers:
+    stockpilot-readonly:
+      type: stdio
+      command: node
+      args:
+        - evals/stockpilot/fixtures/mcp/stockpilot-readonly.js
+      timeout: 15s
   files:
     - src: ../fixtures
       dest: evals/stockpilot/fixtures
