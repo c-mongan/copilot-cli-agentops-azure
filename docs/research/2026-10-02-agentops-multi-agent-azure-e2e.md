@@ -38,7 +38,7 @@ Desktop Runs search selected the three fresh runs. The CI evidence link reached 
 
 Mobile Runs was exercised at 390 × 844 and its document width remained 390 pixels. The canary was absent from the rendered body. The viewport override was reset. Browser errors were the previously observed AdBlock `FILE_ERROR_NO_SPACE` errors, including injected copies attributed to local URLs; this turn does not assert a completely clean browser console.
 
-Screenshots and the [local gallery](</Volumes/SanDisk Archive/Agent-Workspace/artifacts/agentops-e2e-20261002/screenshots.html>) are preserved under `/Volumes/SanDisk Archive/Agent-Workspace/artifacts/agentops-e2e-20261002/`. The gallery contains Azure attribution/results/workspace/credit and local Runs/replay/Architecture/Compare/mobile captures. Screenshots are real browser captures, not mockups.
+Screenshots and the local gallery (`/Volumes/SanDisk Archive/Agent-Workspace/artifacts/agentops-e2e-20261002/screenshots.html`) are preserved under `/Volumes/SanDisk Archive/Agent-Workspace/artifacts/agentops-e2e-20261002/`. The gallery contains Azure attribution/results/workspace/credit and local Runs/replay/Architecture/Compare/mobile captures. Screenshots are real browser captures, not mockups.
 
 ## Gaps exposed
 
