@@ -197,15 +197,28 @@ function defaultReceiptFiles() {
 }
 
 function readSessionOtelSpans(sessionId, files = defaultReceiptFiles(), options = {}) {
+  const spans = [], seen = new Set();
+  let invalid = 0, unsupported = 0;
+  for (const file of files) {
+    if (fs.statSync(file).size > MAX_RECEIPT_BYTES) throw new Error(`native OTel receipt exceeds ${MAX_RECEIPT_BYTES} bytes: ${file}`);
+    const parsed = readOtelSpansFromText(fs.readFileSync(file, 'utf8'), { ...options, sessionId, sourceFile: path.basename(file) });
+    invalid += parsed.invalid; unsupported += parsed.unsupported;
+    for (const span of parsed.spans) {
+      const key = `${span.traceId}:${span.spanId}`;
+      if (!seen.has(key)) { seen.add(key); spans.push(span); }
+    }
+  }
+  return { spans, files, invalid, unsupported };
+}
+
+function readOtelSpansFromText(text, options = {}) {
+  if (typeof text !== 'string' || Buffer.byteLength(text, 'utf8') > MAX_RECEIPT_BYTES) throw new Error('native OTel text exceeds its bounded receipt limit');
+  const sessionId = options.sessionId;
   const spans = [];
   const seen = new Set();
   let invalid = 0;
   let unsupported = 0;
-  for (const file of files) {
-    if (fs.statSync(file).size > MAX_RECEIPT_BYTES) {
-      throw new Error(`native OTel receipt exceeds ${MAX_RECEIPT_BYTES} bytes: ${file}`);
-    }
-    for (const line of fs.readFileSync(file, 'utf8').split(/\r?\n/)) {
+  for (const line of text.split(/\r?\n/)) {
       if (!line.trim()) continue;
       let request;
       try {
@@ -228,7 +241,7 @@ function readSessionOtelSpans(sessionId, files = defaultReceiptFiles(), options 
         const stepName = String(attributeValue(attributes, 'agentops.step.name') || '');
         const ownedScript = span.name === 'agentops.script' || span.name === 'agentops.script.step'
           || Boolean(scriptName || stepName);
-        const exactSession = !ownedScript && conversationId === sessionId;
+        const exactSession = !ownedScript && (sessionId === undefined ? Boolean(conversationId) : conversationId === sessionId);
         const runLinkedScript = Boolean(ownedScript && options.runId && runId === options.runId);
         if (!exactSession && !runLinkedScript) continue;
         const startNanoseconds = timestampNanoseconds(span, 'start');
@@ -304,12 +317,11 @@ function readSessionOtelSpans(sessionId, files = defaultReceiptFiles(), options 
           failed: Number(span.status?.code) === 2 || Boolean(attributeValue(attributes, 'error.type')),
           outcome: attributeValue(attributes, 'agentops.outcome') === 'unknown' ? 'unknown' : '',
           events,
-          sourceFile: path.basename(file)
+          sourceFile: options.sourceFile || ''
         });
       }
-    }
   }
-  return { spans, files, invalid, unsupported };
+  return { spans, invalid, unsupported };
 }
 
-module.exports = { decodeOtlpProtobuf, defaultReceiptFiles, readSessionOtelSpans };
+module.exports = { decodeOtlpProtobuf, defaultReceiptFiles, readSessionOtelSpans, readOtelSpansFromText };

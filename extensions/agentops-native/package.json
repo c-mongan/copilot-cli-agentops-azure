@@ -1,0 +1,112 @@
+{
+  "name": "agentops-native",
+  "displayName": "AgentOps Native Capture",
+  "description": "Local strict native OpenTelemetry capture for Copilot in VS Code and new integrated terminals.",
+  "version": "0.1.0",
+  "publisher": "agentops-local",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.110.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./src/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false
+    },
+    "virtualWorkspaces": {
+      "supported": false
+    }
+  },
+  "extensionKind": [
+    "ui"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "agentopsNative.connect",
+        "title": "AgentOps: Connect native capture"
+      },
+      {
+        "command": "agentopsNative.disconnect",
+        "title": "AgentOps: Disconnect native capture"
+      },
+      {
+        "command": "agentopsNative.status",
+        "title": "AgentOps: Capture status"
+      },
+      {
+        "command": "agentopsNative.openReport",
+        "title": "AgentOps: Open local report"
+      },
+      {
+        "command": "agentopsNative.startCopilotTerminal",
+        "title": "AgentOps: Start Copilot terminal"
+      },
+      {
+        "command": "agentopsNative.traceScript",
+        "title": "AgentOps: Trace selected project script"
+      },
+      {
+        "command": "agentopsNative.enableAzure",
+        "title": "AgentOps: Enable Azure publishing"
+      },
+      {
+        "command": "agentopsNative.publishAzure",
+        "title": "AgentOps: Publish native metadata to Azure"
+      },
+      {
+        "command": "agentopsNative.disableAzure",
+        "title": "AgentOps: Disable Azure publishing"
+      }
+    ],
+    "configuration": {
+      "title": "AgentOps Native Capture",
+      "properties": {
+        "agentopsNative.azureDestination": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "default": null,
+          "scope": "application",
+          "description": "Operator-approved public Azure destination. User settings only. Use tenantId, subscriptionId, approvedSubscriptionIds, endpoint, dcrImmutableId and maxPublishBytesPerDay (1\u201316777216). Do not put credentials here. Publishing requires separate approval and sign-in.",
+          "additionalProperties": false,
+          "properties": {
+            "tenantId": {
+              "type": "string"
+            },
+            "subscriptionId": {
+              "type": "string"
+            },
+            "approvedSubscriptionIds": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "endpoint": {
+              "type": "string"
+            },
+            "dcrImmutableId": {
+              "type": "string"
+            },
+            "maxPublishBytesPerDay": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 16777216
+            }
+          }
+        }
+      }
+    }
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  }
+}

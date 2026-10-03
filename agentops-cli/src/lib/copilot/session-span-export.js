@@ -148,6 +148,7 @@ function spanRowsFromOtelSpans(spans, sessionId, runId) {
       // Legacy/display-only: response model falling back to the requested model. Do not
       // use this to assert actual identity; ModelRequested/ModelActual below do that.
       Model: span.model || '',
+      // Native producer request identity, never overwritten by launcher intent.
       ModelRequested: span.modelRequested || '',
       ModelActual: span.modelActual || '',
       Provider: span.provider || '',

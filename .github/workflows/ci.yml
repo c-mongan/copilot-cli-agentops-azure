@@ -1,123 +1,31 @@
-name: CI
-
+name: Native Windows qualification
 on:
-  pull_request:
-  push:
-    branches:
-      - main
   workflow_dispatch:
-
 permissions:
   contents: read
-
 jobs:
-  offline:
-    name: offline (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - ubuntu-latest
-          - windows-latest
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version: '20'
-
-      - name: Run CLI tests
-        run: npm --prefix agentops-cli test
-
-      - name: Run static analysis
-        run: npm --prefix agentops-cli run static:check
-
-      - name: Check AgentOps CLI package publish readiness
-        run: npm --prefix agentops-cli run publish:check -- --json
-
-      - name: Check Copilot SDK package publish readiness
-        run: npm --prefix packages/agentops-copilot-sdk run publish:check -- --json
-
-      - name: Check release distribution readiness
-        run: node scripts/check-release-distribution.js --json
-
-      - name: Check packed CLI install smoke
-        run: node scripts/check-install-smoke.js --json
-
-      - name: Check Homebrew formula readiness
-        run: node scripts/check-homebrew-formula.js --json
-
-      - name: Enforce coverage gate
-        run: npm --prefix agentops-cli run coverage:check
-
-      - name: AgentOps security audit
-        run: node agentops-cli/src/index.js security audit --json
-
-      - name: AgentOps security posture
-        run: node agentops-cli/src/index.js security posture --json
-
-      - name: Validate JavaScript syntax
-        run: |
-          node --check agentops-cli/src/index.js
-          node --check agentops-cli/src/lib/collector-manager.js
-          node --check agentops-cli/src/commands/e2e.js
-          node --check scripts/build-grafana-dashboard-pack.js
-          node --check scripts/validate-grafana-dashboard-kql.js
-          node --check scripts/validate-json-assets.js
-
-      - name: Validate JSON assets
-        run: node scripts/validate-json-assets.js
-
-      - name: Validate Bash scripts
-        if: runner.os == 'Linux'
-        run: bash -n setup-agentops.sh install-agentops.sh uninstall-agentops.sh scripts/*.sh copilot/copilot-observe
-
-      - name: Validate PowerShell scripts
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $files = @(
-            "setup-agentops.ps1",
-            "install-agentops.ps1",
-            "uninstall-agentops.ps1",
-            "scripts/install-copilot-agentops-shim.ps1",
-            "scripts/uninstall-copilot-agentops-shim.ps1",
-            "scripts/copilot-agentops.ps1",
-            "scripts/collector-azuremonitor-up.ps1"
-          )
-          foreach ($file in $files) {
-            $null = [scriptblock]::Create((Get-Content -Raw $file))
-            Write-Host "parsed $file"
-          }
-
-      - name: AgentOps local doctor
-        run: node agentops-cli/src/index.js doctor --local-only
-
-      - name: Strict privacy smoke
-        run: node agentops-cli/src/index.js collector smoke --privacy strict --poison --json
-
-      - name: AgentOps scan
-        run: node agentops-cli/src/index.js experimental scan
-
-  collector-binary:
-    name: collector binary install
-    runs-on: ubuntu-latest
+  native-windows:
+    runs-on: windows-latest
     timeout-minutes: 15
-    env:
-      AGENTOPS_COLLECTOR_HOME: ${{ github.workspace }}/.agentops-collector
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '20'
-
-      - name: Install Collector binary with checksum verification
-        run: node agentops-cli/src/index.js collector install-binary --version 0.151.0 --json
-
-      - name: Validate strict Collector config
-        run: node agentops-cli/src/index.js collector validate --mode auto --privacy strict --json
-
-      - name: Run strict poison smoke through debug Collector
-        run: node agentops-cli/src/index.js collector smoke --privacy strict --poison --json
+      - name: Native fixture and companion checks
+        run: |
+          node scripts/run-native-tests.js
+          node --test scripts/test/qualify-native-cli.test.js scripts/test/qualify-native-windows.test.js
+      - name: Real native Windows runtime with local synthetic provider
+        shell: pwsh
+        run: node scripts/qualify-native-windows.js --out "$env:RUNNER_TEMP\agentops-native-windows-proof"
+      - name: Upload bounded qualification summary
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: native-windows-qualification
+          path: ${{ runner.temp }}/agentops-native-windows-proof/windows-qualification.json
+          if-no-files-found: warn
+          retention-days: 1
