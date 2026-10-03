@@ -33,7 +33,7 @@ function commandLine(launcher, storage, port) {
   return `""${launcher}" --no-browser --port ${port} --storage "${storage}""`;
 }
 function sourceClosure(sourceRoot = path.resolve(__dirname, '..')) {
-  const files = new Set(['LICENSE', 'companion/package.json', 'extensions/agentops-native/package.json', 'collector/otelcol.local.strict.yaml', 'collector/release-cadence.json', 'scripts/package-native-extension.js', 'scripts/package-native-companion.js', 'scripts/qualify-native-cli.js', 'scripts/qualify-native-windows.js', 'scripts/run-native-tests.js', 'scripts/test/package-native-companion.test.js', 'scripts/test/qualify-native-cli.test.js', 'scripts/test/qualify-native-windows.test.js', 'agentops-cli/test/delivery-limits.test.js']);
+  const files = new Set(['LICENSE', 'companion/package.json', 'extensions/agentops-native/package.json', 'collector/otelcol.local.strict.yaml', 'collector/release-cadence.json', 'scripts/package-native-extension.js', 'scripts/package-native-companion.js', 'scripts/qualify-native-cli.js', 'scripts/qualify-native-windows.js', 'scripts/run-native-tests.js', 'scripts/test/package-native-companion.test.js', 'scripts/test/qualify-native-cli.test.js', 'scripts/test/qualify-native-windows.test.js', 'agentops-cli/test/delivery-limits.test.js', 'agentops-cli/test/scoped-collector.test.js']);
   for (const directory of ['companion/src', 'companion/test', 'extensions/agentops-native/src', 'extensions/agentops-native/test']) {
     for (const name of fs.readdirSync(path.join(sourceRoot, directory))) if (name.endsWith('.js')) files.add(path.posix.join(directory, name));
   }
@@ -96,7 +96,7 @@ async function qualifyWindows({ outDir, sourceRoot = path.resolve(__dirname, '..
     const receiptRoot = path.join(storage, 'receipts');
     const run = fs.readdirSync(receiptRoot).find(name => name.startsWith('run-'));
     if (!run) throw new Error('Owned receipt directory missing.');
-    stage = 'native-offline-runtime';
+    stage = 'native-offline-runtime'; substage = 'native-qualification';
     const native = await qualify({ platform: 'win32', copilot, collectorEndpoint: 'http://127.0.0.1:4318', receiptPath: path.join(receiptRoot, run, 'native-receipt.jsonl') });
     summary.native = nativeProof(native);
     stage = 'quit-cleanup';
@@ -110,7 +110,8 @@ async function qualifyWindows({ outDir, sourceRoot = path.resolve(__dirname, '..
     summary.stage = summary.passed ? 'complete' : 'native-contract-unqualified';
     writeSummary(reportFile, summary);
     return summary;
-  } catch {
+  } catch (error) {
+    if (stage === 'native-offline-runtime') summary.nativeFailureClass = nativeFailureClass(error);
     summary.stage = stage; summary.substage = substage; summary.error = 'Windows qualification failed at this stage. No cloud or paid model was used.';
     writeSummary(reportFile, summary);
     return summary;
@@ -121,6 +122,11 @@ async function qualifyWindows({ outDir, sourceRoot = path.resolve(__dirname, '..
       if (app.exitCode === null && Number.isSafeInteger(app.pid)) spawnSync(path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'taskkill.exe'), ['/PID', String(app.pid), '/T', '/F'], { stdio: 'ignore', timeout: 10000 });
     }
   }
+}
+function nativeFailureClass(error) {
+  if (error?.message === 'External endpoint and receipt must belong to the same strict Collector scope.') return 'external_scope_config_rejected';
+  if (['ENOENT', 'EACCES', 'EPERM'].includes(error?.code)) return 'native_file_access_failed';
+  return 'native_qualification_exception';
 }
 function launcherOutputClass(text) {
   if (/Cannot find module/.test(text)) return 'module_missing';
@@ -135,4 +141,4 @@ if (require.main === module) {
   const index = process.argv.indexOf('--out');
   qualifyWindows({ outDir: index > 0 ? path.resolve(process.argv[index + 1] || '') : undefined }).then(summary => { console.log(JSON.stringify(summary, null, 2)); process.exitCode = summary.passed ? 0 : 1; }).catch(() => { console.error('Windows qualification requires an explicit disposable Windows output directory.'); process.exitCode = 1; });
 }
-module.exports = { PINS, verifyDigest, commandLine, launcherOutputClass, sourceClosure, nativeProof, qualifyWindows };
+module.exports = { PINS, verifyDigest, commandLine, launcherOutputClass, nativeFailureClass, sourceClosure, nativeProof, qualifyWindows };

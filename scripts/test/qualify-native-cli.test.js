@@ -30,6 +30,10 @@ test('external Collector requires a private scope pair and rejects remote export
   fs.writeFileSync(path.join(root, 'otelcol.local.strict.yaml'), '      http:\n        endpoint: 127.0.0.1:4318\ntransform/privacy_strict\nfile/receipt\n');
   try {
     assert.equal(externalCollector({ collectorEndpoint: 'http://127.0.0.1:4318', receiptPath }).external, true);
+    const configPath = path.join(root, 'otelcol.local.strict.yaml');
+    fs.writeFileSync(configPath, fs.readFileSync(configPath, 'utf8').replace(/\n/g, '\r\n'));
+    assert.equal(externalCollector({ collectorEndpoint: 'http://127.0.0.1:4318', receiptPath }).external, true);
+    assert.throws(() => externalCollector({ collectorEndpoint: 'http://127.0.0.1:4319', receiptPath }), /same strict Collector scope/);
     assert.throws(() => externalCollector({ collectorEndpoint: 'https://example.com:4318', receiptPath }), /loopback/);
     assert.throws(() => externalCollector({ collectorEndpoint: 'http://127.0.0.1:4318' }), /both/);
     assert.throws(() => externalCollector({ collectorEndpoint: 'http://127.0.0.1:4319', receiptPath }), /same strict Collector scope/);

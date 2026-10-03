@@ -18,7 +18,7 @@ jobs:
         run: |
           node scripts/run-native-tests.js
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          node --test scripts/test/qualify-native-cli.test.js scripts/test/qualify-native-windows.test.js agentops-cli/test/delivery-limits.test.js
+          node --test scripts/test/qualify-native-cli.test.js scripts/test/qualify-native-windows.test.js agentops-cli/test/delivery-limits.test.js agentops-cli/test/scoped-collector.test.js
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Real native Windows runtime with local synthetic provider
         shell: pwsh

@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const { PINS, verifyDigest, commandLine, launcherOutputClass, sourceClosure, nativeProof, qualifyWindows } = require('../qualify-native-windows');
+const { PINS, verifyDigest, commandLine, launcherOutputClass, nativeFailureClass, sourceClosure, nativeProof, qualifyWindows } = require('../qualify-native-windows');
 test('downloads have fixed official URLs and both accepted digests and rejected corruption', async () => {
   assert.match(PINS.copilotUrl, /^https:\/\/registry\.npmjs\.org\/@github\/copilot-win32-x64\//);
   assert.match(PINS.vscodeUrl, /^https:\/\/vscode\.download\.prss\.microsoft\.com\//);
@@ -37,4 +37,11 @@ test('launcher diagnostics return fixed classes and never raw output', () => {
  assert.equal(launcherOutputClass('Cannot find module C:\\private\\SECRET.js'), 'module_missing');
  assert.equal(launcherOutputClass('private command is not recognized as an internal or external command'), 'cmd_command_unrecognized');
  assert.equal(launcherOutputClass('SECRET_TOKEN=private'), 'other');
+});
+
+
+test('native exceptions expose only fixed validation classes', () => {
+ assert.equal(nativeFailureClass(new Error('External endpoint and receipt must belong to the same strict Collector scope.')), 'external_scope_config_rejected');
+ assert.equal(nativeFailureClass({code:'ENOENT',message:'private path token'}), 'native_file_access_failed');
+ assert.equal(nativeFailureClass(new Error('SECRET_TOKEN=private')), 'native_qualification_exception');
 });

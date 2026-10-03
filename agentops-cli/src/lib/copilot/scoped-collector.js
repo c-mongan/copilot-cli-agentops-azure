@@ -21,7 +21,7 @@ function freePort(requested = 0) {
 }
 
 function scopedConfig(source, ports) {
-  let config = source;
+  let config = source.replace(/\r\n/g, '\n');
   for (const [port, replacement] of Object.entries(ports)) {
     if (port === 'telemetry') continue;
     const needle = `127.0.0.1:${port}`;

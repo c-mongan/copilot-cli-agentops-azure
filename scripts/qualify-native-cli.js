@@ -39,7 +39,7 @@ function externalCollector(options) {
   const directory = path.dirname(receiptPath);
   const directoryStat = fs.lstatSync(directory);
   if (directoryStat.isSymbolicLink() || !directoryStat.isDirectory() || (process.platform !== 'win32' && (directoryStat.mode & 0o077) !== 0)) throw new Error('External receipt directory must be private.');
-  const config = fs.readFileSync(path.join(directory, 'otelcol.local.strict.yaml'), 'utf8');
+  const config = fs.readFileSync(path.join(directory, 'otelcol.local.strict.yaml'), 'utf8').replace(/\r\n/g, '\n');
   if (!config.includes(`      http:\n        endpoint: 127.0.0.1:${endpoint.port}\n`) || !config.includes('transform/privacy_strict') || !config.includes('file/receipt')) throw new Error('External endpoint and receipt must belong to the same strict Collector scope.');
   return { endpoint: endpoint.origin, receiptPath, external: true };
 }
