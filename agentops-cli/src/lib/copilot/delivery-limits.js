@@ -100,8 +100,13 @@ function reserveSharedPublishBytes(options, target, bytes) {
       const fd = fs.openSync(temporary, 'wx', 0o600);
       try { fs.writeFileSync(fd, JSON.stringify(state)); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
       fs.renameSync(temporary, file);
-      const dirFd = fs.openSync(directory, 'r');
-      try { fs.fsyncSync(dirFd); } finally { fs.closeSync(dirFd); }
+      // Node cannot open a directory for fsync on Windows. The budget file is
+      // still flushed before its atomic rename; Windows lacks the additional
+      // parent-directory flush used here for POSIX power-loss durability.
+      if (process.platform !== 'win32') {
+        const dirFd = fs.openSync(directory, 'r');
+        try { fs.fsyncSync(dirFd); } finally { fs.closeSync(dirFd); }
+      }
     });
   } finally { releaseSessionOutboxClaim(claim); }
 }

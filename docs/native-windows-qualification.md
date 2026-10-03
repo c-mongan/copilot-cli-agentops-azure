@@ -39,3 +39,9 @@ A headless runner does **not** prove rendered desktop UI, Windows Terminal inter
 Run `sourceClosure()` from `scripts/qualify-native-windows.js` to obtain the exact source paths. It contains the companion, extension fixture surface, package/qualification scripts, strict Collector assets, and the static local library dependency closure. It excludes research reports, infra, generated graphs, local receipts, and user data. Copy the workflow template separately to `.github/workflows/ci.yml` in the isolated branch.
 
 The parent owns review, snapshot copying, commits, any public push, dispatch, and readback. This local preparation did not perform those actions. Local checks pass on Mac; the first actual Windows run is the next gate.
+
+## First Windows run and repair
+
+Run `37148214250` verified the pinned downloads and started the real VS Code Node runtime (`v24.21.0`). The portable control service did not become ready. It also exposed a separator-specific recorder test and Windows directory-fsync failures. The first multi-command PowerShell test step masked its initial nonzero exit; the repaired workflow checks `$LASTEXITCODE` after every Node command. The strict test assertions remain.
+
+The launcher repair follows Windows `cmd /s /c` quoting rules: an outer quote pair protects the quoted launcher and storage arguments, and `windowsVerbatimArguments:true` prevents libuv from inserting incompatible escapes. This is a credible cause from the launch path; another actual Windows run must prove the result. The summary now has a fixed substage, a numeric launcher exit code, an allowlisted spawn error code, and a fixed output class. It never publishes raw launcher output. The directory-fsync regression is included in the qualification source closure and guarded focused test step.

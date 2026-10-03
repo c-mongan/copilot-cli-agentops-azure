@@ -20,7 +20,7 @@ test('strict Collector is scoped to extension storage', async () => {
   let options;
   await startRecorder('/fixture/storage', { ensureCollector: async () => '/fixture/binary', startScopedStrictCollector: async o => { options = o; return {}; } });
   assert.equal(options.agentopsHome, '/fixture/storage');
-  assert.equal(options.tempRoot, '/fixture/storage/receipts');
+  assert.equal(options.tempRoot, path.join('/fixture/storage', 'receipts'));
   assert.equal(options.findCollectorBinary().path, '/fixture/binary');
 });
 test('receipt report preserves unknown values and never renders content', t => {

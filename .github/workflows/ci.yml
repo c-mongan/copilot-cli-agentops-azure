@@ -17,10 +17,14 @@ jobs:
       - name: Native fixture and companion checks
         run: |
           node scripts/run-native-tests.js
-          node --test scripts/test/qualify-native-cli.test.js scripts/test/qualify-native-windows.test.js
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node --test scripts/test/qualify-native-cli.test.js scripts/test/qualify-native-windows.test.js agentops-cli/test/delivery-limits.test.js
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Real native Windows runtime with local synthetic provider
         shell: pwsh
-        run: node scripts/qualify-native-windows.js --out "$env:RUNNER_TEMP\agentops-native-windows-proof"
+        run: |
+          node scripts/qualify-native-windows.js --out "$env:RUNNER_TEMP\agentops-native-windows-proof"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Upload bounded qualification summary
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

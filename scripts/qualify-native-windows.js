@@ -30,10 +30,10 @@ async function verifyDigest(file, algorithm, expected, encoding = 'hex') {
 function commandLine(launcher, storage, port) {
   for (const file of [launcher, storage]) if (!path.win32.isAbsolute(file) || /[\r\n\0"%!^&|<>]/.test(file)) throw new Error('Qualification path contains unsupported command characters.');
   if (!Number.isSafeInteger(port) || port < 1024 || port > 65535) throw new Error('Qualification control port is invalid.');
-  return `"${launcher}" --no-browser --port ${port} --storage "${storage}"`;
+  return `""${launcher}" --no-browser --port ${port} --storage "${storage}""`;
 }
 function sourceClosure(sourceRoot = path.resolve(__dirname, '..')) {
-  const files = new Set(['LICENSE', 'companion/package.json', 'extensions/agentops-native/package.json', 'collector/otelcol.local.strict.yaml', 'collector/release-cadence.json', 'scripts/package-native-extension.js', 'scripts/package-native-companion.js', 'scripts/qualify-native-cli.js', 'scripts/qualify-native-windows.js', 'scripts/run-native-tests.js', 'scripts/test/package-native-companion.test.js', 'scripts/test/qualify-native-cli.test.js', 'scripts/test/qualify-native-windows.test.js']);
+  const files = new Set(['LICENSE', 'companion/package.json', 'extensions/agentops-native/package.json', 'collector/otelcol.local.strict.yaml', 'collector/release-cadence.json', 'scripts/package-native-extension.js', 'scripts/package-native-companion.js', 'scripts/qualify-native-cli.js', 'scripts/qualify-native-windows.js', 'scripts/run-native-tests.js', 'scripts/test/package-native-companion.test.js', 'scripts/test/qualify-native-cli.test.js', 'scripts/test/qualify-native-windows.test.js', 'agentops-cli/test/delivery-limits.test.js']);
   for (const directory of ['companion/src', 'companion/test', 'extensions/agentops-native/src', 'extensions/agentops-native/test']) {
     for (const name of fs.readdirSync(path.join(sourceRoot, directory))) if (name.endsWith('.js')) files.add(path.posix.join(directory, name));
   }
@@ -55,7 +55,7 @@ async function qualifyWindows({ outDir, sourceRoot = path.resolve(__dirname, '..
   if (process.platform !== 'win32' || process.arch !== 'x64') throw new Error('This qualification requires a disposable Windows x64 host.');
   if (!outDir || !path.isAbsolute(outDir)) throw new Error('A new absolute output directory is required.');
   fs.mkdirSync(outDir); // Refuse to reuse another run or normal profile.
-  let stage = 'downloads', app, origin, token, lease, childExited;
+  let stage = 'downloads', substage = 'input-downloads', app, origin, token, lease, childExited;
   const reportFile = path.join(outDir, 'windows-qualification.json');
   const summary = { passed: false, platform: process.platform, arch: process.arch, runnerNode: process.version, pins: PINS, sourceClosure: sourceClosure(sourceRoot), desktopBrowserQualified: false, azureQualified: false, normalUserProfileQualified: false };
   try {
@@ -77,12 +77,17 @@ async function qualifyWindows({ outDir, sourceRoot = path.resolve(__dirname, '..
     const runtimeVersion = spawnSync(code, ['--version'], { env: { ...cleanEnvironment(process.env), ELECTRON_RUN_AS_NODE: '1' }, encoding: 'utf8', timeout: 10000 });
     if (runtimeVersion.error || runtimeVersion.status !== 0) throw new Error('Packaged VS Code Node runtime could not start.');
     summary.companionNodeRuntime = runtimeVersion.stdout.match(/v\d+\.\d+\.\d+/)?.[0] || 'unknown';
-    stage = 'portable-launcher';
+    stage = 'portable-launcher'; substage = 'package-build';
     const packaged = prepareNativeCompanionPackage({ sourceRoot, outDir: path.join(outDir, 'portable'), platform: 'win32' });
-    const controlPort = await freePort();
+    substage = 'control-port'; const controlPort = await freePort();
     origin = `http://127.0.0.1:${controlPort}`;
-    app = spawn(path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'cmd.exe'), ['/d', '/s', '/c', commandLine(path.join(packaged.appPath, 'Start AgentOps.cmd'), storage, controlPort)], { env: { ...cleanEnvironment(process.env), LOCALAPPDATA: profile }, stdio: 'ignore' });
-    childExited = new Promise(resolve => { app.once('error', () => resolve({ code: null })); app.once('exit', (code, signal) => resolve({ code, signal })); });
+    substage = 'cmd-spawn'; summary.launcherDiagnostic = { spawnError: null, exitCode: null, outputClass: 'none' };
+    app = spawn(path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'cmd.exe'), ['/d', '/s', '/c', commandLine(path.join(packaged.appPath, 'Start AgentOps.cmd'), storage, controlPort)], { env: { ...cleanEnvironment(process.env), LOCALAPPDATA: profile }, windowsVerbatimArguments: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    let outputBytes = 0;
+    const classifyOutput = chunk => { if (outputBytes >= 8192) return; const bounded = chunk.subarray(0, 8192 - outputBytes); outputBytes += bounded.length; const text = bounded.toString('utf8'); const known = launcherOutputClass(text); if (known !== 'other') summary.launcherDiagnostic.outputClass = known; };
+    app.stdout.on('data', classifyOutput); app.stderr.on('data', classifyOutput);
+    childExited = new Promise(resolve => { app.once('error', error => { summary.launcherDiagnostic.spawnError = ['ENOENT','EACCES','EPERM','EINVAL'].includes(error.code) ? error.code : 'OTHER'; resolve({ code: null }); }); app.once('exit', (code, signal) => { summary.launcherDiagnostic.exitCode = Number.isInteger(code) ? code : null; resolve({ code, signal }); }); });
+    substage = 'control-ready';
     await waitFor(async () => { const response = await fetch(origin, { signal: AbortSignal.timeout(1000) }); if (!response.ok) return; const html = await response.text(); return token = html.match(/const token="([a-f0-9]+)"/)?.[1]; });
     const post = action => fetch(origin + '/' + action, { method: 'POST', headers: { Origin: origin, 'X-AgentOps-Token': token, 'Content-Type': 'application/json' }, body: '{}', signal: AbortSignal.timeout(60000) });
     stage = 'collector-connect';
@@ -106,7 +111,7 @@ async function qualifyWindows({ outDir, sourceRoot = path.resolve(__dirname, '..
     writeSummary(reportFile, summary);
     return summary;
   } catch {
-    summary.stage = stage; summary.error = 'Windows qualification failed at this stage. No cloud or paid model was used.';
+    summary.stage = stage; summary.substage = substage; summary.error = 'Windows qualification failed at this stage. No cloud or paid model was used.';
     writeSummary(reportFile, summary);
     return summary;
   } finally {
@@ -117,10 +122,17 @@ async function qualifyWindows({ outDir, sourceRoot = path.resolve(__dirname, '..
     }
   }
 }
+function launcherOutputClass(text) {
+  if (/Cannot find module/.test(text)) return 'module_missing';
+  if (/not recognized as an internal or external command/i.test(text)) return 'cmd_command_unrecognized';
+  if (/AgentOps companion could not start/.test(text)) return 'companion_start_failed';
+  if (/AgentOps needs an installed VS Code runtime/.test(text)) return 'runtime_not_found';
+  return 'other';
+}
 function writeSummary(file, summary) { const text = JSON.stringify(summary, null, 2); if (Buffer.byteLength(text) > 1024 * 1024) throw new Error('Qualification summary exceeds 1 MiB.'); fs.writeFileSync(file, text); }
 async function digestFile(file) { const hash = crypto.createHash('sha256'); for await (const chunk of fs.createReadStream(file)) hash.update(chunk); return hash.digest('hex'); }
 if (require.main === module) {
   const index = process.argv.indexOf('--out');
   qualifyWindows({ outDir: index > 0 ? path.resolve(process.argv[index + 1] || '') : undefined }).then(summary => { console.log(JSON.stringify(summary, null, 2)); process.exitCode = summary.passed ? 0 : 1; }).catch(() => { console.error('Windows qualification requires an explicit disposable Windows output directory.'); process.exitCode = 1; });
 }
-module.exports = { PINS, verifyDigest, commandLine, sourceClosure, nativeProof, qualifyWindows };
+module.exports = { PINS, verifyDigest, commandLine, launcherOutputClass, sourceClosure, nativeProof, qualifyWindows };
