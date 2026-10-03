@@ -66,11 +66,12 @@ test('pre-aborted collector setup never resolves binary or creates files', async
 
 test('setup cancellation terminates harmless child and removes run artifacts', async t => {
   const controller = new AbortController();
-  let child;
+  let child, childExited;
   const { root, options } = fixture(t, {
     abortSignal: controller.signal,
     spawn: () => {
       child = spawn(process.execPath, ['-e', 'process.send("ready");setInterval(()=>{},100)'], { stdio: ['ignore', 'ignore', 'ignore', 'ipc'] });
+      childExited = new Promise(resolve => child.once('exit', resolve));
       t.after(() => child.kill('SIGKILL'));
       child.once('message', () => controller.abort());
       return child;
@@ -78,6 +79,11 @@ test('setup cancellation terminates harmless child and removes run artifacts', a
     waitForHealthUrl: () => new Promise(() => {})
   });
   await assert.rejects(startScopedStrictCollector(options), { name: 'AbortError' });
+  assert.throws(() => process.kill(child.pid, 0), { code: 'ESRCH' });
+  let timer;
+  await Promise.race([childExited, new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error('Cancelled child exit notification did not arrive.')), 2000);
+  })]).finally(() => clearTimeout(timer));
   assert.ok(child.exitCode !== null || child.signalCode !== null);
   assert.deepEqual(fs.readdirSync(root), ['template.yaml']);
 });

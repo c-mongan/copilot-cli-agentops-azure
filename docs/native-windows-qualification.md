@@ -54,3 +54,10 @@ Run `37149018604` at `a25305634d6b615cbc3a85ca3b1ca6b272b154dc` passed the fixtu
 A local reproduction identified Windows checkout line endings as the cause. The strict Collector template had CRLF line endings. The scoped config function did not insert its loopback telemetry listener, and the external scope validator rejected its exact LF endpoint comparison. Both functions now normalize CRLF to LF before their existing template checks. The receiver, privacy processor, receipt exporter, and wrong-port denial checks remain. A regression uses the real strict template to check every scoped listener and the telemetry listener.
 
 The harness now reports the `native-qualification` substage and a fixed exception class. It does not publish exception text, private paths, credentials, or raw process output. The guarded focused workflow step also runs the scoped Collector lifecycle and CRLF tests. The repaired source needs a new actual Windows run; local tests do not prove that gate.
+
+
+## Third Windows run and cancellation observation
+
+Run `37149602566` at `3261bce33f49e91a5aafc274d2e615bbaa7e7730` passed 64 native fixture tests; one Mac-only test was correctly skipped. The focused suite passed 32 tests, skipped one host-specific check, and failed its setup-cancellation observation. The CRLF regression passed. The workflow stopped at the failed fixture step and did not run the native runtime harness.
+
+The cancellation test read Node child exit metadata immediately after the shutdown function observed that the OS process was gone. Windows can deliver the child exit event later. The test now registers the event before cancellation, checks that the PID is absent with `ESRCH`, and waits at most two seconds for the event before checking its exit metadata. The physical termination and artifact cleanup assertions remain. Product source did not change for this repair.
