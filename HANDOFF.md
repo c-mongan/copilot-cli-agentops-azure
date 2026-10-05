@@ -340,5 +340,9 @@ Tests: native 87/87, supporting 34/34. OCR delegate review was clean. Still unpr
   - The SSH firewall docs scope rules to the client CIDR and include rollback.
   - There is no bare `setenforce 0`.
   - CI now runs the real-Collector safe-metrics qualification test. CI passes on f130598.
+- Fourth Copilot round, on f130598, raised 4 findings. Commit 2ed6ed5 fixed and resolved all of them:
+  - The azcli, bicep and terraform cleanup recipes no longer use `--yes` or `-auto-approve`. They require explicit approval, a target check, a recovery path, and a preview (`az resource list` or `terraform plan -destroy`).
+  - `scripts/static-check.js` follows a file symlink only when its real target is inside the scanned root. A regression test covers this.
+  - CI passes on 2ed6ed5.
 - Privacy: personal paths and subscription/tenant IDs are replaced with placeholders in the tree. They remain in the pushed history of a009b68 and b789153. **Squash-merge** the PR, or rewrite history only with the owner's approval.
 - Merging is not blocked. The owner decides when to merge.
