@@ -334,5 +334,11 @@ Tests: native 87/87, supporting 34/34. OCR delegate review was clean. Still unpr
   - The CI deploy examples are now manual only, approval-gated, and run preview/what-if first. None of them use `azd up`.
   - The `.refs/` gitleaks allowlist is narrowed to `^\.refs/`, and `.refs/` is gitignored.
   - Recorder-worker fatal handlers exit 1. A regression test covers this.
+- Third Copilot round, on a9d4512, raised 7 findings. Two were already fixed. Commit f130598 fixed and resolved the other five:
+  - The azure-deploy SKILL.md has a repository override that bans `azd up`/`azd provision`.
+  - The migration scripts fail closed when the azd env read fails.
+  - The SSH firewall docs scope rules to the client CIDR and include rollback.
+  - There is no bare `setenforce 0`.
+  - CI now runs the real-Collector safe-metrics qualification test. CI passes on f130598.
 - Privacy: personal paths and subscription/tenant IDs are replaced with placeholders in the tree. They remain in the pushed history of a009b68 and b789153. **Squash-merge** the PR, or rewrite history only with the owner's approval.
 - Merging is not blocked. The owner decides when to merge.
