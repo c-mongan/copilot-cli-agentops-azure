@@ -28,7 +28,11 @@ set -e
 
 APP_PROJECT_PATH="src/api"  # Adjust to your project directory
 
-# Safely load azd environment variables without eval
+# Safely load azd environment variables without eval; fail before migrating if the read fails
+if ! AZD_ENV_VALUES=$(azd env get-values); then
+  echo "Failed to read azd environment values; refusing to run migrations against an unknown target." >&2
+  exit 1
+fi
 while IFS= read -r line; do
   [ -n "$line" ] || continue
   key=${line%%=*}
@@ -38,7 +42,7 @@ while IFS= read -r line; do
     \'*\') value=${value#\'}; value=${value%\'} ;;
   esac
   export "$key=$value"
-done < <(azd env get-values)
+done <<< "$AZD_ENV_VALUES"
 
 # Install dotnet-ef only when it is not already installed (no-op when already present)
 if ! dotnet tool list --global 2>/dev/null | grep -q '^\s*dotnet-ef\s'; then

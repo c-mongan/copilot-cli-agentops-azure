@@ -28,7 +28,11 @@ $ErrorActionPreference = 'Stop'
 $AppProjectPath = "src/api"  # Adjust to your project directory
 
 # Load azd environment variables
-azd env get-values | ForEach-Object {
+$azdEnvValues = azd env get-values
+if ($LASTEXITCODE -ne 0) {
+    throw "Failed to read azd environment values; refusing to run migrations against an unknown target."
+}
+$azdEnvValues | ForEach-Object {
     $name, $value = $_.Split('=', 2)
     Set-Item "env:$name" $value.Trim('"')
 }

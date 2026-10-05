@@ -27,8 +27,10 @@ az vm user update --name <vm> -g <rg> -u <user> --ssh-key-value "<ssh-public-key
 az vm user update --name <vm> -g <rg> -u <user> -p '<new-password>'
 az vm run-command invoke --name <vm> -g <rg> --command-id RunShellScript \
   --scripts "systemctl status sshd; getenforce"
-az vm run-command invoke --name <vm> -g <rg> --command-id RunShellScript \
-  --scripts "setenforce 0"
+# SELinux: diagnose only. Do not disable enforcement as a quick fix. If the owner explicitly
+# approves a temporary test, restore enforcement in the same command:
+#   --scripts "setenforce 0; <single connection test>; setenforce 1; getenforce"
+# Prefer fixing contexts instead: restorecon -Rv /home/<user>/.ssh  (see [SELinux])
 ```
 
 [SSH overview]: https://learn.microsoft.com/en-us/troubleshoot/azure/virtual-machines/linux/troubleshoot-ssh-connection

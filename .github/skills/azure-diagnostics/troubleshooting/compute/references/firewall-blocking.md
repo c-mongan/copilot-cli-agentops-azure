@@ -24,13 +24,18 @@ az vm user reset-remote-desktop --name <vm> -g <rg>
 az vm run-command invoke --name <vm> -g <rg> --command-id RunPowerShellScript \
   --scripts "netsh advfirewall firewall set rule group='Remote Desktop' new enable=yes"
 
-# Linux
+# Linux: inspect first, then allow SSH only from an approved client CIDR (<client-cidr>).
+# These rules are runtime-only (lost on reboot/reload). Persist only with explicit approval.
 az vm run-command invoke --name <vm> -g <rg> --command-id RunShellScript \
-  --scripts "iptables -L -n; iptables -I INPUT -p tcp --dport 22 -j ACCEPT"
+  --scripts "iptables -L -n; firewall-cmd --list-all 2>/dev/null; ufw status 2>/dev/null"
 az vm run-command invoke --name <vm> -g <rg> --command-id RunShellScript \
-  --scripts "firewall-cmd --add-service=ssh --permanent && firewall-cmd --reload"
+  --scripts "iptables -I INPUT -p tcp -s <client-cidr> --dport 22 -j ACCEPT"
 az vm run-command invoke --name <vm> -g <rg> --command-id RunShellScript \
-  --scripts "ufw status; ufw allow 22/tcp"
+  --scripts "firewall-cmd --add-rich-rule='rule family=ipv4 source address=<client-cidr> service name=ssh accept'"
+# Rollback: iptables -D INPUT -p tcp -s <client-cidr> --dport 22 -j ACCEPT
+#           firewall-cmd --remove-rich-rule='rule family=ipv4 source address=<client-cidr> service name=ssh accept'
+# ufw rules always persist; if approved: ufw allow from <client-cidr> to any port 22 proto tcp
+#           rollback: ufw delete allow from <client-cidr> to any port 22 proto tcp
 ```
 
 [Guest firewall]: https://learn.microsoft.com/en-us/troubleshoot/azure/virtual-machines/windows/guest-os-firewall-blocking-inbound-traffic

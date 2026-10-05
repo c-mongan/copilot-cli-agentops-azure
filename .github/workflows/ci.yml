@@ -124,3 +124,8 @@ jobs:
 
       - name: Run strict poison smoke through debug Collector
         run: node agentops-cli/src/index.js collector smoke --privacy strict --poison --json
+
+      - name: Qualify safe metrics through the real Collector
+        env:
+          AGENTOPS_COLLECTOR_BINARY: ${{ env.AGENTOPS_COLLECTOR_HOME }}/bin/otelcol-contrib
+        run: node --test scripts/test/qualify-safe-metrics.test.js
