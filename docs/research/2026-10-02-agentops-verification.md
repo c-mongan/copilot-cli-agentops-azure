@@ -38,7 +38,7 @@ Rendered desktop Runs, Architecture, and Compare were exercised in an owned inco
 
 ## Recoverable evidence
 
-Local evidence root: `/Volumes/SanDisk Archive/Agent-Workspace/scratch/agentops-reliability-20261002`.
+Local evidence root: `<agent-workspace>/scratch/agentops-reliability-20261002`.
 
 - `full-corpus-grade.json`: preserved original 10/12 result.
 - `full-corpus-repaired-live/smoke/2026-10-01T23-23-53-306Z/results.jsonl` and `repaired-grade.json`: fresh 12/12 execution and actual grades.

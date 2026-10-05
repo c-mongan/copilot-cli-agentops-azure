@@ -38,8 +38,8 @@ The owner crash test killed only a disposable Node parent. It kept the worker al
 
 The runnable test and its machine-readable result are in:
 
-- `/Volumes/SanDisk Archive/Agent-Workspace/scratch/agentops-native-real-20261003/proof.js`
-- `/Volumes/SanDisk Archive/Agent-Workspace/scratch/agentops-native-real-20261003/evidence.json`
+- `<agent-workspace>/scratch/agentops-native-real-20261003/proof.js`
+- `<agent-workspace>/scratch/agentops-native-real-20261003/evidence.json`
 
 The explicit-stop receipt is retained in the `normal/receipts` directory. The crash-test receipt is retained in the `crash/receipts` directory. The result records their exact paths, the test endpoint, and Collector process IDs.
 
@@ -74,7 +74,7 @@ The executable remained inside extension-shaped disposable storage. No global CL
 
 Additional evidence is retained in:
 
-- `/Volumes/SanDisk Archive/Agent-Workspace/scratch/agentops-native-real-20261003/download-proof.js`
-- `/Volumes/SanDisk Archive/Agent-Workspace/scratch/agentops-native-real-20261003/download-evidence.json`
+- `<agent-workspace>/scratch/agentops-native-real-20261003/download-proof.js`
+- `<agent-workspace>/scratch/agentops-native-real-20261003/download-evidence.json`
 
 The storage check before this job confirmed the external volume UUID and 332.46 GiB of free external storage. The download and extraction used that external storage.

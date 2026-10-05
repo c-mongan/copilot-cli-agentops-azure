@@ -66,7 +66,7 @@ test('attached Copilot environment scopes Python script bootstrap and exact run 
       assert.equal(env.PATH, '/usr/bin', 'scoped Python PATH shims are POSIX-only');
     }
     assert.deepEqual(env.NODE_PATH.split(path.delimiter), [path.join(repoRoot, 'instrumentation', 'node'), '/existing/node']);
-    assert.match(env.NODE_OPTIONS, new RegExp(`--require="${path.join(repoRoot, 'instrumentation', 'node', 'preload.cjs').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`));
+    assert.match(env.NODE_OPTIONS, new RegExp(`--require=${JSON.stringify(path.join(repoRoot, 'instrumentation', 'node', 'preload.cjs')).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
     assert.ok(env.NODE_OPTIONS.endsWith('--max-old-space-size=4096'));
     if (process.platform !== 'win32') {
       const expectedPathTail = env.AGENTOPS_REAL_PYTHON ? [path.join(repoRoot, 'instrumentation', 'python', 'bin-python'), '/usr/bin'] : ['/usr/bin'];

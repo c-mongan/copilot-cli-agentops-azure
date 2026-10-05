@@ -10,7 +10,7 @@ const {
   validateWhatIfChanges
 } = require('../src/lib/azure-provision-command');
 
-const subscriptionId = '0222a208-955a-45fd-b6d8-ca4704421bf0';
+const subscriptionId = '00000000-0000-4000-8000-000000000001';
 const resourceGroupName = 'rg-agentops-pilot-test';
 const resourceGroupId = `/subscriptions/${subscriptionId}/resourceGroups/${resourceGroupName}`;
 const workspaceName = 'law-copilot-agentops-eval-pilot';

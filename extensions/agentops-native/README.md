@@ -55,7 +55,7 @@ GitHub-hosted model was used. The packaged macOS Companion accepted the same
 native export at port 4318 and rendered a report with four spans, one session,
 24 input tokens and 10 output tokens. Disconnect closed the listener. Quit
 closed the Companion server. The historical v3 screenshot is
-`/Volumes/SanDisk Archive/Agent-Workspace/artifacts/native-build-20261003/companion-v3-report.png`.
+`<agent-workspace>/artifacts/native-build-20261003/companion-v3-report.png`.
 
 The headless Windows qualification run `37149760874` used Copilot CLI 1.0.91,
 VS Code 1.140.0/Node 24.21.0 and Collector 0.151.0. It produced four spans
@@ -120,11 +120,11 @@ preview.
 
 ## Current reviewable artifacts
 
-- macOS Companion v5: `/Volumes/SanDisk Archive/Agent-Workspace/artifacts/agentops-native-companion-macos-v5/`
-- Windows Companion v5: `/Volumes/SanDisk Archive/Agent-Workspace/artifacts/agentops-native-companion-windows-v5/`
-- Qualified v4 VSIX: `/Volumes/SanDisk Archive/Agent-Workspace/artifacts/agentops-native-vsix-qualified-v4/agentops-local.agentops-native-0.1.0.vsix`
-- v5 manifest: `/Volumes/SanDisk Archive/Agent-Workspace/artifacts/agentops-native-package-manifest-v5/artifact-manifest.json`
-- Windows summary: `/Volumes/SanDisk Archive/Agent-Workspace/artifacts/native-build-20261003/windows-ci-final-summary/windows-qualification.json`
+- macOS Companion v5: `<agent-workspace>/artifacts/agentops-native-companion-macos-v5/`
+- Windows Companion v5: `<agent-workspace>/artifacts/agentops-native-companion-windows-v5/`
+- Qualified v4 VSIX: `<agent-workspace>/artifacts/agentops-native-vsix-qualified-v4/agentops-local.agentops-native-0.1.0.vsix`
+- v5 manifest: `<agent-workspace>/artifacts/agentops-native-package-manifest-v5/artifact-manifest.json`
+- Windows summary: `<agent-workspace>/artifacts/native-build-20261003/windows-ci-final-summary/windows-qualification.json`
 
 The v5 outputs are unsigned preview packages. The historical v3 Mac flow is
 the rendered UI proof; the exact v5 ZIP outputs were not claimed as executed.

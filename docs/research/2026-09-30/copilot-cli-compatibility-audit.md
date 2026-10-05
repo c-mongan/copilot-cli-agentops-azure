@@ -32,7 +32,7 @@ Sources: [CLI monitoring reference](https://docs.github.com/en/copilot/reference
 | Reference coverage is bounded | Export recognizes attachment-declared references through supported file-read tools and restricted direct `cat`; compound shell commands and undeclared resources are excluded. Owning-skill association can be inferred/ambiguous. | Prove ordered multi-reference reads, rereads, failed attempts, version identity and concurrent lanes; show unsupported reference loaders explicitly. Reuse existing reference rows. |
 | Context metrics need source preservation | Span-event reload restores skill names but not arbitrary safe compaction/truncation attributes. | Preserve reviewed context metadata before implementing context-pressure findings. |
 
-Synthetic token proof and local monitoring help are in `/Volumes/SanDisk Archive/Agent-Workspace/scratch/agentops-compat-audit-Z8XonA/`. The token probe called the current exporter and reader without altering product source or emitting telemetry.
+Synthetic token proof and local monitoring help are in `<agent-workspace>/scratch/agentops-compat-audit-Z8XonA/`. The token probe called the current exporter and reader without altering product source or emitting telemetry.
 
 ## Real browser review of the retained failed run
 

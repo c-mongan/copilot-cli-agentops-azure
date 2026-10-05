@@ -63,13 +63,13 @@ to the launcher without changing the normal profile.
 
 Latest unsigned preview outputs:
 
-- Mac: `/Volumes/SanDisk Archive/Agent-Workspace/artifacts/agentops-native-companion-macos-v5/AgentOps Native Companion.app`
-- Windows: `/Volumes/SanDisk Archive/Agent-Workspace/artifacts/agentops-native-companion-windows-v5/AgentOps Native Companion`
-- Mac ZIP: `/Volumes/SanDisk Archive/Agent-Workspace/artifacts/agentops-native-companion-macos-v5/AgentOps-Native-Companion-mac-preview.zip`
-- Windows ZIP: `/Volumes/SanDisk Archive/Agent-Workspace/artifacts/agentops-native-companion-windows-v5/AgentOps-Native-Companion-windows-preview.zip`
-- VSIX: `/Volumes/SanDisk Archive/Agent-Workspace/artifacts/agentops-native-vsix-qualified-v4/agentops-local.agentops-native-0.1.0.vsix`
-- Artifact manifest: `/Volumes/SanDisk Archive/Agent-Workspace/artifacts/agentops-native-package-manifest-v5/artifact-manifest.json`
-- Windows qualification summary: `/Volumes/SanDisk Archive/Agent-Workspace/artifacts/native-build-20261003/windows-ci-final-summary/windows-qualification.json`
+- Mac: `<agent-workspace>/artifacts/agentops-native-companion-macos-v5/AgentOps Native Companion.app`
+- Windows: `<agent-workspace>/artifacts/agentops-native-companion-windows-v5/AgentOps Native Companion`
+- Mac ZIP: `<agent-workspace>/artifacts/agentops-native-companion-macos-v5/AgentOps-Native-Companion-mac-preview.zip`
+- Windows ZIP: `<agent-workspace>/artifacts/agentops-native-companion-windows-v5/AgentOps-Native-Companion-windows-preview.zip`
+- VSIX: `<agent-workspace>/artifacts/agentops-native-vsix-qualified-v4/agentops-local.agentops-native-0.1.0.vsix`
+- Artifact manifest: `<agent-workspace>/artifacts/agentops-native-package-manifest-v5/artifact-manifest.json`
+- Windows qualification summary: `<agent-workspace>/artifacts/native-build-20261003/windows-ci-final-summary/windows-qualification.json`
 
 The v5 artifact manifest records 37/37/46 source matches and extraction
 checks. The Windows qualification summary matched 69 qualification code,

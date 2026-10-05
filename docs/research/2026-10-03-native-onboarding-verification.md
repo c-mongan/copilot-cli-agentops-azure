@@ -60,7 +60,7 @@ Rendered VS Code controls remain unverified. The UI tool selected the normal VS 
 
 The final tested package is:
 
-`/Volumes/SanDisk Archive/Agent-Workspace/artifacts/agentops-native-vsix-20261003-qualified2/agentops-local.agentops-native-0.1.0.vsix`
+`<agent-workspace>/artifacts/agentops-native-vsix-20261003-qualified2/agentops-local.agentops-native-0.1.0.vsix`
 
 Install through VS Code's Extensions menu, **Install from VSIX**. Then select **AgentOps: Connect native capture** in a trusted local workspace. A client reload can be necessary.
 

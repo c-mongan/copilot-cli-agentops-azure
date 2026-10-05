@@ -24,7 +24,7 @@ existing Application Insights component to another workspace. Deploy
 `v2-ingestion.bicep` directly against the existing synthetic resource group.
 
 The verified 1 October 2026 target is subscription
-`0222a208-955a-45fd-b6d8-ca4704421bf0`, resource group
+`<subscription-id>`, resource group
 `rg-copilot-agentops-synthetic-pilot-20260930`, workspace
 `law-copilot-agentops-eval-eval930`, DCE `dce-copilot-agentops-eval930`, and
 DCR `dcr-copilot-agentops-eval930-v2`. Its custom tables retain seven days;
@@ -35,7 +35,7 @@ Then preview with the exact target and unchanged retention:
 
 ```sh
 az deployment group what-if \
-  --subscription 0222a208-955a-45fd-b6d8-ca4704421bf0 \
+  --subscription <subscription-id> \
   --resource-group rg-copilot-agentops-synthetic-pilot-20260930 \
   --template-file infra/bicep/v2-ingestion.bicep \
   --parameters workspaceName=law-copilot-agentops-eval-eval930 \

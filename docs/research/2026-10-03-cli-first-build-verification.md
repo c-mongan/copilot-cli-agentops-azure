@@ -47,7 +47,7 @@ Test counts describe separate checks. They must not be added as a unique test
 total. Earlier unchanged suite results are reused where valid.
 
 Artifacts and logs are under
-`/Volumes/SanDisk Archive/Agent-Workspace/artifacts/native-build-20261003/`:
+`<agent-workspace>/artifacts/native-build-20261003/`:
 
 - `cli-suite-final.log`
 - `native-final-v3.log`
@@ -63,20 +63,20 @@ current v5 package outputs listed below.
 The final VSIX SHA-256 is
 `15cdb66ea7e96c68fd238477b128ca8af8d654d092ecc829adf89d5791fb14f3`.
 Its path is
-`/Volumes/SanDisk Archive/Agent-Workspace/artifacts/agentops-native-vsix-20261003-cli-first-qualified-v2/agentops-local.agentops-native-0.1.0.vsix`.
+`<agent-workspace>/artifacts/agentops-native-vsix-20261003-cli-first-qualified-v2/agentops-local.agentops-native-0.1.0.vsix`.
 
 Final extension-host proofs are under
-`/Volumes/SanDisk Archive/Agent-Workspace/artifacts/agentops-native-final-host-proof-20261003/`.
+`<agent-workspace>/artifacts/agentops-native-final-host-proof-20261003/`.
 They use real VS Code APIs with fixture consent and synthetic telemetry.
 Bundled Copilot development warnings are recorded separately; no AgentOps
 check failed. Live Chat export remains unverified.
 
 Final unsigned preview packages are under:
 
-- `/Volumes/SanDisk Archive/Agent-Workspace/artifacts/agentops-native-companion-macos-v5/`
-- `/Volumes/SanDisk Archive/Agent-Workspace/artifacts/agentops-native-companion-windows-v5/`
-- `/Volumes/SanDisk Archive/Agent-Workspace/artifacts/agentops-native-vsix-qualified-v4/`
-- `/Volumes/SanDisk Archive/Agent-Workspace/artifacts/agentops-native-package-manifest-v5/artifact-manifest.json`
+- `<agent-workspace>/artifacts/agentops-native-companion-macos-v5/`
+- `<agent-workspace>/artifacts/agentops-native-companion-windows-v5/`
+- `<agent-workspace>/artifacts/agentops-native-vsix-qualified-v4/`
+- `<agent-workspace>/artifacts/agentops-native-package-manifest-v5/artifact-manifest.json`
 
 The v5 artifact manifest records 37/37/46 source matches and extraction
 checks. The Windows qualification summary also matched 69 qualification code,
@@ -188,8 +188,8 @@ See the [build status](../plans/2026-10-03-cli-first-build-status.md),
 
 ## Transfer packages
 
-- Mac: `/Volumes/SanDisk Archive/Agent-Workspace/artifacts/agentops-native-companion-macos-v5/AgentOps-Native-Companion-mac-preview.zip`
-- Windows: `/Volumes/SanDisk Archive/Agent-Workspace/artifacts/agentops-native-companion-windows-v5/AgentOps-Native-Companion-windows-preview.zip`
+- Mac: `<agent-workspace>/artifacts/agentops-native-companion-macos-v5/AgentOps-Native-Companion-mac-preview.zip`
+- Windows: `<agent-workspace>/artifacts/agentops-native-companion-windows-v5/AgentOps-Native-Companion-windows-preview.zip`
 
 Both archives passed integrity checks. They are unsigned previews. The archive
 name alone does not establish desktop Windows GUI or normal-user proof; the

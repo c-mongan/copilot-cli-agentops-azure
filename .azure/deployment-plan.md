@@ -6,7 +6,7 @@ Date: 2026-09-29
 
 ## Target and intent
 
-- Subscription: Visual Studio Enterprise Subscription, `0222a208-955a-45fd-b6d8-ca4704421bf0`. Always pass this ID explicitly; the CLI's current default is Pay-As-You-Go.
+- Subscription: Visual Studio Enterprise Subscription, `<subscription-id>`. Always pass this ID explicitly; the CLI's current default is Pay-As-You-Go.
 - Region: North Europe, matching the existing resources.
 - Existing resource group: `rg-copilot-agentops-dev`.
 - Existing Application Insights: `appi-copilot-agentops-dev`, connected to managed workspace `managed-appi-copilot-agentops-dev-ws` in resource group `ai_appi-copilot-agentops-dev_dc946c51-1650-47cf-9b62-2877e54afac4_managed`.

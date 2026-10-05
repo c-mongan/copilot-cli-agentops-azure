@@ -16,6 +16,7 @@ stages:
             inputs:
               azureSubscription: 'azure-service-connection'
               scriptType: 'bash'
+              scriptLocation: 'inlineScript'
               inlineScript: azd up --no-prompt
             env:
               AZURE_ENV_NAME: $(AZURE_ENV_NAME)

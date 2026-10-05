@@ -55,7 +55,7 @@ browser-console claim is not supported. The in-app browser was unavailable.
 No browser extension or user storage settings were changed.
 
 Final HTML artifact directory:
-`/Volumes/SanDisk Archive/Agent-Workspace/scratch/agentops-product-verified-20261001/`.
+`<agent-workspace>/scratch/agentops-product-verified-20261001/`.
 Its native replay uses the current session file, with original stored span
 receipts. The UI warns that later events may lack corresponding captured spans.
 
@@ -104,7 +104,7 @@ the request audit above is the correct budget accounting.
 ## Synthetic Azure proof
 
 Target subscription: Visual Studio Enterprise,
-`0222a208-955a-45fd-b6d8-ca4704421bf0`. Subscription metadata showed spending limit
+`<subscription-id>`. Subscription metadata showed spending limit
 `On`; the portal displayed €121.81 remaining credit before deployment. No paid
 overage, production target, or additional access assignment was authorized.
 
@@ -171,7 +171,7 @@ absence findings or automatic refactoring decisions are supported.
   4814 nodes and 11692 edges without model extraction.
 
 All named logs/artifacts are under
-`/Volumes/SanDisk Archive/Agent-Workspace/scratch/`. Unrelated pre-existing dirty
+`<agent-workspace>/scratch/`. Unrelated pre-existing dirty
 plans and research files were preserved and excluded from the local commit.
 
 ## Subsequent live follow-up

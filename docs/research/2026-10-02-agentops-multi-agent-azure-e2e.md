@@ -22,7 +22,7 @@ Final native session IDs were respectively `e3c9859f-ad9c-4074-a4c0-b63d4775390d
 
 ## Azure proof
 
-Subscription `0222a208-955a-45fd-b6d8-ca4704421bf0` was Enabled, with spending limit On. The portal showed EUR 121.76 credit remaining. No spending protection was changed.
+Subscription `<subscription-id>` was Enabled, with spending limit On. The portal showed EUR 121.76 credit remaining. No spending protection was changed.
 
 The DCR was freshly resolved to immutable ID `dcr-1b45ce3240c3473893972da44a2c2383`, targeting workspace `f556e73c-530a-4e5d-abe1-4de1407a8a11` in `rg-copilot-agentops-synthetic-pilot-20260930`. The DCE endpoint was independently resolved. No infrastructure deployment occurred.
 
@@ -38,7 +38,7 @@ Desktop Runs search selected the three fresh runs. The CI evidence link reached 
 
 Mobile Runs was exercised at 390 × 844 and its document width remained 390 pixels. The canary was absent from the rendered body. The viewport override was reset. Browser errors were the previously observed AdBlock `FILE_ERROR_NO_SPACE` errors, including injected copies attributed to local URLs; this turn does not assert a completely clean browser console.
 
-Screenshots and the local gallery (`/Volumes/SanDisk Archive/Agent-Workspace/artifacts/agentops-e2e-20261002/screenshots.html`) are preserved under `/Volumes/SanDisk Archive/Agent-Workspace/artifacts/agentops-e2e-20261002/`. The gallery contains Azure attribution/results/workspace/credit and local Runs/replay/Architecture/Compare/mobile captures. Screenshots are real browser captures, not mockups.
+Screenshots and the local gallery (`<agent-workspace>/artifacts/agentops-e2e-20261002/screenshots.html`) are preserved under `<agent-workspace>/artifacts/agentops-e2e-20261002/`. The gallery contains Azure attribution/results/workspace/credit and local Runs/replay/Architecture/Compare/mobile captures. Screenshots are real browser captures, not mockups.
 
 ## Gaps exposed
 
@@ -50,7 +50,7 @@ Screenshots and the local gallery (`/Volumes/SanDisk Archive/Agent-Workspace/art
 
 ## Retained receipts and cleanup
 
-Evidence root: `/Volumes/SanDisk Archive/Agent-Workspace/artifacts/agentops-e2e-20261002/`.
+Evidence root: `<agent-workspace>/artifacts/agentops-e2e-20261002/`.
 
 `launch-results-v2.json`, `capture-audit.json`, `upload-plans.json`, `upload-results.json`, `field-readback-audit.json`, both typed readbacks, native receipt exports, generated product pages, adapted agent definitions, and the bounded runner scripts are retained. Seven focused component/UI tests passed. Product source was unchanged, so the preceding full local suite results were reused rather than rerun. All owned model jobs completed; the owned HTTP server and leftover collector were stopped. Unrelated dirty documents and existing processes were preserved. Only this reviewed verification document was committed locally; no push or publication occurred.
 

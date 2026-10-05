@@ -19,7 +19,7 @@ Baseline: `0b91a3671376f9bc655aa955094d995ac711254c`. This audit ran current loc
 | Retained agent-patterns native ledger | 12/12 semantic checks; 57 events; 49 spans | Ordered main A/B/A references then specialist A, named delegation, MCP success/failure, owned scripts, linked Python rejection, provenance and metadata privacy |
 | Retained StockPilot MCP v3 ledger | 9/9 semantic checks; 24 events; 30 spans | One MCP success, one deliberate failure, then named specialist completion; stimulus-scoped provenance/privacy contract |
 
-Raw logs are retained outside Git at `/Volumes/SanDisk Archive/Agent-Workspace/scratch/agentops-audit-2026-10-02/tests-evals/`. Storage identity was verified before suites: external volume selected, approximately 332 GiB free; internal approximately 25 GiB free. Suites used the storage wrapper and ran serially.
+Raw logs are retained outside Git at `<agent-workspace>/scratch/agentops-audit-2026-10-02/tests-evals/`. Storage identity was verified before suites: external volume selected, approximately 332 GiB free; internal approximately 25 GiB free. Suites used the storage wrapper and ran serially.
 
 ## KQL flag behavior and read-only Azure result
 

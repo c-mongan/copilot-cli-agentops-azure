@@ -56,7 +56,7 @@ preserved. Unrelated dirty plans and evidence documents were untouched.
 ## Evidence paths and limits
 
 Disposable artifacts are under
-`/Volumes/SanDisk Archive/Agent-Workspace/scratch/agentops-patterns-20261002/`:
+`<agent-workspace>/scratch/agentops-patterns-20261002/`:
 `result-v2.json`, `audit-v2.json`, `result-auditor-v2.json`,
 `audit-auditor-v2.json`, local launch logs, exported ledger, and `product-final/`.
 All launches completed with the scoped collector lifecycle completed and no

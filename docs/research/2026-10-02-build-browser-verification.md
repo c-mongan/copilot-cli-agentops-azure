@@ -16,7 +16,7 @@ Raw payloads contain `PRIVATE_CANARY_BROWSER_VERIFY` to test exclusion.
 
 SanDisk UUID and capacity were verified through `agent-storage status`; build
 commands ran through `agent-storage run`. Base artifact directory:
-`/Volumes/SanDisk Archive/Agent-Workspace/scratch/browser-product-20261002-verify`.
+`<agent-workspace>/scratch/browser-product-20261002-verify`.
 The CLI receipt reports `localEvidence: generated`, `cloudDelivery: pending`, and
 `outcomes: unknown: no verified evaluation receipt`.
 

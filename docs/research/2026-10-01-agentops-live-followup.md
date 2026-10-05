@@ -96,7 +96,7 @@ the corrected regrade is retained separately.
 
 ## Synthetic Azure proof
 
-The target remained subscription `0222a208-955a-45fd-b6d8-ca4704421bf0`, workspace
+The target remained subscription `<subscription-id>`, workspace
 customer ID `f556e73c-530a-4e5d-abe1-4de1407a8a11`, staging immutable DCR
 `dcr-1b45ce3240c3473893972da44a2c2383`. Subscription state was Enabled and
 `spendingLimitOn` was freshly checked. The earlier portal balance was EUR 121.81;

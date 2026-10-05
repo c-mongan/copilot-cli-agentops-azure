@@ -15,7 +15,7 @@ Application launch
 
 ## Source and version evidence
 
-The official shallow clone is `/Volumes/SanDisk Archive/Agent-Workspace/workspaces/copilot-native-docs-20261003/sdk`. Its HEAD is `ef04633cc84e4ba8e79888a39259ca276f5de732`. No upstream files were edited. No Graphify graph exists in this new clone, so inspection used exact source and docs paths without creating a graph.
+The official shallow clone is `<agent-workspace>/workspaces/copilot-native-docs-20261003/sdk`. Its HEAD is `ef04633cc84e4ba8e79888a39259ca276f5de732`. No upstream files were edited. No Graphify graph exists in this new clone, so inspection used exact source and docs paths without creating a graph.
 
 The release tag `v1.0.14` was also fetched. It resolves to `e60d9037353249ef16b349eb4012e8c1d113fda5`. The project's `evals/stockpilot/package-lock.json` and installed package both specify `@github/copilot-sdk` `1.0.14`, which pins runtime `1.0.85`. The new SDK HEAD pins `1.0.92-3` and uses development version placeholders. These are separate from the system Copilot CLI version. Do not claim HEAD-only APIs work in an older installed runtime. The existing AgentOps adapter's peer range `>=0.1.0 <2` is a compatibility declaration, not proof that every version exposes the current telemetry APIs.
 

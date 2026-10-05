@@ -12,13 +12,13 @@ Copilot CLI is the primary target. VS Code is the secondary setup and report sur
 
 | Item | Current state |
 | --- | --- |
-| Main working directory | `/Volumes/SanDisk Archive/Agent-Workspace/workspaces/copilot-cli-agentops-azure-inspection` |
+| Main working directory | `<agent-workspace>/workspaces/copilot-cli-agentops-azure-inspection` |
 | Working branch | `feat/enterprise-flight-recorder` |
 | Working HEAD | `0b91a3671376f9bc655aa955094d995ac711254c` |
 | Working tree | 139 status entries before this handoff was added; substantial modified and untracked work remains |
 | Public repository | `https://github.com/c-mongan/copilot-cli-agentops-azure` |
 | Remote main | `090d337d4226d7f8a3ebadc2228e9cb4c8e326b5` |
-| Separate qualification worktree | `/Volumes/SanDisk Archive/Agent-Workspace/workspaces/agentops-native-windows-ci-20261003` |
+| Separate qualification worktree | `<agent-workspace>/workspaces/agentops-native-windows-ci-20261003` |
 | Qualification branch | `qualification/native-windows-20261003` |
 | Qualified commit | `bceeb76e09fb9dce24b36d4fd0b690823d2db48e` |
 | Qualification worktree | Clean at handoff preparation |
@@ -123,7 +123,7 @@ See [deployment verification](docs/research/2026-10-02-enterprise-deployment-ver
 
 ## 5. Packages and proof locations
 
-External artifact root: `/Volumes/SanDisk Archive/Agent-Workspace/artifacts`.
+External artifact root: `<agent-workspace>/artifacts`.
 
 | Package | Path below artifact root | SHA256 |
 | --- | --- | --- |
@@ -146,7 +146,7 @@ Important evidence paths below artifact root:
 - `native-build-20261003/cli-suite-final.log` — saved full CLI suite.
 - `agentops-native-final-host-proof-20261003/` — real isolated VS Code API/terminal proof.
 
-Script setup evidence is under `/Volumes/SanDisk Archive/Agent-Workspace/scratch/agentops-script-setup-20261003/`. Official source clones are under the sibling workspace `copilot-native-docs-20261003/`, including SDK and VS Code sources. External artifacts are not bundled into this Markdown file. Preserve the drive and verify paths before reuse.
+Script setup evidence is under `<agent-workspace>/scratch/agentops-script-setup-20261003/`. Official source clones are under the sibling workspace `copilot-native-docs-20261003/`, including SDK and VS Code sources. External artifacts are not bundled into this Markdown file. Preserve the drive and verify paths before reuse.
 
 ## 6. Security and operational limits
 

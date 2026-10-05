@@ -27,13 +27,13 @@ Two findings changed the adapter before the final pass:
 
 No `policyValue` property was present in any real `inspect()` result. There was no enterprise policy in this disposable profile. The test does not prove detection of a managed policy before a write. The adapter checks effective values after writes and restores its owned settings if they do not take effect.
 
-The receipt is `/Volumes/SanDisk Archive/Agent-Workspace/scratch/agentops-native-20261003/api/proof.json`, with `passed: true`. The direct hidden-key rejection receipt is `hidden-agenthost-proof.json` in the same directory. The harness and isolated profile remain there for repeat tests. The normal VS Code profile and its settings were not changed.
+The receipt is `<agent-workspace>/scratch/agentops-native-20261003/api/proof.json`, with `passed: true`. The direct hidden-key rejection receipt is `hidden-agenthost-proof.json` in the same directory. The harness and isolated profile remain there for repeat tests. The normal VS Code profile and its settings were not changed.
 
 Live native Copilot span delivery, a managed enterprise profile, remote extension hosts, and other operating systems were not tested by this API check.
 
 ## Packaged runtime in a real extension host
 
-A second check used the extension files extracted from the qualified VSIX at `/Volumes/SanDisk Archive/Agent-Workspace/artifacts/agentops-native-vsix-20261003-qualified2/content/extension`. The real VS Code extension host loaded `createController` and the packaged recorder. The recorder forked its IPC worker from the Electron host and started the existing local OpenTelemetry Collector binary. The test supplied that binary path through a test dependency; it did not test a release download.
+A second check used the extension files extracted from the qualified VSIX at `<agent-workspace>/artifacts/agentops-native-vsix-20261003-qualified2/content/extension`. The real VS Code extension host loaded `createController` and the packaged recorder. The recorder forked its IPC worker from the Electron host and started the existing local OpenTelemetry Collector binary. The test supplied that binary path through a test dependency; it did not test a release download.
 
 The consent result was a test fixture that returned `Connect`. The terminal environment collection and extension memento were test maps. VS Code configuration calls, the status bar, webview creation, the worker process, Collector process, local HTTP endpoint, private disk receipt, and report parser were real. No normal profile, model request, or cloud endpoint was used.
 
@@ -45,7 +45,7 @@ The following checks passed:
 4. Status reported the received span. A real static webview panel was created. This check proves panel creation, not a screenshot or rendered interaction.
 5. Disconnect restored every real Chat user setting, cleared the fixture environment map, and closed the Collector HTTP listener. The controller then disposed without error.
 
-The integrated receipt is `/Volumes/SanDisk Archive/Agent-Workspace/scratch/agentops-native-20261003/api/integrated-proof.json`, with `passed: true`. Its test harness is `harness/integrated-runner.js`. This is an integrated native-shaped fixture proof in a real extension host. It does not prove that a live Copilot session emitted those spans. The separate terminal check below proves real terminal inheritance.
+The integrated receipt is `<agent-workspace>/scratch/agentops-native-20261003/api/integrated-proof.json`, with `passed: true`. Its test harness is `harness/integrated-runner.js`. This is an integrated native-shaped fixture proof in a real extension host. It does not prove that a live Copilot session emitted those spans. The separate terminal check below proves real terminal inheritance.
 
 ## Real extension context and terminal check
 

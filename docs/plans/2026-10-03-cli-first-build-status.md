@@ -40,7 +40,7 @@ for this preview.
   session, 24 input tokens and 10 output tokens.
 - [x] Companion Disconnect closed the listener. Companion Quit closed the
   server. The report screenshot is
-  `/Volumes/SanDisk Archive/Agent-Workspace/artifacts/native-build-20261003/companion-v3-report.png`.
+  `<agent-workspace>/artifacts/native-build-20261003/companion-v3-report.png`.
 - [x] Stable endpoint and durable opt-in survive routine host shutdown.
   Explicit Disconnect restores only still-owned settings.
 - [x] CJS, ESM and Python HTTP library checks used real Collector receipts.
@@ -49,7 +49,7 @@ for this preview.
 - [x] The local output monitor, retained storage limit, strict field filter,
   and Azure-request cancellation regressions passed.
 - [x] The final CLI suite passed 1,033 tests, with one platform skip and zero
-  failures. See `/Volumes/SanDisk Archive/Agent-Workspace/artifacts/native-build-20261003/cli-suite-final.log`.
+  failures. See `<agent-workspace>/artifacts/native-build-20261003/cli-suite-final.log`.
 - [x] A portable macOS package and a Windows package were generated. Windows
   PE validation, PATH lookup and command safety are covered by structural
   tests.

@@ -18,7 +18,7 @@ The report total and the fixture's four spans measure different things. The Coll
 
 ## Saved evidence
 
-Evidence root: `/Volumes/SanDisk Archive/Agent-Workspace/artifacts/native-build-20261003/`.
+Evidence root: the local `artifacts/native-build-20261003/` directory (kept outside the repository and not committed).
 
 - `companion-v5-native-proof.json`: native runtime, links, fixed tool execution and canary checks. Its `collectorStopped: false` describes the runtime-test stage; the later UI proof confirms shutdown.
 - `companion-v5-ui-proof.json`: report totals and process/listener/lease cleanup.

@@ -13,11 +13,6 @@
     "inputTokens": 265098,
     "outputTokens": 8507,
     "usageCoverage": 19,
-    "runIds": [
-      "vally_61af9f8e52cb0f7fd32773f3",
-      "vally_0a96ba55fb2154c0f2e41cd0",
-      "vally_850937151f26cb3c99f31ca9"
-    ],
     "toolCalls": 9,
     "trialEvidence": [
       {
@@ -29,7 +24,6 @@
         "model": "gpt-5.5",
         "durationMs": 46590,
         "sessionId": "7e4c331b-ef68-49d6-988c-ca601fe274fe",
-        "runId": "vally_61af9f8e52cb0f7fd32773f3",
         "toolCalls": 11,
         "inputTokens": 97358,
         "outputTokens": 3934,
@@ -44,7 +38,6 @@
         "model": "gpt-5.5",
         "durationMs": 27691,
         "sessionId": "c9dcefaf-7c1e-418e-bdec-1d00e929c404",
-        "runId": "vally_0a96ba55fb2154c0f2e41cd0",
         "toolCalls": 9,
         "inputTokens": 83672,
         "outputTokens": 2205,
@@ -59,7 +52,6 @@
         "model": "gpt-5.5",
         "durationMs": 30549,
         "sessionId": "0bce7750-affb-4bfe-a332-d95b77356fdc",
-        "runId": "vally_850937151f26cb3c99f31ca9",
         "toolCalls": 9,
         "inputTokens": 84068,
         "outputTokens": 2368,
@@ -76,11 +68,6 @@
     "inputTokens": 287853,
     "outputTokens": 7083,
     "usageCoverage": 20,
-    "runIds": [
-      "vally_030474c9c2f703ac50e5dc09",
-      "vally_81b5b48fae2298a2a68fd8d2",
-      "vally_df3d791954336bf4cfae9e4e"
-    ],
     "toolCalls": 10,
     "trialEvidence": [
       {
@@ -92,7 +79,6 @@
         "model": "gpt-5.5",
         "durationMs": 30886,
         "sessionId": "00f58737-6cde-4b11-a7c3-7e448814ec85",
-        "runId": "vally_030474c9c2f703ac50e5dc09",
         "toolCalls": 8,
         "inputTokens": 86146,
         "outputTokens": 2448,
@@ -107,7 +93,6 @@
         "model": "gpt-5.5",
         "durationMs": 29467,
         "sessionId": "911e0599-f961-4bd5-afb2-4b4d710d8655",
-        "runId": "vally_81b5b48fae2298a2a68fd8d2",
         "toolCalls": 10,
         "inputTokens": 82936,
         "outputTokens": 2525,
@@ -122,7 +107,6 @@
         "model": "gpt-5.5",
         "durationMs": 32365,
         "sessionId": "2419a093-a763-4f21-8d27-e25b560dc0b2",
-        "runId": "vally_df3d791954336bf4cfae9e4e",
         "toolCalls": 11,
         "inputTokens": 118771,
         "outputTokens": 2110,
@@ -147,5 +131,6 @@
     "toolCalls": "median-per-trial",
     "inputTokens": "sum-of-measured-usage",
     "outputTokens": "sum-of-measured-usage"
-  }
+  },
+  "runIdsRedacted": true
 }

@@ -16,7 +16,7 @@ ARM reads completed at approximately 18:29 UTC on 3 October 2026. The active CLI
 | Item | Verified value |
 | --- | --- |
 | Subscription | `<subscription-id>` |
-| Tenant | `cf17fc39-219d-4d2b-9cd5-a49dc7ad0898` |
+| Tenant | `<tenant-id>` |
 | Subscription state / spending limit | Enabled / On |
 | Resource group | `rg-copilot-agentops-synthetic-pilot-20260930` |
 | Region | `northeurope` |
@@ -35,7 +35,7 @@ The current CLI identity obtained an Azure Monitor token without a sign-in promp
 
 ## Prepared minimum proof
 
-Owner-only disposable artifacts are in `/Volumes/SanDisk Archive/Agent-Workspace/artifacts/native-build-20261003/azure-proof-preflight/`. The external storage helper verified the expected SanDisk UUID before artifact preparation. These files contain resource IDs and synthetic data only.
+Owner-only disposable artifacts are in `<agent-workspace>/artifacts/native-build-20261003/azure-proof-preflight/`. The external storage helper verified the expected SanDisk UUID before artifact preparation. These files contain resource IDs and synthetic data only.
 
 `synthetic-receipt.jsonl` contains one native-shaped OTLP chat span. It is a synthetic fixture, not a Copilot-generated span. `synthetic-upload-plan.json` contains its exact projected row, target and 16,384-byte daily allowance. The JSON request body is **473 bytes**. Every projected field exists in the deployed event stream. `OutputTokens` is absent because it was not measured. The synthetic label canary is absent from the projection. Session identity is hashed; no arbitrary tool, model or span label is forwarded.
 

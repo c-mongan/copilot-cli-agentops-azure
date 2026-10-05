@@ -10,8 +10,8 @@ Read on 2026-10-03. No model request, sign-in, update, installer execution, user
 
 | Official repository | Snapshot | External copy | Size |
 | --- | --- | --- | --- |
-| `https://github.com/github/copilot-cli` | `a9ba11a191255b3f7b323b425b717f7db14b6c74`, committed 2026-10-01 | `/Volumes/SanDisk Archive/Agent-Workspace/workspaces/copilot-native-docs-20261003/cli/copilot-cli` | 600 KiB |
-| `https://github.com/github/docs` | `2bd66de8cea336061c9ea060c9b37385136e6ab3`, committed 2026-10-02 | `/Volumes/SanDisk Archive/Agent-Workspace/workspaces/copilot-native-docs-20261003/cli/github-docs` | 11,464 KiB |
+| `https://github.com/github/copilot-cli` | `a9ba11a191255b3f7b323b425b717f7db14b6c74`, committed 2026-10-01 | `<agent-workspace>/workspaces/copilot-native-docs-20261003/cli/copilot-cli` | 600 KiB |
+| `https://github.com/github/docs` | `2bd66de8cea336061c9ea060c9b37385136e6ab3`, committed 2026-10-02 | `<agent-workspace>/workspaces/copilot-native-docs-20261003/cli/github-docs` | 11,464 KiB |
 
 Both are depth-one, blob-filtered clones. The docs copy uses sparse checkout of `content/copilot` and `data/reusables/copilot`. The CLI repository contains public README, changelog, and installation script. It does not expose the CLI runtime source. The script was not executed. The official CLI README still describes older model defaults and premium-request accounting, so installed help and maintained references take priority for current behavior.
 

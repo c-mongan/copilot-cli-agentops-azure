@@ -45,8 +45,20 @@ const evaluationAssets = new Set([
   'evals/stockpilot/graders/tasks.json'
 ]);
 const workbookAssets = new Set(['workbooks/agentops-workbook.json', 'workbooks/agentops-enterprise-workbook.json']);
+// Windows may report the same directory as an 8.3 short name or a long name;
+// fall back to real paths so allow-list checks never see an escaping path.
+function repoRelative(src) {
+  const escapes = value => value === '..' || value.startsWith('..' + path.sep) || path.isAbsolute(value);
+  let relative = path.relative(root, src);
+  if (escapes(relative)) {
+    try { relative = path.relative(fs.realpathSync.native(root), fs.realpathSync.native(src)); } catch { return null; }
+  }
+  return escapes(relative) ? null : relative.replaceAll('\\', '/');
+}
+
 function shouldCopy(src) {
-  const relative = path.relative(root, src).replaceAll('\\', '/');
+  const relative = repoRelative(src);
+  if (relative === null) return false;
   if (relative === 'workbooks') return true;
   if (relative.startsWith('workbooks/')) return workbookAssets.has(relative);
   // The enterprise qualification helper is repository-only operator tooling.

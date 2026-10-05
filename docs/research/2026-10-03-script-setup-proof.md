@@ -44,7 +44,7 @@ A separate harness retry initially omitted the saved endpoint in its test record
 
 The private evidence directory is:
 
-`/Volumes/SanDisk Archive/Agent-Workspace/scratch/agentops-script-setup-20261003/`
+`<agent-workspace>/scratch/agentops-script-setup-20261003/`
 
 - `proof.json`: final successful checks and numeric report.
 - `proof-buffer-loss.json`: retained first stop-test result.
@@ -56,7 +56,7 @@ The private evidence directory is:
 
 The disposable package environments remain at:
 
-`/Volumes/SanDisk Archive/Agent-Workspace/workspaces/agentops-library-auto-proof-20261003/`
+`<agent-workspace>/workspaces/agentops-library-auto-proof-20261003/`
 
 The current repository source was tested. This check did not validate a final VSIX package. The extension host loaded the existing bundled Copilot package as a development extension to supply its configuration schema. It did not use Copilot to request a model.
 
@@ -73,7 +73,7 @@ A separate `gui-harness/` is ready in the evidence directory. It registers four 
 A separate real-dialog window was launched for parent computer-use checks. Its exact title is `AgentOps Script GUI Proof`. It uses the new internal disposable profile `/private/tmp/agentops-script-gui-20261003-b11191ae/profile`, empty isolated extensions directory, the `gui-harness/` development extension and the existing bundled Copilot configuration extension. The launch metadata is in `gui-launch.json`. This window does not use the normal profile.
 
 1. Run `Script proof: Connect local capture` and confirm the real Connect dialog.
-2. Run `Script proof: Trace selected project script`, choose the `node` workspace folder, then select `/Volumes/SanDisk Archive/Agent-Workspace/workspaces/agentops-library-auto-proof-20261003/node/gui-fixture.cjs`.
+2. Run `Script proof: Trace selected project script`, choose the `node` workspace folder, then select `<agent-workspace>/workspaces/agentops-library-auto-proof-20261003/node/gui-fixture.cjs`.
 3. Keep the default selected Node executable. Confirm `Run selected script` in the real consent dialog.
 4. Run `Script proof: Open numeric report`.
 5. Run `Script proof: Disconnect local capture`. This saves `gui-proof.json` with local receipt, canary absence and settings restoration checks.

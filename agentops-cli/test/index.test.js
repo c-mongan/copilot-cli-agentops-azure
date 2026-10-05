@@ -517,6 +517,17 @@ test('Homebrew formula renderer replaces all release placeholders', () => {
   assert.ok(rendered.includes('sha256 "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"'));
 });
 
+test('CLI package asset copier resolves aliased roots and fails closed outside the repository', t => {
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-asset-alias-'));
+  t.after(() => fs.rmSync(temp, { recursive: true, force: true }));
+  const alias = path.join(temp, 'repo-alias');
+  try { fs.symlinkSync(root, alias, 'junction'); } catch { t.skip('symlinks unavailable'); return; }
+  assert.equal(shouldCopy(path.join(alias, 'workbooks', 'agentops-workbook.json')), true);
+  assert.equal(shouldCopy(path.join(alias, 'workbooks', 'README.md')), false);
+  assert.equal(shouldCopy(path.join(alias, 'scripts', 'qualify-enterprise-evidence.js')), false);
+  assert.equal(shouldCopy(path.join(temp, 'outside.json')), false);
+});
+
 test('CLI package asset copier excludes heavyweight and local-only files', () => {
   assert.equal(shouldCopy(path.join(root, 'docs', 'release-distribution.md')), true);
   assert.equal(shouldCopy(path.join(root, 'docs', 'screenshots', 'agentops-home.png')), false);

@@ -17,6 +17,25 @@ const safeEventFields = new Set([
   'ErrorSizeBytes'
 ]);
 
+// Model and provider identifiers are free-form upstream; admit only short identifier shapes so
+// URLs, credentials, or key=value payloads cannot ride out under metadata field names.
+const modelIdentifierPattern = /^[A-Za-z0-9][A-Za-z0-9._:+\/-]{0,127}$/;
+const providerIdentifierPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+const credentialHintPattern = /(?:api[_-]?key|token|secret|password|bearer|sig=)/i;
+
+function safeIdentifier(value, pattern) {
+  if (typeof value !== 'string') return undefined;
+  const text = value.trim();
+  if (!pattern.test(text) || text.includes('://') || text.includes('//') || credentialHintPattern.test(text)) return undefined;
+  return text;
+}
+
+const identifierFields = {
+  ModelRequested: modelIdentifierPattern,
+  ModelActual: modelIdentifierPattern,
+  Provider: providerIdentifierPattern
+};
+
 const otelAttributeMap = {
   RunId: 'agentops.run.id', SessionId: 'agentops.session.id', Surface: 'agentops.surface',
   SchemaVersion: 'agentops.schema.version', PrivacyMode: 'agentops.privacy.mode',
@@ -67,6 +86,9 @@ function createSafeEventNormalizer(options = {}) {
       EventName: name,
       SpanName: String(source.SpanName || name).slice(0, 200)
     };
+    for (const [field, pattern] of Object.entries(identifierFields)) {
+      if (field in normalized) normalized[field] = safeIdentifier(normalized[field], pattern);
+    }
     return Object.fromEntries(Object.entries(normalized).filter(([key, value]) => (
       safeEventFields.has(key) && value !== undefined && value !== null
     )));

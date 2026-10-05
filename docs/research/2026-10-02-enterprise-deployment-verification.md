@@ -54,7 +54,7 @@ This proves synthetic producer/schema/ingestion contracts. It does not establish
 
 Final saved Workbook browser proof: all twelve panels rendered without resource/query errors with the intended workspace and default all-runs selection. Actual single-run filtering returned one summary, correct linked evidence and explicit unknown empty panels. Stream labels use exact table names. Native time choices displayed Last hour, Last 4 hours, Last 24 hours and Last 7 days; switching to Last hour refreshed the run list and results. Health remains correctly workspace-wide. The tab is left open for review. No captured browser console errors were observed. These are signed-in owner checks, not observer isolation or independent human usefulness.
 
-Private parent receipts are retained at `/Volumes/SanDisk Archive/Agent-Workspace/scratch/agentops-enterprise-20261002/`: original deployment, what-if, budget/Workbook readback, upload receipt, first/second readback and final check logs. No credentials are retained in these reports.
+Private parent receipts are retained at `<agent-workspace>/scratch/agentops-enterprise-20261002/`: original deployment, what-if, budget/Workbook readback, upload receipt, first/second readback and final check logs. No credentials are retained in these reports.
 
 ## Remaining production gates
 
@@ -66,4 +66,4 @@ A regular organization-owned production subscription, named operator, approved p
 - **Publish and readback.** Three synthetic metadata spans were published and returned HTTP 204. Readback found 3 of 3. The publisher used a cached CLI token, so this does not prove VS Code provider sign-in.
 - **Panel queries.** All 14 ran live over 7 days without errors.
 - **Portal.** The Overview tiles and chart rendered in the signed-in owner portal.
-- **Private receipts.** `/Volumes/SanDisk Archive/Agent-Workspace/scratch/workbook-redesign-20261004/`.
+- **Private receipts.** `<agent-workspace>/scratch/workbook-redesign-20261004/`.

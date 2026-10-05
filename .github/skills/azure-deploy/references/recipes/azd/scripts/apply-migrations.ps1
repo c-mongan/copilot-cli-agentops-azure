@@ -51,4 +51,7 @@ $ConnectionString = "Server=tcp:$($env:SQL_SERVER).database.windows.net,1433;Dat
 Write-Host "Applying EF Core migrations..."
 Set-Location $AppProjectPath
 dotnet ef database update --connection $ConnectionString
+if ($LASTEXITCODE -ne 0) {
+    throw "dotnet ef database update failed with exit code $LASTEXITCODE."
+}
 Write-Host "Migrations applied successfully."

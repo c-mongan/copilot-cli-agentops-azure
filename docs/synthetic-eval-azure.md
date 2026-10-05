@@ -16,7 +16,7 @@ The [subscription Bicep template](../infra/bicep/eval-content-subscription.bicep
 
 ```bash
 az deployment sub what-if \
-  --subscription 0222a208-955a-45fd-b6d8-ca4704421bf0 \
+  --subscription <subscription-id> \
   --location northeurope \
   --template-file infra/bicep/eval-content-subscription.bicep \
   --parameters location=northeurope environmentName=dev

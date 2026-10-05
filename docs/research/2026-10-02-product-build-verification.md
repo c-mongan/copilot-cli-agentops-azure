@@ -53,7 +53,7 @@ All five local views passed desktop/mobile axe with zero violations, including b
 
 Evaluation smoke proves 24 oracle fixture answers and three actual synthetic sink grades. It does not prove an independently executed held-out cohort or human usefulness. Human timing medians remain null. Current protected fixture artifacts are outside the repository at `/tmp/agentops-evaluation-review-repaired-20261002-1790949222`.
 
-Parent check receipts and logs are retained under `/Volumes/SanDisk Archive/Agent-Workspace/scratch/agentops-build-20261002/`. Browser artifacts use the verifier's separately named scratch folder documented in its report. Full-run results are reused for unchanged paths; affected checks were rerun after later repairs.
+Parent check receipts and logs are retained under `<agent-workspace>/scratch/agentops-build-20261002/`. Browser artifacts use the verifier's separately named scratch folder documented in its report. Full-run results are reused for unchanged paths; affected checks were rerun after later repairs.
 
 ## Remaining delivery boundaries
 

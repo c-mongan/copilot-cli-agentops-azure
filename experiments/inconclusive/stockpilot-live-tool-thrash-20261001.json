@@ -13,9 +13,6 @@
     "inputTokens": 100813,
     "outputTokens": 2526,
     "usageCoverage": 7,
-    "runIds": [
-      "vally_7fb407968637c33327e01fe2"
-    ],
     "toolCalls": 11
   },
   "candidate": {
@@ -27,12 +24,10 @@
     "inputTokens": 131136,
     "outputTokens": 2129,
     "usageCoverage": 7,
-    "runIds": [
-      "vally_3a598af65ea01ec8d73c76da"
-    ],
     "toolCalls": 11
   },
   "vallyVersion": "0.17.0",
   "model": "gpt-5.5",
-  "planDigest": "ac4fce970d331912"
+  "planDigest": "ac4fce970d331912",
+  "runIdsRedacted": true
 }

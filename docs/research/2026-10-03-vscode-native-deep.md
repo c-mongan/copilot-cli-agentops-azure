@@ -10,7 +10,7 @@ Copilot CLI should be the primary capture target. VS Code can be a setup and rep
 
 ## Sources saved for local reading
 
-Disposable clone root: `/Volumes/SanDisk Archive/Agent-Workspace/workspaces/copilot-native-docs-20261003/vscode`.
+Disposable clone root: `<agent-workspace>/workspaces/copilot-native-docs-20261003/vscode`.
 
 | Repository | Pinned commit | Scope |
 | --- | --- | --- |

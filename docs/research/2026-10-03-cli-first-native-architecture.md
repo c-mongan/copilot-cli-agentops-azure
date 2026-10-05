@@ -96,7 +96,7 @@ No new upstream tests, model sessions, Azure uploads, device policy writes, depe
 
 ## Saved source corpus
 
-Nine official source repositories were cloned to verified external storage. Exact commits, URLs, source dates and tracked-clean checks are in `/Volumes/SanDisk Archive/Agent-Workspace/workspaces/copilot-native-docs-20261003/corpus-manifest.json`. Relevant documents and source paths were read; this is not a claim that every cloned page was read. The CLI repository contains public docs/install files, not its closed runtime source.
+Nine official source repositories were cloned to verified external storage. Exact commits, URLs, source dates and tracked-clean checks are in `<agent-workspace>/workspaces/copilot-native-docs-20261003/corpus-manifest.json`. Relevant documents and source paths were read; this is not a claim that every cloned page was read. The CLI repository contains public docs/install files, not its closed runtime source.
 
 Azure Monitor source is pinned at `583ced423b23f0c40b1c214768201ad122e09f06` (2026-10-02), with ten selected Markdown files. The SDK main snapshot, released SDK 1.0.14 runtime 1.0.85, installed CLI 1.0.91, and installed Chat artifact are separate versions. Public Chat source is older than the installed bundle. Capability discovery must use the installed release, not main-branch claims.
 

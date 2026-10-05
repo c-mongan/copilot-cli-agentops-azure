@@ -89,7 +89,7 @@ paid-usage protection. Additional live model calls are held pending verification
 of a zero paid budget or enforced stop. No billing setting was changed.
 
 Artifacts remain under
-`/Volumes/SanDisk Archive/Agent-Workspace/scratch/agentops-patterns-20261002/`.
+`<agent-workspace>/scratch/agentops-patterns-20261002/`.
 `screenshots.html` separates fresh local proof, synthetic UI fixtures, and
 earlier Azure frontend captures. `azure-patterns-bundle/review.json` records the
 bounded unsent batch. The prior reports retain their original proof dates.

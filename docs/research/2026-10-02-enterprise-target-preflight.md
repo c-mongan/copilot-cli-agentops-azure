@@ -2,14 +2,14 @@
 
 Fresh read-only checks at approximately 14:44–14:50 UTC confirm the existing Visual Studio synthetic pilot, its schemas, subscription spending limit, and deployer control-plane authority. **The parent verified a positive current-period Visual Studio benefit credit balance in the authenticated Azure portal at approximately 14:51 UTC.** The API checks below did not establish that balance. The Pay-As-You-Go subscription has spending protection Off and no existing AgentOps-named resource group. This report selects neither subscription and authorizes no deployment.
 
-No Azure writes, model calls, telemetry uploads, provider registrations, notifications, default-subscription changes, commits, or pushes were performed. Existing dirty work was preserved. The only repository file owned by this task is this report. Small sanitized command receipts are owner-only under `/Volumes/SanDisk Archive/Agent-Workspace/scratch/agentops-enterprise-target-preflight-20261002/`; the external volume UUID was verified before writing them. Receipts contain IDs and resource configuration but no tokens, email addresses, prompts, or private project inventory.
+No Azure writes, model calls, telemetry uploads, provider registrations, notifications, default-subscription changes, commits, or pushes were performed. Existing dirty work was preserved. The only repository file owned by this task is this report. Small sanitized command receipts are owner-only under `<agent-workspace>/scratch/agentops-enterprise-target-preflight-20261002/`; the external volume UUID was verified before writing them. Receipts contain IDs and resource configuration but no tokens, email addresses, prompts, or private project inventory.
 
 ## Target and protection comparison
 
 | Property | Existing synthetic pilot | Pay-As-You-Go candidate |
 | --- | --- | --- |
 | Subscription | `<subscription-id>` | `<other-subscription-id>` |
-| Tenant | `cf17fc39-219d-4d2b-9cd5-a49dc7ad0898` | Same tenant |
+| Tenant | `<tenant-id>` | Same tenant |
 | State | Enabled | Enabled |
 | Default Azure CLI account | Yes; unchanged | No |
 | ARM quota/offer family | `MSDN_2014-09-01` | `PayAsYouGo_2014-09-01` |

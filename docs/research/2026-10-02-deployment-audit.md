@@ -2,7 +2,7 @@
 
 The existing Azure synthetic pilot is working as a telemetry store. Fresh exact-run typed REST queries recovered all 390 retained event/span rows and matched all 14,639 source fields. This verifies delivery and preservation for those nine synthetic run IDs. It does not prove continuous production ingestion, model-quality improvement, or a hosted AgentOps product.
 
-This audit performed read-only Azure and GitHub operations. It made no deployments, telemetry uploads, model calls, RBAC changes, commits, pushes, or billing changes. It preserved existing work. Small local evidence copies are in `/Volumes/SanDisk Archive/Agent-Workspace/scratch/agentops-deployment-audit-20261002/`; the SanDisk UUID was verified before retaining them.
+This audit performed read-only Azure and GitHub operations. It made no deployments, telemetry uploads, model calls, RBAC changes, commits, pushes, or billing changes. It preserved existing work. Small local evidence copies are in `<agent-workspace>/scratch/agentops-deployment-audit-20261002/`; the SanDisk UUID was verified before retaining them.
 
 ## Exact environment
 
@@ -74,9 +74,9 @@ Six Logs REST queries were scoped to exact retained synthetic run IDs and `TimeG
 
 Exact run IDs are retained in `fresh-field-readback-audit.json` and query artifacts. Original evidence roots remain unchanged:
 
-1. `/Volumes/SanDisk Archive/Agent-Workspace/scratch/agentops-patterns-20261002/azure-patterns-bundle/`.
-2. `/Volumes/SanDisk Archive/Agent-Workspace/artifacts/agentops-e2e-20261002/azure-bundle/`.
-3. `/Volumes/SanDisk Archive/Agent-Workspace/artifacts/agentops-e2e-20261002/azure-review-bundle/`.
+1. `<agent-workspace>/scratch/agentops-patterns-20261002/azure-patterns-bundle/`.
+2. `<agent-workspace>/artifacts/agentops-e2e-20261002/azure-bundle/`.
+3. `<agent-workspace>/artifacts/agentops-e2e-20261002/azure-review-bundle/`.
 
 **Verified documentation discrepancy:** The multi-agent completion document says the two reviewer runs selected `gpt-5.4-mini` instead of their definitions' `gpt-5.5`. Both retained source bundles and fresh Azure readback instead report `ModelActual=gpt-5.5` in reviewer event rows and `ModelRequested=ModelActual=Model=gpt-5.5` in their model-bearing span rows (four per reviewer). This audit credits the recorded model as `gpt-5.5`; an asserted mini override is not model execution proof.
 

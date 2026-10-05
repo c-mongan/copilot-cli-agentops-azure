@@ -50,7 +50,7 @@ The exact existing Visual Studio Enterprise subscription, staging resource
 group, workspace, DCE, and DCR were verified. No infrastructure deployment was
 needed; `main.bicep` was not applied.
 
-- Subscription: `0222a208-955a-45fd-b6d8-ca4704421bf0`.
+- Subscription: `<subscription-id>`.
 - Workspace: `law-copilot-agentops-eval-eval930`, customer ID
   `f556e73c-530a-4e5d-abe1-4de1407a8a11`.
 - DCR immutable ID: `dcr-1b45ce3240c3473893972da44a2c2383`.
@@ -88,7 +88,7 @@ gates. The unchanged additive Bicep compilation remains valid. A separate
 read-only completion audit found no further scoped local implementation gap.
 
 Artifacts are under
-`/Volumes/SanDisk Archive/Agent-Workspace/scratch/agentops-patterns-20261002/`:
+`<agent-workspace>/scratch/agentops-patterns-20261002/`:
 `stockpilot-live-final/LIVE-PROOF.md`, `native-proof-all.json`,
 `azure-patterns-bundle/field-readback-audit.json`, `live-final-browser-proof.json`,
 and `screenshots.html`. The gallery adds seven fresh screenshots to the prior

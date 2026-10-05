@@ -100,7 +100,7 @@ live budget/Azure target supplied when this run was authorized:
   conflicting history, nothing needs reconciling.
 - `docs/plans/2026-09-30-agentops-overnight-progress.md` has the other
   session's detailed slice log (browser screenshots live under
-  `/Volumes/SanDisk Archive/Agent-Workspace/scratch/`).
+  `<agent-workspace>/scratch/`).
 - This session's full task-by-task ledger (rulings, review findings, fix
   rounds) is at `.superpowers/sdd/2026-09-30-agentops-overnight-build/
   progress-session-5c490171.md` (git-ignored, local scratch — not evidence
