@@ -81,8 +81,8 @@ test('attach defaults to a no-write preview and writes only its two local files 
 
     const applied = attachCommand(['--repo', root, '--yes', '--json'], { stdout: { write() {} } });
     assert.equal(applied.changed, true);
-    assert.equal(fs.statSync(path.join(root, MANIFEST_RELATIVE_PATH)).mode & 0o777, 0o600);
-    assert.equal(fs.statSync(path.join(root, RECEIPT_RELATIVE_PATH)).mode & 0o777, 0o600);
+    if (process.platform !== "win32") assert.equal(fs.statSync(path.join(root, MANIFEST_RELATIVE_PATH)).mode & 0o777, 0o600);
+    if (process.platform !== "win32") assert.equal(fs.statSync(path.join(root, RECEIPT_RELATIVE_PATH)).mode & 0o777, 0o600);
     const manifest = JSON.parse(fs.readFileSync(path.join(root, MANIFEST_RELATIVE_PATH), 'utf8'));
     assert.equal(manifest.observation.hooksInstalled, false);
     assert.equal(manifest.observation.nativeOtel, 'inactive-until-explicit-agentops-copilot-launch');
@@ -174,7 +174,7 @@ test('coverage joins only matching repository run exports and labels unobserved 
     const other = path.join(agentopsHome, 'runs', 'run_other_repo');
     const matching = path.join(agentopsHome, 'runs', 'run_this_repo');
     for (const directory of [other, matching]) fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
-    const rootHash = require('../src/lib/attach-command').sha256(fs.realpathSync(root)).slice(0, 16);
+    const rootHash = require('../src/lib/attach-command').sha256(fs.realpathSync.native(root)).slice(0, 16);
     const manifestText = fs.readFileSync(path.join(root, MANIFEST_RELATIVE_PATH), 'utf8');
     const manifestHash = require('../src/lib/attach-command').sha256(manifestText);
     fs.writeFileSync(path.join(other, 'run-context.json'), JSON.stringify({
@@ -238,7 +238,7 @@ test('coverage connects private runtime interview labels to observed scripts and
       subcommand: 'set', scope: 'project', cwd: root, agentOpsHome: agentopsHome,
       values: { pythonRuntime: 'python3.12', nodeRuntime: 'node22.23', typescriptLoader: 'unknown' }
     });
-    assert.equal(fs.statSync(config.path).mode & 0o777, 0o600);
+    if (process.platform !== "win32") assert.equal(fs.statSync(config.path).mode & 0o777, 0o600);
 
     const first = coverageCommand(['--repo', root, '--json'], { agentopsHome, stdout: { write() {} } });
     assert.equal(first.runtimeProfile.python.runtime, 'python3.12');
@@ -252,7 +252,7 @@ test('coverage connects private runtime interview labels to observed scripts and
     const run = path.join(agentopsHome, 'runs', 'runtime-profile-run');
     fs.mkdirSync(run, { recursive: true, mode: 0o700 });
     const manifestText = fs.readFileSync(path.join(root, MANIFEST_RELATIVE_PATH), 'utf8');
-    const rootHash = require('../src/lib/attach-command').sha256(fs.realpathSync(root)).slice(0, 16);
+    const rootHash = require('../src/lib/attach-command').sha256(fs.realpathSync.native(root)).slice(0, 16);
     fs.writeFileSync(path.join(run, 'run-context.json'), JSON.stringify({
       managedBy: 'copilot-agentops', schemaVersion: 1, runId: 'runtime-profile-run', repositoryRootHash: rootHash,
       attachmentManifestSha256: require('../src/lib/attach-command').sha256(manifestText)

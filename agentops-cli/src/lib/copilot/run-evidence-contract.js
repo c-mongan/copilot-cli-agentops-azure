@@ -38,7 +38,7 @@ function metadataArchitecture(input = {}) {
 function snapshotHash(value) { const { sha256, ...body } = value; return hash(JSON.stringify(body)); }
 function capturePreRunSnapshot({ cwd, executionConfiguration, taskId = null } = {}) {
   let root;
-  try { root = gitRoot(cwd); } catch { root = fs.realpathSync(cwd); }
+  try { root = gitRoot(cwd); } catch { root = fs.realpathSync.native(cwd); }
   const base = { schemaVersion: 1, status: 'unavailable', capturedAt: new Date().toISOString(),
     repositoryRootHash: hash(root).slice(0, 16), attachmentManifestSha256: null, architectureVersion: null,
     architecture: null, configurationVersion: executionConfiguration?.configurationVersion || null,

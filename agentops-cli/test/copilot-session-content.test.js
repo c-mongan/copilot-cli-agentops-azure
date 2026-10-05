@@ -36,7 +36,7 @@ test('synthetic content export creates a private non-overwriting JSONL file', ()
   try {
     const output = path.join(directory, 'AgentOpsContent_CL.jsonl');
     assert.equal(writeSessionContent(events, 'session-test', output).rows, 4);
-    assert.equal(fs.statSync(output).mode & 0o777, 0o600);
+    if (process.platform !== "win32") assert.equal(fs.statSync(output).mode & 0o777, 0o600);
     assert.throws(() => writeSessionContent(events, 'session-test', output), /EEXIST/);
     assert.throws(() => writeSessionContent(events, 'session-test', path.join(directory, 'other.jsonl')), /AgentOpsContent_CL/);
   } finally {

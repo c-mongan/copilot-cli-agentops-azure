@@ -80,14 +80,14 @@ function loadTarget() {
   const endpoint = process.env.AGENTOPS_SCRIPT_OTLP_ENDPOINT || '';
   if (!validEndpoint(endpoint)) return null;
   try {
-    const realRepo = fs.realpathSync(repo);
+    const realRepo = fs.realpathSync.native(repo);
     const expectedManifest = path.join(realRepo, '.agentops', 'attachment.json');
-    if (fs.realpathSync(manifestPath) !== fs.realpathSync(expectedManifest)) return null;
+    if (fs.realpathSync.native(manifestPath) !== fs.realpathSync.native(expectedManifest)) return null;
     const manifestStat = fs.statSync(expectedManifest);
     if (!manifestStat.isFile() || manifestStat.size > MAX_MANIFEST_BYTES) return null;
     const manifest = JSON.parse(fs.readFileSync(expectedManifest, 'utf8'));
     if (manifest.managedBy !== 'copilot-agentops' || manifest.schemaVersion !== 1) return null;
-    const scriptPath = fs.realpathSync(scriptArg);
+    const scriptPath = fs.realpathSync.native(scriptArg);
     const relative = path.relative(realRepo, scriptPath).split(path.sep).join('/');
     if (relative.startsWith('../') || path.isAbsolute(relative)) return null;
       const scriptStat = fs.statSync(scriptPath);

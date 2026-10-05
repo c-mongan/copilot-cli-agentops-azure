@@ -117,7 +117,7 @@ test('content export labels local restriction and unverified synthetic declarati
   assert.equal(report.privacy_profile, 'restricted_local');
   assert.equal(report.synthetic_provenance, 'user_declared_unverified');
   assert.equal(report.redaction_status, 'best_effort_redacted');
-  assert.equal(fs.statSync(output).mode & 0o777, 0o600);
+  if (process.platform !== "win32") assert.equal(fs.statSync(output).mode & 0o777, 0o600);
 });
 
 test('delete-content previews by default, only deletes the exact file with --confirm, and never claims Azure deletion', t => {

@@ -131,8 +131,8 @@ test('target preview, JSONL hashes, permissions and deterministic rerun are pres
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'outcome-test-'));
   try {
     const written = writeProductEvidenceBundle(bundle, path.join(temp, 'new'));
-    assert.equal(fs.statSync(written.directory).mode & 0o777, 0o700);
-    assert.equal(fs.statSync(written.manifestFile).mode & 0o777, 0o600);
+    if (process.platform !== "win32") assert.equal(fs.statSync(written.directory).mode & 0o777, 0o700);
+    if (process.platform !== "win32") assert.equal(fs.statSync(written.manifestFile).mode & 0o777, 0o600);
     assert.throws(() => writeProductEvidenceBundle(bundle, written.directory), /must be new/);
     bundle.tables.AgentOpsRunSummary_CL[0].InputTokens = 42;
     assert.throws(() => writeProductEvidenceBundle(bundle, path.join(temp, 'mutated')), /changed after qualification/);

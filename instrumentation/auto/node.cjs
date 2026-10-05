@@ -3,8 +3,8 @@
 const { createRequire } = require('node:module');
 const path = require('node:path');
 const fs = require('node:fs');
-const root = fs.realpathSync(process.env.AGENTOPS_AUTO_PROJECT_ROOT || '');
-const entry = fs.realpathSync(process.argv[1]);
+const root = fs.realpathSync.native(process.env.AGENTOPS_AUTO_PROJECT_ROOT || '.');
+const entry = fs.realpathSync.native(process.argv[1]);
 const relative = path.relative(root, entry);
 if (relative.startsWith('..' + path.sep) || relative === '..' || path.isAbsolute(relative)) throw new Error('AgentOps entry outside approved project');
 const local = createRequire(path.join(root, 'package.json'));

@@ -36,7 +36,7 @@ test('Python interpreter lookup preserves a PATH symlink and skips executable di
     const linked = path.join(second, 'python3');
     fs.symlinkSync(process.execPath, linked);
     assert.equal(executableOnPath('python3', [first, second].join(path.delimiter), root), linked);
-    assert.notEqual(linked, fs.realpathSync(linked));
+    assert.notEqual(linked, fs.realpathSync.native(linked));
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -54,17 +54,24 @@ test('attached Copilot environment scopes Python script bootstrap and exact run 
       collectorMode: 'auto'
     });
     assert.equal(env.AGENTOPS_RUN_ID, 'run-synthetic-123');
-    assert.equal(env.AGENTOPS_REPO_ROOT, fs.realpathSync(root));
-    assert.equal(env.AGENTOPS_ATTACHMENT_MANIFEST, path.join(fs.realpathSync(root), '.agentops', 'attachment.json'));
+    assert.equal(env.AGENTOPS_REPO_ROOT, fs.realpathSync.native(root));
+    assert.equal(env.AGENTOPS_ATTACHMENT_MANIFEST, path.join(fs.realpathSync.native(root), '.agentops', 'attachment.json'));
     assert.equal(env.AGENTOPS_SCRIPT_OTLP_ENDPOINT, 'http://127.0.0.1:4318/v1/traces');
     assert.deepEqual(env.PYTHONPATH.split(path.delimiter), [path.join(repoRoot, 'instrumentation', 'python'), '/existing/python']);
-    assert.equal(env.PATH.split(path.delimiter)[0], path.join(repoRoot, 'instrumentation', 'python', 'bin-python3'));
-    assert.ok(path.isAbsolute(env.AGENTOPS_REAL_PYTHON3));
-    assert.equal(env.PATH.split(path.delimiter).some(entry => fs.existsSync(path.join(entry, 'python'))), Boolean(env.AGENTOPS_REAL_PYTHON));
+    if (process.platform !== 'win32') {
+      assert.equal(env.PATH.split(path.delimiter)[0], path.join(repoRoot, 'instrumentation', 'python', 'bin-python3'));
+      assert.ok(path.isAbsolute(env.AGENTOPS_REAL_PYTHON3));
+      assert.equal(env.PATH.split(path.delimiter).some(entry => fs.existsSync(path.join(entry, 'python'))), Boolean(env.AGENTOPS_REAL_PYTHON));
+    } else {
+      assert.equal(env.PATH, '/usr/bin', 'scoped Python PATH shims are POSIX-only');
+    }
     assert.deepEqual(env.NODE_PATH.split(path.delimiter), [path.join(repoRoot, 'instrumentation', 'node'), '/existing/node']);
     assert.match(env.NODE_OPTIONS, new RegExp(`--require="${path.join(repoRoot, 'instrumentation', 'node', 'preload.cjs').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`));
     assert.ok(env.NODE_OPTIONS.endsWith('--max-old-space-size=4096'));
-    assert.equal(env.PATH.split(path.delimiter).slice(1).join(path.delimiter), '/usr/bin');
+    if (process.platform !== 'win32') {
+      const expectedPathTail = env.AGENTOPS_REAL_PYTHON ? [path.join(repoRoot, 'instrumentation', 'python', 'bin-python'), '/usr/bin'] : ['/usr/bin'];
+      assert.deepEqual(env.PATH.split(path.delimiter).slice(1), expectedPathTail);
+    }
     const repeated = attachedScriptEnvironment({ env, cwd: root, runId: 'run-synthetic-123', agentopsRoot: repoRoot, collectorMode: 'auto' });
     assert.equal(repeated.PATH, env.PATH);
     assert.equal(repeated.AGENTOPS_REAL_PYTHON3, env.AGENTOPS_REAL_PYTHON3);
@@ -241,7 +248,11 @@ test('Node TypeScript .ts .mts and .cts entrypoints trace without changing task 
   }
 });
 
-test('Node preload traces the script argument selected by a ts-node-style launcher', async () => {
+test('Node preload traces the script argument selected by a ts-node-style launcher', async t => {
+  if (!process.features.typescript) {
+    t.skip('selected Node runtime does not strip TypeScript types by default');
+    return;
+  }
   const requests = [];
   const server = http.createServer((request, response) => {
     const chunks = [];
@@ -473,7 +484,11 @@ test('overlapping and repeated invocations of inventoried scripts within one run
   }
 });
 
-test('scoped Python launcher records actual owned-script outcomes without capturing exception payloads', async () => {
+test('scoped Python launcher records actual owned-script outcomes without capturing exception payloads', async t => {
+  if (process.platform === 'win32') {
+    t.skip('scoped Python launcher shims are POSIX-only');
+    return;
+  }
   const payloads = [];
   const server = http.createServer((request, response) => {
     const chunks = [];
@@ -708,7 +723,11 @@ test('scoped Python launcher bounds cleanup when an owned child ignores cancella
   }
 });
 
-test('scoped Python launcher retains explicit step spans and leaves unsupported or unowned commands truthful', async () => {
+test('scoped Python launcher retains explicit step spans and leaves unsupported or unowned commands truthful', async t => {
+  if (process.platform === 'win32') {
+    t.skip('scoped Python launcher shims are POSIX-only');
+    return;
+  }
   const payloads = [];
   const server = http.createServer((request, response) => {
     const chunks = [];

@@ -204,8 +204,8 @@ test('post-run delivery exports private metadata and uploads both streams to the
   assert.ok(uris.every(uri => uri.includes('project.ingest.monitor.azure.com') && uri.includes('dcr-project')));
   assert.ok(uris.some(uri => uri.includes('Custom-AgentOpsEvents_CL')));
   assert.ok(uris.some(uri => uri.includes('Custom-AgentOpsSpans_CL')));
-  assert.equal(fs.statSync(path.dirname(result.outputDir)).mode & 0o777, 0o700);
-  assert.equal(fs.statSync(result.outputDir).mode & 0o777, 0o700);
+  if (process.platform !== "win32") assert.equal(fs.statSync(path.dirname(result.outputDir)).mode & 0o777, 0o700);
+  if (process.platform !== "win32") assert.equal(fs.statSync(result.outputDir).mode & 0o777, 0o700);
   const runContext = JSON.parse(fs.readFileSync(path.join(result.outputDir, 'run-context.json'), 'utf8'));
   assert.equal(runContext.managedBy, 'copilot-agentops');
   assert.equal(runContext.runId, 'wrapper_run_synthetic');
@@ -217,9 +217,9 @@ test('post-run delivery exports private metadata and uploads both streams to the
   assert.equal(runContext.executionConfiguration.source, 'unknown');
   assert.equal(runContext.executionConfiguration.completeness, 'unknown');
   assert.equal(JSON.stringify(runContext).includes(fixture.repo), false);
-  assert.equal(fs.statSync(path.join(result.outputDir, 'run-context.json')).mode & 0o777, 0o600);
+  if (process.platform !== "win32") assert.equal(fs.statSync(path.join(result.outputDir, 'run-context.json')).mode & 0o777, 0o600);
   const eventFile = path.join(result.outputDir, 'AgentOpsEvents_CL.jsonl');
-  assert.equal(fs.statSync(eventFile).mode & 0o777, 0o600);
+  if (process.platform !== "win32") assert.equal(fs.statSync(eventFile).mode & 0o777, 0o600);
   assert.doesNotMatch(fs.readFileSync(eventFile, 'utf8'), /PRIVATE_COMMAND/);
 });
 

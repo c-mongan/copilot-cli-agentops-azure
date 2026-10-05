@@ -9,9 +9,9 @@ const {
 } = require('../src/lib/azure/v2-ingestion-schema-safety');
 
 const bicepPath = path.resolve(__dirname, '../../infra/bicep/v2-ingestion.bicep');
-const bicep = fs.readFileSync(bicepPath, 'utf8');
-const evalSpansBicep = fs.readFileSync(path.resolve(__dirname, '../../infra/bicep/eval-spans.bicep'), 'utf8');
-const runtimeMigrationBicep = fs.readFileSync(path.resolve(__dirname, '../../infra/bicep/migrate-script-runtime-schema.bicep'), 'utf8');
+const bicep = fs.readFileSync(bicepPath, 'utf8').replace(/\r\n/g, '\n');
+const evalSpansBicep = fs.readFileSync(path.resolve(__dirname, '../../infra/bicep/eval-spans.bicep'), 'utf8').replace(/\r\n/g, '\n');
+const runtimeMigrationBicep = fs.readFileSync(path.resolve(__dirname, '../../infra/bicep/migrate-script-runtime-schema.bicep'), 'utf8').replace(/\r\n/g, '\n');
 
 test('AgentOpsEvents Bicep preserves legacy cost type and adds ordered receipt columns', () => {
   const columns = new Map(agentOpsEventsColumnsFromBicep(bicep).map(column => [column.name, column.type]));

@@ -45,7 +45,7 @@ function gitRoot(repoPath) {
   const stat = fs.statSync(requested);
   if (!stat.isDirectory()) throw new Error(`--repo must be a directory: ${requested}`);
   const root = childProcess.execFileSync('git', ['-C', requested, 'rev-parse', '--show-toplevel'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
-  return fs.realpathSync(root);
+  return fs.realpathSync.native(root);
 }
 
 function relativePath(root, absolutePath) {
@@ -376,7 +376,7 @@ function readJsonlRows(file) {
 
 function observedCoverage(root, architecture, options = {}) {
   const runsDirectory = path.join(options.agentopsHome || require('./paths').agentopsHome, 'runs');
-  const rootHash = sha256(fs.realpathSync(root)).slice(0, 16);
+  const rootHash = sha256(fs.realpathSync.native(root)).slice(0, 16);
   const observed = { agents: new Set(), skills: new Set(), referenceFiles: new Set(), scriptFiles: new Set() };
   let associatedRuns = 0;
   let unassociatedRuns = 0;

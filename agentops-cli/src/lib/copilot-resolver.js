@@ -6,7 +6,7 @@ const { commandCandidates, isExecutable } = require('./shell');
 
 function realPathMaybe(filePath) {
   try {
-    return fs.realpathSync(filePath);
+    return fs.realpathSync.native(filePath);
   } catch {
     return path.resolve(filePath);
   }

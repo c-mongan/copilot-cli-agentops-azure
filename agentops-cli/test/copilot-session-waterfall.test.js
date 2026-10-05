@@ -71,7 +71,7 @@ test('local waterfall escapes rich content and writes owner-only file without ov
   try {
     const output = path.join(directory, 'run.html');
     writeSessionWaterfall(events, 'synthetic', output);
-    assert.equal(fs.statSync(output).mode & 0o777, 0o600);
+    if (process.platform !== "win32") assert.equal(fs.statSync(output).mode & 0o777, 0o600);
     assert.throws(() => writeSessionWaterfall(events, 'synthetic', output), /EEXIST/);
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });

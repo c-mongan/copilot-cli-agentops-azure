@@ -16,7 +16,7 @@ function executableOnPath(name, pathValue, cwd = process.cwd(), excludedRoot = '
     try {
       fs.accessSync(candidate, fs.constants.X_OK);
       if (!fs.statSync(candidate).isFile()) continue;
-      const resolved = fs.realpathSync(candidate);
+      const resolved = fs.realpathSync.native(candidate);
       if (excludedRoot && (resolved === excludedRoot || resolved.startsWith(`${excludedRoot}${path.sep}`))) continue;
       // Launch the PATH entry itself. Resolving a virtualenv interpreter
       // symlink to its base binary would change sys.prefix and site-packages.

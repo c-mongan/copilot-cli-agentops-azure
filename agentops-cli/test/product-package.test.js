@@ -8,7 +8,7 @@ const sourceRoot = path.resolve(__dirname, '../..');
 const { prepare, gradeHeldoutTrial, DATA_DEST, SINK_DEST } = require('../../evals/stockpilot/scripts/heldout');
 const { readKey } = require('../../evals/diagnostics/common');
 function run(executable, args, options = {}) {
-  const result = spawnSync(executable, args, { encoding: 'utf8', timeout: 60000, ...options });
+  const result = spawnSync(executable, args, { encoding: 'utf8', timeout: 60000, shell: process.platform === 'win32', ...options });
   assert.equal(result.status, 0, result.stderr || result.error?.message);
   return result.stdout;
 }

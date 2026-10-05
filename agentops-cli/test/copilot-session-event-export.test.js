@@ -60,7 +60,7 @@ test('session event export omits undeclared references and writes a private non-
     ], 'session-synthetic', 'run-synthetic', outputDir, { repoRoot: root, referencePaths: new Set() });
     assert.equal(written.rows, 1);
     assert.equal(path.basename(written.output), 'AgentOpsEvents_CL.jsonl');
-    assert.equal(fs.statSync(written.output).mode & 0o777, 0o600);
+    if (process.platform !== "win32") assert.equal(fs.statSync(written.output).mode & 0o777, 0o600);
     assert.throws(() => writeSessionEvents([], 'session-synthetic', 'run-synthetic', outputDir, { repoRoot: root, referencePaths: new Set() }), /EEXIST/);
     assert.throws(() => projectSessionEvents([], { sessionId: 'bad id', runId: 'run-synthetic', repoRoot: root }), /safe session ID/);
   } finally {

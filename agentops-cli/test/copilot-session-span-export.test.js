@@ -236,7 +236,7 @@ test('span export writes owner-only JSONL and refuses overwrite', () => {
       spanName: 'invoke_agent', operation: 'invoke_agent', match: 'exact-session'
     }], 'session-a', 'run-a', output);
     assert.equal(result.rows, 1);
-    assert.equal(fs.statSync(output).mode & 0o777, 0o600);
+    if (process.platform !== "win32") assert.equal(fs.statSync(output).mode & 0o777, 0o600);
     assert.throws(() => writeSessionSpans([{
       start: 1767225601000, end: 1767225601000, traceId: 'trace-a', spanId: 'span-a',
       spanName: 'invoke_agent', operation: 'invoke_agent', match: 'exact-session'

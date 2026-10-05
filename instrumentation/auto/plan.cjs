@@ -18,12 +18,12 @@ function prepareAutoInstrumentation(options, deps = {}) {
   if (!['node', 'python'].includes(runtime)) throw new Error('runtime must be node or python');
   if (!Array.isArray(args) || args.some(value => typeof value !== 'string' || value.includes('\0'))) throw new Error('args must be a string array');
   if (![executable, entry, projectRoot].every(value => typeof value === 'string' && path.isAbsolute(value))) throw new Error('absolute executable, entry and projectRoot are required');
-  const root = fs.realpathSync(projectRoot);
-  const target = fs.realpathSync(entry);
+  const root = fs.realpathSync.native(projectRoot);
+  const target = fs.realpathSync.native(entry);
   const relative = path.relative(root, target);
   if (!fs.statSync(root).isDirectory() || !fs.statSync(target).isFile() || relative.startsWith('..' + path.sep) || relative === '..' || path.isAbsolute(relative)) throw new Error('entry must be a file inside the approved project');
   const command = executable;
-  fs.realpathSync(command);
+  fs.realpathSync.native(command);
   if (!fs.statSync(command).isFile()) throw new Error('executable must be a file');
   let url;
   try { url = new URL(endpoint); } catch { throw new Error("endpoint must be a loopback Collector base URL"); }

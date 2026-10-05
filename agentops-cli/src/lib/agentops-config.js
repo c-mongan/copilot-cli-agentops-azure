@@ -12,7 +12,7 @@ const defaultConfigPath = process.env.AGENTOPS_CONFIG_PATH || defaultUserAgentOp
 function projectRootFor(cwd = process.cwd()) {
   let current;
   try {
-    current = fs.realpathSync(path.resolve(cwd));
+    current = fs.realpathSync.native(path.resolve(cwd));
   } catch {
     return '';
   }

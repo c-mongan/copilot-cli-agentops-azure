@@ -48,8 +48,8 @@ test('project-scoped AgentOps config overrides user defaults without changing th
     });
 
     assert.notEqual(result.path, globalConfigPath);
-    assert.match(result.path, /\.agentops[\/]projects[\/][a-f0-9]+\.json$/);
-    assert.equal(fs.statSync(result.path).mode & 0o777, 0o600);
+    assert.match(result.path, /\.agentops[\\/]projects[\\/][a-f0-9]+\.json$/);
+    if (process.platform !== "win32") assert.equal(fs.statSync(result.path).mode & 0o777, 0o600);
     assert.deepEqual(readAgentOpsConfig({ configPath: globalConfigPath }).values, {
       resourceGroup: 'rg-global',
       workspaceName: 'law-global',
@@ -156,7 +156,7 @@ test('project-scoped azd import writes private config without touching user conf
 
     assert.equal(result.ok, true);
     assert.notEqual(result.path, globalConfigPath);
-    assert.equal(fs.statSync(result.path).mode & 0o777, 0o600);
+    if (process.platform !== "win32") assert.equal(fs.statSync(result.path).mode & 0o777, 0o600);
     assert.equal(readAgentOpsConfig({ configPath: globalConfigPath }).values.resourceGroup, 'rg-global');
     assert.equal(readAgentOpsConfig({ configPath: result.path }).values.resourceGroup, 'rg-project');
   } finally {

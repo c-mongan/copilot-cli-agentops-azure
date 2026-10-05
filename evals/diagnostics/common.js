@@ -29,5 +29,5 @@ function preparePaths(publicDir, keyFile) {
   return { publicDir: publicReal, keyFile: keyReal };
 }
 function writeJson(file, value, mode = 0o644) { fs.writeFileSync(file, JSON.stringify(value, null, 2) + '\n', { flag: 'wx', mode }); }
-function readKey(file) { const value = readJson(file); if ((fs.statSync(file).mode & 0o077) !== 0) throw new Error('answer key must have mode 0600'); return value; }
+function readKey(file) { const value = readJson(file); if (process.platform !== 'win32' && (fs.statSync(file).mode & 0o077) !== 0) throw new Error('answer key must have mode 0600'); return value; }
 module.exports = { hash, rng, shuffle, knownOpaque, inside, readJson, preparePaths, writeJson, readKey, repo };

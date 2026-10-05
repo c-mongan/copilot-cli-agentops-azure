@@ -69,7 +69,7 @@ function deliverCopilotSession(options = {}) {
   try {
     repoRoot = gitRoot(cwd);
   } catch {
-    repoRoot = fs.realpathSync(cwd);
+    repoRoot = fs.realpathSync.native(cwd);
   }
   const eventExport = writeSessionEvents(sessionEvents, sessionId, runId, outputDir, { repoRoot });
   const native = readSessionOtelSpans(

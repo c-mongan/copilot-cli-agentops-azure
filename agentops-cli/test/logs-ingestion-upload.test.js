@@ -302,7 +302,7 @@ test('Azure CLI conservative reservation covers stdlib Python serialization acro
     [Number.MIN_VALUE, Number.MAX_VALUE, -Number.MAX_VALUE, 1e-6, 1e-7, 1e20, 1e21, -0, 1.2345678901234567],
     Array.from({ length: 500 }, (_, index) => ({ [`é${index}`]: index / 13, unicode: '🚀é' }))
   ];
-  const result = spawnSync('python3', ['-c', 'import json,sys; print(json.dumps([len(json.dumps(json.loads(item)).encode("utf-8")) for item in json.load(sys.stdin)]))'], { input: JSON.stringify(fixtures.map(JSON.stringify)), encoding: 'utf8' });
+  const result = spawnSync('python3', ['-c', 'import json,sys; print(json.dumps([len(json.dumps(json.loads(item)).encode("utf-8")) for item in json.load(sys.stdin)]))'], { input: JSON.stringify(fixtures.map(JSON.stringify)), encoding: 'utf8', env: { ...process.env, PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8' } });
   assert.equal(result.status, 0, result.stderr);
   const actualBytes = JSON.parse(result.stdout);
   fixtures.forEach((fixture, index) => assert.ok(azureCliPayloadUpperBound(JSON.stringify(fixture)) >= actualBytes[index], `fixture ${index} undercounted`));
