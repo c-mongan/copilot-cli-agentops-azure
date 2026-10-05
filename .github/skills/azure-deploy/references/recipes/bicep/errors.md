@@ -11,8 +11,12 @@
 
 ## Cleanup (DESTRUCTIVE)
 
+Do not run this without separate, explicit owner approval. First confirm the exact subscription and target, and confirm that a recovery path (backup or redeploy from source) exists. Preview what would be deleted before running anything.
+
 ```bash
-az group delete --name <rg-name> --yes
+az account show --query "{name:name,id:id}" -o table
+az resource list -g <rg-name> -o table   # preview
+az group delete --name <rg-name>         # prompts for confirmation; never add --yes
 ```
 
 ⚠️ Permanently deletes ALL resources in the group.

@@ -63,9 +63,13 @@ function walk(dir, files = [], root = repoRoot) {
       files.push(fullPath);
     } else if (entry.isSymbolicLink()) {
       // Directory symlinks must not be treated as files. File symlinks remain
-      // part of the repository checks when their targets are readable files.
+      // part of the repository checks only when their targets are readable
+      // files inside the scanned root, so external files are never read.
       try {
-        if (fs.statSync(fullPath).isFile()) files.push(fullPath);
+        const target = fs.realpathSync(fullPath);
+        const relativeTarget = path.relative(fs.realpathSync(root), target);
+        const insideRoot = relativeTarget !== '' && relativeTarget.split(path.sep)[0] !== '..' && !path.isAbsolute(relativeTarget);
+        if (insideRoot && fs.statSync(target).isFile()) files.push(fullPath);
       } catch {
         // Broken or inaccessible symlinks are not source files to inspect.
       }
