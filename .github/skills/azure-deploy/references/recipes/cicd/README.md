@@ -2,6 +2,8 @@
 
 Deploy to Azure using automated pipelines.
 
+> All examples run manually and wait for an approval-gated environment. Each one runs a preview (`azd provision --preview` or `az deployment … what-if`) before any write, so the change can be reviewed. Do not add push triggers that apply infrastructure without that review.
+
 ## Prerequisites
 
 - `.azure/deployment-plan.md` exists with status `Validated`

@@ -7,5 +7,5 @@ useDefault = true
 description = "Graphify writes this ignored cache from source-file hashes; scanning it can produce generic-key false positives."
 paths = [
   '''(^|/)graphify-out/''',
-  '''(^|/)\.refs/'''
+  '''^\.refs/'''
 ]

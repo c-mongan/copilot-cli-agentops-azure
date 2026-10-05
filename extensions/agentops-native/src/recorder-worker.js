@@ -4,21 +4,21 @@ const { startScopedStrictCollector } = fs.existsSync(require('node:path').join(_
 const path = require('node:path');
 const abort = new AbortController();
 let collector, stopping, starting;
-async function stop() {
+async function stop(exitCode = 0) {
   if (stopping) return stopping;
   stopping = (async () => {
     abort.abort();
     try { await starting; } catch {}
     if (collector) await collector.stop({ remove: false });
-    process.exit(0);
+    process.exit(exitCode);
   })();
   return stopping;
 }
 process.on('disconnect', () => stop().catch(() => process.exit(1)));
 process.on('SIGTERM', () => stop().catch(() => process.exit(1)));
 process.on('SIGINT', () => stop().catch(() => process.exit(1)));
-process.on('uncaughtException', () => stop().catch(() => process.exit(1)));
-process.on('unhandledRejection', () => stop().catch(() => process.exit(1)));
+process.on('uncaughtException', () => stop(1).catch(() => process.exit(1)));
+process.on('unhandledRejection', () => stop(1).catch(() => process.exit(1)));
 process.on('message', message => {
   if (message?.type === 'stop') { stop().catch(() => process.exit(1)); return; }
   if (message?.type !== 'start' || starting || stopping) return;

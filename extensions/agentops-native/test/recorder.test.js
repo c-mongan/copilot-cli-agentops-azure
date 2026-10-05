@@ -107,3 +107,12 @@ test('worker startup failure propagates retained storage quota reason', async ()
   });
   await assert.rejects(startRecorder('/fixture/storage', { ensureCollector: async () => '/fixture/binary', fork: () => worker }), { reason: 'storage_limit' });
 });
+test('recorder worker reports fatal errors with a failing exit code', async t => {
+  const dir = temporary(t);
+  const preload = path.join(dir, 'throw.js');
+  fs.writeFileSync(preload, "setTimeout(() => { throw new Error('fatal fixture'); }, 20);\n");
+  const { fork } = require('node:child_process');
+  const worker = fork(path.join(__dirname, '../src/recorder-worker.js'), [], { execArgv: ['--require', preload], stdio: ['ignore', 'ignore', 'ignore', 'ipc'] });
+  const code = await new Promise(resolve => worker.on('exit', resolve));
+  assert.equal(code, 1);
+});

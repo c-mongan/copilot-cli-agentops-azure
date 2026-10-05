@@ -1,8 +1,7 @@
+# Manual, approval-gated example: run what-if/preview, review it, then apply. Never auto-deploy on push.
 name: Deploy to Azure
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -12,6 +11,7 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # Configure required reviewers on this environment so the apply steps wait for approval.
     environment: dev
     
     steps:
@@ -27,8 +27,17 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Deploy
-        run: azd up --no-prompt
+      - name: Preview infrastructure changes (review before apply)
+        run: azd provision --preview --no-prompt
+        env:
+          AZURE_ENV_NAME: ${{ vars.AZURE_ENV_NAME }}
+          AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Provision and deploy
+        run: |
+          azd provision --no-prompt
+          azd deploy --no-prompt
         env:
           AZURE_ENV_NAME: ${{ vars.AZURE_ENV_NAME }}
           AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
