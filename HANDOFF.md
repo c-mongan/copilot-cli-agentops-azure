@@ -344,5 +344,12 @@ Tests: native 87/87, supporting 34/34. OCR delegate review was clean. Still unpr
   - The azcli, bicep and terraform cleanup recipes no longer use `--yes` or `-auto-approve`. They require explicit approval, a target check, a recovery path, and a preview (`az resource list` or `terraform plan -destroy`).
   - `scripts/static-check.js` follows a file symlink only when its real target is inside the scanned root. A regression test covers this.
   - CI passes on 2ed6ed5.
+- Fifth Copilot round, on 2ed6ed5, raised 5 findings in the vendored skills. Commit e896255 fixed and resolved all of them:
+  - The cost report cleanup removes only a temp directory owned by the run.
+  - The Azure DevOps deployment jobs check out the repo.
+  - The Bicep example uses resource-group scope.
+  - The AppExceptions KQL query uses real column names.
+  - AuthorizationFailed guidance asks for the least privilege needed.
+  - CI passes on e896255. No review threads are open.
 - Privacy: personal paths and subscription/tenant IDs are replaced with placeholders in the tree. They remain in the pushed history of a009b68 and b789153. **Squash-merge** the PR, or rewrite history only with the owner's approval.
 - Merging is not blocked. The owner decides when to merge.
