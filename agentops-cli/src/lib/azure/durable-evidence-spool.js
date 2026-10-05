@@ -2,6 +2,8 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 
+const { readPrivateFile } = require('../copilot/delivery-limits');
+
 const spoolVersion = 1;
 const defaultMaxBytes = 64 * 1024 * 1024;
 const defaultTtlMs = 7 * 24 * 60 * 60 * 1000;
@@ -107,7 +109,8 @@ function safeEvidenceRow(input = {}) {
 function ensurePrivateDirectory(directory) {
   if (fs.existsSync(directory)) {
     const existing = fs.lstatSync(directory);
-    if (existing.isSymbolicLink() || !existing.isDirectory()) {
+    if (existing.isSymbolicLink() || !existing.isDirectory()
+      || (typeof process.getuid === 'function' && existing.uid !== process.getuid())) {
       throw new Error('AgentOps durable spool directory must be a real directory, not a symlink');
     }
   }
@@ -136,7 +139,7 @@ function atomicWrite(file, body) {
 }
 
 function readJson(file, fallback = null) {
-  try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return fallback; }
+  try { return JSON.parse(readPrivateFile(file, 1024 * 1024)); } catch { return fallback; }
 }
 
 function stateFile(directory) {
@@ -225,7 +228,8 @@ function segmentFiles(directory) {
         if (error.code === 'ENOENT') return false;
         throw error;
       }
-      if (entry.isSymbolicLink() || !entry.isFile()) {
+      if (entry.isSymbolicLink() || !entry.isFile() || entry.nlink !== 1
+        || (typeof process.getuid === 'function' && entry.uid !== process.getuid())) {
         throw new Error('AgentOps durable spool segment must be a regular file, not a symlink');
       }
       return true;
@@ -439,7 +443,7 @@ function createDurableEvidenceSpool(options = {}) {
         && Number.isFinite(createdAt) && Number.isFinite(expiresAt)
         && expiresAt > createdAt && expiresAt - createdAt <= maximumTtlMs;
       if (!valid) return { ok: false, status: 'invalid', event_id: eventId };
-      if (expiresAt <= now()) return { ok: false, status: 'expired', event_id: eventId };
+      if (Math.min(expiresAt, createdAt + ttlMs) <= now()) return { ok: false, status: 'expired', event_id: eventId };
 
       for (const existingFile of segmentFiles(directory).filter(item => /\.(pending|uploading)\.json$/.test(item))) {
         const existing = readJson(existingFile);
@@ -583,7 +587,7 @@ function createDurableEvidenceSpool(options = {}) {
         result.skipped_scope += 1;
         continue;
       }
-      if (expiresAt <= now()) {
+      if (Math.min(expiresAt, createdAt + ttlMs) <= now()) {
         transition(file, 'expired');
         result.expired += 1;
         continue;
@@ -601,6 +605,14 @@ function createDurableEvidenceSpool(options = {}) {
       heartbeat.unref();
       try {
       for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        if (Math.min(expiresAt, createdAt + ttlMs) <= now()) {
+          segment.attempts += attempt - 1;
+          atomicWrite(file, `${canonicalJson(segment)}\n`);
+          transition(file, 'expired');
+          result.expired += 1;
+          terminal = true;
+          break;
+        }
         result.attempts += 1;
         let response;
         try {

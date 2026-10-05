@@ -33,12 +33,23 @@ agentops dashboard validate
 agentops dashboard links-check
 ```
 
-Live KQL checks against Azure Log Analytics:
+Render bounded queries locally without Azure access:
 
 ```bash
-agentops dashboard kql-check --last 24h --json
+agentops dashboard kql-check --help
+agentops dashboard kql-check --local-only --last 24h --json
+```
+
+Local results include each rendered query, `mode: "local-only"`, and `evidenceTier: "local-query-render"`. They prove query rendering only; they do not prove Azure syntax acceptance or telemetry rows. Each query ends in `take 5`. `--last` accepts positive `s`, `m`, `h`, or `d` durations up to 30 days. An optional `--workspace-id` must be an Azure workspace UUID. Unknown arguments and missing values fail before queries run. `--require-rows` and `--live` cannot be combined with `--local-only`.
+
+Live KQL checks against Azure Log Analytics (the default for compatibility; `--live` makes this explicit):
+
+```bash
+agentops dashboard kql-check --live --last 24h --json
 agentops dashboard kql-check --last 24h --require-rows --json
 ```
+
+Live results report `mode: "live"` and `evidenceTier: "live-azure-query"`; inspect `ok`, each check, and `errors` to establish whether queries succeeded.
 
 The prompt/response viewer query is syntax-checked even when strict mode has no `AgentOpsContent_CL` rows. It is not required to return rows unless content capture was explicitly enabled. When rows exist, it normalizes prompt/response columns into a transcript-style `MessageText` field and keeps `CaptureMode`, `RedactionStatus`, `ContentHash`, and `ContentLength` visible beside the text.
 

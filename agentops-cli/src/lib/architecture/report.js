@@ -111,6 +111,10 @@ function renderMarkdown(report) {
     lines.push(`- Rejection test: ${card.rejectionTest}`);
     lines.push('');
   }
+  lines.push('## Captured positive observations', '');
+  const observed = metrics?.observedDiagnostics;
+  lines.push(`Observed-only diagnostics: ${(observed?.runIds || []).length} runs; ${(observed?.tools || []).length} terminal tools; ${(observed?.scripts || []).length} script receipts; ${(observed?.references || []).length} affirmative reads.`);
+  lines.push('These are lower-bound observations. Missing receipts do not establish absence or an activation probability.', '');
   lines.push('## Metric summary', '');
   const covRuns = metrics?.coverageRuns ?? coverageRuns;
   lines.push(`- Skill activation rows: ${metrics?.skillActivationRate?.length || 0}`);

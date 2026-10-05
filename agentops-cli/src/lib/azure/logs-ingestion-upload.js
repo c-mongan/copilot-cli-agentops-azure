@@ -2,9 +2,11 @@ const childProcess = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { checkAzureSubscription } = require('./subscription-guard');
+const { checkAzureSubscription, normalizedSubscriptionId } = require('./subscription-guard');
 const { allowedEvidenceTables, createDurableEvidenceSpool } = require('./durable-evidence-spool');
 const { logsIngestionUri, streamNameFor } = require('./v2-ingest-plan');
+
+const { configuredDeliveryLimits, readPrivateFile, reserveSharedPublishBytes } = require('../copilot/delivery-limits');
 
 const logsIngestionResource = 'https://monitor.azure.com/';
 const defaultRequestTimeoutMs = 30000;
@@ -58,7 +60,18 @@ function azureCliAccessToken(options = {}) {
 
 function createDurableLogsIngestionUploader(options = {}) {
   const spawnSync = options.spawnSync || childProcess.spawnSync;
-  const subscription = checkAzureSubscription({
+  const authenticationMode = options.authenticationMode || 'azure-cli';
+  if (!['azure-cli', 'embedded'].includes(authenticationMode)) throw new Error('Durable Logs Ingestion authentication mode is invalid');
+  if (options.tokenProvider !== undefined && typeof options.tokenProvider !== 'function') {
+    throw new Error('Durable Logs Ingestion requires a callable token provider');
+  }
+  // An embedded identity provider has no Azure CLI account. Its destination
+  // must be approved explicitly by its host, never inferred from ambient env.
+  // This checks local destination consent, not ownership of a DCR: Azure RBAC
+  // remains the authority for the endpoint/immutable DCR pair.
+  const subscription = authenticationMode === 'embedded'
+    ? approvedEmbeddedSubscription(options)
+    : checkAzureSubscription({
     spawnSync,
     env: options.env,
     expectedSubscriptionId: options.expectedSubscriptionId,
@@ -81,29 +94,53 @@ function createDurableLogsIngestionUploader(options = {}) {
       return { status: 400, error: 'table-not-allowlisted' };
     }
     const uri = logsIngestionUri(endpoint, dcrImmutableId, streamNameFor(context.table));
-    const send = async token => {
-      if (typeof token !== 'string' || !token.trim()) throw new Error('Durable Logs Ingestion token provider returned no token');
+    const body = JSON.stringify([row]);
+    const send = async () => {
+      if (options.abortSignal?.aborted) return { status: 0, error: 'publishing-cancelled', headers: {} };
+      const reservation = reserveSharedPublishBytes(options, {
+        subscriptionId: subscription.expected, logsIngestionEndpoint: endpoint, dcrImmutableId
+      }, Buffer.byteLength(body));
+      if (!reservation.allowed) return { status: 429, error: reservation.reason, headers: {} };
+      const token = await tokenProvider();
+      if (options.abortSignal?.aborted) return { status: 0, error: 'publishing-cancelled', headers: {} };
+      if (typeof token !== 'string' || !token.trim() || /[\r\n]/.test(token)) throw new Error('Durable Logs Ingestion token provider returned no usable token');
+      const timeoutSignal = AbortSignal.timeout(timeoutMs);
+      const signal = options.abortSignal ? AbortSignal.any([options.abortSignal, timeoutSignal]) : timeoutSignal;
       return boundedResponse(await fetchImpl(uri, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify([row]),
-      signal: AbortSignal.timeout(timeoutMs)
+      body,
+      redirect: 'error',
+      signal
       }));
     };
-    let response = await send(await tokenProvider());
+    let response = await send();
     if ([401, 403].includes(Number(response?.status))) {
-      response = await send(await tokenProvider());
+      response = await send();
     }
     return response;
   };
 }
 
+function approvedEmbeddedSubscription(options) {
+  const expected = normalizedSubscriptionId(options.expectedSubscriptionId);
+  const guid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
+  if (typeof options.tokenProvider !== 'function') {
+    throw new Error('Durable Logs Ingestion requires a callable token provider');
+  }
+  if (!guid.test(expected) || !Array.isArray(options.approvedSubscriptionIds)
+    || !options.approvedSubscriptionIds.map(normalizedSubscriptionId).includes(expected)) {
+    throw new Error('Azure subscription guard refused the write: embedded publishing requires an explicit subscription ID and approved subscription list.');
+  }
+  return { ok: true, expected, active: '', mode: 'embedded-destination-approval' };
+}
+
 async function drainDurableLogsIngestion(options = {}) {
   const spool = createDurableEvidenceSpool({
     directory: options.directory,
-    maxBytes: options.maxBytes,
-    ttlMs: options.ttlMs,
-    now: options.now,
+    maxBytes: configuredDeliveryLimits(options).maxQueueBytes,
+    ttlMs: configuredDeliveryLimits(options).ttlMs,
+    now: typeof options.now === 'function' ? options.now : () => Number(options.now ?? Date.now()),
     sleep: options.sleep
   });
   const uploader = createDurableLogsIngestionUploader(options);
@@ -115,7 +152,7 @@ async function drainDurableLogsIngestion(options = {}) {
 }
 
 function jsonArrayUploadFile(jsonlFile, tempDir, table) {
-  const rows = fs.readFileSync(jsonlFile, 'utf8')
+  const rows = readPrivateFile(jsonlFile, 256 * 1024 * 1024)
     .split(/\r?\n/)
     .filter(line => line.trim())
     .map(line => JSON.parse(line));
@@ -124,8 +161,32 @@ function jsonArrayUploadFile(jsonlFile, tempDir, table) {
   return file;
 }
 
+// Azure CLI reparses JSON and emits Python json.dumps: ASCII escapes and
+// structural whitespace. Reserve an upper bound rather than the smaller UTF-8
+// file size. Each numeric token gets 12 extra bytes for float representation.
+function azureCliPayloadUpperBound(jsonText) {
+  const ascii = jsonText.replace(/[\u007f-\uffff]/g, character => `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`);
+  let quoted = false, escaped = false, separators = 0, numbers = 0;
+  for (let index = 0; index < ascii.length; index += 1) {
+    const character = ascii[index];
+    if (quoted) {
+      if (escaped) escaped = false;
+      else if (character === '\\') escaped = true;
+      else if (character === '"') quoted = false;
+    } else if (character === '"') quoted = true;
+    else if (character === ',' || character === ':') separators += 1;
+    else if (character === '-' || /[0-9]/.test(character)) {
+      numbers += 1;
+      while (index + 1 < ascii.length && /[0-9eE+.\-]/.test(ascii[index + 1])) index += 1;
+    }
+  }
+  return Buffer.byteLength(ascii) + separators + 12 * numbers;
+}
+
 function runLogsIngestionUpload(plan, options = {}) {
   if (!plan.ok) return { ...plan, ok: false, executed: false };
+  const limits = configuredDeliveryLimits(options);
+  if (!limits.maxPublishBytesPerDay) return { ...plan, ok: false, executed: false, uploads: [], errors: [...(plan.errors || []), 'publishing_ceiling: explicit publishing allowance is required'] };
   const spawnSync = options.spawnSync || childProcess.spawnSync;
   const subscription = checkAzureSubscription({
     spawnSync,
@@ -150,6 +211,19 @@ function runLogsIngestionUpload(plan, options = {}) {
   try {
     for (const upload of plan.uploads) {
       const bodyFile = jsonArrayUploadFile(upload.file, tempDir, upload.table);
+      const uri = new URL(upload.uri);
+      validatedPublicLogsEndpoint(uri.origin);
+      const match = uri.pathname.match(/^\/dataCollectionRules\/(dcr-[A-Za-z0-9-]+)\/streams\/(Custom-[A-Za-z0-9_]+)$/);
+      if (uri.username || uri.password || uri.hash || !match || match[2] !== streamNameFor(upload.table)
+        || uri.searchParams.get('api-version') !== '2023-01-01' || [...uri.searchParams.keys()].some(key => key !== 'api-version')) throw new Error('invalid canonical Logs Ingestion upload URI');
+      const dcrImmutableId = match[1];
+      const reservation = reserveSharedPublishBytes(options, {
+        subscriptionId: subscription.expected, logsIngestionEndpoint: uri.origin, dcrImmutableId
+      }, azureCliPayloadUpperBound(readPrivateFile(bodyFile, 256 * 1024 * 1024)));
+      if (!reservation.allowed) {
+        uploads.push({ ...upload, ok: false, status: null, error: reservation.reason });
+        continue;
+      }
       const args = [
         'rest',
         '--subscription',
@@ -214,6 +288,7 @@ function renderLogsIngestionUploadResult(result) {
 }
 
 module.exports = {
+  azureCliPayloadUpperBound,
   azureCliAccessToken,
   boundedResponse,
   createDurableLogsIngestionUploader,

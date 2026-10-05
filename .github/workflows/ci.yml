@@ -30,6 +30,9 @@ jobs:
       - name: Run CLI tests
         run: npm --prefix agentops-cli test
 
+      - name: Run native extension and companion tests
+        run: node scripts/run-native-tests.js
+
       - name: Run static analysis
         run: npm --prefix agentops-cli run static:check
 

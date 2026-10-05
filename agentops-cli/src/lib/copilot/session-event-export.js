@@ -157,6 +157,7 @@ function operationFields(event, repoRoot, referencePaths, prior = {}) {
     SubAgentName: event.type.startsWith('subagent.') ? safeText(data.agentName || data.agentDisplayName || '', 200) : '',
     ParentAgentName: '',
     ExitCode: shellExitCode === null ? undefined : shellExitCode,
+    // Producer-declared request. Launcher intent stays in sanitized run context.
     ModelRequested: safeText(data.requestedModel || '', 200),
     ModelActual: safeText(data.newModel || data.currentModel || data.model || '', 200),
     Provider: safeText(data.provider || '', 200),

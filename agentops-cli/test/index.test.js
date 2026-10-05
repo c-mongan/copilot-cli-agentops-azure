@@ -223,7 +223,8 @@ test('CLI help exposes small core surface and hides experimental commands', () =
   assert.match(result.stdout, /agentops experimental <old-command>/);
   assert.doesNotMatch(result.stdout, /benchmark list/);
   assert.doesNotMatch(result.stdout, /saved-view add/);
-  assert.match(result.stdout, /Next:\n  agentops init --full/);
+  assert.match(result.stdout, /Next:\n  agentops product --help/);
+  assert.match(result.stdout, /agentops init --full\s+# advanced compatibility path/);
   assert.match(result.stdout, /agentops help <command>/);
 });
 
@@ -775,6 +776,7 @@ test('azure-ingest logs-upload executes az rest only after a ready plan', () => 
     });
 
     const result = runLogsIngestionUpload(plan, {
+      agentopsHome: path.join(tempDir, 'budget-home'), deliveryLimits: { maxPublishBytesPerDay: 1048576 },
       expectedSubscriptionId: '11111111-1111-4111-8111-111111111111',
       approvedSubscriptionIds: ['11111111-1111-4111-8111-111111111111'],
       spawnSync: (command, args) => {
@@ -4980,8 +4982,8 @@ test('dashboard verify combines static UX and optional live KQL gates', () => {
   assert.equal(offline.summary.kql_checks, 0);
   assert.ok(offline.next.some(command => command.includes('--live')));
 
-  const live = dashboardVerify(['--live', '--last', '24h', '--workspace-id', 'workspace-123'], {
-    runQuery: (_query, options) => ({ ok: options.workspaceId === 'workspace-123', rows: [{ ok: true }] })
+  const live = dashboardVerify(['--live', '--last', '24h', '--workspace-id', '12345678-1234-1234-1234-123456789abc'], {
+    runQuery: (_query, options) => ({ ok: options.workspaceId === '12345678-1234-1234-1234-123456789abc', rows: [{ ok: true }] })
   });
   assert.equal(live.ok, true, live.errors.join('\n'));
   assert.equal(live.live, true);
@@ -5114,7 +5116,7 @@ test('dashboard import --yes invokes the import script with explicit env', () =>
 
 test('dashboard kql-check renders representative V2 panel queries', () => {
   const queries = [];
-  const result = dashboardKqlCheck(['--last', '24h', '--workspace-id', 'workspace-123'], {
+  const result = dashboardKqlCheck(['--last', '24h', '--workspace-id', '12345678-1234-1234-1234-123456789abc'], {
     runQuery: (query, options) => {
       queries.push({ query, options });
       return { ok: true, rows: [{ ok: true }] };
@@ -5123,7 +5125,7 @@ test('dashboard kql-check renders representative V2 panel queries', () => {
 
   assert.equal(result.ok, true, result.errors.join('\n'));
   assert.equal(result.checks.length, 35);
-  assert.ok(queries.every(item => item.options.workspaceId === 'workspace-123'));
+  assert.ok(queries.every(item => item.options.workspaceId === '12345678-1234-1234-1234-123456789abc'));
   assert.ok(queries.every(item => item.query.includes('ago(24h)')));
   assert.ok(queries.every(item => !item.query.includes('$__timeFrom')));
   assert.ok(queries.some(item => item.query.includes('AppDependencies')));

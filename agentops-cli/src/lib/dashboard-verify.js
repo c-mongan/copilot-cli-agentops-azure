@@ -17,7 +17,7 @@ function dashboardVerify(args = [], options = {}) {
     ux: validateDashboardUx(),
     content: validateDashboardContentGuardrails()
   };
-  if (includeLive) checks.kql = dashboardKqlCheck(args, options);
+  if (includeLive) checks.kql = dashboardKqlCheck(args.map(arg => arg === '--kql' ? '--live' : arg), options);
 
   const errors = Object.entries(checks)
     .flatMap(([name, result]) => (result.errors || []).map(error => `${name}: ${error}`));

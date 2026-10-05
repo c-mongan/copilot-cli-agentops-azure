@@ -1,3 +1,4 @@
+const { capturePreRunSnapshot } = require('./run-evidence-contract');
 const { loadComponentExpectations } = require('./component-evidence');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -46,6 +47,7 @@ function parseCopilotSessionArgs(args = []) {
     sidecarFile: optionValue(optionArgs, '--sidecar'),
     otelFiles: optionValues(optionArgs, '--otel-file'),
     runId: optionValue(optionArgs, '--run-id'),
+    taskId: optionValue(optionArgs, '--task-id'),
     repo: optionValue(optionArgs, '--repo'),
     copilotHome: optionValue(optionArgs, '--copilot-home'),
     expectationsFile: optionValue(optionArgs, '--expectations'),
@@ -85,6 +87,7 @@ function incompatibleInheritedOtelSettings(env) {
 async function launchObservedCopilot(options = {}, dependencies = {}) {
   if (options.upload && !options.yes) throw new Error('copilot-session launch --upload requires --yes; omit --upload to keep evidence local');
   if (options.yes && !options.upload) throw new Error('copilot-session launch --yes requires --upload');
+  if (options.taskId && !/^[A-Za-z0-9_.:-]{1,128}$/.test(options.taskId)) throw new Error('task ID must be a bounded metadata identifier');
   const expectations = loadComponentExpectations(options.expectationsFile);
   const env = dependencies.env || process.env;
   const otelConflicts = incompatibleInheritedOtelSettings(env);
@@ -115,17 +118,32 @@ async function launchObservedCopilot(options = {}, dependencies = {}) {
   const resolved = resolve({ env });
   if (!resolved.ok) throw new Error(resolved.error);
   const startCollector = dependencies.startScopedStrictCollector || startScopedStrictCollector;
-  const scopedCollector = await startCollector({ agentopsHome: dependencies.agentopsHome || agentopsHome });
   const runId = options.runId || uniqueRunId();
   const commandArgs = options.commandArgs || [];
   const executionConfiguration = observedLaunchExecutionConfiguration(commandArgs);
+  const preRunSnapshot = capturePreRunSnapshot({ cwd, executionConfiguration, taskId: options.taskId });
   const suppliedSessionIndex = commandArgs.indexOf('--session-id');
   const inlineSession = commandArgs.find(arg => arg.startsWith('--session-id='));
   const resumes = commandArgs.some(arg => ['--resume', '-r', '--continue', '--connect'].includes(arg) || arg.startsWith('--resume=') || arg.startsWith('--connect='));
   const expectedSessionId = suppliedSessionIndex >= 0 ? commandArgs[suppliedSessionIndex + 1]
     : inlineSession ? inlineSession.slice('--session-id='.length) : resumes ? '' : crypto.randomUUID();
   const launchArgs = suppliedSessionIndex >= 0 || inlineSession || !expectedSessionId ? commandArgs : [...commandArgs, '--session-id', expectedSessionId];
+  const launchAbort = new AbortController();
+  const signals = dependencies.signals || process;
+  const abortLaunch = () => launchAbort.abort();
+  const externalAbort = dependencies.abortSignal;
+  signals.on('SIGINT', abortLaunch);
+  signals.on('SIGTERM', abortLaunch);
+  externalAbort?.addEventListener('abort', abortLaunch, { once: true });
+  if (externalAbort?.aborted) abortLaunch();
+  let scopedCollector;
   try {
+    scopedCollector = await startCollector({ agentopsHome: dependencies.agentopsHome || agentopsHome, abortSignal: launchAbort.signal });
+    if (launchAbort.signal.aborted) {
+      const error = new Error('Copilot observation cancelled during collector setup');
+      error.name = 'AbortError';
+      throw error;
+    }
     const endpoint = scopedCollector.endpoint;
     const runEnv = {
       ...env,
@@ -145,12 +163,13 @@ async function launchObservedCopilot(options = {}, dependencies = {}) {
     };
     const observedEnv = attachedScriptEnvironment({ env: runEnv, cwd, runId, agentopsRoot, collectorMode: 'auto' });
     const sessionRoot = path.join(copilotHome, 'session-state');
+    const sourceWindow = { sessionId: expectedSessionId || null, freshSession: Boolean(expectedSessionId) && !fs.existsSync(path.join(sessionRoot, expectedSessionId, 'events.jsonl')), startedAt: new Date().toISOString() };
     const snapshot = (dependencies.snapshotCopilotSessions || snapshotCopilotSessions)(sessionRoot);
     // Legacy injected synchronous runner is retained for existing embedders/tests.
     // Production always uses asynchronous supervision.
     const result = dependencies.spawnSync
       ? dependencies.spawnSync(resolved.path, launchArgs, { cwd, env: observedEnv, stdio: 'inherit' })
-      : await (dependencies.superviseProcess || superviseProcess)(resolved.path, launchArgs, { cwd, env: observedEnv, stdio: 'inherit' }, scopedCollector, dependencies);
+      : await (dependencies.superviseProcess || superviseProcess)(resolved.path, launchArgs, { cwd, env: observedEnv, stdio: 'inherit' }, scopedCollector, { ...dependencies, abortSignal: launchAbort.signal });
 
     // Graceful Collector shutdown flushes the final OTel batches to its
     // strict-redacted local receipt before delivery reads that file.
@@ -170,6 +189,8 @@ async function launchObservedCopilot(options = {}, dependencies = {}) {
         upload: Boolean(options.upload),
         expectations,
         executionConfiguration,
+        preRunSnapshot,
+        sourceWindow,
         lifecycle: { collector: result.collectorFailed ? 'failed' : 'completed', process: result.signal || result.cancelled ? 'cancelled' : 'completed' }
       });
     }
@@ -199,7 +220,11 @@ async function launchObservedCopilot(options = {}, dependencies = {}) {
     process.exitCode = output.exitCode || (output.ok ? 0 : 1);
     return output;
   } finally {
-    await scopedCollector.stop({ remove: true });
+    try { await scopedCollector?.stop({ remove: true }); } finally {
+      signals.removeListener('SIGINT', abortLaunch);
+      signals.removeListener('SIGTERM', abortLaunch);
+      externalAbort?.removeEventListener('abort', abortLaunch);
+    }
   }
 }
 
@@ -290,7 +315,7 @@ async function copilotSessionCommand(args = [], dependencies = {}) {
   const options = parseCopilotSessionArgs(args);
   if (options.subcommand === 'launch' && options.help) {
     const stdout = dependencies.stdout || process.stdout;
-    stdout.write('agentops copilot-session launch [--repo <git-repo>] [--copilot-home <path>] [--expectations <manifest.json>] [--upload --yes] [--json] -- [copilot-args...]\n');
+    stdout.write('agentops copilot-session launch [--repo <git-repo>] [--copilot-home <path>] [--expectations <manifest.json>] [--task-id <id>] [--upload --yes] [--json] -- [copilot-args...]\n');
     stdout.write('Starts one process-scoped Copilot CLI observation run. Evidence stays local unless --upload --yes is explicit.\n');
     stdout.write('Azure upload requires a complete project-scoped target or all three explicit Azure target environment values.\n');
     return { ok: true, action: 'help' };
@@ -396,9 +421,22 @@ async function copilotSessionCommand(args = [], dependencies = {}) {
     let joinedSpans = enrichSpansWithSessionToolContext(native.spans, sessionEvents);
     let invalidNativeRecords = native.invalid;
     let deliveryStatus = null;
+    let launchExecutionConfiguration = null;
+    let modelProvenance = null;
     if (options.runId) {
       if (!/^[A-Za-z0-9_.:-]{1,128}$/.test(options.runId)) throw new Error('copilot-session view requires a safe --run-id');
       const runDirectory = path.join(agentopsHome, 'runs', options.runId);
+      try {
+        const contextFile = path.join(runDirectory, 'run-context.json');
+        const stat = fs.lstatSync(contextFile);
+        if (stat.isFile() && !stat.isSymbolicLink() && stat.size <= 2 * 1024 * 1024) {
+          const context = JSON.parse(fs.readFileSync(contextFile, 'utf8'));
+          if (context.sessionId === sessionId && context.runId === options.runId) {
+            launchExecutionConfiguration = context.launchExecutionConfiguration || context.executionConfiguration || null;
+            modelProvenance = context.modelProvenance || null;
+          }
+        }
+      } catch {}
       let outbox = null;
       try { outbox = readSessionOutbox(runDirectory); } catch (error) {
         if (error.code !== 'ENOENT') throw error;
@@ -414,7 +452,7 @@ async function copilotSessionCommand(args = [], dependencies = {}) {
         }
       }
     }
-    const output = writeSessionWaterfall(sessionEvents, sessionId, options.output, { nativeSpans: joinedSpans, deliveryStatus, metadataOnly });
+    const output = writeSessionWaterfall(sessionEvents, sessionId, options.output, { nativeSpans: joinedSpans, deliveryStatus, metadataOnly, launchExecutionConfiguration, modelProvenance });
     const contentWarning = metadataOnly
       ? 'Metadata only: prompts, tool arguments/results and other raw content are redacted. Pass --allow-content to render full content (persists raw content in this local HTML file).'
       : 'Full content rendered: this local HTML file contains raw prompts, tool arguments/results and other captured payloads. Treat it as sensitive.';

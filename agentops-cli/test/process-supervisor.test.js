@@ -24,7 +24,7 @@ test('collector death cancels a running process without blocking and reports los
   assert.equal(signals.listenerCount('SIGINT'), 0);
 });
 
-test('cancellation forwards signal and escalates when child ignores it', async () => {
+test('cancellation forwards signal and escalates when child ignores it', { skip: process.platform === 'win32' }, async () => {
   const signals = new EventEmitter();
   const pending = superviseProcess(process.execPath, ['-e', 'process.on("SIGTERM",()=>{});process.send("ready");setInterval(()=>{},100)'], { stdio: ['ignore','ignore','ignore','ipc'] }, {}, { signals, graceMs: 80, spawn: (...args) => { const child=spawn(...args); child.once('message', () => signals.emit('SIGTERM')); return child; } });
   const result = await pending;
@@ -39,7 +39,7 @@ test('spawn errors settle and leave no signal handlers', async () => {
   assert.equal(signals.listenerCount('SIGTERM'), 0);
 });
 
-test('budget abort uses supervised cancellation and kills an ignoring child', async () => {
+test('budget abort uses supervised cancellation and kills an ignoring child', { skip: process.platform === 'win32' }, async () => {
   const controller = new AbortController();
   const pending = superviseProcess(process.execPath, ['-e', 'process.on("SIGTERM",()=>{});process.send("ready");setInterval(()=>{},100)'], { stdio: ['ignore','ignore','ignore','ipc'] }, {}, { abortSignal: controller.signal, graceMs: 80, spawn: (...args) => { const child=spawn(...args); child.once('message', () => controller.abort()); return child; } });
   const result = await pending;
@@ -47,7 +47,7 @@ test('budget abort uses supervised cancellation and kills an ignoring child', as
   assert.equal(result.signal, 'SIGKILL');
 });
 
-test('cooperative zero-exit cancellation is still recorded as cancelled', async () => {
+test('cooperative zero-exit cancellation is still recorded as cancelled', { skip: process.platform === 'win32' }, async () => {
   const signals = new EventEmitter();
   const result = await superviseProcess(process.execPath, ['-e', 'process.on("SIGTERM",()=>process.exit(0));process.send("ready");setInterval(()=>{},100)'], { stdio: ['ignore','ignore','ignore','ipc'] }, {}, { signals, spawn: (...args) => { const child=spawn(...args); child.once('message', () => signals.emit('SIGTERM')); return child; } });
   assert.equal(result.status, 0);
@@ -72,4 +72,13 @@ test('cancellation kills owned descendants after a cooperative launcher exits', 
     if (alive) await new Promise(resolve => setTimeout(resolve, 25));
   }
   assert.equal(alive, false, 'owned descendant must not continue work after cancellation');
+});
+
+test('pre-aborted supervision never spawns model work', async () => {
+  const controller = new AbortController();
+  controller.abort();
+  const result = await superviseProcess('unused', [], {}, {}, { abortSignal: controller.signal, spawn: () => { throw new Error('must not spawn'); } });
+  assert.equal(result.aborted, true);
+  assert.equal(result.cancelled, true);
+  assert.equal(result.error, undefined);
 });

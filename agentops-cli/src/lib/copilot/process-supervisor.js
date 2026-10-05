@@ -34,6 +34,12 @@ function superviseProcess(command, args, options, collector, dependencies = {}) 
       dependencies.abortSignal?.removeEventListener('abort', abort);
       resolve({ ...result, collectorFailed, aborted, cancelled });
     };
+    if (dependencies.abortSignal?.aborted) {
+      aborted = true;
+      cancelled = true;
+      finish({ status: null, signal: 'SIGTERM' });
+      return;
+    }
     try {
       child = spawn(command, args, { ...options, detached: process.platform !== 'win32' });
     } catch (error) { finish({ status: null, error }); return; }

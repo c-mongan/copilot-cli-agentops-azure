@@ -293,6 +293,7 @@ function joinObserved(graph, run = {}) {
   const taskIds = [...new Set([recordedTaskId, ...eventTaskIds].filter(Boolean))].sort();
   return {
     runId: run.runId,
+    evidenceOrigin: run.evidenceOrigin || null,
     architectureVersion: run.architectureVersion || graph.architectureVersion,
     configurationVersion: configurationVersions.length === 1 ? configurationVersions[0] : null,
     configurationVersions,
@@ -304,6 +305,12 @@ function joinObserved(graph, run = {}) {
     // explicit completeness assertion with valid captured rows counts.
     evidenceComplete: run.evidenceComplete === true,
     coverage: run.coverage || {},
+    preRunSnapshot: run.preRunSnapshot || null,
+    attachmentProvenance: run.attachmentProvenance || null,
+    sourceIntegrity: run.sourceIntegrity || null,
+    invalidSourceRows: run.invalidSourceRows || 0,
+    componentDenominators: run.componentDenominators || {},
+    lifecycle: run.lifecycle || null,
     taskContract: run.taskContract || null,
     outcomeFailed: Boolean(run.outcomeFailed),
     compactionObserved: compaction || Boolean(run.compactionObserved),
@@ -315,6 +322,7 @@ function joinObserved(graph, run = {}) {
     refsRead,
     perSkillRefs,
     scriptCalls,
+    observedScriptReceipts: run.observedScriptReceipts || [],
     toolCalls,
     modelCallsBySkill,
     runTotals,

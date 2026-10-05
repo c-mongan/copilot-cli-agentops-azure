@@ -18,6 +18,8 @@ function summarizeCopilotRun(metadata = {}, session = {}, result = {}) {
     RepoHash: metadata.repoHash || '',
     CommandHash: metadata.commandHash || '',
     PromptHash: metadata.promptHash || '',
+    // Legacy run-summary launcher metadata; event/span fields instead describe
+    // producer requests. This is not actual usage or override certification.
     ModelRequested: metadata.modelRequested || '',
     StartedAt: metadata.startedAt || session.startedAt || '',
     EndedAt: result.endedAt || session.endedAt || ''

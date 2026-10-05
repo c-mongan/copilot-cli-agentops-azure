@@ -1,13 +1,13 @@
+const { validPreRunSnapshot, attachmentProvenance, sessionSourceIntegrity } = require('./run-evidence-contract');
 const { componentEvidence } = require('./component-evidence');
-const { normalizeExecutionConfiguration } = require('./execution-configuration');
+const { normalizeExecutionConfiguration, reconcileModelProvenance } = require('./execution-configuration');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
 const path = require('node:path');
 
 const { configuredCloudValues, projectAgentOpsConfigPath } = require('../agentops-config');
-const { gitRoot, readOwnedAttachment } = require('../attach-command');
+const { gitRoot } = require('../attach-command');
 const { agentopsHome } = require('../paths');
-const { architectureVersion } = require('../architecture/graph');
 const { defaultReceiptFiles, readSessionOtelSpans } = require('./session-otel');
 const { readCopilotSessionEvents } = require('./session-enricher');
 const { writeSessionEvents } = require('./session-event-export');
@@ -50,6 +50,7 @@ function deliverCopilotSession(options = {}) {
   const eventsFile = path.join(copilotHome, 'session-state', selectedSessionId, 'events.jsonl');
   if (!fs.existsSync(eventsFile)) return { state: 'native_best_effort', reason: 'Copilot session event file was not found' };
 
+  const sourceBefore = sessionSourceIntegrity(eventsFile, selectedSessionId);
   const sessionEvents = readCopilotSessionEvents(eventsFile);
   const eventSessionId = sessionEvents.find(event => event.type === 'session.start')?.data?.sessionId;
   if (eventSessionId && eventSessionId !== selectedSessionId) {
@@ -83,7 +84,7 @@ function deliverCopilotSession(options = {}) {
 
   const projectConfigPath = options.projectConfigPath || projectAgentOpsConfigPath({ cwd });
   const cloud = configuredCloudValues({ env, projectConfigPath });
-  initializeSessionOutbox(outputDir, { runId, sessionId, cloud });
+  initializeSessionOutbox(outputDir, { runId, sessionId, cloud, deliveryLimits: options.deliveryLimits, now: options.now });
   const uploadRequested = options.upload !== false;
   const delivery = uploadRequested && cloud.subscriptionId && cloud.logsIngestionEndpoint && cloud.dcrImmutableId
     ? drainSessionOutboxes({
@@ -91,7 +92,9 @@ function deliverCopilotSession(options = {}) {
       cloud,
       env,
       runId,
-      spawnSync: options.spawnSync
+      spawnSync: options.spawnSync,
+      deliveryLimits: options.deliveryLimits,
+      now: options.now
     })
     : { acknowledged: 0, pending: 0, skippedTarget: 0, streams: [] };
   const outbox = readSessionOutbox(outputDir);
@@ -99,7 +102,16 @@ function deliverCopilotSession(options = {}) {
   const results = delivery.streams.filter(item => item.runId === runId);
   const uploaded = Object.values(streams).every(stream => stream.status === 'azure_accepted');
   const runContextPath = path.join(outputDir, 'run-context.json');
-  const attachment = readOwnedAttachment(repoRoot);
+  const snapshot = validPreRunSnapshot(options.preRunSnapshot)
+    && options.preRunSnapshot.repositoryRootHash === crypto.createHash('sha256').update(repoRoot).digest('hex').slice(0, 16)
+    ? options.preRunSnapshot : null;
+  const provenance = attachmentProvenance(snapshot, repoRoot);
+  const sourceIntegrity = sessionSourceIntegrity(eventsFile, sessionId);
+  if (sourceBefore.sha256 !== sourceIntegrity.sha256 || sourceIntegrity.rowCount !== sessionEvents.length) {
+    sourceIntegrity.status = 'invalid'; sourceIntegrity.reason = 'source changed during export or parser omitted rows';
+  }
+  sourceIntegrity.freshSession = options.sourceWindow?.freshSession === true && options.sourceWindow.sessionId === sessionId;
+  sourceIntegrity.windowStartedAt = options.sourceWindow?.startedAt || null;
   const executionConfiguration = normalizeExecutionConfiguration(options.executionConfiguration);
   const runContext = {
     managedBy: 'copilot-agentops',
@@ -107,11 +119,17 @@ function deliverCopilotSession(options = {}) {
     runId,
     sessionId,
     repositoryRootHash: crypto.createHash('sha256').update(repoRoot).digest('hex').slice(0, 16),
-    attachmentManifestSha256: attachment.ok ? attachment.receipt.manifestSha256 : '',
-    architectureVersion: attachment.ok ? architectureVersion(attachment.manifest.architecture) : null,
+    attachmentManifestSha256: snapshot?.attachmentManifestSha256 || '',
+    architectureVersion: snapshot?.architectureVersion || null,
+    preRunSnapshot: snapshot,
+    attachmentProvenance: provenance,
+    sourceIntegrity,
+    taskId: snapshot?.taskId || null,
     configurationVersion: executionConfiguration.configurationVersion,
     executionConfigurationHash: executionConfiguration.executionConfigurationHash,
     executionConfiguration,
+    launchExecutionConfiguration: executionConfiguration,
+    modelProvenance: reconcileModelProvenance({ launchExecutionConfiguration: executionConfiguration, events: sessionEvents, nativeSpans: spans }),
     lifecycle: options.lifecycle || { collector: 'unknown', process: 'unknown' },
     // Native event presence proves observation, not completeness of each surface.
     coverage: Object.fromEntries(['agents', 'skills', 'references', 'scripts', 'tools', 'models'].map(kind => [kind, 'unknown'])),
@@ -123,7 +141,9 @@ function deliverCopilotSession(options = {}) {
   };
   fs.writeFileSync(runContextPath, `${JSON.stringify(runContext, null, 2)}\n`, { flag: 'wx', mode: 0o600 });
   return {
-    state: uploaded ? 'azure_acknowledged' : 'local_pending',
+    state: Object.values(streams).some(stream => stream.status === 'overflow') ? 'overflow'
+      : Object.values(streams).some(stream => stream.status === 'expired') ? 'expired'
+      : uploaded ? 'azure_acknowledged' : 'local_pending',
     sessionId,
     runId,
     outputDir,

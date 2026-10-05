@@ -85,6 +85,8 @@ function usage(command) {
   const full = `agentops <command>
 
 Next:
+  agentops product --help                    # local recorder and diagnostic product flow
+  agentops product runtime --json            # read-only version qualification
   agentops init --full                       # advanced compatibility path; zero-write preview
   agentops provision azure --subscription <id> --resource-group <new-agentops-rg> --profile pilot  # synthetic Azure pilot
 
@@ -117,6 +119,7 @@ Core commands:
   configure show|set|import-azd [--project|--user] [--python-runtime <label>] [--node-runtime <label>] [--typescript-loader <label|unknown>] [--json]
   collector start|stop|status|validate|smoke|install-binary|uninstall-binary [--mode auto|local|docker|binary|azure-native|none] [--privacy strict|compat] [--json]
   azure-ingest plan [--dir <AgentOps table dir>] [--allow-content] [--json]
+  azure-ingest logs-upload --dir <AgentOps table dir> --endpoint <logs-ingestion-endpoint> --dcr-immutable-id <id> [--max-publish-bytes-per-day <bytes>] [--yes] [--json]
   azure-ingest upload-plan --dir <export dir> --account <storage> [--container <name>] [--prefix <path>] [--json]
   annotation config-change --component <name> --target <name> [--change-type <type>] [--change-id <id>] [--version <value>] [--run-id <id>] [--session <id>] [--trace-id <id>] [--dry-run] [--json]
   ask-context latest|<run-id> [--last <duration>] [--runs <jsonl>] [--events <jsonl>] [--tools <jsonl>] [--evals <jsonl>] [--insights <jsonl>] [--recommendations <jsonl>] [--json]
@@ -134,7 +137,7 @@ Core commands:
   security audit|posture [--json] [--fail-on-warning]
   dashboard validate|links-check|filters-check|ux-check|content-check|kql-check|verify|import [--last <duration>] [--live] [--yes] [--all] [--folder <name>] [--resource-group <rg>] [--grafana-name <name>]
   demo generate|verify [--runs <n>] [--out <dir>] [--insights-out <dir>] [--write] [--with-content] [--json]
-  delivery status|review|requeue|prune|drain [--event-id <id>] [--run-id <id>] [--older-than <30-365-days>] [--dir <spool>] [--endpoint <logs-ingestion-endpoint>] [--dcr-immutable-id <id>] [--max-attempts <1-10>] [--yes] [--json]
+  delivery status|review|requeue|prune|drain [--event-id <id>] [--run-id <id>] [--older-than <30-365-days>] [--dir <spool>] [--endpoint <logs-ingestion-endpoint>] [--dcr-immutable-id <id>] [--max-attempts <1-10>] [--max-publish-bytes-per-day <bytes>] [--yes] [--json]\n  Cloud publishing defaults to 0 bytes/day; set AGENTOPS_MAX_PUBLISH_BYTES_PER_DAY or the explicit flag. Qualification allowance: 1048576 bytes/day per shared local home.
   github-enrich [--limit <n>] [--runs <AgentOpsRunSummary_CL.jsonl>] [--out <dir>] [--json]
   health [--runs <AgentOpsRunSummary_CL.jsonl>] [--json]
   explain latest|<run-id> [--runs <jsonl>] [--evals <jsonl>] [--insights <jsonl>] [--json]
@@ -150,7 +153,7 @@ Core commands:
   latest [--file <jsonl>] [--last <duration>] [--json]
   replay <session|latest> [--file <jsonl>] [--last <duration>]
   open [latest|<run-id>] [--runs <jsonl>] [--file <jsonl>] [--last <duration>] [--json]
-  product audit [--live] [--last <duration>] [--require-rows] [--require-visual] [--report <html>] [--json]
+  product audit|build|evidence|compare|runtime [--help] [--json]
   validate-azure [--last <duration>] [--profile personal|team|internal] [--import-dashboards] [--verify-dashboard-content] [--production] [--remediation-plan] [--json]
   validate-enterprise [--json]
   plugin install|uninstall [--copilot-home <path>] [--force] [--dry-run] [--json]
@@ -165,6 +168,7 @@ Experimental:
   if (!command) return full;
 
   const name = String(command).trim();
+  if (name === 'product') return require('./product-command').PRODUCT_HELP;
   const coreSection = full.split('\nExperimental:')[0];
   const commandLine = coreSection
     .split('\n')

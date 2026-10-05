@@ -1,3 +1,4 @@
+const { capturePreRunSnapshot } = require('../src/lib/copilot/run-evidence-contract');
 const assert = require('node:assert/strict');
 const childProcess = require('node:child_process');
 const fs = require('node:fs');
@@ -86,16 +87,20 @@ function prepareSession(t, { withSpans = true, configured = true, attached = fal
 test('delivery rejects a session ID that escapes the Copilot session directory', t => {
   const fixture = prepareSession(t, { configured: false });
   assert.throws(() => deliverCopilotSession({
+    preRunSnapshot: capturePreRunSnapshot({ cwd: fixture.repo }),
     summary: { sessionId: '..' }, runId: 'safe-run', copilotHome: fixture.copilotHome,
-    agentopsHome: fixture.agentopsHome, cwd: fixture.repo, upload: false
+    agentopsHome: fixture.agentopsHome,
+    deliveryLimits: { maxPublishBytesPerDay: 1048576 }, cwd: fixture.repo, upload: false
   }), /safe Copilot session ID/);
 });
 
 test('delivery rejects a run ID that resolves to the runs directory', t => {
   const fixture = prepareSession(t, { configured: false });
   assert.throws(() => deliverCopilotSession({
+    preRunSnapshot: capturePreRunSnapshot({ cwd: fixture.repo }),
     summary: { sessionId: fixture.sessionId }, runId: '..', copilotHome: fixture.copilotHome,
-    agentopsHome: fixture.agentopsHome, cwd: fixture.repo, upload: false
+    agentopsHome: fixture.agentopsHome,
+    deliveryLimits: { maxPublishBytesPerDay: 1048576 }, cwd: fixture.repo, upload: false
   }), /safe AgentOps run ID/);
 });
 
@@ -106,8 +111,10 @@ test('delivery rejects an event-supplied session ID different from the selected 
   events[0].data.sessionId = 'different-session';
   fs.writeFileSync(file, `${events.map(event => JSON.stringify(event)).join('\n')}\n`);
   assert.throws(() => deliverCopilotSession({
+    preRunSnapshot: capturePreRunSnapshot({ cwd: fixture.repo }),
     summary: { sessionId: fixture.sessionId }, runId: 'safe-run', copilotHome: fixture.copilotHome,
-    agentopsHome: fixture.agentopsHome, cwd: fixture.repo, upload: false
+    agentopsHome: fixture.agentopsHome,
+    deliveryLimits: { maxPublishBytesPerDay: 1048576 }, cwd: fixture.repo, upload: false
   }), /does not match selected session/);
 });
 
@@ -126,14 +133,17 @@ test('coverage command joins a delivered synthetic run to its exact attached inv
     ]
   })}\n`);
   deliverCopilotSession({
+    preRunSnapshot: capturePreRunSnapshot({ cwd: fixture.repo }),
     summary: { sessionId: fixture.sessionId }, runId, copilotHome: fixture.copilotHome,
-    agentopsHome: fixture.agentopsHome, cwd: fixture.repo, env: fixture.env,
+    agentopsHome: fixture.agentopsHome,
+    deliveryLimits: { maxPublishBytesPerDay: 1048576 }, cwd: fixture.repo, env: fixture.env,
     projectConfigPath: fixture.projectConfigPath, otelFiles: fixture.otelFiles,
     spawnSync() { throw new Error('Azure upload must not run in this local coverage test'); }
   });
 
   const result = coverageCommand(['--repo', fixture.repo, '--json'], {
-    agentopsHome: fixture.agentopsHome, stdout: { write() {} }
+    agentopsHome: fixture.agentopsHome,
+    deliveryLimits: { maxPublishBytesPerDay: 1048576 }, stdout: { write() {} }
   });
   assert.equal(result.runtime.associatedRuns, 1);
   assert.equal(result.runtime.executionObserved, true);
@@ -149,14 +159,17 @@ test('coverage reports malformed local evidence instead of treating it as comple
   attachCommand(['--repo', fixture.repo, '--yes', '--json'], { stdout: { write() {} } });
   const runId = 'run-malformed-coverage';
   const delivered = deliverCopilotSession({
+    preRunSnapshot: capturePreRunSnapshot({ cwd: fixture.repo }),
     summary: { sessionId: fixture.sessionId }, runId, copilotHome: fixture.copilotHome,
-    agentopsHome: fixture.agentopsHome, cwd: fixture.repo, env: fixture.env,
+    agentopsHome: fixture.agentopsHome,
+    deliveryLimits: { maxPublishBytesPerDay: 1048576 }, cwd: fixture.repo, env: fixture.env,
     projectConfigPath: fixture.projectConfigPath, otelFiles: fixture.otelFiles,
     upload: false
   });
   fs.appendFileSync(path.join(delivered.outputDir, 'AgentOpsEvents_CL.jsonl'), '{bad json\n');
   const result = coverageCommand(['--repo', fixture.repo, '--json'], {
-    agentopsHome: fixture.agentopsHome, stdout: { write() {} }
+    agentopsHome: fixture.agentopsHome,
+    deliveryLimits: { maxPublishBytesPerDay: 1048576 }, stdout: { write() {} }
   });
   assert.equal(result.runtime.invalidEvidenceRows, 1);
   assert.equal(result.runtime.evidenceScanComplete, false);
@@ -167,10 +180,12 @@ test('post-run delivery exports private metadata and uploads both streams to the
   const fixture = prepareSession(t);
   const uris = [];
   const result = deliverCopilotSession({
+    preRunSnapshot: capturePreRunSnapshot({ cwd: fixture.repo }),
     summary: { sessionId: fixture.sessionId },
     runId: 'wrapper_run_synthetic',
     copilotHome: fixture.copilotHome,
     agentopsHome: fixture.agentopsHome,
+    deliveryLimits: { maxPublishBytesPerDay: 1048576 },
     cwd: fixture.repo,
     env: fixture.env,
     projectConfigPath: fixture.projectConfigPath,
@@ -211,10 +226,12 @@ test('post-run delivery exports private metadata and uploads both streams to the
 test('post-run delivery persists a supplied execution configuration identity and provenance', t => {
   const fixture = prepareSession(t, { configured: false });
   const result = deliverCopilotSession({
+    preRunSnapshot: capturePreRunSnapshot({ cwd: fixture.repo }),
     summary: { sessionId: fixture.sessionId },
     runId: 'wrapper_run_configuration_identity',
     copilotHome: fixture.copilotHome,
     agentopsHome: fixture.agentopsHome,
+    deliveryLimits: { maxPublishBytesPerDay: 1048576 },
     cwd: fixture.repo,
     env: fixture.env,
     projectConfigPath: fixture.projectConfigPath,
@@ -239,10 +256,12 @@ test('post-run delivery persists a supplied execution configuration identity and
 test('post-run delivery persists only the bounded observed launch projection', t => {
   const fixture = prepareSession(t, { configured: false });
   const result = deliverCopilotSession({
+    preRunSnapshot: capturePreRunSnapshot({ cwd: fixture.repo }),
     summary: { sessionId: fixture.sessionId },
     runId: 'wrapper_run_observed_configuration',
     copilotHome: fixture.copilotHome,
     agentopsHome: fixture.agentopsHome,
+    deliveryLimits: { maxPublishBytesPerDay: 1048576 },
     cwd: fixture.repo,
     env: fixture.env,
     projectConfigPath: fixture.projectConfigPath,
@@ -281,10 +300,12 @@ test('native session collection can create coverage evidence locally without upl
     ]
   })}\n`);
   const result = deliverCopilotSession({
+    preRunSnapshot: capturePreRunSnapshot({ cwd: fixture.repo }),
     summary: { sessionId: fixture.sessionId },
     runId,
     copilotHome: fixture.copilotHome,
     agentopsHome: fixture.agentopsHome,
+    deliveryLimits: { maxPublishBytesPerDay: 1048576 },
     cwd: fixture.repo,
     env: fixture.env,
     projectConfigPath: fixture.projectConfigPath,
@@ -302,6 +323,7 @@ test('native session collection can create coverage evidence locally without upl
   assert.ok(runContext.attachmentManifestSha256);
   const coverage = coverageCommand(['--repo', fixture.repo, '--json'], {
     agentopsHome: fixture.agentopsHome,
+    deliveryLimits: { maxPublishBytesPerDay: 1048576 },
     stdout: { write() {} }
   });
   assert.equal(coverage.runtime.associatedRuns, 1);
@@ -333,8 +355,10 @@ test('post-run upload selects only the current run and leaves unrelated session 
 
   const uploaded = [];
   const result = deliverCopilotSession({
+    preRunSnapshot: capturePreRunSnapshot({ cwd: fixture.repo }),
     summary: { sessionId: fixture.sessionId }, runId: 'wrapper_run_selected',
-    copilotHome: fixture.copilotHome, agentopsHome: fixture.agentopsHome, cwd: fixture.repo,
+    copilotHome: fixture.copilotHome, agentopsHome: fixture.agentopsHome,
+    deliveryLimits: { maxPublishBytesPerDay: 1048576 }, cwd: fixture.repo,
     env: fixture.env, projectConfigPath: fixture.projectConfigPath, otelFiles: fixture.otelFiles,
     spawnSync(_command, args) {
       if (args[0] === 'account') return { status: 0, stdout: `${target.subscriptionId}\n`, stderr: '' };
@@ -381,6 +405,7 @@ test('session outbox drain sends only the selected run and leaves other runs pen
   const uploaded = [];
   const result = drainSessionOutboxes({
     agentopsHome: fixture.agentopsHome,
+    deliveryLimits: { maxPublishBytesPerDay: 1048576 },
     cloud: target,
     runId: 'wrapper_run_scope_first',
     spawnSync(_command, args) {
@@ -402,6 +427,7 @@ test('session outbox drain sends only the selected run and leaves other runs pen
 
   const recoveredOtherRun = drainSessionOutboxes({
     agentopsHome: fixture.agentopsHome,
+    deliveryLimits: { maxPublishBytesPerDay: 1048576 },
     cloud: target,
     runId: 'wrapper_run_scope_second',
     env: fixture.env,
@@ -421,10 +447,12 @@ test('session outbox drain sends only the selected run and leaves other runs pen
 test('post-run delivery preserves local evidence when no project Azure target is configured', t => {
   const fixture = prepareSession(t, { configured: false });
   const result = deliverCopilotSession({
+    preRunSnapshot: capturePreRunSnapshot({ cwd: fixture.repo }),
     summary: { sessionId: fixture.sessionId },
     runId: 'wrapper_run_local',
     copilotHome: fixture.copilotHome,
     agentopsHome: fixture.agentopsHome,
+    deliveryLimits: { maxPublishBytesPerDay: 1048576 },
     cwd: fixture.repo,
     env: fixture.env,
     projectConfigPath: fixture.projectConfigPath,
@@ -442,10 +470,12 @@ test('post-run delivery preserves local evidence when no project Azure target is
 test('post-run delivery does not claim a complete upload if one evidence stream is missing', t => {
   const fixture = prepareSession(t, { withSpans: false });
   const result = deliverCopilotSession({
+    preRunSnapshot: capturePreRunSnapshot({ cwd: fixture.repo }),
     summary: { sessionId: fixture.sessionId },
     runId: 'wrapper_run_missing_spans',
     copilotHome: fixture.copilotHome,
     agentopsHome: fixture.agentopsHome,
+    deliveryLimits: { maxPublishBytesPerDay: 1048576 },
     cwd: fixture.repo,
     env: fixture.env,
     projectConfigPath: fixture.projectConfigPath,
@@ -467,10 +497,12 @@ test('post-run delivery does not claim a complete upload if one evidence stream 
 test('post-run delivery reports partial Azure acceptance and drain retries only the pending stream', async t => {
   const fixture = prepareSession(t);
   const result = deliverCopilotSession({
+    preRunSnapshot: capturePreRunSnapshot({ cwd: fixture.repo }),
     summary: { sessionId: fixture.sessionId },
     runId: 'wrapper_run_partial_upload',
     copilotHome: fixture.copilotHome,
     agentopsHome: fixture.agentopsHome,
+    deliveryLimits: { maxPublishBytesPerDay: 1048576 },
     cwd: fixture.repo,
     env: fixture.env,
     projectConfigPath: fixture.projectConfigPath,
@@ -520,6 +552,7 @@ test('post-run delivery reports partial Azure acceptance and drain retries only 
   const retriedUris = [];
   const recovered = await runDeliveryCommand(['drain', '--yes', '--run-id', 'wrapper_run_partial_upload'], {
     agentopsHome: fixture.agentopsHome,
+    deliveryLimits: { maxPublishBytesPerDay: 1048576 },
     cwd: fixture.repo,
     env: fixture.env,
     config: {
@@ -553,6 +586,7 @@ test('post-run delivery reports partial Azure acceptance and drain retries only 
 
   const secondDrain = await runDeliveryCommand(['drain', '--yes', '--run-id', 'wrapper_run_partial_upload'], {
     agentopsHome: fixture.agentopsHome,
+    deliveryLimits: { maxPublishBytesPerDay: 1048576 },
     cwd: fixture.repo,
     env: fixture.env,
     config: {
@@ -584,10 +618,12 @@ test('post-run delivery refuses a symlinked runs directory', t => {
   fs.symlinkSync(outside, path.join(fixture.agentopsHome, 'runs'));
 
   assert.throws(() => deliverCopilotSession({
+    preRunSnapshot: capturePreRunSnapshot({ cwd: fixture.repo }),
     summary: { sessionId: fixture.sessionId },
     runId: 'wrapper_run_symlink',
     copilotHome: fixture.copilotHome,
     agentopsHome: fixture.agentopsHome,
+    deliveryLimits: { maxPublishBytesPerDay: 1048576 },
     cwd: fixture.repo,
     env: fixture.env,
     projectConfigPath: fixture.projectConfigPath,
@@ -615,6 +651,7 @@ test('session outbox never sends a pending run to a different Azure target', t =
   let writes = 0;
   const result = drainSessionOutboxes({
     agentopsHome: fixture.agentopsHome,
+    deliveryLimits: { maxPublishBytesPerDay: 1048576 },
     cloud: {
       subscriptionId: '22222222-2222-4222-8222-222222222222',
       logsIngestionEndpoint: 'https://other.ingest.monitor.azure.com',
@@ -631,10 +668,12 @@ test('session outbox never sends a pending run to a different Azure target', t =
 test('session outbox skips a live drain claim and recovers a claim from an exited process', t => {
   const fixture = prepareSession(t);
   const result = deliverCopilotSession({
+    preRunSnapshot: capturePreRunSnapshot({ cwd: fixture.repo }),
     summary: { sessionId: fixture.sessionId },
     runId: 'wrapper_run_claim_recovery',
     copilotHome: fixture.copilotHome,
     agentopsHome: fixture.agentopsHome,
+    deliveryLimits: { maxPublishBytesPerDay: 1048576 },
     cwd: fixture.repo,
     env: fixture.env,
     projectConfigPath: fixture.projectConfigPath,
@@ -656,6 +695,7 @@ test('session outbox skips a live drain claim and recovers a claim from an exite
   let writes = 0;
   const busy = drainSessionOutboxes({
     agentopsHome: fixture.agentopsHome,
+    deliveryLimits: { maxPublishBytesPerDay: 1048576 },
     cloud: target,
     spawnSync() { writes += 1; throw new Error('a live claim must block another sender'); }
   });
@@ -668,6 +708,7 @@ test('session outbox skips a live drain claim and recovers a claim from an exite
   fs.writeFileSync(claimFile, JSON.stringify({ version: 1, pid: Number(child.stdout) }), { mode: 0o600 });
   const recovered = drainSessionOutboxes({
     agentopsHome: fixture.agentopsHome,
+    deliveryLimits: { maxPublishBytesPerDay: 1048576 },
     cloud: target,
     env: fixture.env,
     spawnSync(_command, args) {
@@ -828,6 +869,7 @@ test('session outbox recovers an in-flight stream after process exit and documen
     const api = require(${JSON.stringify(modulePath)});
     api.drainSessionOutboxes({
       agentopsHome: process.env.AGENTOPS_TEST_HOME,
+      deliveryLimits: { maxPublishBytesPerDay: 1048576 },
       runId: process.env.AGENTOPS_TEST_RUN_ID,
       cloud: JSON.parse(process.env.AGENTOPS_TEST_CLOUD),
       spawnSync(_command, args) {
@@ -858,6 +900,7 @@ test('session outbox recovers an in-flight stream after process exit and documen
   const retried = [];
   const recovered = drainSessionOutboxes({
     agentopsHome: fixture.agentopsHome,
+    deliveryLimits: { maxPublishBytesPerDay: 1048576 },
     runId,
     cloud,
     env: fixture.env,
@@ -884,6 +927,7 @@ test('session outbox recovers an in-flight stream after process exit and documen
 
   const otherRunDrain = drainSessionOutboxes({
     agentopsHome: fixture.agentopsHome,
+    deliveryLimits: { maxPublishBytesPerDay: 1048576 },
     cloud,
     env: fixture.env,
     runId: otherRunId,

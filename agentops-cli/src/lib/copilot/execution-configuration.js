@@ -1,4 +1,5 @@
 const crypto = require('node:crypto');
+const { redactContent } = require('./session-content');
 
 const SCHEMA_VERSION = 1;
 const HASH_ALGORITHM = 'sha256-16';
@@ -75,6 +76,13 @@ function boundedCount(value) {
 
 function safeStoredValue(value) {
   return typeof value === 'string' && SAFE_VALUE.test(value) ? value : null;
+}
+
+// Model/provider names are identifiers, not URLs or credential containers.
+function safeModelIdentity(value) {
+  if (!safeStoredValue(value) || /:\/\/|(?:^|\/)\/|[^/]*:[^/]*@/.test(value)) return null;
+  if (redactContent(value) !== value || /^(?:gh[pousr]_|github_pat_|sk-(?:proj-|ant-)?|AKIA[0-9A-Z]{16}|eyJ[A-Za-z0-9_-]+\.)/i.test(value)) return null;
+  return value;
 }
 
 function safeStoredList(value) {
@@ -155,7 +163,7 @@ function observedLaunchExecutionConfiguration(args = []) {
 
   const observedSettings = sanitizeObservedSettings({
     model: {
-      requested: safeFirst(commandArgs, '--model', omitted),
+      requested: safeModelIdentity(safeFirst(commandArgs, '--model', omitted)),
       effort: safeFirst(commandArgs, ['--effort', '--reasoning-effort'], omitted),
       mode: safeFirst(commandArgs, ['--mode', '--copilot-mode'], omitted)
     },
@@ -274,10 +282,61 @@ function normalizeExecutionConfiguration(input) {
   return suppliedExecutionConfiguration(input);
 }
 
+// Producer request/response identity is distinct from an observed launcher request.
+// Never use the legacy display-only `model` field as response evidence.
+function reconcileModelProvenance({ launchExecutionConfiguration, requestedModel, events = [], nativeSpans = [] } = {}) {
+  const configuration = launchExecutionConfiguration?.source === 'observed_launch_arguments'
+    ? normalizeExecutionConfiguration(launchExecutionConfiguration) : null;
+  const launchRequestedModel = safeModelIdentity(configuration?.observedSettings?.model?.requested) || safeModelIdentity(requestedModel);
+  const unique = values => [...new Set(values.map(safeModelIdentity).filter(Boolean))].sort();
+  const spans = nativeSpans.filter(span => span.match !== 'run-linked-script' && span.agent !== 'script OTel');
+  const producerRequestedModels = unique([
+    ...spans.map(span => span.modelRequested),
+    ...events.map(event => event?.data?.requestedModel)
+  ]);
+  const actualModels = unique(spans.map(span => span.modelActual));
+  const actualUsageIdentities = [...new Map(spans.filter(span => safeModelIdentity(span.modelActual)).map(span => {
+    const identity = { model: safeModelIdentity(span.modelActual), provider: safeModelIdentity(span.provider) };
+    return [JSON.stringify(identity), identity];
+  })).values()].sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
+  const producerResponseConflicts = [...new Map(spans.filter(span => safeModelIdentity(span.modelRequested)
+    && safeModelIdentity(span.modelActual) && span.modelRequested !== span.modelActual).map(span => {
+    const conflict = { requested: safeModelIdentity(span.modelRequested), actual: safeModelIdentity(span.modelActual), provider: safeModelIdentity(span.provider) };
+    return [JSON.stringify(conflict), conflict];
+  })).values()].sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
+  const sessionReportedModels = unique(events.flatMap(event => {
+    const data = event?.data || {};
+    return [data.newModel, data.currentModel, data.model];
+  }));
+  const conflictingModels = launchRequestedModel ? unique([
+    ...producerRequestedModels, ...actualModels, ...sessionReportedModels
+  ]).filter(model => model !== launchRequestedModel) : [];
+  const status = conflictingModels.length || producerResponseConflicts.length ? 'conflict'
+    : !launchRequestedModel || !actualModels.length ? 'unknown'
+      : actualModels.length > 1 ? 'mixed' : 'consistent_observation';
+  return {
+    launchRequestedModel: launchRequestedModel || null,
+    launchRequestSource: safeModelIdentity(configuration?.observedSettings?.model?.requested)
+      ? 'observed_launch_arguments' : launchRequestedModel ? 'launch_context' : 'unknown',
+    producerRequestedModels,
+    actualModels,
+    actualUsageIdentities,
+    sessionReportedModels,
+    conflictingModels,
+    producerResponseConflicts,
+    mixedActualModels: actualModels.length > 1,
+    actualUsageObserved: actualModels.length > 0,
+    status,
+    overrideCertified: false
+  };
+}
+
 module.exports = {
   HASH_ALGORITHM,
   SCHEMA_VERSION,
   normalizeExecutionConfiguration,
+  reconcileModelProvenance,
+  safeModelIdentity,
   observedLaunchExecutionConfiguration,
   suppliedExecutionConfiguration,
   unknownExecutionConfiguration

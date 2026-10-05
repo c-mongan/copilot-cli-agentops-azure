@@ -42,7 +42,7 @@ function azureIngestCommand(args = []) {
       eventsOnly: hasFlag(args, '--events-only')
     });
     const yes = hasFlag(args, '--yes');
-    const result = yes ? runLogsIngestionUpload(plan) : plan;
+    const result = yes ? runLogsIngestionUpload(plan, { deliveryLimits: optionValue(args, '--max-publish-bytes-per-day') === null ? undefined : { maxPublishBytesPerDay: /^\d+$/.test(String(optionValue(args, '--max-publish-bytes-per-day'))) ? Number(optionValue(args, '--max-publish-bytes-per-day')) : NaN } }) : plan;
 
     writeJsonOrRender(result, hasFlag(args, '--json'), yes ? renderLogsIngestionUploadResult : renderLogsIngestionUploadPlan);
     if (!result.ok) process.exitCode = 1;

@@ -784,7 +784,8 @@ test('actual scoped strict Collector retains supervisor-derived Python exit evid
   let collector;
   try {
     const script = path.join(root, '.github/skills/demo/scripts/collector-exit.py');
-    fs.writeFileSync(script, 'from agentops_script import observe_script\nwith observe_script(".github/skills/demo/scripts/collector-exit.py") as observation:\n    with observation.step("collector-step"):\n        pass\nraise SystemExit(7)\n');
+    // Separate early step export from launcher completion to exercise receipt ordering.
+    fs.writeFileSync(script, 'from agentops_script import observe_script\nwith observe_script(".github/skills/demo/scripts/collector-exit.py") as observation:\n    with observation.step("collector-step"):\n        pass\nimport time\ntime.sleep(0.4)\nraise SystemExit(7)\n');
     attachCommand(['--repo', root, '--yes', '--json'], { stdout: { write() {} } });
     collector = await startScopedStrictCollector({
       tempRoot: path.join(root, 'collector-runtime'),
@@ -803,10 +804,18 @@ test('actual scoped strict Collector retains supervisor-derived Python exit evid
       child.once('error', reject);
     });
     assert.deepEqual(result, { code: 7, signal: null });
-    for (let attempt = 0; attempt < 100 && fs.statSync(collector.receiptPath).size === 0; attempt += 1) {
+    // Child exit proves export submission, not that both Collector batch
+    // pipelines and the receipt file have drained. An early step receipt can
+    // precede the launcher's terminal span; stop only after that exact receipt.
+    const receiptDeadline = Date.now() + 8000;
+    let receivedSupervisor;
+    while (Date.now() < receiptDeadline) {
+      const receipt = readSessionOtelSpans('synthetic-session', [collector.receiptPath], { runId });
+      receivedSupervisor = receipt.spans.some(span => span.scriptOutcomeSource === 'supervisor-child-wait' && span.processExitCode === 7);
+      if (receivedSupervisor) break;
       await new Promise(resolve => setTimeout(resolve, 20));
     }
-    assert.ok(fs.statSync(collector.receiptPath).size > 0, fs.readFileSync(path.join(collector.directory, 'collector.log'), 'utf8'));
+    assert.ok(receivedSupervisor, fs.readFileSync(path.join(collector.directory, 'collector.log'), 'utf8'));
     await collector.stop({ remove: false });
     const parsed = readSessionOtelSpans('synthetic-session', [collector.receiptPath], { runId });
     const supervisor = parsed.spans.find(span => span.scriptOutcomeSource === 'supervisor-child-wait');

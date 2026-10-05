@@ -13,6 +13,7 @@
     "copilot",
     "docs",
     "examples",
+    "evals",
     "fixtures",
     "grafana",
     "infra",
@@ -23,6 +24,7 @@
     "packages",
     "plugin",
     "scripts",
+    "workbooks",
     "src",
     "uninstall-agentops.ps1",
     "uninstall-agentops.sh"

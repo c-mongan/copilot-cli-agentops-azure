@@ -16,6 +16,7 @@ const assetDirs = [
   'copilot',
   'docs',
   'examples',
+  'evals',
   'fixtures',
   'grafana',
   'infra',
@@ -23,7 +24,8 @@ const assetDirs = [
   'kql',
   'packages',
   'plugin',
-  'scripts'
+  'scripts',
+  'workbooks'
 ];
 const assetFiles = [
   'LICENSE',
@@ -33,8 +35,23 @@ const assetFiles = [
   'uninstall-agentops.ps1',
   'uninstall-agentops.sh'
 ];
+// Only the local protected-receipt grader and its pure dependencies ship.
+// Exclude trial workspaces, public datasets, answer keys, and model runners.
+const evaluationAssets = new Set([
+  'evals/diagnostics/common.js',
+  'evals/stockpilot/scripts/heldout.js',
+  'evals/stockpilot/scripts/full-corpus.js',
+  'evals/stockpilot/graders/index.js',
+  'evals/stockpilot/graders/tasks.json'
+]);
+const workbookAssets = new Set(['workbooks/agentops-workbook.json', 'workbooks/agentops-enterprise-workbook.json']);
 function shouldCopy(src) {
   const relative = path.relative(root, src).replaceAll('\\', '/');
+  if (relative === 'workbooks') return true;
+  if (relative.startsWith('workbooks/')) return workbookAssets.has(relative);
+  // The enterprise qualification helper is repository-only operator tooling.
+  if (relative === 'scripts/qualify-enterprise-evidence.js') return false;
+  if (relative === 'evals' || relative.startsWith('evals/')) return evaluationAssets.has(relative) || [...evaluationAssets].some(file => file.startsWith(relative + '/'));
   if (relative.split('/').includes('node_modules')) return false;
   if (relative.split('/').includes('__pycache__') || relative.endsWith('.pyc')) return false;
   if (relative.startsWith('instrumentation/') && path.basename(relative).startsWith('test_')) return false;
@@ -42,7 +59,7 @@ function shouldCopy(src) {
   if (relative.endsWith('.tgz')) return false;
   if (relative.startsWith('docs/images/') && relative !== 'docs/images/agentops-architecture-dataflow.png') return false;
   if (relative.startsWith('docs/screenshots/')) return false;
-  if (relative.startsWith('scripts/check-')) return false;
+  if (relative.startsWith('scripts/check-') && relative !== 'scripts/check-runtime-matrix.js') return false;
   if (relative === 'scripts/coverage-check.js' || relative === 'scripts/static-check.js') return false;
   return true;
 }

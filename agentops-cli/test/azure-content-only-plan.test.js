@@ -34,6 +34,7 @@ test('content-only plan selects one synthetic content stream and requires explic
     assert.match(unsafe.errors.join(' '), /Azure public Monitor ingestion endpoint/);
     const calls = [];
     const result = runLogsIngestionUpload(upload, {
+      agentopsHome: path.join(directory, 'home'), deliveryLimits: { maxPublishBytesPerDay: 1048576 },
       expectedSubscriptionId: '11111111-1111-4111-8111-111111111111',
       approvedSubscriptionIds: ['11111111-1111-4111-8111-111111111111'],
       spawnSync(command, args) {
@@ -68,6 +69,7 @@ test('span-only plan selects metadata spans without enabling rich content', () =
     assert.deepEqual(upload.uploads.map(item => item.stream), ['Custom-AgentOpsSpans_CL']);
     const calls = [];
     const result = runLogsIngestionUpload(upload, {
+      agentopsHome: path.join(directory, 'home'), deliveryLimits: { maxPublishBytesPerDay: 1048576 },
       expectedSubscriptionId: '11111111-1111-4111-8111-111111111111',
       approvedSubscriptionIds: ['11111111-1111-4111-8111-111111111111'],
       spawnSync(command, args) {

@@ -13,10 +13,11 @@ const { receiptDeliveryText } = require('../delivery-state');
 const { createWrapperDelivery } = require('./wrapper-delivery');
 const { attachedScriptEnvironment, scriptTraceEndpoint } = require('./script-observation');
 const { deliverCopilotSession } = require('./session-run-delivery');
+const { capturePreRunSnapshot } = require('./run-evidence-contract');
 const { observedLaunchExecutionConfiguration } = require('./execution-configuration');
 
 function removeAgentOpsCopilotFlags(args) {
-  return withoutFlags(args, ['--collector-mode', '--privacy', '--unsafe-no-collector']);
+  return withoutFlags(args, ['--collector-mode', '--privacy', '--unsafe-no-collector', '--task-id']);
 }
 
 function wrapperReplayUrl(envelope = createWrapperEnvelope(), links = legacy.openLinksSummary()) {
@@ -34,7 +35,7 @@ function safeReceiptName(value = '') {
   return /^[A-Za-z0-9_.:/@+-]{1,200}$/.test(text) ? text : '';
 }
 
-function renderCopilotReceipt({ envelope, exitCode, privacy = 'strict', requestedPrivacy = privacy, fallbackUnobserved = false, deliveryState = 'native_best_effort', sessionDelivery = null, replayUrl = '', summary = null, wallDurationMs = 0, agent = '', signal = '' }) {
+function renderCopilotReceipt({ envelope, exitCode, privacy = 'strict', requestedPrivacy = privacy, fallbackUnobserved = false, deliveryState = 'native_best_effort', sessionDelivery = null, replayUrl = '', summary = null, wallDurationMs = 0, agent = '', signal = '', requestedModel = '' }) {
   const completed = Number(exitCode) === 0;
   const safeSignal = safeReceiptName(signal);
   const lines = [
@@ -50,7 +51,8 @@ function renderCopilotReceipt({ envelope, exitCode, privacy = 'strict', requeste
     `Privacy     ${privacy}${requestedPrivacy !== privacy ? ` effective · ${requestedPrivacy} requested` : ''} · AgentOps did not record prompts, answers, code, or tool payloads`,
   ];
   if (safeReceiptName(agent)) lines.push(`Agent       ${safeReceiptName(agent)}`);
-  if (summary?.model) lines.push(`Model       ${summary.model}`);
+  if (safeReceiptName(requestedModel)) lines.push(`Requested   ${safeReceiptName(requestedModel)} from launch arguments`);
+  if (summary?.model) lines.push(`Model       ${safeReceiptName(summary.model) || 'unknown'} reported by session; response model requires span evidence`);
   if (summary && (summary.inputTokens || summary.outputTokens)) lines.push(`Tokens      ${summary.inputTokens.toLocaleString()} in · ${summary.outputTokens.toLocaleString()} out`);
   if (summary?.aiCredits) lines.push(`AI credits  ${summary.aiCredits.toFixed(1)}`);
   const timing = [];
@@ -79,6 +81,8 @@ async function copilotCommand(args = []) {
     return;
   }
   const requestedAgent = optionValue(observedArgs, '--agent', '');
+  const executionConfiguration = observedLaunchExecutionConfiguration(observedArgs);
+  const preRunSnapshot = capturePreRunSnapshot({ cwd: process.cwd(), executionConfiguration, taskId: optionValue(args, '--task-id') });
   const envelope = createWrapperEnvelope();
   const wrapperDelivery = createWrapperDelivery();
   const durableEventIds = [];
@@ -184,7 +188,8 @@ async function copilotCommand(args = []) {
       copilotHome,
       cwd: process.cwd(),
       env: process.env,
-      executionConfiguration: observedLaunchExecutionConfiguration(observedArgs)
+      executionConfiguration,
+      preRunSnapshot
     });
   } catch (error) {
     sessionDelivery = {
@@ -219,6 +224,7 @@ async function copilotCommand(args = []) {
       summary,
       wallDurationMs,
       agent: requestedAgent,
+      requestedModel: executionConfiguration.observedSettings?.model?.requested || '',
       signal: result.signal || ''
     }));
   }

@@ -1,0 +1,1137 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "name": "enterprise-header",
+      "content": {
+        "json": "## AgentOps · Copilot agent telemetry\nMetadata only — no prompts, responses, code, file paths or private URLs. Pick a workspace, time window and run. **Empty means not observed, never success.** Requested and recorded models are shown separately; nothing here proves complete capture, independent model execution or business benefit."
+      }
+    },
+    {
+      "type": 9,
+      "name": "enterprise-parameters",
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "workspace",
+            "version": "KqlParameterItem/1.0",
+            "name": "Workspace",
+            "label": "Metadata workspace",
+            "type": 5,
+            "isRequired": true,
+            "value": "value::1",
+            "typeSettings": {
+              "resourceTypeFilter": {
+                "microsoft.operationalinsights/workspaces": true
+              },
+              "additionalResourceOptions": [
+                "value::1"
+              ],
+              "showDefault": false
+            }
+          },
+          {
+            "id": "time-range",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 86400000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 604800000
+                }
+              ],
+              "allowCustom": true
+            }
+          },
+          {
+            "id": "run-id",
+            "version": "KqlParameterItem/1.0",
+            "name": "RunId",
+            "label": "Run (bounded to newest 500)",
+            "type": 2,
+            "isRequired": true,
+            "value": "*",
+            "query": "union (AgentOpsRunSummary_CL | where TimeGenerated {TimeRange} | project TimeGenerated, RunId), (AgentOpsEvents_CL | where TimeGenerated {TimeRange} | project TimeGenerated, RunId), (AgentOpsSpans_CL | where TimeGenerated {TimeRange} | project TimeGenerated, RunId)\n| where isnotempty(RunId)\n| summarize LastSeen=max(TimeGenerated) by RunId\n| top 500 by LastSeen desc\n| project value=RunId, label=RunId\n| union (datatable(value:string, label:string)['*', 'All observed runs'])",
+            "queryType": 0,
+            "resourceType": "microsoft.operationalinsights/workspaces",
+            "crossComponentResources": [
+              "{Workspace}"
+            ],
+            "timeContextFromParameter": "TimeRange"
+          }
+        ],
+        "style": "above"
+      }
+    },
+    {
+      "type": 9,
+      "name": "enterprise-tab-state",
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "7f1d2c4e-5a3b-4c8d-9e21-6b0a4f3c2d18",
+            "version": "KqlParameterItem/1.0",
+            "name": "selectedTab",
+            "type": 1,
+            "isHiddenWhenLocked": true,
+            "value": "overview",
+            "label": "Selected tab"
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      }
+    },
+    {
+      "type": 11,
+      "name": "enterprise-tabs",
+      "content": {
+        "version": "LinkItem/1.0",
+        "style": "tabs",
+        "links": [
+          {
+            "id": "tab-overview",
+            "cellValue": "selectedTab",
+            "linkTarget": "parameter",
+            "linkLabel": "Overview",
+            "subTarget": "overview",
+            "style": "link"
+          },
+          {
+            "id": "tab-runs",
+            "cellValue": "selectedTab",
+            "linkTarget": "parameter",
+            "linkLabel": "Runs & models",
+            "subTarget": "runs",
+            "style": "link"
+          },
+          {
+            "id": "tab-tools",
+            "cellValue": "selectedTab",
+            "linkTarget": "parameter",
+            "linkLabel": "Tools & scripts",
+            "subTarget": "tools",
+            "style": "link"
+          },
+          {
+            "id": "tab-lineage",
+            "cellValue": "selectedTab",
+            "linkTarget": "parameter",
+            "linkLabel": "Trace lineage",
+            "subTarget": "lineage",
+            "style": "link"
+          },
+          {
+            "id": "tab-privacy",
+            "cellValue": "selectedTab",
+            "linkTarget": "parameter",
+            "linkLabel": "Privacy & health",
+            "subTarget": "privacy",
+            "style": "link"
+          },
+          {
+            "id": "tab-quality",
+            "cellValue": "selectedTab",
+            "linkTarget": "parameter",
+            "linkLabel": "Quality & outcomes",
+            "subTarget": "quality",
+            "style": "link"
+          },
+          {
+            "id": "tab-insights",
+            "cellValue": "selectedTab",
+            "linkTarget": "parameter",
+            "linkLabel": "Insights & actions",
+            "subTarget": "insights",
+            "style": "link"
+          }
+        ]
+      }
+    },
+    {
+      "type": 12,
+      "name": "tab-overview",
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "items": [
+          {
+            "type": 3,
+            "name": "kpi-tiles",
+            "content": {
+              "version": "KqlItem/1.0",
+              "showExportToExcel": false,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "timeContextFromParameter": "TimeRange",
+              "title": "At a glance",
+              "query": "let RunRows = AgentOpsRunSummary_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId;\nlet EventRows = AgentOpsEvents_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId, Status;\nlet SpanRows = AgentOpsSpans_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId;\nlet ToolRows = union\n(AgentOpsToolCalls_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId, Status, Allowed),\n(AgentOpsMcpCalls_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId, Status, Allowed);\nlet PrivacyRows = AgentOpsPrivacy_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId, LeakDetected;\nlet HealthRows = AgentOpsCollectorHealth_CL\n| where TimeGenerated {TimeRange}\n| project TimeGenerated, Component;\nlet RunsObserved = toscalar(union RunRows, EventRows, SpanRows | where isnotempty(RunId) | summarize dcount(RunId));\nlet EventCount = toscalar(EventRows | count);\nlet SpanCount = toscalar(SpanRows | count);\nlet ToolCount = toscalar(ToolRows | count);\nlet ToolFailures = toscalar(ToolRows | where Status in~ (\"error\", \"failed\", \"failure\", \"denied\", \"blocked\") or Allowed == false | count);\nlet PrivacyCount = toscalar(PrivacyRows | count);\nlet LeakSignals = toscalar(PrivacyRows | where LeakDetected == true | count);\nlet LastHeartbeat = toscalar(HealthRows | summarize max(TimeGenerated));\nlet HeartbeatMinutes = datetime_diff('minute', now(), LastHeartbeat);\nunion\n(print Order=1, Metric=\"Runs observed\", Value=tostring(RunsObserved), Signal=\"neutral\", Note=\"distinct RunId with summary, event or span rows\"),\n(print Order=2, Metric=\"Events\", Value=tostring(EventCount), Signal=\"neutral\", Note=\"query-visible rows; retries may duplicate\"),\n(print Order=3, Metric=\"Spans\", Value=tostring(SpanCount), Signal=\"neutral\", Note=\"query-visible span rows\"),\n(print Order=4, Metric=\"Tool / MCP failure signals\", Value=iff(ToolCount == 0, \"not observed\", tostring(ToolFailures)), Signal=iff(ToolFailures > 0, \"attention\", \"neutral\"), Note=strcat(\"of \", tostring(ToolCount), \" tool rows; other rows: success unknown\")),\n(print Order=5, Metric=\"Privacy leak signals\", Value=iff(PrivacyCount == 0, \"not observed\", tostring(LeakSignals)), Signal=iff(LeakSignals > 0, \"attention\", \"neutral\"), Note=iff(PrivacyCount == 0, \"no receipts; leak verdict unknown\", strcat(\"of \", tostring(PrivacyCount), \" receipts; not a complete guarantee\"))),\n(print Order=6, Metric=\"Collector heartbeat\", Value=iff(isnull(LastHeartbeat), \"not observed\", case(HeartbeatMinutes < 120, strcat(tostring(HeartbeatMinutes), \" min ago\"), HeartbeatMinutes < 2880, strcat(tostring(HeartbeatMinutes / 60), \" h ago\"), strcat(tostring(HeartbeatMinutes / 1440), \" d ago\"))), Signal=iff(isnull(LastHeartbeat), \"neutral\", iff(HeartbeatMinutes > 60, \"attention\", \"neutral\")), Note=\"workspace-wide; not run-filtered\")\n| extend Value=iff(Signal == \"attention\", strcat(\"⚠ \", Value), Value)\n| order by Order asc\n| take 500",
+              "size": 4,
+              "visualization": "tiles",
+              "noDataMessage": "No metadata rows observed in this window. Publish with VS Code `AgentOps: Publish native metadata to Azure` or CLI `agentops azure-ingest`.",
+              "noDataMessageStyle": 5,
+              "tileSettings": {
+                "titleContent": {
+                  "columnMatch": "Metric",
+                  "formatter": 1
+                },
+                "leftContent": {
+                  "columnMatch": "Value",
+                  "formatter": 1
+                },
+                "secondaryContent": {
+                  "columnMatch": "Note",
+                  "formatter": 1
+                },
+                "showBorder": true,
+                "size": "auto"
+              }
+            }
+          },
+          {
+            "type": 3,
+            "name": "activity-timechart",
+            "content": {
+              "version": "KqlItem/1.0",
+              "showExportToExcel": false,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "timeContextFromParameter": "TimeRange",
+              "title": "Telemetry rows over time",
+              "query": "union\n(AgentOpsEvents_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId | extend Stream=\"events\"),\n(AgentOpsSpans_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId | extend Stream=\"spans\"),\n(AgentOpsToolCalls_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId | extend Stream=\"tool calls\"),\n(AgentOpsMcpCalls_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId | extend Stream=\"MCP calls\")\n| make-series Rows=count() default=0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by Stream\n| take 500",
+              "size": 0,
+              "visualization": "timechart",
+              "noDataMessage": "No events, spans or tool calls in this window. Publish with VS Code `AgentOps: Publish native metadata to Azure` or CLI `agentops azure-ingest`.",
+              "noDataMessageStyle": 5,
+              "chartSettings": {
+                "showLegend": true
+              }
+            }
+          },
+          {
+            "type": 3,
+            "name": "coverage-delivery",
+            "content": {
+              "version": "KqlItem/1.0",
+              "title": "Observed streams, coverage limits and delivery evidence",
+              "query": "union\n(AgentOpsRunSummary_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId | extend SourceTable=\"AgentOpsRunSummary_CL\"),\n(AgentOpsEvents_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId | extend SourceTable=\"AgentOpsEvents_CL\"),\n(AgentOpsSpans_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId | extend SourceTable=\"AgentOpsSpans_CL\"),\n(AgentOpsToolCalls_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId | extend SourceTable=\"AgentOpsToolCalls_CL\"),\n(AgentOpsMcpCalls_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId | extend SourceTable=\"AgentOpsMcpCalls_CL\"),\n(AgentOpsPrivacy_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId | extend SourceTable=\"AgentOpsPrivacy_CL\"),\n(AgentOpsEval_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId | extend SourceTable=\"AgentOpsEval_CL\"),\n(AgentOpsGithubOutcomes_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId | extend SourceTable=\"AgentOpsGithubOutcomes_CL\"),\n(AgentOpsInsights_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId | extend SourceTable=\"AgentOpsInsights_CL\"),\n(AgentOpsRecommendations_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId | extend SourceTable=\"AgentOpsRecommendations_CL\")\n| summarize ReadbackRows=count(), LastReadbackRow=max(TimeGenerated) by RunId, SourceTable\n| extend ReadbackEvidence=\"Azure query-visible rows only\", UploadAcknowledgment=\"unknown; local receipt not in table contract\", CaptureCompleteness=\"unknown; row presence does not establish coverage\"\n| order by LastReadbackRow desc\n| take 500",
+              "size": 0,
+              "visualization": "table",
+              "noDataMessage": "No AgentOps rows in this window, so delivery is not observed. Publish with VS Code `AgentOps: Publish native metadata to Azure` or CLI `agentops azure-ingest`.",
+              "showExportToExcel": false,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "timeContextFromParameter": "TimeRange",
+              "noDataMessageStyle": 5,
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "ReadbackRows",
+                    "formatter": 4,
+                    "formatOptions": {
+                      "palette": "blue"
+                    }
+                  }
+                ],
+                "filter": true
+              }
+            }
+          }
+        ]
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "overview"
+      }
+    },
+    {
+      "type": 12,
+      "name": "tab-runs",
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "items": [
+          {
+            "type": 3,
+            "name": "runs",
+            "content": {
+              "version": "KqlItem/1.0",
+              "title": "Runs, model provenance and nullable usage / cost",
+              "query": "AgentOpsRunSummary_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId, SessionId, TraceId, AgentName, Surface, TaskType, ModelRequested, ModelActual, OutcomeStatus, InputTokens, OutputTokens, EstimatedCostUsdReal, TestsRan, TestsPassed, CiStatus, PrivacyMode, SchemaVersion\n| summarize arg_max(TimeGenerated, *) by RunId\n| extend RequestedModel=iff(isempty(ModelRequested), \"unknown\", ModelRequested), RecordedActualModel=iff(isempty(ModelActual), \"unknown\", ModelActual), ActualModelProvenance=\"recorded metadata; independent execution not established\", Outcome=iff(isempty(OutcomeStatus), \"unknown\", OutcomeStatus), UsageEvidence=iff(isnull(InputTokens) or isnull(OutputTokens), \"partial or unknown\", \"recorded run summary\"), CostEvidence=iff(isnull(EstimatedCostUsdReal), \"unknown\", \"recorded estimate; not invoice\"), CaptureCompleteness=\"unknown; no affirmative coverage field\"\n| project TimeGenerated, RunId, SessionId, TraceId, AgentName, Surface, TaskType, RequestedModel, RecordedActualModel, ActualModelProvenance, Outcome, InputTokens, OutputTokens, UsageEvidence, EstimatedCostUsdReal, CostEvidence, TestsRan, TestsPassed, CiStatus, PrivacyMode, CaptureCompleteness, SchemaVersion\n| order by TimeGenerated desc\n| take 500",
+              "size": 0,
+              "visualization": "table",
+              "noDataMessage": "No run summaries in this window. Run summaries come from CLI `agentops run-summary`; native VS Code capture publishes events only. Outcome stays unknown.",
+              "showExportToExcel": false,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "timeContextFromParameter": "TimeRange",
+              "noDataMessageStyle": 5,
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "SessionId",
+                    "formatter": 5
+                  },
+                  {
+                    "columnMatch": "TraceId",
+                    "formatter": 5
+                  },
+                  {
+                    "columnMatch": "SchemaVersion",
+                    "formatter": 5
+                  },
+                  {
+                    "columnMatch": "Outcome",
+                    "formatter": 18,
+                    "formatOptions": {
+                      "thresholdsOptions": "icons",
+                      "thresholdsGrid": [
+                        {
+                          "operator": "==",
+                          "thresholdValue": "failed",
+                          "representation": "failed",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "failure",
+                          "representation": "failed",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "error",
+                          "representation": "failed",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "denied",
+                          "representation": "failed",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "blocked",
+                          "representation": "failed",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "success",
+                          "representation": "success",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "succeeded",
+                          "representation": "success",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "ok",
+                          "representation": "success",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "completed",
+                          "representation": "success",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "Default",
+                          "thresholdValue": null,
+                          "representation": "Unknown",
+                          "text": "{0}{1}"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "columnMatch": "InputTokens",
+                    "formatter": 4,
+                    "formatOptions": {
+                      "palette": "blue"
+                    }
+                  },
+                  {
+                    "columnMatch": "OutputTokens",
+                    "formatter": 4,
+                    "formatOptions": {
+                      "palette": "blue"
+                    }
+                  }
+                ],
+                "filter": true
+              }
+            }
+          },
+          {
+            "type": 3,
+            "name": "model-events",
+            "content": {
+              "version": "KqlItem/1.0",
+              "title": "Model request versus recorded actual event evidence",
+              "query": "AgentOpsEvents_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId, EventId, Sequence, EventName, Status, ModelRequested, ModelActual, Provider\n| where isnotempty(ModelRequested) or isnotempty(ModelActual)\n| extend ActualModelProvenance=iff(isempty(ModelActual), \"unknown; request is not actual\", \"recorded event; independent execution not established\")\n| order by TimeGenerated desc\n| take 500",
+              "size": 0,
+              "visualization": "table",
+              "noDataMessage": "No model request or recorded actual model in this window. Requested model is never treated as actual.",
+              "showExportToExcel": false,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "timeContextFromParameter": "TimeRange",
+              "noDataMessageStyle": 5,
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "ActualModelProvenance",
+                    "formatter": 18,
+                    "formatOptions": {
+                      "thresholdsOptions": "icons",
+                      "thresholdsGrid": [
+                        {
+                          "operator": "startswith",
+                          "thresholdValue": "unknown",
+                          "representation": "Unknown",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "Default",
+                          "thresholdValue": null,
+                          "representation": "Available",
+                          "text": "{0}{1}"
+                        }
+                      ]
+                    }
+                  }
+                ],
+                "filter": true
+              }
+            }
+          }
+        ]
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "runs"
+      }
+    },
+    {
+      "type": 12,
+      "name": "tab-tools",
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "items": [
+          {
+            "type": 3,
+            "name": "tools-scripts",
+            "content": {
+              "version": "KqlItem/1.0",
+              "title": "Tool, MCP and script execution / failures",
+              "query": "union\n(AgentOpsToolCalls_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId, TraceId, SpanId, ToolName, ToolType, ToolRisk, Status, Allowed, DurationMs | extend Lane=\"tool\"),\n(AgentOpsMcpCalls_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId, TraceId, SpanId, ToolName, McpServerName, ToolRisk, Status, Allowed, DurationMs | extend Lane=\"mcp\"),\n(AgentOpsEvents_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId, TraceId, EventId, EventName, ToolName, McpServerName, ScriptName, ScriptRuntimeName, ScriptLoaderName, Status, ErrorType, ExitCode, DurationMs | where isnotempty(ScriptName) or isnotempty(ErrorType) or (isnotnull(ExitCode) and ExitCode != 0) | extend Lane=\"event / script\")\n| extend RecordedStatus=iff(isempty(Status), \"unknown\", Status), FailureEvidence=case(isnotempty(ErrorType), \"recorded error type\", isnotnull(ExitCode) and ExitCode != 0, \"recorded nonzero exit\", Status in~ (\"error\", \"failed\", \"failure\", \"denied\", \"blocked\"), \"recorded failure / denial\", \"no failure signal in this row; success unknown\")\n| project TimeGenerated, RunId, Lane, ToolName, McpServerName, ScriptName, ScriptRuntimeName, ScriptLoaderName, RecordedStatus, FailureEvidence, Allowed, ErrorType, ExitCode, DurationMs, TraceId, SpanId, EventId\n| order by TimeGenerated desc\n| take 500",
+              "size": 0,
+              "visualization": "table",
+              "noDataMessage": "No tool, MCP or script rows in this window. Success remains unknown, not assumed.",
+              "showExportToExcel": false,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "timeContextFromParameter": "TimeRange",
+              "noDataMessageStyle": 5,
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "TraceId",
+                    "formatter": 5
+                  },
+                  {
+                    "columnMatch": "SpanId",
+                    "formatter": 5
+                  },
+                  {
+                    "columnMatch": "EventId",
+                    "formatter": 5
+                  },
+                  {
+                    "columnMatch": "FailureEvidence",
+                    "formatter": 18,
+                    "formatOptions": {
+                      "thresholdsOptions": "icons",
+                      "thresholdsGrid": [
+                        {
+                          "operator": "startswith",
+                          "thresholdValue": "recorded",
+                          "representation": "failed",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "Default",
+                          "thresholdValue": null,
+                          "representation": "Unknown",
+                          "text": "{0}{1}"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "columnMatch": "DurationMs",
+                    "formatter": 4,
+                    "formatOptions": {
+                      "palette": "blue"
+                    }
+                  }
+                ],
+                "filter": true
+              }
+            }
+          }
+        ]
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "tools"
+      }
+    },
+    {
+      "type": 12,
+      "name": "tab-lineage",
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "items": [
+          {
+            "type": 3,
+            "name": "span-lineage",
+            "content": {
+              "version": "KqlItem/1.0",
+              "title": "Span lineage and attribution evidence",
+              "query": "AgentOpsSpans_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId, TraceId, SpanId, ParentSpanId, OperationName, AgentName, ToolName, McpServerName, McpToolName, ScriptName, ToolCallEvidence, LinkType, Outcome, ErrorType, DurationMs\n| order by TimeGenerated asc\n| take 500",
+              "size": 0,
+              "visualization": "table",
+              "noDataMessage": "No spans in this window. Start capture with VS Code `AgentOps: Connect native capture`, then publish.",
+              "showExportToExcel": false,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "timeContextFromParameter": "TimeRange",
+              "noDataMessageStyle": 5,
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "TraceId",
+                    "formatter": 5
+                  },
+                  {
+                    "columnMatch": "ParentSpanId",
+                    "formatter": 5
+                  },
+                  {
+                    "columnMatch": "Outcome",
+                    "formatter": 18,
+                    "formatOptions": {
+                      "thresholdsOptions": "icons",
+                      "thresholdsGrid": [
+                        {
+                          "operator": "==",
+                          "thresholdValue": "failed",
+                          "representation": "failed",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "failure",
+                          "representation": "failed",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "error",
+                          "representation": "failed",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "denied",
+                          "representation": "failed",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "blocked",
+                          "representation": "failed",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "success",
+                          "representation": "success",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "succeeded",
+                          "representation": "success",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "ok",
+                          "representation": "success",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "completed",
+                          "representation": "success",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "Default",
+                          "thresholdValue": null,
+                          "representation": "Unknown",
+                          "text": "{0}{1}"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "columnMatch": "DurationMs",
+                    "formatter": 4,
+                    "formatOptions": {
+                      "palette": "blue"
+                    }
+                  }
+                ],
+                "filter": true
+              }
+            }
+          },
+          {
+            "type": 3,
+            "name": "references",
+            "content": {
+              "version": "KqlItem/1.0",
+              "title": "Opaque evidence references for local ledger investigation",
+              "query": "AgentOpsEvents_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId, SessionId, TraceId, EventId, ParentEventId, Sequence, EventName, ToolCallId, ParentToolCallId, AgentId, ParentAgentId\n| order by TimeGenerated asc\n| take 500",
+              "size": 0,
+              "visualization": "table",
+              "noDataMessage": "No event references in this window. Publish with VS Code `AgentOps: Publish native metadata to Azure` or CLI `agentops azure-ingest`.",
+              "showExportToExcel": false,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "timeContextFromParameter": "TimeRange",
+              "noDataMessageStyle": 5,
+              "gridSettings": {
+                "formatters": [],
+                "filter": true
+              }
+            }
+          }
+        ]
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "lineage"
+      }
+    },
+    {
+      "type": 12,
+      "name": "tab-privacy",
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "items": [
+          {
+            "type": 3,
+            "name": "privacy",
+            "content": {
+              "version": "KqlItem/1.0",
+              "title": "Privacy receipts and explicit unknown verdicts",
+              "query": "AgentOpsPrivacy_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId, TraceId, ContentKind, Action, Observed, LeakDetected, DroppedCount, RedactedCount, PrivacyMode\n| extend PrivacyEvidence=case(isnull(Observed), \"unknown\", Observed == false, \"not observed\", isnull(LeakDetected), \"observed; leak verdict unknown\", LeakDetected == true, \"leak signal; investigate\", \"recorded no-leak verdict; not a complete privacy guarantee\")\n| order by TimeGenerated desc\n| take 500",
+              "size": 0,
+              "visualization": "table",
+              "noDataMessage": "No privacy receipts in this window. No-leak verdict is unknown, not clean.",
+              "showExportToExcel": false,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "timeContextFromParameter": "TimeRange",
+              "noDataMessageStyle": 5,
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "TraceId",
+                    "formatter": 5
+                  },
+                  {
+                    "columnMatch": "PrivacyEvidence",
+                    "formatter": 18,
+                    "formatOptions": {
+                      "thresholdsOptions": "icons",
+                      "thresholdsGrid": [
+                        {
+                          "operator": "startswith",
+                          "thresholdValue": "leak signal",
+                          "representation": "failed",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "startswith",
+                          "thresholdValue": "recorded no-leak",
+                          "representation": "success",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "Default",
+                          "thresholdValue": null,
+                          "representation": "Unknown",
+                          "text": "{0}{1}"
+                        }
+                      ]
+                    }
+                  }
+                ],
+                "filter": true
+              }
+            }
+          },
+          {
+            "type": 3,
+            "name": "health",
+            "content": {
+              "version": "KqlItem/1.0",
+              "title": "Workspace-wide collector health (not run-filtered)",
+              "query": "AgentOpsCollectorHealth_CL\n| where TimeGenerated {TimeRange}\n| project TimeGenerated, Component, Status, CheckName, CollectorMode, PrivacyMode, AzureConfigured, PrivacyPoisonOk, DroppedContentCount, ExportErrors, LastExportSuccess, LastSpanReceived\n| summarize arg_max(TimeGenerated, *) by Component, CheckName\n| extend HealthScope=\"workspace-wide; schema has no RunId\", LastExportEvidence=iff(isnull(LastExportSuccess), \"unknown\", \"recorded collector export timestamp; not full readback\"), HeartbeatAge=now()-TimeGenerated\n| order by TimeGenerated desc\n| take 500",
+              "size": 0,
+              "visualization": "table",
+              "noDataMessage": "No collector heartbeat in this window (workspace-wide). Check `agentops health` or VS Code `AgentOps: Capture status`.",
+              "showExportToExcel": false,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "timeContextFromParameter": "TimeRange",
+              "noDataMessageStyle": 5,
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "Status",
+                    "formatter": 18,
+                    "formatOptions": {
+                      "thresholdsOptions": "icons",
+                      "thresholdsGrid": [
+                        {
+                          "operator": "==",
+                          "thresholdValue": "ok",
+                          "representation": "success",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "healthy",
+                          "representation": "success",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "error",
+                          "representation": "failed",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "degraded",
+                          "representation": "warning",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "warning",
+                          "representation": "warning",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "Default",
+                          "thresholdValue": null,
+                          "representation": "Unknown",
+                          "text": "{0}{1}"
+                        }
+                      ]
+                    }
+                  }
+                ],
+                "filter": true
+              }
+            }
+          }
+        ]
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "privacy"
+      }
+    },
+    {
+      "type": 12,
+      "name": "tab-quality",
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "items": [
+          {
+            "type": 3,
+            "name": "evaluations",
+            "content": {
+              "version": "KqlItem/1.0",
+              "title": "Recorded deterministic evaluations; missing scores stay null",
+              "query": "AgentOpsEval_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId, TraceId, TaskType, ModelActual, EvalOverall, EvalBucket, Reliability, Security, TestDiscipline, ToolEfficiency, ContextEfficiency, CodeOutcome\n| extend ScoreEvidence=iff(isnull(EvalOverall), \"unknown\", \"recorded deterministic grade; execution tier not in schema\")\n| order by TimeGenerated desc\n| take 500",
+              "size": 0,
+              "visualization": "table",
+              "noDataMessage": "No evaluation rows in this window. Missing scores stay null, never zero.",
+              "showExportToExcel": false,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "timeContextFromParameter": "TimeRange",
+              "noDataMessageStyle": 5,
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "TraceId",
+                    "formatter": 5
+                  },
+                  {
+                    "columnMatch": "EvalOverall",
+                    "formatter": 8,
+                    "formatOptions": {
+                      "palette": "redGreen",
+                      "min": 0,
+                      "max": 100
+                    }
+                  }
+                ],
+                "filter": true
+              }
+            }
+          },
+          {
+            "type": 3,
+            "name": "github-outcomes",
+            "content": {
+              "version": "KqlItem/1.0",
+              "title": "Measured code outcomes; unknown booleans stay null",
+              "query": "AgentOpsGithubOutcomes_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId, RepoHash, PrNumberHash, PrOpened, PrMerged, PrClosed, PrReverted, CiStatus, CommitCount, FilesChangedCount, ReviewCommentCount, TimeToPrMinutes, TimeToMergeMinutes\n| extend OutcomeEvidence=\"recorded GitHub state; causal benefit not established\"\n| order by TimeGenerated desc\n| take 500",
+              "size": 0,
+              "visualization": "table",
+              "noDataMessage": "No GitHub outcome rows in this window. Enrich with CLI `agentops github-enrich`. Unknown booleans stay null.",
+              "showExportToExcel": false,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "timeContextFromParameter": "TimeRange",
+              "noDataMessageStyle": 5,
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "CiStatus",
+                    "formatter": 18,
+                    "formatOptions": {
+                      "thresholdsOptions": "icons",
+                      "thresholdsGrid": [
+                        {
+                          "operator": "==",
+                          "thresholdValue": "failed",
+                          "representation": "failed",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "failure",
+                          "representation": "failed",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "error",
+                          "representation": "failed",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "denied",
+                          "representation": "failed",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "blocked",
+                          "representation": "failed",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "success",
+                          "representation": "success",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "succeeded",
+                          "representation": "success",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "ok",
+                          "representation": "success",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "completed",
+                          "representation": "success",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "Default",
+                          "thresholdValue": null,
+                          "representation": "Unknown",
+                          "text": "{0}{1}"
+                        }
+                      ]
+                    }
+                  }
+                ],
+                "filter": true
+              }
+            }
+          }
+        ]
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "quality"
+      }
+    },
+    {
+      "type": 12,
+      "name": "tab-insights",
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "items": [
+          {
+            "type": 3,
+            "name": "insights",
+            "content": {
+              "version": "KqlItem/1.0",
+              "title": "Architecture insights and bounded evidence references",
+              "query": "AgentOpsInsights_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId, TraceId, InsightId, InsightType, Severity, Rule, ArchitectureVersion, Numerator, Denominator, CoverageRuns, Status, Evidence\n| extend EvidenceIds=Evidence.evidenceIds, CoverageLimits=tostring(Evidence.coverageLimits)\n| project TimeGenerated, RunId, TraceId, InsightId, InsightType, Severity, Rule, ArchitectureVersion, Numerator, Denominator, CoverageRuns, Status, EvidenceIds, CoverageLimits\n| order by TimeGenerated desc\n| take 500",
+              "size": 0,
+              "visualization": "table",
+              "noDataMessage": "No architecture insights in this window. Generate with CLI `agentops insights`.",
+              "showExportToExcel": false,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "timeContextFromParameter": "TimeRange",
+              "noDataMessageStyle": 5,
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "TraceId",
+                    "formatter": 5
+                  },
+                  {
+                    "columnMatch": "Severity",
+                    "formatter": 18,
+                    "formatOptions": {
+                      "thresholdsOptions": "icons",
+                      "thresholdsGrid": [
+                        {
+                          "operator": "==",
+                          "thresholdValue": "high",
+                          "representation": "failed",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "critical",
+                          "representation": "failed",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "medium",
+                          "representation": "warning",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "low",
+                          "representation": "info",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "Default",
+                          "thresholdValue": null,
+                          "representation": "Blank",
+                          "text": "{0}{1}"
+                        }
+                      ]
+                    }
+                  }
+                ],
+                "filter": true
+              }
+            }
+          },
+          {
+            "type": 3,
+            "name": "recommendations",
+            "content": {
+              "version": "KqlItem/1.0",
+              "title": "Recommendation identifiers and controlled actions",
+              "query": "AgentOpsRecommendations_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId, SessionId, TraceId, RecommendationId, Action, Severity, EvalOverall, EvalBucket\n| extend Decision=\"proposal only; human review required\"\n| order by TimeGenerated desc\n| take 500",
+              "size": 0,
+              "visualization": "table",
+              "noDataMessage": "No recommendations in this window. Generate with CLI `agentops recommend`; every action needs human review.",
+              "showExportToExcel": false,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "timeContextFromParameter": "TimeRange",
+              "noDataMessageStyle": 5,
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "TraceId",
+                    "formatter": 5
+                  },
+                  {
+                    "columnMatch": "SessionId",
+                    "formatter": 5
+                  },
+                  {
+                    "columnMatch": "Severity",
+                    "formatter": 18,
+                    "formatOptions": {
+                      "thresholdsOptions": "icons",
+                      "thresholdsGrid": [
+                        {
+                          "operator": "==",
+                          "thresholdValue": "high",
+                          "representation": "failed",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "critical",
+                          "representation": "failed",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "medium",
+                          "representation": "warning",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "low",
+                          "representation": "info",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "Default",
+                          "thresholdValue": null,
+                          "representation": "Blank",
+                          "text": "{0}{1}"
+                        }
+                      ]
+                    }
+                  }
+                ],
+                "filter": true
+              }
+            }
+          }
+        ]
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "insights"
+      }
+    },
+    {
+      "type": 1,
+      "name": "enterprise-limits",
+      "content": {
+        "json": "## Interpretation and privacy limits\n\nCounts describe rows observed in this window, not expected deliveries or capture coverage. Retries may duplicate rows. Health is workspace-wide because its table has no RunId. Numeric and boolean blanks remain unknown; estimated cost is not billed cost. Run and event IDs are linkable metadata. No arbitrary dynamic evidence object, recommendation text, health detail or endpoint is rendered. Metadata projection and least-privilege table access must be qualified before private data onboarding. Local replay and independently verified receipts remain the authority for detailed investigation.\n\n[Time parameters](https://learn.microsoft.com/en-us/azure/azure-monitor/visualize/workbooks-time) · [Workbook access](https://learn.microsoft.com/en-us/azure/azure-monitor/visualize/workbooks-access-control) · [Official workbook schema](https://github.com/microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json)"
+      }
+    }
+  ],
+  "fallbackResourceIds": [],
+  "$schema": "https://github.com/microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

@@ -116,14 +116,22 @@ function loadLedgerFromDirectory(ledgerDir, options = {}) {
     // Older contexts have unknown coverage. Partial or malformed capture cannot
     // establish absence, even when an older writer stamped evidenceComplete.
     const explicitEvidenceComplete = typeof context.evidenceComplete === 'boolean' ? context.evidenceComplete : null;
-    const coverage = context.coverage || {};
+    const recordedRun = fs.existsSync(path.join(runDir, 'run-context.json'));
+    // No recorded producer currently qualifies exhaustive global capture.
+    // Preserve caller claims for inspection without presenting them as proof.
+    const coverageClaims = context.coverage || {};
+    const coverage = recordedRun
+      ? Object.fromEntries(['agents', 'skills', 'references', 'scripts', 'tools', 'models'].map(kind => [kind, 'unknown']))
+      : coverageClaims;
     const componentsComplete = ['agents', 'skills', 'references', 'scripts', 'tools', 'models']
       .every(component => coverage[component] === 'complete');
     const evidenceComplete = explicitEvidenceComplete !== false && invalid === 0 && events.length > 0
       && componentsComplete
+      && !recordedRun
       && !Object.values(coverage).some(value => value !== 'complete');
     runs.push({
       runId: entry.name,
+      evidenceOrigin: recordedRun ? 'recorded-run' : 'legacy-fixture',
       sessionId: context.sessionId || '',
       architectureVersion: context.architectureVersion || 'unknown',
       configurationVersion: context.configurationVersion || null,
@@ -132,7 +140,15 @@ function loadLedgerFromDirectory(ledgerDir, options = {}) {
       evidenceTier: context.evidenceTier || 'unknown',
       evidenceComplete,
       coverage,
+      coverageClaims: recordedRun ? coverageClaims : null,
       coverageEvidence: context.coverageEvidence || {},
+      preRunSnapshot: context.preRunSnapshot || null,
+      attachmentProvenance: context.attachmentProvenance || null,
+      sourceIntegrity: context.sourceIntegrity || null,
+      invalidSourceRows: invalid,
+      launchExecutionConfiguration: context.launchExecutionConfiguration || context.executionConfiguration || null,
+      modelProvenance: context.modelProvenance || null,
+      componentDenominators: context.componentDenominators || {},
       lifecycle: context.lifecycle || { collector: 'unknown', process: 'unknown' },
       taskContract: context.taskContract || null,
       outcomeFailed: Boolean(context.outcomeFailed),
@@ -140,6 +156,17 @@ function loadLedgerFromDirectory(ledgerDir, options = {}) {
       events
     });
     const run = runs[runs.length - 1];
+    const spanLedger = readJsonlSafe(path.join(runDir, 'AgentOpsSpans_CL.jsonl'));
+    invalidTotal += spanLedger.invalid;
+    run.observedScriptReceipts = spanLedger.invalid === 0 ? spanLedger.rows.filter(row =>
+      row.RunId === run.runId && row.SessionId === run.sessionId
+      && row.LinkType === 'run-id-logical-link' && /^[a-f0-9]{32}$/i.test(row.TraceId || '')
+      && /^[a-f0-9]{16}$/i.test(row.SpanId || '') && typeof row.ScriptName === 'string'
+      && !row.StepName && ['completed', 'failed', 'success', 'ok'].includes(String(row.Outcome || '').toLowerCase())
+    ).map(row => ({ script: row.ScriptName, status: ['success', 'ok'].includes(String(row.Outcome).toLowerCase()) ? 'completed' : String(row.Outcome).toLowerCase(),
+      durationMs: Number.isFinite(row.DurationMs) ? row.DurationMs : null, eventId: `${row.TraceId}:${row.SpanId}`,
+      evidenceLabel: 'run-id-logical-link', parentToolCallId: row.ParentToolCallId || null,
+      toolCallEvidence: row.ToolCallEvidence || null })) : [];
     try { run.deliveryStatus = readSessionOutbox(runDir); } catch { run.deliveryStatus = null; }
     if (options.copilotHome && /^[A-Za-z0-9-]{1,100}$/.test(run.sessionId)) {
       const native = readJsonlSafe(path.join(options.copilotHome, 'session-state', run.sessionId, 'events.jsonl'));

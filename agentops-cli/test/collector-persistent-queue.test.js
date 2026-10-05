@@ -48,5 +48,28 @@ test('strict local privacy config clears signal-level content fields before expo
   assert.match(config, /set\(name, "agentops\.span"\) where name != nil/);
   assert.match(config, /set\(status\.message, "redacted by AgentOps strict privacy mode"\)/);
   assert.match(config, /set\(name, "agentops\.event"\) where name != nil/);
-  assert.match(config, /set\(name, "agentops\.metric"\) where name != nil/);
+  // Metric identity is retained only behind an exact name/type/unit gate.
+  // The runnable real-Collector regression checks values and secret canaries.
+  assert.doesNotMatch(config, /set\(name, "agentops\.metric"\)/);
+  assert.match(config, /filter\/native_metrics:\n\s+error_mode: propagate/);
+  assert.match(config, /\(name != "gen_ai\.client\.token\.usage" or type != METRIC_DATA_TYPE_HISTOGRAM or unit != "tokens"\)/);
+  assert.match(config, /\(name != "gen_ai\.client\.operation\.duration" or type != METRIC_DATA_TYPE_HISTOGRAM or unit != "s"\)/);
+  assert.match(config, /\(name != "github\.copilot\.tool\.call\.count" or type != METRIC_DATA_TYPE_SUM or unit != "calls"\)/);
+  const gate = config.split('  filter/native_metrics:')[1].split('  batch:')[0];
+  const instrumentNames = [...gate.matchAll(/\(name != "([^"]+)" or type != METRIC_DATA_TYPE_(?:HISTOGRAM|SUM) or unit != "[^"]+"\)/g)];
+  assert.equal(instrumentNames.length, 14, 'Only the approved native instruments are accepted');
+  assert.equal((gate.match(/\) and \(/g) || []).length, 13, 'Unknown names fail every pair and are dropped');
+  for (const pipeline of ['metrics', 'metrics/receipt']) {
+    const block = config.split('service:\n')[1].split(`    ${pipeline}:\n`)[1].split('    logs')[0];
+    assert.match(block, /processors: \[[^\]]*filter\/native_metrics, transform\/privacy_strict/);
+  }
+  assert.match(config, /set\(description, ""\)/);
+  assert.match(config, /Len\(exemplars\) > 0/);
+  assert.match(config, /Len\(links\) > 0/);
+  assert.equal((config.match(/set\(resource\.schema_url, ""\)/g) || []).length, 3);
+  assert.equal((config.match(/set\(scope\.schema_url, ""\)/g) || []).length, 3);
+  assert.equal((config.match(/keep_keys\(scope\.attributes, \[\]\)/g) || []).length, 3);
+  assert.match(config, /set\(trace_state, ""\)/);
+  assert.match(config, /set\(severity_text, ""\)/);
+  assert.match(config, /set\(event_name, "agentops\.event"\)/);
 });

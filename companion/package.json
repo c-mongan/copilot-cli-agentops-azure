@@ -1,0 +1,1 @@
+{"name":"agentops-native-companion","version":"0.1.0","private":true,"description":"Local CLI-first native capture companion; macOS preview with installed VS Code runtime","scripts":{"test":"node --test test/*.test.js"}}

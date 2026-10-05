@@ -1,3 +1,4 @@
+const { validPreRunSnapshot } = require('../copilot/run-evidence-contract');
 const crypto = require('node:crypto');
 
 const DEFAULTS = Object.freeze({
@@ -39,13 +40,41 @@ function proportionRow(numerator, denominator, coverageRuns, architectureVersion
   };
 }
 
+function frozenIdentityValid(graph, run) {
+  const snapshot = run.preRunSnapshot;
+  return run.architectureVersion === graph.architectureVersion && validPreRunSnapshot(snapshot)
+    && snapshot.architectureVersion === run.architectureVersion
+    && snapshot.configurationVersion === run.configurationVersion
+    && snapshot.taskId === run.taskId && Boolean(run.configurationVersion) && Boolean(run.taskId)
+    && (run.configurationVersions || []).length <= 1 && (run.taskIds || []).length <= 1
+    && run.attachmentProvenance?.status === 'unchanged' && !run.invalidSourceRows;
+}
+function componentComplete(graph, run, components) {
+  // Legacy fixtures retain their explicit complete contract. New recordings
+  // require a frozen identity and an affirmative producer denominator.
+  if (run.evidenceOrigin !== 'recorded-run' && !run.preRunSnapshot && !run.sourceIntegrity) return run.evidenceComplete === true && run.architectureVersion === graph.architectureVersion;
+  if (!frozenIdentityValid(graph, run) || run.sourceIntegrity?.status !== 'valid' || run.sourceIntegrity.freshSession !== true
+    || run.lifecycle?.collector !== 'completed' || run.lifecycle?.process !== 'completed') return false;
+  // No native/runtime producer currently has independently qualified exhaustive
+  // capture. Context labels/count equality are assertions, not capabilities.
+  // Keep this gate closed until a producer adapter validates raw count evidence.
+  const qualifiedProducer = () => false;
+  return components.every(component => {
+    const denominator = run.componentDenominators?.[component];
+    return qualifiedProducer(component, denominator) && run.coverage?.[component] === 'complete' && denominator?.status === 'complete'
+      && denominator.scope === 'entire-run' && typeof denominator.producer === 'string' && denominator.producer.length > 0
+      && typeof denominator.sourceSha256 === 'string' && /^[a-f0-9]{64}$/.test(denominator.sourceSha256)
+      && denominator.sourceSha256 === run.sourceIntegrity.sha256
+      && Number.isSafeInteger(denominator.expected) && denominator.expected >= 0
+      && Number.isSafeInteger(denominator.observed) && denominator.observed === denominator.expected;
+  });
+}
 function matchesArchitecture(graph, run) {
-  // Unknown or partial capture cannot establish a metric denominator.
-  return run.architectureVersion === graph.architectureVersion && run.evidenceComplete === true;
+  return componentComplete(graph, run, ['agents', 'skills', 'references', 'scripts', 'tools', 'models']);
 }
 
-function eligibleRuns(graph, joinedRuns) {
-  return joinedRuns.filter(run => matchesArchitecture(graph, run));
+function eligibleRuns(graph, joinedRuns, components = null) {
+  return joinedRuns.filter(run => components ? componentComplete(graph, run, components) : matchesArchitecture(graph, run));
 }
 
 function executionConfigurationEvidence(runs) {
@@ -96,9 +125,9 @@ function runCohort(run) {
   };
 }
 
-function eligibleCohorts(graph, joinedRuns) {
+function eligibleCohorts(graph, joinedRuns, components = null) {
   const groups = new Map();
-  for (const run of eligibleRuns(graph, joinedRuns)) {
+  for (const run of eligibleRuns(graph, joinedRuns, components)) {
     const cohort = runCohort(run);
     if (!groups.has(cohort.cohortId)) groups.set(cohort.cohortId, { ...cohort, runs: [] });
     groups.get(cohort.cohortId).runs.push(run);
@@ -108,18 +137,18 @@ function eligibleCohorts(graph, joinedRuns) {
     .sort((a, b) => a.cohortId.localeCompare(b.cohortId));
 }
 
-function metricEligibleCohorts(graph, joinedRuns) {
-  return eligibleCohorts(graph, joinedRuns).filter(cohort => (
+function metricEligibleCohorts(graph, joinedRuns, components = null) {
+  return eligibleCohorts(graph, joinedRuns, components).filter(cohort => (
     cohort.configurationVersionStatus !== 'mixed' && cohort.taskStatus !== 'mixed'
   ));
 }
 
-function metricEligibleRuns(graph, joinedRuns) {
-  return metricEligibleCohorts(graph, joinedRuns).flatMap(cohort => cohort.runs);
+function metricEligibleRuns(graph, joinedRuns, components = null) {
+  return metricEligibleCohorts(graph, joinedRuns, components).flatMap(cohort => cohort.runs);
 }
 
 function partitionedRows(graph, joinedRuns, options, calculate) {
-  const cohorts = metricEligibleCohorts(graph, joinedRuns);
+  const cohorts = metricEligibleCohorts(graph, joinedRuns, options?.components);
   if (options?.partition === false || cohorts.length <= 1) return null;
   return cohorts.flatMap(cohort => calculate(cohort.runs, { partition: false }));
 }
@@ -169,9 +198,10 @@ function evidenceMetadata(coverageRuns, evidenceIds, unit = 'runs') {
 }
 
 function skillActivationRate(graph, joinedRuns, options = {}) {
+  options = { ...options, components: ["agents", "skills"] };
   const partitioned = partitionedRows(graph, joinedRuns, options, (runs, nested) => skillActivationRate(graph, runs, nested));
   if (partitioned) return partitioned;
-  const covered = metricEligibleRuns(graph, joinedRuns);
+  const covered = metricEligibleRuns(graph, joinedRuns, options.components);
   const perAgentCount = new Map();
   for (const run of covered) {
     for (const agent of run.agentsObserved) {
@@ -200,9 +230,10 @@ function skillActivationRate(graph, joinedRuns, options = {}) {
 }
 
 function skillCoactivation(graph, joinedRuns, options = {}) {
+  options = { ...options, components: ["skills"] };
   const partitioned = partitionedRows(graph, joinedRuns, options, (runs, nested) => skillCoactivation(graph, runs, nested));
   if (partitioned) return partitioned;
-  const covered = metricEligibleRuns(graph, joinedRuns);
+  const covered = metricEligibleRuns(graph, joinedRuns, options.components);
   const names = graph.skills.map(skill => skill.name);
   const rows = [];
   for (let i = 0; i < names.length; i += 1) {
@@ -232,9 +263,10 @@ function skillCoactivation(graph, joinedRuns, options = {}) {
 }
 
 function independentUse(graph, joinedRuns, options = {}) {
+  options = { ...options, components: ["skills"] };
   const partitioned = partitionedRows(graph, joinedRuns, options, (runs, nested) => independentUse(graph, runs, nested));
   if (partitioned) return partitioned;
-  const covered = metricEligibleRuns(graph, joinedRuns);
+  const covered = metricEligibleRuns(graph, joinedRuns, options.components);
   const names = graph.skills.map(skill => skill.name);
   const rows = [];
   for (const target of names) {
@@ -257,9 +289,10 @@ function independentUse(graph, joinedRuns, options = {}) {
 }
 
 function referenceLoadGivenSkill(graph, joinedRuns, options = {}) {
+  options = { ...options, components: ["skills", "references"] };
   const partitioned = partitionedRows(graph, joinedRuns, options, (runs, nested) => referenceLoadGivenSkill(graph, runs, nested));
   if (partitioned) return partitioned;
-  const covered = metricEligibleRuns(graph, joinedRuns);
+  const covered = metricEligibleRuns(graph, joinedRuns, options.components);
   const rows = [];
   for (const skill of graph.skills) {
     const runsWithSkill = covered.filter(run => run.skillsObserved.has(skill.name));
@@ -285,9 +318,10 @@ function referenceLoadGivenSkill(graph, joinedRuns, options = {}) {
 }
 
 function rereadRate(graph, joinedRuns, options = {}) {
+  options = { ...options, components: ["references"] };
   const partitioned = partitionedRows(graph, joinedRuns, options, (runs, nested) => rereadRate(graph, runs, nested));
   if (partitioned) return partitioned;
-  const covered = metricEligibleRuns(graph, joinedRuns);
+  const covered = metricEligibleRuns(graph, joinedRuns, options.components);
   const rows = [];
   const references = new Set();
   for (const skill of graph.skills) for (const ref of skill.references) references.add(ref.path);
@@ -359,9 +393,10 @@ function maxConsecutiveSameTool(toolCalls) {
 }
 
 function toolRepetition(graph, joinedRuns, options = {}) {
+  options = { ...options, components: ["tools"] };
   const partitioned = partitionedRows(graph, joinedRuns, options, (runs, nested) => toolRepetition(graph, runs, nested));
   if (partitioned) return partitioned;
-  const covered = metricEligibleRuns(graph, joinedRuns);
+  const covered = metricEligibleRuns(graph, joinedRuns, options.components);
   const rows = [];
   const perTool = new Map();
   for (const run of covered) {
@@ -398,9 +433,10 @@ function percentile(values, p) {
 }
 
 function scriptHealth(graph, joinedRuns, options = {}) {
+  options = { ...options, components: ["scripts"] };
   const partitioned = partitionedRows(graph, joinedRuns, options, (runs, nested) => scriptHealth(graph, runs, nested));
   if (partitioned) return partitioned;
-  const covered = metricEligibleRuns(graph, joinedRuns);
+  const covered = metricEligibleRuns(graph, joinedRuns, options.components);
   const perScript = new Map();
   for (const run of covered) {
     for (const call of run.scriptCalls) {
@@ -431,13 +467,14 @@ function scriptHealth(graph, joinedRuns, options = {}) {
 }
 
 function subagentContribution(graph, joinedRuns, options = {}) {
-  const cohorts = metricEligibleCohorts(graph, joinedRuns);
+  options = { ...options, components: ["agents", "models"] };
+  const cohorts = metricEligibleCohorts(graph, joinedRuns, options.components);
   if (options.partition !== false && cohorts.length > 1) {
     const results = cohorts.map(cohort => ({
       ...cohort,
       metrics: subagentContribution(graph, cohort.runs, { partition: false })
     }));
-    const covered = metricEligibleRuns(graph, joinedRuns);
+    const covered = metricEligibleRuns(graph, joinedRuns, options.components);
     return {
       perRun: results.flatMap(result => result.metrics.perRun),
       aggregate: {
@@ -459,7 +496,7 @@ function subagentContribution(graph, joinedRuns, options = {}) {
       }))
     };
   }
-  const covered = metricEligibleRuns(graph, joinedRuns);
+  const covered = metricEligibleRuns(graph, joinedRuns, options.components);
   const durationRuns = covered.filter(run => run.runTotals.durationMs !== null && run.subagentDurationMs.total !== null);
   const tokenRuns = covered.filter(run => [run.runTotals.input, run.runTotals.output, run.subagentTokens.input, run.subagentTokens.output].every(value => value !== null));
   const ratio = (part, total) => total > 0 ? part / total : null;
@@ -487,9 +524,10 @@ function subagentContribution(graph, joinedRuns, options = {}) {
 }
 
 function contextPressure(graph, joinedRuns, options = {}) {
-  const cohorts = metricEligibleCohorts(graph, joinedRuns);
+  options = { ...options, components: ["references", "models"] };
+  const cohorts = metricEligibleCohorts(graph, joinedRuns, options.components);
   if (options.partition !== false && cohorts.length > 1) {
-    const covered = metricEligibleRuns(graph, joinedRuns);
+    const covered = metricEligibleRuns(graph, joinedRuns, options.components);
     const metadata = evidenceMetadata(covered, eventIds(covered, event => event.ContextCompaction));
     const unavailable = {
       numerator: null,
@@ -513,7 +551,7 @@ function contextPressure(graph, joinedRuns, options = {}) {
       }))
     };
   }
-  const covered = metricEligibleRuns(graph, joinedRuns);
+  const covered = metricEligibleRuns(graph, joinedRuns, options.components);
   const refThreshold = Number.isFinite(options.referenceThreshold) ? options.referenceThreshold : 3;
   const runsWithCompaction = covered.filter(run => run.compactionObserved);
   const failuresGivenCompaction = runsWithCompaction.filter(run => run.outcomeFailed).length;
@@ -590,6 +628,26 @@ function declaredVsObserved(graph, joinedRuns, options = {}) {
   };
 }
 
+function observedDiagnostics(graph, joinedRuns) {
+  const runs = joinedRuns.filter(run => run.architectureVersion === graph.architectureVersion
+    && !run.invalidSourceRows && ((run.evidenceOrigin !== 'recorded-run' && !run.preRunSnapshot && !run.sourceIntegrity && run.evidenceComplete === true) || (
+      validPreRunSnapshot(run.preRunSnapshot) && run.preRunSnapshot.architectureVersion === graph.architectureVersion
+      && run.attachmentProvenance?.status === 'unchanged'
+      && ['valid', 'partial'].includes(run.sourceIntegrity?.status)
+    )));
+  return {
+    status: 'observed-only', scope: 'captured-positive-receipts', absenceEligible: false,
+    denominatorProvenance: 'observed receipts only; unsupported or missing operations are unknown',
+    runIds: runs.map(run => run.runId),
+    tools: runs.flatMap(run => run.toolCalls.filter(call => call.eventId && call.toolCallId && call.eventName === 'tool.execution_complete')
+      .map(call => ({ ...call, runId: run.runId, evidenceLabel: 'exact-event-identity' }))),
+    scripts: runs.flatMap(run => [...run.scriptCalls, ...(run.observedScriptReceipts || []).filter(call => graph.runtimeScripts.some(script => script.path === call.script) || graph.skills.some(skill => skill.scripts.some(script => script.path === call.script)))].filter(call => call.eventId && ['completed', 'failed'].includes(call.status))
+      .map(call => ({ ...call, runId: run.runId, evidenceLabel: call.evidenceLabel || 'recorded-script-receipt' }))),
+    references: runs.flatMap(run => run.refsRead.filter(read => read.eventId)
+      .map(read => ({ ...read, runId: run.runId, evidenceLabel: 'affirmative-read; ownership may be inferred' })))
+  };
+}
+
 function computeAllMetrics(graph, joinedRuns, options = {}) {
   const observed = eligibleRuns(graph, joinedRuns);
   const covered = metricEligibleRuns(graph, joinedRuns);
@@ -623,6 +681,7 @@ function computeAllMetrics(graph, joinedRuns, options = {}) {
       coverageRuns: cohort.runs.length,
       runIds: cohort.runs.map(run => run.runId)
     })),
+    observedDiagnostics: observedDiagnostics(graph, joinedRuns),
     skillActivationRate: skillActivationRate(graph, joinedRuns),
     skillCoactivation: skillCoactivation(graph, joinedRuns),
     independentUse: independentUse(graph, joinedRuns),
@@ -638,6 +697,9 @@ function computeAllMetrics(graph, joinedRuns, options = {}) {
 
 module.exports = {
   DEFAULTS,
+  componentComplete,
+  frozenIdentityValid,
+  observedDiagnostics,
   computeAllMetrics,
   contextPressure,
   declaredVsObserved,

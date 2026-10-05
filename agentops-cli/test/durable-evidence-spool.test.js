@@ -445,3 +445,34 @@ test('durable evidence spool authenticates immutable envelope metadata and fails
   assert.equal(uploaded, false);
   assert.equal(drained.quarantined, 1);
 });
+
+test('durable drain refuses hard-linked segments and preserves the linked original', async t => {
+  const { directory, spool } = tempSpool(t);
+  spool.enqueue(row());
+  const segment = fs.readdirSync(directory).find(name => name.endsWith('.pending.json'));
+  const outside = path.join(path.dirname(directory), 'outside.json');
+  fs.linkSync(path.join(directory, segment), outside);
+  await assert.rejects(() => spool.drain(async () => { throw new Error('must not upload'); }), /regular file/);
+  assert.equal(fs.existsSync(outside), true);
+});
+
+test('durable drain tightens legacy transport expiry while preserving held evidence', async t => {
+  let clock = Date.parse('2026-10-02T00:00:00Z');
+  const { directory, spool } = tempSpool(t, { now: () => clock, ttlMs: 7 * 86400000 });
+  spool.enqueue(row());
+  clock += 3 * 86400000;
+  const tightened = createDurableEvidenceSpool({ directory, now: () => clock, ttlMs: 48 * 3600000 });
+  const result = await tightened.drain(async () => { throw new Error('must not upload'); });
+  assert.equal(result.expired, 1);
+  assert.equal(fs.readdirSync(directory).some(name => name.endsWith('.expired.json')), true);
+});
+
+test('durable retry stops at expiry after a retry delay and preserves ambiguous attempt count', async t => {
+  let clock = Date.parse('2026-10-02T00:00:00Z'), calls = 0;
+  const { directory, spool } = tempSpool(t, { now: () => clock, ttlMs: 1000, sleep: async () => { clock += 2000; } });
+  spool.enqueue(row());
+  const result = await spool.drain(async () => { calls++; return { status: 503 }; }, { maxAttempts: 3 });
+  assert.equal(calls, 1); assert.equal(result.expired, 1);
+  const held = fs.readdirSync(directory).find(name => name.endsWith('.expired.json'));
+  assert.equal(JSON.parse(fs.readFileSync(path.join(directory, held))).attempts, 1);
+});

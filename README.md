@@ -6,29 +6,55 @@
 
 The checked-in dev deployment is a personal development/demo environment. Its normal telemetry path is metadata-only; a separately controlled synthetic EVAL path may carry rich content after the destination and access checks in the [deployment plan](.azure/deployment-plan.md). This environment is not approved for Microsoft confidential, customer, work-agent, or production data. `agentops validate-azure` defaults to the personal metadata-only profile; unconfigured Application Insights and Managed Grafana checks are explicitly skipped. Use `--profile team` or `--profile internal` for readiness gates that require capped Log Analytics ingestion, an Azure Consumption budget, Application Insights, and Managed Grafana. `internal` also requires least-privilege group RBAC. `--production` implies `internal` and adds the wider production security checks.
 
-Privacy-first observability for GitHub Copilot CLI runs, Copilot SDK sessions, MCP tools, and code outcomes using Azure Monitor. AgentOps records run/session metadata, tool names, failures, latency, token usage, estimated cost, privacy signals, evals, and GitHub outcomes without recording prompts, code, file contents, tool arguments, or tool results by default. Azure Monitor's native Application Insights Agents view is the primary investigation surface; Managed Grafana is optional for advanced operators.
+Local diagnostics for GitHub Copilot CLI runs, agent architecture, and protected
+comparison trials. Start with an explicit recorder run, then generate local Runs,
+Architecture, Compare, and evidence receipts. Missing capture or outcome evidence
+stays unknown. Diagnostic cards are hypotheses for human review.
 
 ```text
-GitHub Copilot CLI
-  -> local OTLP endpoint on 127.0.0.1
-  -> local OpenTelemetry Collector privacy boundary
-  -> Azure Monitor / Application Insights Agents view
-  -> optional Log Analytics custom receipts and Managed Grafana dashboards
+Copilot recorder → local run ledger → Runs / Architecture / Compare
+                                  → qualified evidence bundle
+                                  → optional Azure or Aspire investigation
 ```
 
-See the [simplified Azure-native design](docs/simplified-azure-design.md) for
-the minimum service footprint, first-value flow, and live-evidence states.
-The [CLI-first flight recorder](docs/cli-first-flight-recorder.md) now generates a local timed waterfall from a synthetic Copilot session. The [dated research and full requirements](docs/research/2026-09-29/README.md) explain the broader product target.
+Start with the [local diagnostic pilot](docs/diagnostic-pilot-quickstart.md).
+`agentops product --help` lists the integrated flow. It never automatically
+uploads evidence, executes comparison trials, or applies refactors. Cloud delivery
+requires a separate approved target and readback. AgentOps records metadata without recording prompts, code,
+tool arguments, or tool results by default.
 
-If you are new to the project, start with the [junior quickstart](docs/junior-quickstart.md).
-It gets you from zero to a local privacy-safe Copilot receipt, then shows the
-short Azure-native path without making you copy OTLP URLs by hand.
+Azure Monitor's native Application Insights Agents view and optional Managed
+Grafana remain supported. See the [Azure-native design](docs/simplified-azure-design.md)
+and [junior quickstart](docs/junior-quickstart.md) for those paths. The
+[CLI-first flight recorder](docs/cli-first-flight-recorder.md) explains local
+capture; the [dated research](docs/research/2026-09-29/README.md) describes the
+broader product target.
 
 For the public release checklist, including packaging, privacy review,
 rollback, and the boundary between preview and production, see
 the [public release checklist](docs/public-release.md).
 
 ## Quick Start
+
+For native capture in VS Code and new integrated Copilot CLI terminals, use the
+[AgentOps Native Capture extension](extensions/agentops-native/README.md).
+It uses native OpenTelemetry. It does not require an AgentOps CLI installation.
+The extension keeps capture local and restores its settings on disconnect.
+See the [native onboarding plan](docs/plans/2026-10-03-native-automatic-onboarding.md)
+for terminal scope and qualification limits.
+
+For the default local product flow, follow the
+[diagnostic pilot](docs/diagnostic-pilot-quickstart.md):
+
+```bash
+agentops product runtime --json
+agentops attach --repo /path/to/repo --yes --json
+agentops copilot-session launch --repo /path/to/repo --json -- -p "Your bounded task"
+agentops product build --repo /path/to/repo --ledger "$HOME/.agentops/runs" --out /path/to/new-report --json
+```
+
+The launch invokes your configured Copilot model; product build only reads local
+receipts and writes local reports. Native monitoring remains an optional path:
 
 Prerequisites for local value:
 

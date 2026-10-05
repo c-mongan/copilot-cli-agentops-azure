@@ -47,6 +47,7 @@ test('copilot session command library parses args and renders enrichment summary
     sidecarFile: 'sidecar-events.jsonl',
     otelFiles: ['native.jsonl', 'script.jsonl'],
     runId: 'run-1',
+    taskId: null,
     repo: null,
     copilotHome: null,
     expectationsFile: null,
@@ -541,10 +542,14 @@ test('copilot-session collect packages a native process locally and requires exp
     assert.equal(rows.find(row => row.ReferenceName)?.ReferenceName, '.github/skills/sample/references/guide.md');
     assert.doesNotMatch(fs.readFileSync(eventFile, 'utf8'), /cat --|synthetic reference/);
     const coverage = coverageCommand(['--repo', repo, '--json'], { agentopsHome, stdout: { write() {} } });
-    assert.equal(coverage.runtime.associatedRuns, 1);
-    assert.equal(coverage.runtime.categories.agents.observed, 1);
-    assert.equal(coverage.runtime.categories.skills.observed, 1);
-    assert.equal(coverage.runtime.categories.referenceFiles.observed, 1);
+    // Manual post-run collection cannot bind a later inventory to this run.
+    assert.equal(coverage.runtime.associatedRuns, 0);
+    assert.equal(coverage.runtime.categories.agents.observed, 0);
+    assert.equal(coverage.runtime.categories.skills.observed, 0);
+    assert.equal(coverage.runtime.categories.referenceFiles.observed, 0);
+    const context = JSON.parse(fs.readFileSync(path.join(summary.outputDir, 'run-context.json'), 'utf8'));
+    assert.equal(context.preRunSnapshot, null);
+    assert.equal(context.attachmentProvenance.status, 'not-captured');
     assert.equal(coverage.runtime.categories.scriptFiles.observed, 0);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
@@ -654,4 +659,37 @@ test('launch expectations parse separately from forwarded Copilot arguments', ()
   const parsed = parseCopilotSessionArgs(['launch', '--expectations', 'manifest.json', '--', '-p', 'synthetic']);
   assert.equal(parsed.expectationsFile, 'manifest.json');
   assert.deepEqual(parsed.commandArgs, ['-p', 'synthetic']);
+});
+test('startup OS signal aborts readiness without launching and removes signal listeners', async () => {
+  const { EventEmitter } = require('node:events');
+  const signals = new EventEmitter();
+  let launched = false, receivedSignal;
+  await assert.rejects(launchObservedCopilot({ commandArgs: ['--version'] }, {
+    signals, env: {}, resolveCopilotBinary: () => ({ ok: true, path: '/synthetic/copilot' }),
+    startScopedStrictCollector: async options => {
+      receivedSignal = options.abortSignal;
+      assert.equal(signals.listenerCount('SIGINT'), 1);
+      signals.emit('SIGINT');
+      assert.equal(options.abortSignal.aborted, true);
+      const error = new Error('aborted readiness'); error.name = 'AbortError'; throw error;
+    },
+    spawnSync: () => { launched = true; return { status: 0 }; }
+  }), { name: 'AbortError' });
+  assert.equal(receivedSignal.aborted, true);
+  assert.equal(launched, false);
+  assert.equal(signals.listenerCount('SIGINT'), 0);
+  assert.equal(signals.listenerCount('SIGTERM'), 0);
+});
+test('cancelled startup cleans a collector returned after cancellation without spawning', async () => {
+  const { EventEmitter } = require('node:events');
+  const signals = new EventEmitter(); let stopped = 0, launched = false;
+  await assert.rejects(launchObservedCopilot({ commandArgs: ['--version'] }, {
+    signals, env: {}, resolveCopilotBinary: () => ({ ok: true, path: '/synthetic/copilot' }),
+    startScopedStrictCollector: async () => { signals.emit('SIGTERM'); return { stop: async () => { stopped++; } }; },
+    spawnSync: () => { launched = true; return { status: 0 }; }
+  }), { name: 'AbortError' });
+  assert.equal(stopped, 1);
+  assert.equal(launched, false);
+  assert.equal(signals.listenerCount('SIGINT'), 0);
+  assert.equal(signals.listenerCount('SIGTERM'), 0);
 });

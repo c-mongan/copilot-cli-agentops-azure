@@ -25,18 +25,13 @@ test('compare renders stored outcomes and detects configuration mismatch', () =>
  assert.match(html,/runs.html#run-/);
  assert.match(html,/Failed protected test/);
 });
-test('compare marks compatibility only when both architecture and configuration versions are known and equal', () => {
- const authoritative={completeness:'authoritative',source:'supplied_identity',verification:'caller_asserted',scope:{model:'authoritative',tools:'authoritative',mcp:'authoritative',skills:'authoritative'}};
- const matching=renderCompare({invalid:0,records:[{id:'matching',status:'accepted',baseline:{architectureVersion:'arch-a',configurationVersion:'cfg-a',executionConfiguration:authoritative},candidate:{architectureVersion:'arch-a',configurationVersion:'cfg-a',executionConfiguration:authoritative}}]});
- assert.match(matching,/compatible by matching caller-asserted authoritative architecture and configuration identities; not independently verified/);
- const partial={completeness:'partial',source:'observed_launch_arguments',scope:{model:'observed',tools:'observed',mcp:'unknown',skills:'unknown'}};
- const observedOnly=renderCompare({invalid:0,records:[{id:'partial',status:'inconclusive',baseline:{architectureVersion:'arch-a',configurationVersion:'cfg-a',executionConfiguration:partial},candidate:{architectureVersion:'arch-a',configurationVersion:'cfg-a',executionConfiguration:partial}}]});
- assert.match(observedOnly,/matching recorded identities; configuration evidence is not authoritative/);
- assert.doesNotMatch(observedOnly,/compatible: matching/);
- const architectureMismatch=renderCompare({invalid:0,records:[{id:'arch-mismatch',status:'inconclusive',baseline:{architectureVersion:'arch-a',configurationVersion:'cfg-a'},candidate:{architectureVersion:'arch-b',configurationVersion:'cfg-a'}}]});
- assert.match(architectureMismatch,/unknown or mismatched architecture\/configuration/);
- const unknownArchitecture=renderCompare({invalid:0,records:[{id:'unknown-arch',status:'inconclusive',baseline:{configurationVersion:'cfg-a'},candidate:{configurationVersion:'cfg-a'}}]});
- assert.match(unknownArchitecture,/unknown or mismatched architecture\/configuration/);
+test('compare legacy matching hashes remain unknown and stored outcomes stay visible', () => {
+ const authoritative={completeness:'authoritative',verification:'caller_asserted'};
+ const html=renderCompare({invalid:0,records:[{id:'legacy',status:'accepted',baseline:{architectureVersion:'arch-a',configurationVersion:'cfg-a',executionConfiguration:authoritative},candidate:{architectureVersion:'arch-a',configurationVersion:'cfg-a',executionConfiguration:authoritative}}]});
+ assert.match(html,/legacy or unknown comparison contract/);
+ assert.match(html,/data-status="accepted"/);
+ assert.match(html,/Contract evaluation: inconclusive/);
+ assert.doesNotMatch(html,/compatible by matching/);
 });
 test('architecture cards render version, unit, coverage and exact evidence IDs without content payloads', () => {
  const html=renderArchitecture({architectureVersion:'arch-a',configurationVersion:'cfg-a',configurationVersions:['cfg-a'],coverageRuns:12,insufficientEvidence:false,inventory:{agents:1,skills:1,references:1,scripts:0},cards:[{rule:'REFERENCE_NEAR_MANDATORY',title:'Reference evidence',summary:'metadata only',metricEvidence:{architectureVersion:'arch-a',configurationVersion:'cfg-a',unit:'runs',numerator:11,denominator:12,coverageRuns:12,coverage:{evidenceCompleteRuns:12,configurationVersionStatus:'known'},evidenceIds:['event-1']},representativeRunIds:['run-1'],proposedChange:'Review it',rejectionTest:'pending'}]});
@@ -91,4 +86,11 @@ test('partial component coverage and malformed ledger defeat complete flag', () 
  assert.equal(result.runs.find(r=>r.runId==='complete').evidenceComplete,true);
  assert.equal(result.invalidLedgerRows,1);
  }finally{fs.rmSync(dir,{recursive:true,force:true});}
+});
+
+test('observed-only diagnostics expose positive evidence and frozen source stays scoped', () => {
+ const html=renderArchitecture({cards:[],inventory:{agents:0,skills:0,references:0,scripts:0},coverageRuns:0,insufficientEvidence:true,metrics:{observedDiagnostics:{runIds:['observed-run'],tools:[{runId:'observed-run',eventId:'observed-event',evidenceLabel:'exact-event-identity'}],scripts:[],references:[],denominatorProvenance:'observed receipts only'}}},{availableRunIds:new Set(),availableEventIds:new Set()});
+ assert.match(html,/lower-bound observations/);assert.match(html,/Missing receipts remain unknown/);assert.match(html,/evidence unavailable in this ledger/);
+ const runs=renderRuns([{runId:'frozen-run',events:[],preRunSnapshot:{architectureVersion:'before',configurationVersion:'cfg',taskId:'task'},attachmentProvenance:{status:'unchanged'},sourceIntegrity:{status:'partial'}}]);
+ assert.match(runs,/Pre-run architecture: before/);assert.match(runs,/Source integrity: partial/);assert.match(runs,/do not establish complete capture/);
 });

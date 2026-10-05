@@ -6,6 +6,8 @@ const { buildLogsIngestionUploadPlan } = require('../azure/v2-ingest-plan');
 const { runLogsIngestionUpload } = require('../azure/logs-ingestion-upload');
 const { agentopsHome: defaultAgentopsHome } = require('../paths');
 
+const { configuredDeliveryLimits, deliveryLimits, deliveryTargetHash, maxStateBytes, readPrivateFile } = require('./delivery-limits');
+
 const outboxFileName = 'session-delivery.json';
 const claimFileName = '.session-delivery.lock';
 const streamFiles = Object.freeze({ events: 'AgentOpsEvents_CL.jsonl', spans: 'AgentOpsSpans_CL.jsonl' });
@@ -24,6 +26,8 @@ function validatedRetentionDays(value) {
 function safeDirectory(directory) {
   const stat = fs.lstatSync(directory);
   if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error('session outbox run path must be a real directory');
+  if (typeof process.getuid === 'function' && stat.uid !== process.getuid()) throw new Error('session outbox directory must belong to the current owner');
+  if (process.platform !== 'win32') fs.chmodSync(directory, 0o700);
   return directory;
 }
 
@@ -109,7 +113,7 @@ function claimSessionOutbox(runDirectory) {
     try {
       stat = fs.lstatSync(file);
       if (stat.isSymbolicLink() || !stat.isFile()) throw new Error('session outbox claim must be a regular file');
-      existing = JSON.parse(fs.readFileSync(file, 'utf8'));
+      existing = JSON.parse(readPrivateFile(file, maxStateBytes));
     } catch (error) {
       if (error.code === 'ENOENT') continue;
       if (/session outbox claim must be a regular file/.test(error.message)) throw error;
@@ -126,7 +130,7 @@ function claimSessionOutbox(runDirectory) {
     let currentOwner;
     try {
       currentStat = fs.lstatSync(file);
-      currentOwner = JSON.parse(fs.readFileSync(file, 'utf8'));
+      currentOwner = JSON.parse(readPrivateFile(file, maxStateBytes));
     } catch (error) {
       if (error.code === 'ENOENT') continue;
       throw new Error('session outbox claim changed during stale-owner recovery');
@@ -144,7 +148,7 @@ function releaseSessionOutboxClaim(claim) {
   const stat = fs.lstatSync(claim.file);
   if (stat.isSymbolicLink() || !stat.isFile()) throw new Error('session outbox claim changed while held');
   let owner;
-  try { owner = JSON.parse(fs.readFileSync(claim.file, 'utf8')); } catch {
+  try { owner = JSON.parse(readPrivateFile(claim.file, maxStateBytes)); } catch {
     throw new Error('session outbox claim changed while held');
   }
   if (owner.pid !== process.pid || (claim.ownerNonce && owner.nonce !== claim.ownerNonce)) {
@@ -155,12 +159,27 @@ function releaseSessionOutboxClaim(claim) {
 
 function initializeSessionOutbox(runDirectory, input) {
   safeDirectory(runDirectory);
+  if (!input || !/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/.test(String(input.runId || ''))
+    || path.basename(runDirectory) !== input.runId || !/^[A-Za-z0-9-]{1,100}$/.test(String(input.sessionId || ''))) throw new Error('invalid session outbox identity');
   const streams = {};
   for (const [name, fileName] of Object.entries(streamFiles)) {
     const file = path.join(runDirectory, fileName);
     const present = fs.existsSync(file);
     let rows = 0;
-    if (present) rows = fs.readFileSync(file, 'utf8').split(/\r?\n/).filter(line => line.trim()).length;
+    if (present) {
+      const stat = fs.lstatSync(file);
+      if (stat.isSymbolicLink() || !stat.isFile() || stat.nlink !== 1
+        || (typeof process.getuid === 'function' && stat.uid !== process.getuid())) throw new Error('session export must be an owner-owned regular file without links');
+      if (process.platform !== 'win32') fs.chmodSync(file, 0o600);
+      if (stat.size > deliveryLimits(input.deliveryLimits).maxQueueBytes) {
+        streams[name] = { file: fileName, rows: 0, status: 'overflow', attempts: 0 };
+        holdStream(streams[name], 'overflow', new Date(input.now ?? Date.now()).toISOString());
+        streams[name].lossReceipt.bytes = stat.size;
+        streams[name].lossReceipt.rowsKnown = false;
+        continue;
+      }
+      rows = readPrivateFile(file, deliveryLimits(input.deliveryLimits).maxQueueBytes).split(/\r?\n/).filter(line => line.trim()).length;
+    }
     streams[name] = { file: fileName, rows, status: present && rows ? 'pending' : 'not_observed', attempts: 0 };
   }
   const target = input.cloud?.subscriptionId && input.cloud?.logsIngestionEndpoint && input.cloud?.dcrImmutableId
@@ -170,15 +189,43 @@ function initializeSessionOutbox(runDirectory, input) {
       dcrImmutableId: input.cloud.dcrImmutableId
     }
     : { subscriptionId: '', logsIngestionEndpoint: '', dcrImmutableId: '' };
+  if (target.subscriptionId) deliveryTargetHash(target);
   const state = {
     version: 1,
     runId: input.runId,
     sessionId: input.sessionId,
     target,
     streams,
-    updatedAt: new Date().toISOString()
+    createdAt: new Date(input.now ?? Date.now()).toISOString(),
+    updatedAt: new Date(input.now ?? Date.now()).toISOString()
   };
-  atomicWriteJson(outboxPath(runDirectory), state);
+  const sharedClaim = claimSessionOutbox(path.dirname(runDirectory));
+  if (!sharedClaim.acquired) throw new Error('shared delivery queue is busy; local exports are retained');
+  try {
+    const limits = deliveryLimits(input.deliveryLimits);
+    let bytes = 0;
+    for (const name of fs.readdirSync(path.dirname(runDirectory))) {
+      const directory = path.join(path.dirname(runDirectory), name);
+      if (name === path.basename(runDirectory)) continue;
+      const stat = fs.lstatSync(directory);
+      if (!stat.isDirectory() || stat.isSymbolicLink()) continue;
+      const existing = readSessionOutbox(directory);
+      for (const stream of Object.values(existing?.streams || {})) {
+        if (['pending', 'in_flight'].includes(stream.status)) {
+          const stat = fs.lstatSync(path.join(directory, stream.file));
+          if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1) throw new Error('unsafe queued session export');
+          bytes += stat.size;
+        }
+      }
+    }
+    for (const stream of Object.values(streams)) {
+      if (stream.status === 'pending') bytes += Buffer.byteLength(readPrivateFile(path.join(runDirectory, stream.file), limits.maxQueueBytes));
+    }
+    if (bytes > limits.maxQueueBytes) {
+      for (const stream of Object.values(streams)) if (stream.status === 'pending') holdStream(stream, 'overflow', state.createdAt);
+    }
+    atomicWriteJson(outboxPath(runDirectory), state);
+  } finally { releaseSessionOutboxClaim(sharedClaim); }
   return state;
 }
 
@@ -187,28 +234,33 @@ function readSessionOutbox(runDirectory) {
   try {
     const stat = fs.lstatSync(file);
     if (stat.isSymbolicLink() || !stat.isFile()) throw new Error('session outbox state must be a regular file');
-    if (process.platform !== 'win32' && (stat.mode & 0o077) !== 0) fs.chmodSync(file, 0o600);
   } catch (error) {
     if (error.code === 'ENOENT') return null;
     throw error;
   }
   let state;
-  try { state = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (error) {
+  try { state = JSON.parse(readPrivateFile(file, maxStateBytes)); } catch (error) {
     if (error.code === 'ENOENT') return null;
     throw new Error(`session outbox is unreadable: ${error.message}`);
   }
   if (state?.version !== 1 || !/^[A-Za-z0-9_.:-]{1,128}$/.test(String(state.runId || ''))
     || path.basename(runDirectory) !== state.runId
     || !state.target || ['subscriptionId', 'logsIngestionEndpoint', 'dcrImmutableId'].some(key => typeof state.target[key] !== 'string')
-    || !state.streams || typeof state.streams !== 'object') {
+    || !state.streams || typeof state.streams !== 'object' || Array.isArray(state.streams)
+    || Object.keys(state.streams).some(key => !(key in streamFiles))
+    || !Number.isFinite(Date.parse(state.updatedAt))
+    || (state.createdAt !== undefined && !Number.isFinite(Date.parse(state.createdAt)))) {
     throw new Error('session outbox has an unsupported or invalid schema');
   }
   for (const [name, fileName] of Object.entries(streamFiles)) {
     const stream = state.streams[name];
-    if (!stream || stream.file !== fileName || !['pending', 'in_flight', 'azure_accepted', 'not_observed'].includes(stream.status)
+    if (!stream || stream.file !== fileName || !['pending', 'in_flight', 'azure_accepted', 'not_observed', 'expired', 'overflow'].includes(stream.status)
       || !Number.isSafeInteger(stream.rows) || stream.rows < 0 || !Number.isSafeInteger(stream.attempts) || stream.attempts < 0) {
       throw new Error(`session outbox ${name} stream is invalid`);
     }
+    if (['expired', 'overflow'].includes(stream.status) && (stream.lossReceipt?.version !== 1
+      || stream.lossReceipt.reason !== stream.status || stream.lossReceipt.localExportRetained !== true
+      || !Number.isFinite(Date.parse(stream.lossReceipt.at)))) throw new Error('invalid retained delivery loss receipt');
   }
   return state;
 }
@@ -220,6 +272,8 @@ function sessionOutboxStatus(options = {}) {
   safeDirectory(runs);
   const streams = [];
   let accepted = 0;
+  let expired = 0;
+  let overflow = 0;
   const pendingRuns = new Set();
   for (const name of fs.readdirSync(runs)) {
     if (options.runId && name !== options.runId) continue;
@@ -237,9 +291,13 @@ function sessionOutboxStatus(options = {}) {
         pendingRuns.add(state.runId);
         streams.push({ runId: state.runId, kind, rows: stream.rows, status: stream.status });
       } else if (stream.status === 'azure_accepted') accepted += 1;
+      else if (['expired', 'overflow'].includes(stream.status)) {
+        if (stream.status === 'expired') expired += 1; else overflow += 1;
+        streams.push({ runId: state.runId, kind, rows: stream.rows, status: stream.status, lossReceipt: stream.lossReceipt });
+      }
     }
   }
-  return { runs: pendingRuns.size, pending: streams.length, accepted, streams };
+  return { runs: pendingRuns.size, pending: streams.filter(stream => ['pending', 'in_flight'].includes(stream.status)).length, accepted, expired, overflow, streams };
 }
 
 function sessionOutboxPrune(options = {}) {
@@ -265,7 +323,7 @@ function sessionOutboxPrune(options = {}) {
       try {
         const claimStat = fs.lstatSync(claimFile);
         if (claimStat.isSymbolicLink() || !claimStat.isFile()) return { ok: false, reason: 'unsafe_claim' };
-        const owner = JSON.parse(fs.readFileSync(claimFile, 'utf8'));
+        const owner = JSON.parse(readPrivateFile(claimFile, maxStateBytes));
         const isOwnClaim = ownClaim && owner.pid === process.pid && owner.nonce === ownClaim.ownerNonce;
         if (!isOwnClaim && Number.isSafeInteger(owner?.pid) && processIsAlive(owner.pid)) return { ok: false, reason: 'active_drain' };
       } catch (error) {
@@ -346,6 +404,11 @@ function sessionOutboxPrune(options = {}) {
   return { older_than_days: olderThanDays, applied: apply, candidates, removed, skipped };
 }
 
+function holdStream(stream, reason, at) {
+  stream.status = reason;
+  stream.lossReceipt = { version: 1, reason, at, rows: stream.rows, attempts: stream.attempts, localExportRetained: true, remoteAcceptance: stream.attempts ? 'unknown' : 'not_attempted' };
+}
+
 function targetMatches(bound, cloud) {
   return (!bound.subscriptionId || bound.subscriptionId === cloud.subscriptionId)
     && (!bound.logsIngestionEndpoint || bound.logsIngestionEndpoint === cloud.logsIngestionEndpoint)
@@ -355,6 +418,9 @@ function targetMatches(bound, cloud) {
 function drainSessionOutboxes(options = {}) {
   const home = path.resolve(options.agentopsHome || defaultAgentopsHome);
   const runs = path.join(home, 'runs');
+  const limits = configuredDeliveryLimits(options);
+  const now = Number(options.now ?? Date.now());
+  if (!Number.isSafeInteger(now) || now < 0) throw new Error('invalid delivery clock');
   const runId = options.runId || null;
   if (!fs.existsSync(runs)) return { acknowledged: 0, pending: 0, skippedTarget: 0, skippedBusy: 0, ...(runId ? { runId } : {}), streams: [] };
   safeDirectory(runs);
@@ -382,6 +448,7 @@ function drainSessionOutboxes(options = {}) {
     try {
       const state = readSessionOutbox(directory);
       if (!state) continue;
+      state.createdAt = state.createdAt || state.updatedAt;
       if (runId && state.runId !== runId) {
         continue;
       }
@@ -400,6 +467,14 @@ function drainSessionOutboxes(options = {}) {
       }
       for (const [kind, stream] of Object.entries(state.streams)) {
         if (stream.status !== 'pending' && stream.status !== 'in_flight') continue;
+        const createdAt = Date.parse(state.createdAt || state.updatedAt);
+        if (!Number.isFinite(createdAt) || createdAt > now) throw new Error('invalid session outbox creation timestamp');
+        if (now - createdAt >= limits.ttlMs) {
+          holdStream(stream, 'expired', new Date(now).toISOString());
+          atomicWriteJson(file, state);
+          output.streams.push({ runId: state.runId, kind, rows: stream.rows, status: 'expired', lossReceipt: stream.lossReceipt });
+          continue;
+        }
         const jsonl = path.join(directory, streamFiles[kind]);
         if (!fs.existsSync(jsonl)) {
           output.pending += 1;
@@ -409,6 +484,9 @@ function drainSessionOutboxes(options = {}) {
           output.streams.push({ runId: state.runId, kind, status: 'local_pending', error: 'local export file is missing' });
           continue;
         }
+        const text = readPrivateFile(jsonl, limits.maxQueueBytes);
+        const rows = text.split(/\r?\n/).filter(line => line.trim()).map(JSON.parse);
+        if (rows.length !== stream.rows) throw new Error('session outbox row count changed');
         stream.status = 'in_flight';
         stream.attempts += 1;
         state.updatedAt = new Date().toISOString();
@@ -423,7 +501,10 @@ function drainSessionOutboxes(options = {}) {
         const result = runLogsIngestionUpload(plan, {
           env: options.env,
           expectedSubscriptionId: cloud.subscriptionId,
-          spawnSync: options.spawnSync
+          spawnSync: options.spawnSync,
+          agentopsHome: home,
+          deliveryLimits: limits,
+          now: options.now
         });
         if (result.ok && result.executed) {
           stream.status = 'azure_accepted';

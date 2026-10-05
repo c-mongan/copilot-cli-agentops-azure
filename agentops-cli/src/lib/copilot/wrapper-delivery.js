@@ -5,6 +5,7 @@ const { createDurableEvidenceSpool } = require('../azure/durable-evidence-spool'
 const { drainDurableLogsIngestion } = require('../azure/logs-ingestion-upload');
 const { deliveryStateFromEnqueue } = require('../delivery-state');
 const { agentopsHome } = require('../paths');
+const { configuredDeliveryLimits } = require('./delivery-limits');
 const { canonicalWrapperEvidence } = require('./wrapper-evidence');
 
 function wrapperDeliveryDirectory(env = process.env) {
@@ -17,7 +18,7 @@ function createWrapperDelivery(options = {}) {
   let spool = options.spool || null;
   let initializationError = '';
   if (!spool) {
-    try { spool = createDurableEvidenceSpool({ directory }); } catch (error) { initializationError = error.message; }
+    try { spool = createDurableEvidenceSpool({ directory, ttlMs: configuredDeliveryLimits(options).ttlMs, maxBytes: configuredDeliveryLimits(options).maxQueueBytes }); } catch (error) { initializationError = error.message; }
   }
 
   function record(event, recordOptions = {}) {
@@ -42,6 +43,9 @@ function createWrapperDelivery(options = {}) {
     try {
       const result = await drainDurableLogsIngestion({
         directory,
+        agentopsHome: drainOptions.agentopsHome || options.agentopsHome,
+        deliveryLimits: drainOptions.deliveryLimits || options.deliveryLimits,
+        now: drainOptions.now,
         endpoint: cloud.logsIngestionEndpoint,
         dcrImmutableId: cloud.dcrImmutableId,
         expectedSubscriptionId: cloud.subscriptionId,

@@ -1,0 +1,35 @@
+name: Native Windows qualification
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-windows:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '20'
+      - name: Native fixture and companion checks
+        run: |
+          node scripts/run-native-tests.js
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node --test scripts/test/qualify-native-cli.test.js scripts/test/qualify-native-windows.test.js agentops-cli/test/delivery-limits.test.js agentops-cli/test/scoped-collector.test.js
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Real native Windows runtime with local synthetic provider
+        shell: pwsh
+        run: |
+          node scripts/qualify-native-windows.js --out "$env:RUNNER_TEMP\agentops-native-windows-proof"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Upload bounded qualification summary
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: native-windows-qualification
+          path: ${{ runner.temp }}/agentops-native-windows-proof/windows-qualification.json
+          if-no-files-found: warn
+          retention-days: 1

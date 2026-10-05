@@ -7,6 +7,7 @@ const { durableDeliveryStatus } = require('./status-summary');
 const { createWrapperDelivery } = require('./copilot/wrapper-delivery');
 const { drainSessionOutboxes, sessionOutboxPrune, sessionOutboxStatus } = require('./copilot/session-delivery-outbox');
 const { createDurableEvidenceSpool, retentionDays } = require('./azure/durable-evidence-spool');
+const { configuredDeliveryLimits } = require('./copilot/delivery-limits');
 const { agentopsHome } = require('./paths');
 
 function renderDelivery(result) {
@@ -98,6 +99,8 @@ function renderDelivery(result) {
 
 async function runDeliveryCommand(args = [], options = {}) {
   const [subcommand = 'status'] = args;
+  const allowance = optionValue(args, '--max-publish-bytes-per-day');
+  const deliveryLimits = configuredDeliveryLimits({ ...options, deliveryLimits: allowance === null ? options.deliveryLimits : { ...(options.deliveryLimits || {}), maxPublishBytesPerDay: /^\d+$/.test(String(allowance)) ? Number(allowance) : NaN } });
   const directory = optionValue(args, '--dir', options.directory || process.env.AGENTOPS_DURABLE_SPOOL_DIR || '');
   const agentopsRoot = options.agentopsHome || agentopsHome;
   if (subcommand === 'review') {
@@ -180,6 +183,7 @@ async function runDeliveryCommand(args = [], options = {}) {
     cloud,
     runId,
     eventIds: eventId ? [eventId] : undefined,
+    agentopsHome: agentopsRoot, deliveryLimits,
     maxAttempts: Number(optionValue(args, '--max-attempts', '3')),
     spawnSync: options.spawnSync,
     fetchImpl: options.fetchImpl,
@@ -191,6 +195,7 @@ async function runDeliveryCommand(args = [], options = {}) {
     : (options.drainSessions || drainSessionOutboxes)({
       agentopsHome: agentopsRoot,
       cloud,
+      deliveryLimits,
       runId,
       env: options.env,
       spawnSync: options.spawnSync

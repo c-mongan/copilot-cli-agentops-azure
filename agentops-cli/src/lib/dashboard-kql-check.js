@@ -1,9 +1,35 @@
-const { hasFlag, optionValue } = require('./args');
-const {
-  queryFromPanel,
-  v2DashboardBodies
-} = require('./dashboard-validation');
-const legacy = require('../legacy');
+const { validateKqlDuration } = require('./kql');
+
+const dashboardKqlHelp = {
+  ok: true,
+  mode: 'help',
+  evidenceTier: 'help',
+  usage: 'agentops dashboard kql-check [--local-only | --live] [--last <duration>] [--workspace-id <uuid>] [--require-rows] [--json]',
+  description: 'Default mode executes live Azure queries. --local-only renders bounded queries without Azure access. --last must be at most 30d. --require-rows is live-only.'
+};
+
+function parseKqlCheckArgs(args, options) {
+  const parsed = { last: '24h', workspaceId: options.workspaceId, localOnly: false, live: false, requireRows: false };
+  const switches = { '--local-only': 'localOnly', '--live': 'live', '--require-rows': 'requireRows', '--json': 'json' };
+  const values = { '--last': 'last', '--workspace-id': 'workspaceId' };
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (Object.hasOwn(switches, arg)) { parsed[switches[arg]] = true; continue; }
+    const equals = arg.indexOf('=');
+    const name = equals < 0 ? arg : arg.slice(0, equals);
+    if (!Object.hasOwn(values, name)) throw new Error(`Unknown dashboard kql-check argument: ${arg}`);
+    const value = equals < 0 ? args[++index] : arg.slice(equals + 1);
+    if (!value || value.startsWith('-')) throw new Error(`${name} requires a value`);
+    parsed[values[name]] = value;
+  }
+  parsed.last = validateKqlDuration(parsed.last);
+  const seconds = Number(parsed.last.slice(0, -1)) * { s: 1, m: 60, h: 3600, d: 86400 }[parsed.last.slice(-1)];
+  if (!Number.isFinite(seconds) || seconds > 30 * 86400) throw new Error('--last must be at most 30d');
+  if (parsed.workspaceId != null && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(parsed.workspaceId)) throw new Error('--workspace-id must be a workspace UUID');
+  if (parsed.localOnly && parsed.live) throw new Error('--local-only cannot be combined with --live');
+  if (parsed.localOnly && parsed.requireRows) throw new Error('--require-rows requires live mode');
+  return parsed;
+}
 
 const v2KqlSmokePanels = [
   { uid: 'agentops-v2-home', panel: 'Session Health', requireRows: true },
@@ -44,7 +70,7 @@ const v2KqlSmokePanels = [
 ];
 
 function substituteGrafanaMacros(query, { last = '24h' } = {}) {
-  const safeLast = legacy.validateKqlDuration(last);
+  const safeLast = validateKqlDuration(last);
   const variableNames = [
     'datasource',
     'workspace',
@@ -81,9 +107,10 @@ function substituteGrafanaMacros(query, { last = '24h' } = {}) {
 }
 
 function dashboardKqlCheck(args = [], options = {}) {
-  const last = optionValue(args, '--last', '24h');
-  const requireRows = hasFlag(args, '--require-rows');
-  const runQuery = options.runQuery || ((query, queryOptions) => legacy.runAzureLogAnalyticsQuery(query, queryOptions));
+  if (args.includes('--help') || args.includes('-h')) return { ...dashboardKqlHelp };
+  const { last, workspaceId, localOnly, requireRows } = parseKqlCheckArgs(args, options);
+  const { queryFromPanel, v2DashboardBodies } = require('./dashboard-validation');
+  const runQuery = localOnly ? null : (options.runQuery || ((query, queryOptions) => require('../legacy').runAzureLogAnalyticsQuery(query, queryOptions)));
   const dashboards = (options.dashboardBodies || v2DashboardBodies)();
   const smokePanels = options.smokePanels || v2KqlSmokePanels;
   const byUid = new Map(dashboards.map(item => [item.body.uid, item]));
@@ -103,9 +130,13 @@ function dashboardKqlCheck(args = [], options = {}) {
       continue;
     }
     const query = substituteGrafanaMacros(rawQuery, { last });
+    if (localOnly) {
+      checks.push({ uid, panel: panelTitle, ok: true, query });
+      continue;
+    }
     const result = runQuery(query, {
       spawnSync: options.spawnSync,
-      workspaceId: optionValue(args, '--workspace-id', options.workspaceId)
+      workspaceId
     });
     const rows = Array.isArray(result.rows) ? result.rows.length : 0;
     const rowsRequired = requireRows && smokePanel.requireRows !== false;
@@ -124,9 +155,11 @@ function dashboardKqlCheck(args = [], options = {}) {
   const errors = checks.filter(check => !check.ok).map(check => `${check.uid}/${check.panel}: ${check.error}`);
   return {
     ok: errors.length === 0,
-    last: legacy.validateKqlDuration(last),
+    mode: localOnly ? 'local-only' : 'live',
+    evidenceTier: localOnly ? 'local-query-render' : 'live-azure-query',
+    last,
     require_rows: requireRows,
-    checks: checks.map(({ query, ...check }) => check),
+    checks: localOnly ? checks : checks.map(({ query, ...check }) => check),
     errors
   };
 }
