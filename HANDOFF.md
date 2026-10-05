@@ -319,3 +319,20 @@ Tests: native 87/87, supporting 34/34. OCR delegate review was clean. Still unpr
 - Added `.github/copilot-instructions.md`. It tells the reviewer to prioritise privacy (metadata only), keeping secrets and receipts out of the repo, Azure safety, and Workbook KQL conventions.
 - Local CI run, all passing: CLI 1035/1035, native 87/87, static check (1250 files), IaC contract, Workbook contract, JSON assets, coverage, security audit 13/13, strict poison collector smoke.
 - Copilot review triggers only on a PR. This branch is still uncommitted and needs the owner's approval to commit, push and open the PR.
+
+## 16. PR #167, CI and Copilot review rounds — 2026-10-05
+
+- PR #167 (`feat/enterprise-flight-recorder`) has these commits: a009b68 (feature), b789153 (CI fixes), a9d4512 (first-round review fixes), 780d089 (re-review fixes), and this handoff commit.
+- CI passes on 780d089: offline ubuntu, offline windows, and collector binary install.
+- First Copilot round raised 7 findings, all fixed and resolved:
+  - recipe exit codes and OIDC/AzureCLI inline settings;
+  - SDK `safeIdentifier` and strict-collector OTTL guards, including model metadata;
+  - fail-closed `repoRelative()` packaging;
+  - Windows test fixes;
+  - doc path and run-ID redaction.
+- Second Copilot round raised 8 findings. Three were already fixed. The other five were fixed and resolved:
+  - The CI deploy examples are now manual only, approval-gated, and run preview/what-if first. None of them use `azd up`.
+  - The `.refs/` gitleaks allowlist is narrowed to `^\.refs/`, and `.refs/` is gitignored.
+  - Recorder-worker fatal handlers exit 1. A regression test covers this.
+- Privacy: personal paths and subscription/tenant IDs are replaced with placeholders in the tree. They remain in the pushed history of a009b68 and b789153. **Squash-merge** the PR, or rewrite history only with the owner's approval.
+- Merging is not blocked. The owner decides when to merge.
