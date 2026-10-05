@@ -62,8 +62,11 @@ Save cost query results to `output/cost-query-result<YYYYMMDD_HHMMSS>.json` for 
 
 ## Cleanup
 
-After generating the report, remove temporary files:
+Write intermediate files only to a unique directory that this run creates, and remove only that directory. Never delete a pre-existing `temp` folder in the caller's working directory.
 
 ```powershell
-Remove-Item -Path "temp" -Recurse -Force -ErrorAction SilentlyContinue
+$runTemp = Join-Path ([System.IO.Path]::GetTempPath()) ("azure-cost-" + [guid]::NewGuid())
+New-Item -ItemType Directory -Path $runTemp | Out-Null
+# ... write intermediate files under $runTemp ...
+Remove-Item -LiteralPath $runTemp -Recurse -Force -ErrorAction SilentlyContinue
 ```

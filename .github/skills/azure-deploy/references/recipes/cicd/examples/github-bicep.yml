@@ -24,15 +24,16 @@ jobs:
 
       - name: What-if (review before apply)
         run: |
-          az deployment sub what-if \
-            --location eastus \
+          az deployment group what-if \
+            --resource-group ${{ vars.AZURE_RESOURCE_GROUP }} \
             --template-file ./infra/main.bicep \
             --parameters environmentName=${{ vars.ENVIRONMENT }}
 
       - uses: azure/arm-deploy@v2
         with:
-          scope: subscription
+          # Match the template: this example assumes targetScope = 'resourceGroup'.
+          scope: resourcegroup
           subscriptionId: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          region: eastus
+          resourceGroupName: ${{ vars.AZURE_RESOURCE_GROUP }}
           template: ./infra/main.bicep
           parameters: environmentName=${{ vars.ENVIRONMENT }}

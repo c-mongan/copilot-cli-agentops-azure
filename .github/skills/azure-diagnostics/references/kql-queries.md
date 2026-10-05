@@ -15,7 +15,7 @@ Essential Kusto Query Language (KQL) queries for diagnosing Azure application is
 // Recent errors
 AppExceptions
 | where TimeGenerated > ago(1h)
-| project TimeGenerated, Message, StackTrace
+| project TimeGenerated, ProblemId, ExceptionType, OuterMessage, Details
 | order by TimeGenerated desc
 ```
 
