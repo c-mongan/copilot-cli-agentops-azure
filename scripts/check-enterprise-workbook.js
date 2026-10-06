@@ -32,6 +32,39 @@ function checkTabs(workbook) {
   }
   assert.equal(groups[0].conditionalVisibility.value, 'overview');
 }
+// Final result columns per table panel, read from the live Log Analytics query schema.
+// Update this list when a panel's projection or summarize output changes.
+const TABLE_RESULT_COLUMNS = {
+  'coverage-delivery': ['RunId', 'SourceTable', 'ReadbackRows', 'LastReadbackRow', 'ReadbackEvidence', 'UploadAcknowledgment', 'CaptureCompleteness'],
+  'runs': ['TimeGenerated', 'RunId', 'SessionId', 'TraceId', 'AgentName', 'Surface', 'TaskType', 'RequestedModel', 'RecordedActualModel', 'ActualModelProvenance', 'Outcome', 'InputTokens', 'OutputTokens', 'UsageEvidence', 'EstimatedCostUsdReal', 'CostEvidence', 'TestsRan', 'TestsPassed', 'CiStatus', 'PrivacyMode', 'CaptureCompleteness', 'SchemaVersion'],
+  'model-events': ['TimeGenerated', 'RunId', 'EventId', 'Sequence', 'EventName', 'Status', 'ModelRequested', 'ModelActual', 'Provider', 'ActualModelProvenance'],
+  'tools-scripts': ['TimeGenerated', 'RunId', 'Lane', 'ToolName', 'McpServerName', 'ScriptName', 'ScriptRuntimeName', 'ScriptLoaderName', 'RecordedStatus', 'FailureEvidence', 'Allowed', 'ErrorType', 'ExitCode', 'DurationMs', 'TraceId', 'SpanId', 'EventId'],
+  'span-lineage': ['TimeGenerated', 'RunId', 'TraceId', 'SpanId', 'ParentSpanId', 'OperationName', 'AgentName', 'ToolName', 'McpServerName', 'McpToolName', 'ScriptName', 'ToolCallEvidence', 'LinkType', 'Outcome', 'ErrorType', 'DurationMs'],
+  'references': ['TimeGenerated', 'RunId', 'SessionId', 'TraceId', 'EventId', 'ParentEventId', 'Sequence', 'EventName', 'ToolCallId', 'ParentToolCallId', 'AgentId', 'ParentAgentId'],
+  'privacy': ['TimeGenerated', 'RunId', 'TraceId', 'ContentKind', 'Action', 'Observed', 'LeakDetected', 'DroppedCount', 'RedactedCount', 'PrivacyMode', 'PrivacyEvidence'],
+  'health': ['Component', 'CheckName', 'TimeGenerated', 'Status', 'CollectorMode', 'PrivacyMode', 'AzureConfigured', 'PrivacyPoisonOk', 'DroppedContentCount', 'ExportErrors', 'LastExportSuccess', 'LastSpanReceived', 'HealthScope', 'LastExportEvidence', 'HeartbeatAge'],
+  'evaluations': ['TimeGenerated', 'RunId', 'TraceId', 'TaskType', 'ModelActual', 'EvalOverall', 'EvalBucket', 'Reliability', 'Security', 'TestDiscipline', 'ToolEfficiency', 'ContextEfficiency', 'CodeOutcome', 'ScoreEvidence'],
+  'github-outcomes': ['TimeGenerated', 'RunId', 'RepoHash', 'PrNumberHash', 'PrOpened', 'PrMerged', 'PrClosed', 'PrReverted', 'CiStatus', 'CommitCount', 'FilesChangedCount', 'ReviewCommentCount', 'TimeToPrMinutes', 'TimeToMergeMinutes', 'OutcomeEvidence'],
+  'insights': ['TimeGenerated', 'RunId', 'TraceId', 'InsightId', 'InsightType', 'Severity', 'Rule', 'ArchitectureVersion', 'Numerator', 'Denominator', 'CoverageRuns', 'Status', 'EvidenceIds', 'CoverageLimits'],
+  'recommendations': ['TimeGenerated', 'RunId', 'SessionId', 'TraceId', 'RecommendationId', 'Action', 'Severity', 'EvalOverall', 'EvalBucket', 'Decision'],
+};
+function checkTableLabels(panels) {
+  const tables = panels.filter(item => item.content.visualization === 'table');
+  assert.deepEqual(tables.map(item => item.name), Object.keys(TABLE_RESULT_COLUMNS));
+  for (const { name, content } of tables) {
+    const columns = TABLE_RESULT_COLUMNS[name];
+    for (const column of columns) assert.ok(content.query.includes(column), `${name}: maintained column ${column} absent from query`);
+    const labels = content.gridSettings?.labelSettings;
+    assert.ok(Array.isArray(labels) && labels.length, `${name}: table must have labelSettings`);
+    const ids = labels.map(label => label.columnId);
+    assert.equal(new Set(ids).size, ids.length, `${name}: duplicate label columnId`);
+    for (const label of labels) {
+      assert.ok(columns.includes(label.columnId), `${name}: label targets ${label.columnId}, not a result column`);
+      assert.ok(typeof label.label === 'string' && label.label.trim() && label.label !== label.columnId, `${name}: empty label for ${label.columnId}`);
+    }
+    for (const column of columns.filter(column => /[a-z][A-Z]/.test(column))) assert.ok(ids.includes(column), `${name}: multiword column ${column} has no label`);
+  }
+}
 function checkEnterpriseWorkbook(workbook = JSON.parse(fs.readFileSync(WORKBOOK, 'utf8'))) {
   const schemas = loadEvidenceSchemas();
   assert.equal(Object.keys(schemas).length, 12);
@@ -50,6 +83,7 @@ function checkEnterpriseWorkbook(workbook = JSON.parse(fs.readFileSync(WORKBOOK,
   const panels = collectPanels(workbook.items);
   assert.deepEqual(panels.map(item => item.name), PANEL_NAMES);
   checkTabs(workbook);
+  checkTableLabels(panels);
   const queries = [...panels.map(item => item.content), params[2]];
   const sources = new Set();
   let checkedColumns = 0;
@@ -135,8 +169,22 @@ function checkEnterpriseWorkbook(workbook = JSON.parse(fs.readFileSync(WORKBOOK,
     hiddenTabs.items.find(item => item.name === 'enterprise-tab-state').content.parameters[0].value = '';
     assert.throws(() => checkEnterpriseWorkbook(hiddenTabs));
     assert.throws(() => checkEnterpriseWorkbook(contentLane));
+    const staleLabel = structuredClone(workbook);
+    collectPanels(staleLabel.items).find(item => item.name === 'coverage-delivery').content.gridSettings.labelSettings.push({ columnId: 'TimeGenerated', label: 'Time' });
+    assert.throws(() => checkEnterpriseWorkbook(staleLabel), /not a result column/);
+    const duplicateLabel = structuredClone(workbook);
+    const duplicateLabels = collectPanels(duplicateLabel.items).find(item => item.name === 'runs').content.gridSettings.labelSettings;
+    duplicateLabels.push({ ...duplicateLabels[0] });
+    assert.throws(() => checkEnterpriseWorkbook(duplicateLabel), /duplicate label columnId/);
+    const missingLabels = structuredClone(workbook);
+    delete collectPanels(missingLabels.items).find(item => item.name === 'health').content.gridSettings.labelSettings;
+    assert.throws(() => checkEnterpriseWorkbook(missingLabels), /must have labelSettings/);
+    const unlabelled = structuredClone(workbook);
+    const insightLabels = collectPanels(unlabelled.items).find(item => item.name === 'insights').content.gridSettings;
+    insightLabels.labelSettings = insightLabels.labelSettings.filter(label => label.columnId !== 'EvidenceIds');
+    assert.throws(() => checkEnterpriseWorkbook(unlabelled), /has no label/);
   }
-  return { ok: true, evidenceTier: 'local-workbook-source-contract', queryPanels: panels.length, metadataTables: sources.size, checkedSourceColumns: checkedColumns, maintainedSchemas: Object.keys(schemas).length, nullableFixtureProjection: true, azureKqlExecutionVerified: false, portalRenderingVerified: false, cloudWritesPerformed: false };
+  return { ok: true, evidenceTier: 'local-workbook-source-contract', queryPanels: panels.length, metadataTables: sources.size, checkedSourceColumns: checkedColumns, labelledTables: Object.keys(TABLE_RESULT_COLUMNS).length, maintainedSchemas: Object.keys(schemas).length, nullableFixtureProjection: true, azureKqlExecutionVerified: false, portalRenderingVerified: false, cloudWritesPerformed: false };
 }
 if (require.main === module) {
   try { process.stdout.write(`${JSON.stringify(checkEnterpriseWorkbook(), null, 2)}\n`); }
