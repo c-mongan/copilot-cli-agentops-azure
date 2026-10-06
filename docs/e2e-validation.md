@@ -47,6 +47,30 @@ response details in VS Code.
 
 ![AgentOpsEvents_CL rows for the run, with the chat span highlighted](images/e2e-05-log-analytics.png)
 
+**6. Azure Monitor Workbook.** The saved Workbook "AgentOps Diagnostic Pilot" opened
+in the user's existing signed-in browser session; the agent did not enter any
+credentials. Images are cropped below the portal header, so no account,
+subscription or resource ID is shown. Overview counts 4 native runs and 12 events.
+The Spans tile reads 0 span-table rows and says that 12 native span events are
+counted in Events.
+
+![Workbook Overview tiles and telemetry chart](images/e2e-06-workbook-overview.png)
+
+The Observed streams table lists each native run, its source table and readback
+row count. Upload acknowledgment and capture completeness stay "unknown" because
+row presence does not prove coverage.
+
+![Workbook Observed streams table with four native runs](images/e2e-07-workbook-streams.png)
+
+**7. Trace lineage.** Native capture writes span observations to
+`AgentOpsEvents_CL` as `native.span.observed` events, not to `AgentOpsSpans_CL`.
+This walkthrough found that Trace lineage read only the span table and wrongly
+told users to start capture. It now unions both sources. Native rows show their
+operation (`invoke_agent`, `chat` or `unknown`) and say that span and parent IDs
+are not exported.
+
+![Trace lineage listing native span events per run](images/e2e-08-workbook-trace-lineage.png)
+
 Coverage and task outcome stay unverified by design. This run proves capture,
 delivery and readback; it does not prove that every span was captured.
 
