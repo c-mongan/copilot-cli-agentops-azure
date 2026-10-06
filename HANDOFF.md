@@ -301,6 +301,25 @@ Tests: native 87/87, supporting 34/34. OCR delegate review was clean. Still unpr
 
 **Computer-use notes.** `type_text` does not reach the command palette or Monaco. Use `set_value` on the palette field and press Return. For Chat, use `pbcopy`, click the input, then paste.
 
+### 13.3 Native Azure publish and cloud readback — 2026-10-06
+
+Gate 2 now passes in the isolated, signed-in test Insiders.
+
+**Root cause of the first, empty publish (0 events admitted).** The Agent Host gets its OTel environment from the VS Code main process. That environment is built from `chat.agentHost.otel.*`, the application-scope settings held in memory when the host spawns. `main.log` showed "Refusing to watch … settings.json … possibly being a network share", because the test profile was on an external volume. So the main process never loaded the keys that Connect wrote. Restarting the Agent Host started it again with only the default variables: no `COPILOT_OTEL_ENABLED` and no endpoint. Only Copilot Chat `embeddings` spans arrived, and they have no conversation id, so publish correctly admitted nothing.
+
+**Fix.** A full quit and reopen of VS Code loaded the settings. The new Agent Host had `COPILOT_OTEL_ENABLED=true` and the Collector endpoint. When the extension owns the host keys, its status message now tells users to quit and reopen VS Code if Chat turns add no spans. The README explains why, and a regression test covers it.
+
+| Step | Result |
+|---|---|
+| Chat "Reply with just: pong three" | Pass: spans from `github-copilot` and `vscode-agent-host` (`chat`, `invoke_agent`) with `gen_ai.conversation.id` |
+| AgentOps: Publish native metadata to Azure | Pass: "Azure accepted 6 metadata events. Refused: 0." |
+| Log Analytics cross-check (`AgentOpsEvents_CL`) | Pass: 6 rows |
+| AgentOps: Verify Azure cloud readback | Pass: "verified. 6 of 6 published events were found with the expected typed fields." |
+
+Coverage and task outcome remain unverified by design. Tests: native 88/88.
+
+**Workbook polish.** Critique finding: the wide tables, with up to 22 columns, showed raw CamelCase field names. All 12 tables now have readable column labels (for example `Run ID`, `Parent span ID`, `Est. cost (USD)`). The KQL and field names are unchanged. What-if showed only the Workbook would change. Deployment `agentops-workbook-labels-20261006` succeeded, and the content readback found 12 label sets.
+
 ## 14. Azure skills, tabbed Workbook and end to end — 2026-10-05
 
 | Item | Result |

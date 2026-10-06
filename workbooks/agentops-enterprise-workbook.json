@@ -260,7 +260,13 @@
                     }
                   }
                 ],
-                "filter": true
+                "filter": true,
+                "labelSettings": [
+                  {
+                    "columnId": "TimeGenerated",
+                    "label": "Time"
+                  }
+                ]
               }
             }
           }
@@ -395,7 +401,89 @@
                     }
                   }
                 ],
-                "filter": true
+                "filter": true,
+                "labelSettings": [
+                  {
+                    "columnId": "TimeGenerated",
+                    "label": "Time"
+                  },
+                  {
+                    "columnId": "RunId",
+                    "label": "Run ID"
+                  },
+                  {
+                    "columnId": "SessionId",
+                    "label": "Session ID"
+                  },
+                  {
+                    "columnId": "TraceId",
+                    "label": "Trace ID"
+                  },
+                  {
+                    "columnId": "AgentName",
+                    "label": "Agent name"
+                  },
+                  {
+                    "columnId": "TaskType",
+                    "label": "Task type"
+                  },
+                  {
+                    "columnId": "RequestedModel",
+                    "label": "Requested model"
+                  },
+                  {
+                    "columnId": "RecordedActualModel",
+                    "label": "Recorded actual model"
+                  },
+                  {
+                    "columnId": "ActualModelProvenance",
+                    "label": "Actual model provenance"
+                  },
+                  {
+                    "columnId": "InputTokens",
+                    "label": "Input tokens"
+                  },
+                  {
+                    "columnId": "OutputTokens",
+                    "label": "Output tokens"
+                  },
+                  {
+                    "columnId": "UsageEvidence",
+                    "label": "Usage evidence"
+                  },
+                  {
+                    "columnId": "EstimatedCostUsdReal",
+                    "label": "Est. cost (USD)"
+                  },
+                  {
+                    "columnId": "CostEvidence",
+                    "label": "Cost evidence"
+                  },
+                  {
+                    "columnId": "TestsRan",
+                    "label": "Tests ran"
+                  },
+                  {
+                    "columnId": "TestsPassed",
+                    "label": "Tests passed"
+                  },
+                  {
+                    "columnId": "CiStatus",
+                    "label": "CI status"
+                  },
+                  {
+                    "columnId": "PrivacyMode",
+                    "label": "Privacy mode"
+                  },
+                  {
+                    "columnId": "CaptureCompleteness",
+                    "label": "Capture completeness"
+                  },
+                  {
+                    "columnId": "SchemaVersion",
+                    "label": "Schema version"
+                  }
+                ]
               }
             }
           },
@@ -441,7 +529,33 @@
                     }
                   }
                 ],
-                "filter": true
+                "filter": true,
+                "labelSettings": [
+                  {
+                    "columnId": "TimeGenerated",
+                    "label": "Time"
+                  },
+                  {
+                    "columnId": "RunId",
+                    "label": "Run ID"
+                  },
+                  {
+                    "columnId": "EventId",
+                    "label": "Event ID"
+                  },
+                  {
+                    "columnId": "EventName",
+                    "label": "Event name"
+                  },
+                  {
+                    "columnId": "ModelRequested",
+                    "label": "Model requested"
+                  },
+                  {
+                    "columnId": "ModelActual",
+                    "label": "Model actual"
+                  }
+                ]
               }
             }
           }
@@ -521,7 +635,69 @@
                     }
                   }
                 ],
-                "filter": true
+                "filter": true,
+                "labelSettings": [
+                  {
+                    "columnId": "TimeGenerated",
+                    "label": "Time"
+                  },
+                  {
+                    "columnId": "RunId",
+                    "label": "Run ID"
+                  },
+                  {
+                    "columnId": "ToolName",
+                    "label": "Tool name"
+                  },
+                  {
+                    "columnId": "McpServerName",
+                    "label": "MCP server"
+                  },
+                  {
+                    "columnId": "ScriptName",
+                    "label": "Script name"
+                  },
+                  {
+                    "columnId": "ScriptRuntimeName",
+                    "label": "Script runtime name"
+                  },
+                  {
+                    "columnId": "ScriptLoaderName",
+                    "label": "Script loader name"
+                  },
+                  {
+                    "columnId": "RecordedStatus",
+                    "label": "Recorded status"
+                  },
+                  {
+                    "columnId": "FailureEvidence",
+                    "label": "Failure evidence"
+                  },
+                  {
+                    "columnId": "ErrorType",
+                    "label": "Error type"
+                  },
+                  {
+                    "columnId": "ExitCode",
+                    "label": "Exit code"
+                  },
+                  {
+                    "columnId": "DurationMs",
+                    "label": "Duration (ms)"
+                  },
+                  {
+                    "columnId": "TraceId",
+                    "label": "Trace ID"
+                  },
+                  {
+                    "columnId": "SpanId",
+                    "label": "Span ID"
+                  },
+                  {
+                    "columnId": "EventId",
+                    "label": "Event ID"
+                  }
+                ]
               }
             }
           }
@@ -645,7 +821,69 @@
                     }
                   }
                 ],
-                "filter": true
+                "filter": true,
+                "labelSettings": [
+                  {
+                    "columnId": "TimeGenerated",
+                    "label": "Time"
+                  },
+                  {
+                    "columnId": "RunId",
+                    "label": "Run ID"
+                  },
+                  {
+                    "columnId": "TraceId",
+                    "label": "Trace ID"
+                  },
+                  {
+                    "columnId": "SpanId",
+                    "label": "Span ID"
+                  },
+                  {
+                    "columnId": "ParentSpanId",
+                    "label": "Parent span ID"
+                  },
+                  {
+                    "columnId": "OperationName",
+                    "label": "Operation name"
+                  },
+                  {
+                    "columnId": "AgentName",
+                    "label": "Agent name"
+                  },
+                  {
+                    "columnId": "ToolName",
+                    "label": "Tool name"
+                  },
+                  {
+                    "columnId": "McpServerName",
+                    "label": "MCP server"
+                  },
+                  {
+                    "columnId": "McpToolName",
+                    "label": "MCP tool"
+                  },
+                  {
+                    "columnId": "ScriptName",
+                    "label": "Script name"
+                  },
+                  {
+                    "columnId": "ToolCallEvidence",
+                    "label": "Tool call evidence"
+                  },
+                  {
+                    "columnId": "LinkType",
+                    "label": "Link type"
+                  },
+                  {
+                    "columnId": "ErrorType",
+                    "label": "Error type"
+                  },
+                  {
+                    "columnId": "DurationMs",
+                    "label": "Duration (ms)"
+                  }
+                ]
               }
             }
           },
@@ -669,7 +907,53 @@
               "noDataMessageStyle": 5,
               "gridSettings": {
                 "formatters": [],
-                "filter": true
+                "filter": true,
+                "labelSettings": [
+                  {
+                    "columnId": "TimeGenerated",
+                    "label": "Time"
+                  },
+                  {
+                    "columnId": "RunId",
+                    "label": "Run ID"
+                  },
+                  {
+                    "columnId": "SessionId",
+                    "label": "Session ID"
+                  },
+                  {
+                    "columnId": "TraceId",
+                    "label": "Trace ID"
+                  },
+                  {
+                    "columnId": "EventId",
+                    "label": "Event ID"
+                  },
+                  {
+                    "columnId": "ParentEventId",
+                    "label": "Parent event ID"
+                  },
+                  {
+                    "columnId": "EventName",
+                    "label": "Event name"
+                  },
+                  {
+                    "columnId": "ToolCallId",
+                    "label": "Tool call ID"
+                  },
+                  {
+                    "columnId": "ParentToolCallId",
+                    "label": "Parent tool call ID"
+                  },
+                  {
+                    "columnId": "AgentId",
+                    "label": "Agent ID"
+                  },
+                  {
+                    "columnId": "ParentAgentId",
+                    "label": "Parent agent ID"
+                  }
+                ]
               }
             }
           }
@@ -740,7 +1024,41 @@
                     }
                   }
                 ],
-                "filter": true
+                "filter": true,
+                "labelSettings": [
+                  {
+                    "columnId": "TimeGenerated",
+                    "label": "Time"
+                  },
+                  {
+                    "columnId": "RunId",
+                    "label": "Run ID"
+                  },
+                  {
+                    "columnId": "TraceId",
+                    "label": "Trace ID"
+                  },
+                  {
+                    "columnId": "ContentKind",
+                    "label": "Content kind"
+                  },
+                  {
+                    "columnId": "LeakDetected",
+                    "label": "Leak detected"
+                  },
+                  {
+                    "columnId": "DroppedCount",
+                    "label": "Dropped count"
+                  },
+                  {
+                    "columnId": "RedactedCount",
+                    "label": "Redacted count"
+                  },
+                  {
+                    "columnId": "PrivacyMode",
+                    "label": "Privacy mode"
+                  }
+                ]
               }
             }
           },
@@ -810,7 +1128,49 @@
                     }
                   }
                 ],
-                "filter": true
+                "filter": true,
+                "labelSettings": [
+                  {
+                    "columnId": "TimeGenerated",
+                    "label": "Time"
+                  },
+                  {
+                    "columnId": "CheckName",
+                    "label": "Check name"
+                  },
+                  {
+                    "columnId": "CollectorMode",
+                    "label": "Collector mode"
+                  },
+                  {
+                    "columnId": "PrivacyMode",
+                    "label": "Privacy mode"
+                  },
+                  {
+                    "columnId": "AzureConfigured",
+                    "label": "Azure configured"
+                  },
+                  {
+                    "columnId": "PrivacyPoisonOk",
+                    "label": "Privacy poison OK"
+                  },
+                  {
+                    "columnId": "DroppedContentCount",
+                    "label": "Dropped content count"
+                  },
+                  {
+                    "columnId": "ExportErrors",
+                    "label": "Export errors"
+                  },
+                  {
+                    "columnId": "LastExportSuccess",
+                    "label": "Last export success"
+                  },
+                  {
+                    "columnId": "LastSpanReceived",
+                    "label": "Last span received"
+                  }
+                ]
               }
             }
           }
@@ -863,7 +1223,53 @@
                     }
                   }
                 ],
-                "filter": true
+                "filter": true,
+                "labelSettings": [
+                  {
+                    "columnId": "TimeGenerated",
+                    "label": "Time"
+                  },
+                  {
+                    "columnId": "RunId",
+                    "label": "Run ID"
+                  },
+                  {
+                    "columnId": "TraceId",
+                    "label": "Trace ID"
+                  },
+                  {
+                    "columnId": "TaskType",
+                    "label": "Task type"
+                  },
+                  {
+                    "columnId": "ModelActual",
+                    "label": "Model actual"
+                  },
+                  {
+                    "columnId": "EvalOverall",
+                    "label": "Eval overall"
+                  },
+                  {
+                    "columnId": "EvalBucket",
+                    "label": "Eval bucket"
+                  },
+                  {
+                    "columnId": "TestDiscipline",
+                    "label": "Test discipline"
+                  },
+                  {
+                    "columnId": "ToolEfficiency",
+                    "label": "Tool efficiency"
+                  },
+                  {
+                    "columnId": "ContextEfficiency",
+                    "label": "Context efficiency"
+                  },
+                  {
+                    "columnId": "CodeOutcome",
+                    "label": "Code outcome"
+                  }
+                ]
               }
             }
           },
@@ -957,7 +1363,65 @@
                     }
                   }
                 ],
-                "filter": true
+                "filter": true,
+                "labelSettings": [
+                  {
+                    "columnId": "TimeGenerated",
+                    "label": "Time"
+                  },
+                  {
+                    "columnId": "RunId",
+                    "label": "Run ID"
+                  },
+                  {
+                    "columnId": "RepoHash",
+                    "label": "Repo hash"
+                  },
+                  {
+                    "columnId": "PrNumberHash",
+                    "label": "PR number hash"
+                  },
+                  {
+                    "columnId": "PrOpened",
+                    "label": "PR opened"
+                  },
+                  {
+                    "columnId": "PrMerged",
+                    "label": "PR merged"
+                  },
+                  {
+                    "columnId": "PrClosed",
+                    "label": "PR closed"
+                  },
+                  {
+                    "columnId": "PrReverted",
+                    "label": "PR reverted"
+                  },
+                  {
+                    "columnId": "CiStatus",
+                    "label": "CI status"
+                  },
+                  {
+                    "columnId": "CommitCount",
+                    "label": "Commit count"
+                  },
+                  {
+                    "columnId": "FilesChangedCount",
+                    "label": "Files changed count"
+                  },
+                  {
+                    "columnId": "ReviewCommentCount",
+                    "label": "Review comment count"
+                  },
+                  {
+                    "columnId": "TimeToPrMinutes",
+                    "label": "Time to PR (min)"
+                  },
+                  {
+                    "columnId": "TimeToMergeMinutes",
+                    "label": "Time to merge (min)"
+                  }
+                ]
               }
             }
           }
@@ -1040,7 +1504,45 @@
                     }
                   }
                 ],
-                "filter": true
+                "filter": true,
+                "labelSettings": [
+                  {
+                    "columnId": "TimeGenerated",
+                    "label": "Time"
+                  },
+                  {
+                    "columnId": "RunId",
+                    "label": "Run ID"
+                  },
+                  {
+                    "columnId": "TraceId",
+                    "label": "Trace ID"
+                  },
+                  {
+                    "columnId": "InsightId",
+                    "label": "Insight ID"
+                  },
+                  {
+                    "columnId": "InsightType",
+                    "label": "Insight type"
+                  },
+                  {
+                    "columnId": "ArchitectureVersion",
+                    "label": "Architecture version"
+                  },
+                  {
+                    "columnId": "CoverageRuns",
+                    "label": "Coverage runs"
+                  },
+                  {
+                    "columnId": "EvidenceIds",
+                    "label": "Evidence IDs"
+                  },
+                  {
+                    "columnId": "CoverageLimits",
+                    "label": "Coverage limits"
+                  }
+                ]
               }
             }
           },
@@ -1112,7 +1614,37 @@
                     }
                   }
                 ],
-                "filter": true
+                "filter": true,
+                "labelSettings": [
+                  {
+                    "columnId": "TimeGenerated",
+                    "label": "Time"
+                  },
+                  {
+                    "columnId": "RunId",
+                    "label": "Run ID"
+                  },
+                  {
+                    "columnId": "SessionId",
+                    "label": "Session ID"
+                  },
+                  {
+                    "columnId": "TraceId",
+                    "label": "Trace ID"
+                  },
+                  {
+                    "columnId": "RecommendationId",
+                    "label": "Recommendation ID"
+                  },
+                  {
+                    "columnId": "EvalOverall",
+                    "label": "Eval overall"
+                  },
+                  {
+                    "columnId": "EvalBucket",
+                    "label": "Eval bucket"
+                  }
+                ]
               }
             }
           }
