@@ -1,6 +1,6 @@
 [mcp_servers.azure-mcp]
 command = "npx"
-args = ["-y", "@azure/mcp@latest", "server", "start", "--read-only", "--namespace", "monitor", "--namespace", "applicationinsights", "--namespace", "workbooks", "--namespace", "grafana", "--namespace", "kusto", "--namespace", "group", "--namespace", "subscription", "--namespace", "role", "--namespace", "pricing", "--namespace", "bicepschema"]
+args = ["-y", "@azure/mcp@2.0.5", "server", "start", "--read-only", "--namespace", "monitor", "--namespace", "applicationinsights", "--namespace", "workbooks", "--namespace", "grafana", "--namespace", "kusto", "--namespace", "group", "--namespace", "subscription", "--namespace", "role", "--namespace", "pricing", "--namespace", "bicepschema"]
 startup_timeout_sec = 40
 
 [mcp_servers.microsoft-learn]
