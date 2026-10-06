@@ -2,6 +2,56 @@
 
 Use E2E validation to prove the loop with real Copilot CLI telemetry.
 
+## Native capture walkthrough (VS Code, 2026-10-06)
+
+These screenshots come from a single run of the
+[AgentOps Native Capture extension](../extensions/agentops-native/README.md).
+It ran in an isolated, signed-in VS Code Insiders test profile, and computer use
+drove each step through the Command Palette. The account avatar is masked. The
+publish path sends only the approved metadata projection: span names, timings,
+token counts, trace and event IDs, and hashed run, session and repository
+identifiers. Prompts, responses, code and tool arguments are not sent.
+
+| Step | Command | Result |
+|---|---|---|
+| 1 | Copilot Chat: "Reply with just: pong e2e" | Reply received; status bar shows `AgentOps: Collector ready` |
+| 2 | `AgentOps: Capture status` | Collector ready; 6 native spans received; Azure stages not yet attempted |
+| 3 | `AgentOps: Publish native metadata to Azure` | Azure accepted 6 metadata events; refused 0 |
+| 4 | `AgentOps: Verify Azure cloud readback` | Verified: 6 of 6 published events found with the expected typed fields |
+| 5 | `az monitor log-analytics query` on `AgentOpsEvents_CL` | 6 rows; the `chat` span's tokens match the Chat response details |
+
+**1. Chat with capture connected.** Connect ran automatically at startup.
+
+![Copilot Chat reply with the AgentOps status bar showing Collector ready](images/e2e-01-chat.png)
+
+**2. Capture status.** Each stage is listed separately, so a stage that has not
+happened never reads as passing. Here the upload is `not-attempted`, readback is
+`unverified` and the project-script receipt is `none`.
+
+![Capture status notification listing the Collector, native receipt and Azure stages](images/e2e-02-status.png)
+
+**3. Publish to Azure.** Acceptance is not proof of storage, so the message points to
+the readback command.
+
+![Publish notification: Azure accepted 6 metadata events, refused 0](images/e2e-03-publish.png)
+
+**4. Cloud readback.** The extension queries Log Analytics for the exact event IDs
+it published.
+
+![Readback notification: verified, 6 of 6 published events found](images/e2e-04-readback.png)
+
+**5. Independent Log Analytics check.** This image is rendered from the rows that
+`az monitor log-analytics query` returned. Workspace and resource IDs are omitted.
+The `chat` span reports 28,656 input and 8 output tokens, which matches the
+response details in VS Code.
+
+![AgentOpsEvents_CL rows for the run, with the chat span highlighted](images/e2e-05-log-analytics.png)
+
+Coverage and task outcome stay unverified by design. This run proves capture,
+delivery and readback; it does not prove that every span was captured.
+
+## CLI live E2E
+
 ```bash
 agentops e2e run --live --browser-report --last 2h --json
 agentops e2e report --last 2h --out .agentops/e2e/latest/report.html

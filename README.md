@@ -486,7 +486,10 @@ For V2 dashboard-tour screenshots, add `--grafana-v2-only --v2-docs-screenshots`
 
 Azure Managed Grafana validation may still require the user’s normal signed-in browser.
 
-See [E2E validation](docs/e2e-validation.md).
+See [E2E validation](docs/e2e-validation.md). It includes a screenshot walkthrough of
+the VS Code native path: chat, capture status, Azure publish and cloud readback.
+
+![VS Code native capture: Azure cloud readback verified 6 of 6 events](docs/images/e2e-04-readback.png)
 
 ## Documentation
 
