@@ -263,8 +263,32 @@
                 "filter": true,
                 "labelSettings": [
                   {
-                    "columnId": "TimeGenerated",
-                    "label": "Time"
+                    "columnId": "RunId",
+                    "label": "Run ID"
+                  },
+                  {
+                    "columnId": "SourceTable",
+                    "label": "Source table"
+                  },
+                  {
+                    "columnId": "ReadbackRows",
+                    "label": "Readback rows"
+                  },
+                  {
+                    "columnId": "LastReadbackRow",
+                    "label": "Last readback row"
+                  },
+                  {
+                    "columnId": "ReadbackEvidence",
+                    "label": "Readback evidence"
+                  },
+                  {
+                    "columnId": "UploadAcknowledgment",
+                    "label": "Upload acknowledgment"
+                  },
+                  {
+                    "columnId": "CaptureCompleteness",
+                    "label": "Capture completeness"
                   }
                 ]
               }
@@ -554,6 +578,10 @@
                   {
                     "columnId": "ModelActual",
                     "label": "Model actual"
+                  },
+                  {
+                    "columnId": "ActualModelProvenance",
+                    "label": "Actual model provenance"
                   }
                 ]
               }
@@ -651,7 +679,7 @@
                   },
                   {
                     "columnId": "McpServerName",
-                    "label": "MCP server"
+                    "label": "MCP server name"
                   },
                   {
                     "columnId": "ScriptName",
@@ -857,11 +885,11 @@
                   },
                   {
                     "columnId": "McpServerName",
-                    "label": "MCP server"
+                    "label": "MCP server name"
                   },
                   {
                     "columnId": "McpToolName",
-                    "label": "MCP tool"
+                    "label": "MCP tool name"
                   },
                   {
                     "columnId": "ScriptName",
@@ -1057,6 +1085,10 @@
                   {
                     "columnId": "PrivacyMode",
                     "label": "Privacy mode"
+                  },
+                  {
+                    "columnId": "PrivacyEvidence",
+                    "label": "Privacy evidence"
                   }
                 ]
               }
@@ -1131,12 +1163,12 @@
                 "filter": true,
                 "labelSettings": [
                   {
-                    "columnId": "TimeGenerated",
-                    "label": "Time"
-                  },
-                  {
                     "columnId": "CheckName",
                     "label": "Check name"
+                  },
+                  {
+                    "columnId": "TimeGenerated",
+                    "label": "Time"
                   },
                   {
                     "columnId": "CollectorMode",
@@ -1169,6 +1201,18 @@
                   {
                     "columnId": "LastSpanReceived",
                     "label": "Last span received"
+                  },
+                  {
+                    "columnId": "HealthScope",
+                    "label": "Health scope"
+                  },
+                  {
+                    "columnId": "LastExportEvidence",
+                    "label": "Last export evidence"
+                  },
+                  {
+                    "columnId": "HeartbeatAge",
+                    "label": "Heartbeat age"
                   }
                 ]
               }
@@ -1268,6 +1312,10 @@
                   {
                     "columnId": "CodeOutcome",
                     "label": "Code outcome"
+                  },
+                  {
+                    "columnId": "ScoreEvidence",
+                    "label": "Score evidence"
                   }
                 ]
               }
@@ -1420,6 +1468,10 @@
                   {
                     "columnId": "TimeToMergeMinutes",
                     "label": "Time to merge (min)"
+                  },
+                  {
+                    "columnId": "OutcomeEvidence",
+                    "label": "Outcome evidence"
                   }
                 ]
               }
