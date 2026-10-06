@@ -322,7 +322,7 @@ Coverage and task outcome remain unverified by design. Tests: native 88/88.
 
 ### 13.4 Screenshot walkthrough — 2026-10-06
 
-A second run repeated the full path with computer use: chat "pong e2e", Capture status, Publish (6 accepted, 0 refused) and readback (verified 6 of 6). A `az` query confirmed 6 rows in `AgentOpsEvents_CL`. The `chat` span's token counts (28,656 in and 8 out) match the Chat response details. The screenshots are in `docs/images/e2e-0*.png` and embedded in `docs/e2e-validation.md`. They are window-only captures with the account avatar masked. The Log Analytics image is rendered from the query rows, with workspace IDs omitted. The Azure portal Workbook was not captured because the browser is not signed in to Azure, and the agent does not sign in on the user's behalf.
+A second run repeated the full path with computer use: chat "pong e2e", Capture status, Publish (6 accepted, 0 refused) and readback (verified 6 of 6). An `az` query confirmed 6 rows in `AgentOpsEvents_CL`. The `chat` span's token counts (28,656 in and 8 out) match the Chat response details. The screenshots are in `docs/images/e2e-0*.png` and embedded in `docs/e2e-validation.md`. They are window-only captures with the account avatar masked. The Log Analytics image is rendered from the query rows, with workspace IDs omitted. The Azure portal Workbook was not captured because the browser is not signed in to Azure, and the agent does not sign in on the user's behalf.
 
 ## 14. Azure skills, tabbed Workbook and end to end — 2026-10-05
 

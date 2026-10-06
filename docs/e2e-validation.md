@@ -7,8 +7,10 @@ Use E2E validation to prove the loop with real Copilot CLI telemetry.
 These screenshots come from a single run of the
 [AgentOps Native Capture extension](../extensions/agentops-native/README.md).
 It ran in an isolated, signed-in VS Code Insiders test profile, and computer use
-drove each step through the Command Palette. The account avatar is masked. No
-prompts, code or IDs leave the machine: the publish path sends metadata only.
+drove each step through the Command Palette. The account avatar is masked. The
+publish path sends only the approved metadata projection: span names, timings,
+token counts, trace and event IDs, and hashed run, session and repository
+identifiers. Prompts, responses, code and tool arguments are not sent.
 
 | Step | Command | Result |
 |---|---|---|
@@ -22,8 +24,9 @@ prompts, code or IDs leave the machine: the publish path sends metadata only.
 
 ![Copilot Chat reply with the AgentOps status bar showing Collector ready](images/e2e-01-chat.png)
 
-**2. Capture status.** Each stage is listed separately, so a missing stage reads as
-unknown instead of passing.
+**2. Capture status.** Each stage is listed separately, so a stage that has not
+happened never reads as passing. Here the upload is `not-attempted`, readback is
+`unverified` and the project-script receipt is `none`.
 
 ![Capture status notification listing the Collector, native receipt and Azure stages](images/e2e-02-status.png)
 
