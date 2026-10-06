@@ -318,7 +318,7 @@ Gate 2 now passes in the isolated, signed-in test Insiders.
 
 Coverage and task outcome remain unverified by design. Tests: native 88/88.
 
-**Workbook polish.** Critique finding: the wide tables, with up to 22 columns, showed raw CamelCase field names. All 12 tables now have readable column labels (for example `Run ID`, `Parent span ID`, `Est. cost (USD)`). The KQL and field names are unchanged. Labels are keyed to each panel's actual result columns. Those columns were read from the live query schema, because some panels end in `summarize`, which drops `TimeGenerated`. What-if showed only the Workbook would change. Deployment `agentops-workbook-labels2-20261006` succeeded, and the content readback found 12 label sets.
+**Workbook polish.** Critique finding: the wide tables, with up to 22 columns, showed raw CamelCase field names. All 12 tables now have readable column labels (for example `Run ID`, `Parent span ID`, `Est. cost (USD)`). The KQL and field names are unchanged. Every table query now ends in an explicit `project`, so its final columns are declared, and the labels are keyed to those columns. `scripts/check-enterprise-workbook.js` compares each terminal `project` with `TABLE_RESULT_COLUMNS` and checks each label set (required, no duplicates, existing columns only, all multiword columns labelled), with negative cases. All 14 panels ran live, and their result schemas match. What-if showed only the Workbook would change. Deployment `agentops-workbook-terminal-20261006` succeeded. The deployed items match the repo except for the workspace parameter that Bicep binds.
 
 ## 14. Azure skills, tabbed Workbook and end to end — 2026-10-05
 

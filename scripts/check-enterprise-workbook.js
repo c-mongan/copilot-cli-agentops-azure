@@ -32,8 +32,8 @@ function checkTabs(workbook) {
   }
   assert.equal(groups[0].conditionalVisibility.value, 'overview');
 }
-// Final result columns per table panel, read from the live Log Analytics query schema.
-// Update this list when a panel's projection or summarize output changes.
+// Final result columns per table panel, matching each query's terminal `project`
+// and the live Log Analytics result schema. Update both together.
 const TABLE_RESULT_COLUMNS = {
   'coverage-delivery': ['RunId', 'SourceTable', 'ReadbackRows', 'LastReadbackRow', 'ReadbackEvidence', 'UploadAcknowledgment', 'CaptureCompleteness'],
   'runs': ['TimeGenerated', 'RunId', 'SessionId', 'TraceId', 'AgentName', 'Surface', 'TaskType', 'RequestedModel', 'RecordedActualModel', 'ActualModelProvenance', 'Outcome', 'InputTokens', 'OutputTokens', 'UsageEvidence', 'EstimatedCostUsdReal', 'CostEvidence', 'TestsRan', 'TestsPassed', 'CiStatus', 'PrivacyMode', 'CaptureCompleteness', 'SchemaVersion'],
@@ -53,7 +53,10 @@ function checkTableLabels(panels) {
   assert.deepEqual(tables.map(item => item.name), Object.keys(TABLE_RESULT_COLUMNS));
   for (const { name, content } of tables) {
     const columns = TABLE_RESULT_COLUMNS[name];
-    for (const column of columns) assert.ok(content.query.includes(column), `${name}: maintained column ${column} absent from query`);
+    const stages = content.query.split('\n| ');
+    const terminal = stages.filter(stage => !/^(?:order|sort|take|top)\b/.test(stage)).at(-1);
+    assert.match(terminal, /^project [\w, ]+$/, `${name}: final result must come from an explicit terminal project`);
+    assert.deepEqual(terminal.slice('project '.length).split(/\s*,\s*/), columns, `${name}: terminal project differs from maintained result columns`);
     const labels = content.gridSettings?.labelSettings;
     assert.ok(Array.isArray(labels) && labels.length, `${name}: table must have labelSettings`);
     const ids = labels.map(label => label.columnId);
@@ -169,6 +172,18 @@ function checkEnterpriseWorkbook(workbook = JSON.parse(fs.readFileSync(WORKBOOK,
     hiddenTabs.items.find(item => item.name === 'enterprise-tab-state').content.parameters[0].value = '';
     assert.throws(() => checkEnterpriseWorkbook(hiddenTabs));
     assert.throws(() => checkEnterpriseWorkbook(contentLane));
+    const droppedOutput = structuredClone(workbook);
+    const droppedRuns = collectPanels(droppedOutput.items).find(item => item.name === 'runs').content;
+    const runStages = droppedRuns.query.split('\n| ');
+    const finalProject = runStages.findLastIndex(stage => stage.startsWith('project '));
+    runStages[finalProject] = runStages[finalProject].replace('TestsPassed, ', '');
+    droppedRuns.query = runStages.join('\n| ');
+    assert.ok(droppedRuns.query.includes('TestsPassed'), 'negative case keeps TestsPassed in the source projection');
+    assert.throws(() => checkEnterpriseWorkbook(droppedOutput), /terminal project differs/);
+    const noTerminalProject = structuredClone(workbook);
+    const health = collectPanels(noTerminalProject.items).find(item => item.name === 'health').content;
+    health.query = health.query.replace(/\n\| project Component[^\n]*/, '');
+    assert.throws(() => checkEnterpriseWorkbook(noTerminalProject), /explicit terminal project/);
     const staleLabel = structuredClone(workbook);
     collectPanels(staleLabel.items).find(item => item.name === 'coverage-delivery').content.gridSettings.labelSettings.push({ columnId: 'TimeGenerated', label: 'Time' });
     assert.throws(() => checkEnterpriseWorkbook(staleLabel), /not a result column/);
