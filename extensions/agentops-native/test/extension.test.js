@@ -159,18 +159,25 @@ test('Agent Host settings trigger a local Agent Host restart on connect and on d
   const commands = [];
   const hostEntry = { key: 'chat.agentHost.otel.enabled', ownedValue: true, hadValue: false };
   let state;
+  const messages = [];
+  const logLines = [];
   const vscode = { StatusBarAlignment: { Left: 1 }, env: {}, workspace: { isTrusted: true }, commands: { executeCommand: async id => commands.push(id) },
-    window: { createStatusBarItem: () => ({ show() {}, dispose() {} }), showInformationMessage: async () => 'Connect', showErrorMessage: async () => {} } };
+    window: { createStatusBarItem: () => ({ show() {}, dispose() {} }), showInformationMessage: async message => { messages.push(message); return 'Connect'; }, showErrorMessage: async () => {},
+      createOutputChannel: () => ({ appendLine: line => logLines.push(line), dispose() {} }) } };
   const context = { globalStorageUri: { scheme: 'file', fsPath: '/fixture' }, globalState: { get: () => ({ optedIn: false }), update: async (key, value) => { state = value; } }, environmentVariableCollection: { clear() {}, replace() {} } };
   const controller = createController(vscode, context, { env: {}, profile: { readProfileState: () => null, writeProfileState() {}, acquireProfileLease: () => ({}), releaseProfileLease() {} },
     settings: { inspectNativeStatus: () => ({ blockers: [] }),
       connectNativeSettings: async (_, options) => { options.state.settingsSnapshot = { entries: [hostEntry] }; return { connected: true, agentHostConfigured: true }; },
       disconnectNativeSettings: async (_, options) => { delete options.state.settingsSnapshot; },
       nativeTerminalEnvironment: () => ({}) },
+    reportReceipt: () => ({ nativeSpanCount: 0 }),
     startRecorder: async () => ({ endpoint: 'http://127.0.0.1:4318', receiptPath: '/fixture/r.jsonl', stop: async () => {} }) });
   await controller.connect(false);
   assert.deepEqual(commands, ['workbench.action.chat.restartLocalAgentHost']);
   assert.equal(state.optedIn, true);
+  assert.ok(logLines.some(line => /Agent Host OTel settings applied; local Agent Host restarted\. If new Copilot Chat turns add no spans, quit and reopen VS Code\./.test(line)));
+  await controller.status();
+  assert.match(messages.at(-1), /quit and reopen VS Code\. Restarting the local Agent Host reuses settings already loaded by the VS Code main process/);
   await controller.disconnect();
   assert.deepEqual(commands, ['workbench.action.chat.restartLocalAgentHost', 'workbench.action.chat.restartLocalAgentHost']);
 });

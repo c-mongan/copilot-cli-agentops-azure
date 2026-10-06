@@ -25,6 +25,12 @@ normal VS Code restart and reconnects after an earlier opt-in. A private
 profile lease allows one owner per profile. Remote and untrusted workspaces are
 blocked.
 
+When Insiders runs Chat in the local Agent Host, Connect also writes the
+`chat.agentHost.otel.*` settings and restarts the local Agent Host. That restart
+reuses the settings the VS Code main process has already loaded. If new Chat
+turns add no spans, quit and reopen VS Code. This is needed when VS Code cannot
+watch the user-data folder, for example on an external or network volume.
+
 If the pinned Collector is missing, the VSIX downloads the official release
 into private extension storage. A system `tar` program and network access to
 the official GitHub release are required for that first download.

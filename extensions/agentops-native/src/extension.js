@@ -47,6 +47,7 @@ function createController(vscode, context, deps = {}) {
     try { await vscode.commands.executeCommand('workbench.action.chat.restartLocalAgentHost'); return true; }
     catch (error) { log?.appendLine(`[${new Date().toISOString()}] Agent Host restart failed: ${error?.message || 'unknown error'}`); return false; }
   };
+  const hostRestartHint = 'If new Copilot Chat turns add no spans, quit and reopen VS Code. Restarting the local Agent Host reuses settings already loaded by the VS Code main process, which can miss changes (for example, when the user-data folder is on an external or network volume). ';
   const restore = async () => {
     const ownedHost = hostOwned();
     const result = await nativeSettings.disconnectNativeSettings(vscode, { state, persistState });
@@ -131,7 +132,7 @@ function createController(vscode, context, deps = {}) {
       }
       if (reloadRequired && result.agentHostConfigured && hostOwned()) {
         const restarted = await restartAgentHost();
-        log?.appendLine(`[${new Date().toISOString()}] Agent Host OTel settings applied; ${restarted ? 'local Agent Host restarted' : 'restart the local Agent Host or VS Code for them to take effect'}.`);
+        log?.appendLine(`[${new Date().toISOString()}] Agent Host OTel settings applied; ${restarted ? 'local Agent Host restarted' : 'restart the local Agent Host or VS Code for them to take effect'}. ${hostRestartHint.trim()}`);
       }
       context.environmentVariableCollection.persistent = false;
       for (const [key, value] of Object.entries(nativeSettings.nativeTerminalEnvironment(collector.endpoint))) context.environmentVariableCollection.replace(key, value);
@@ -177,7 +178,7 @@ function createController(vscode, context, deps = {}) {
     } catch { reportError = true; update('Collector ready; data unknown'); }
     const stages = stagesText(captureStages({ collector: { connected: true }, report, reportError, script: stageEvents.script, upload: stageEvents.upload, readback: stageEvents.readback }));
     const hostStatus = state.agentHostSupported === false ? 'Native Agent Host capture is unavailable in this client; Copilot Chat and new integrated terminals are configured. ' : '';
-    return vscode.window.showInformationMessage(`Collector is ready. ${observed} ${hostStatus}Copilot Chat export is unverified. ${reloadRequired ? 'Reload VS Code for the new Chat settings to take effect. ' : ''}Capture coverage and task success remain unknown. Restart Copilot if native settings have not taken effect. Only new integrated terminals receive the capture environment. Stages: ${stages}`);
+    return vscode.window.showInformationMessage(`Collector is ready. ${observed} ${hostStatus}Copilot Chat export is unverified. ${reloadRequired ? 'Reload VS Code for the new Chat settings to take effect. ' : ''}${hostOwned() ? hostRestartHint : ''}Capture coverage and task success remain unknown. Restart Copilot if native settings have not taken effect. Only new integrated terminals receive the capture environment. Stages: ${stages}`);
   };
 
   const openReport = async () => {
