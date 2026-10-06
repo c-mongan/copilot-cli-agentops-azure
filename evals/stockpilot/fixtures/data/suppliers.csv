@@ -1,0 +1,6 @@
+supplier_id,name,lead_time_days,reliability
+SUP-01,Cascade Distribution,7,0.95
+SUP-02,Alpine Wholesale,10,0.92
+SUP-03,Backcountry Supply Co,5,0.88
+SUP-04,Sierra Outfitters,14,0.97
+SUP-05,Granite Gear Partners,7,0.9

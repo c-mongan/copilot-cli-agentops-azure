@@ -21,6 +21,7 @@ function validateEnterprise(options = {}) {
   const grafanaBicep = repoFileText('infra/bicep/grafana.bicep', options);
   const keyVaultBicep = repoFileText('infra/bicep/key-vault.bicep', options);
   const appInsightsBicep = repoFileText('infra/bicep/app-insights.bicep', options);
+  const pilotSubscriptionBicep = repoFileText('infra/bicep/pilot-subscription.bicep', options);
   const alertsBicep = repoFileText('infra/bicep/alerts.bicep', options);
   const rbacBicep = repoFileText('infra/bicep/rbac.bicep', options);
   const budgetBicep = repoFileText('infra/bicep/budget.bicep', options);
@@ -157,6 +158,14 @@ function validateEnterprise(options = {}) {
       /WorkspaceResourceId/.test(appInsightsBicep) && /IngestionMode: 'LogAnalytics'/.test(appInsightsBicep),
       'high',
       'Application Insights is workspace-based for central query and retention control.'
+    ),
+    enterpriseCheck(
+      'pilot-provisions-workspace-app-insights',
+      /module appInsights '\.\/app-insights\.bicep'/.test(pilotSubscriptionBicep) &&
+        /workspaceResourceId: content\.outputs\.workspaceResourceId/.test(pilotSubscriptionBicep) &&
+        /telemetryContent: 'metadata-only'/.test(pilotSubscriptionBicep),
+      'high',
+      'The one-command synthetic pilot creates workspace-linked Application Insights with metadata-only tags.'
     ),
     enterpriseCheck(
       'least-privilege-rbac-module',

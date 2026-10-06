@@ -1,0 +1,7 @@
+#!/bin/sh
+if [ "$#" -eq 0 ] || [ "${1#-}" != "$1" ]; then
+  exec "$AGENTOPS_REAL_PYTHON3" "$@"
+fi
+AGENTOPS_PYTHON_WRAPPER_NAME=python3
+export AGENTOPS_PYTHON_WRAPPER_NAME
+exec "$AGENTOPS_REAL_PYTHON3" -m agentops_launcher "$@"

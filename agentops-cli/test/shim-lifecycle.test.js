@@ -59,8 +59,8 @@ test('macOS/Linux shim lifecycle installs transparent routing and restores the o
   try {
     const installed = run('scripts/install-copilot-agentops-shim.sh', ['--shadow-copilot'], env);
     assert.equal(installed.status, 0, installed.stderr || installed.stdout);
-    assert.equal(fs.realpathSync(path.join(installDir, 'agentops')), path.join(root, 'agentops-cli', 'src', 'index.js'));
-    assert.equal(fs.realpathSync(path.join(installDir, 'copilot-agentops')), path.join(root, 'scripts', 'copilot-agentops'));
+    assert.equal(fs.realpathSync.native(path.join(installDir, 'agentops')), path.join(root, 'agentops-cli', 'src', 'index.js'));
+    assert.equal(fs.realpathSync.native(path.join(installDir, 'copilot-agentops')), path.join(root, 'scripts', 'copilot-agentops'));
     const shadow = fs.readFileSync(installedCopilot, 'utf8');
     assert.match(shadow, /# AgentOps managed shadow shim/);
     assert.match(shadow, new RegExp(`COPILOT_CLI_BIN="${realCopilot.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`));

@@ -65,16 +65,28 @@ function findManagedCollectorProcess(binaryPath, configPath) {
   return findCollectorProcessByConfig(configPath, binaryPath);
 }
 
-function healthCheck(url = collectorHealthUrl, timeoutMs = 1000) {
+function healthCheck(url = collectorHealthUrl, timeoutMs = 1000, { signal } = {}) {
   return new Promise(resolve => {
-    const request = http.get(url, { timeout: timeoutMs }, response => {
-      response.resume();
-      resolve({ ok: response.statusCode >= 200 && response.statusCode < 500, statusCode: response.statusCode });
-    });
-    request.on('timeout', () => {
-      request.destroy(new Error('timeout'));
-    });
-    request.on('error', error => resolve({ ok: false, error: error.message }));
+    let request;
+    let settled = false;
+    const finish = health => {
+      if (settled) return;
+      settled = true;
+      signal?.removeEventListener('abort', onAbort);
+      request?.destroy();
+      resolve(health);
+    };
+    const onAbort = () => finish({ ok: false, error: 'aborted' });
+    if (signal?.aborted) { onAbort(); return; }
+    signal?.addEventListener('abort', onAbort, { once: true });
+    try {
+      request = http.get(url, { timeout: timeoutMs }, response => {
+        response.resume();
+        finish({ ok: response.statusCode >= 200 && response.statusCode < 500, statusCode: response.statusCode });
+      });
+      request.on('timeout', () => finish({ ok: false, error: 'timeout' }));
+      request.on('error', error => finish({ ok: false, error: error.message }));
+    } catch (error) { finish({ ok: false, error: error.message }); }
   });
 }
 
@@ -267,13 +279,29 @@ async function runtimePoisonSmoke({ privacy, findCollectorBinary } = {}) {
   }
 }
 
-function waitForHealthUrl(url, timeoutMs = 5000) {
+function waitForHealthUrl(url, timeoutMs = 5000, { signal } = {}) {
   const deadline = Date.now() + timeoutMs;
+  const requestController = new AbortController();
   return new Promise(resolve => {
+    let timer;
+    let settled = false;
+    const finish = health => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
+      requestController.abort();
+      resolve(health);
+    };
+    const onAbort = () => finish({ ok: false, error: 'aborted' });
+    if (signal?.aborted) { onAbort(); return; }
+    signal?.addEventListener('abort', onAbort, { once: true });
     const check = async () => {
-      const health = await healthCheck(url, 1000);
-      if (health.ok || Date.now() >= deadline) return resolve(health);
-      setTimeout(check, 250);
+      const remaining = Math.max(1, deadline - Date.now());
+      const health = await healthCheck(url, Math.min(1000, remaining), { signal: requestController.signal });
+      if (settled) return;
+      if (health.ok || Date.now() >= deadline) { finish(health); return; }
+      timer = setTimeout(check, Math.min(250, Math.max(1, deadline - Date.now())));
     };
     check();
   });

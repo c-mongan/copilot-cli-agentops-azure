@@ -1,0 +1,53 @@
+# StockPilot F3 "batch low-stock alerts" eval, used by experiment.yaml to
+# compare the healthy base (with notify-templates' "Batch, don't spam"
+# guidance intact) against the planted-tool-thrash variant (that guidance
+# removed) — see ../variants/planted-tool-thrash/CHANGE.md.
+#
+# agent_environment.skills is intentionally declared WITHOUT
+# notify-templates here: the experiment file's `vary: [/environment/skills]`
+# is what injects the correct (healthy or planted) notify-templates
+# directory per variant, so this base eval spec itself must not hardcode
+# either one.
+name: stockpilot-f3-batch-alerts
+description: >
+  F3 "batch low-stock alerts" task — the documented over-orchestration
+  failure mode (naive per-SKU notification loop vs. one batched call).
+type: regression
+
+defaults:
+  runs: 1
+  timeout: 3m
+  model: gpt-5.5
+  executor: copilot-sdk
+
+agent_environment:
+  skills:
+    - ../fixtures/skills/forecasting
+    - ../fixtures/skills/reorder-policy
+    - ../fixtures/skills/supplier-selection
+    - ../fixtures/skills/weekly-report
+  mcpServers:
+    stockpilot-readonly:
+      type: stdio
+      command: node
+      args:
+        - evals/stockpilot/fixtures/mcp/stockpilot-readonly.js
+      timeout: 15s
+  files:
+    - src: ../fixtures
+      dest: evals/stockpilot/fixtures
+
+stimuli:
+  - name: F3-batch-low-stock-alerts
+    prompt: >
+      Identify the most urgent low-stock SKUs and send a personalized
+      alert for each to the ops channel. Your final reply should be a
+      brief confirmation, not a repeat of the alert content.
+    constraints:
+      max_turns: 25
+      max_tool_calls: 30
+      max_wall_time: 180s
+    graders:
+      - type: output-matches
+        config:
+          pattern: '(?i)(confirmation|sent|✓)'

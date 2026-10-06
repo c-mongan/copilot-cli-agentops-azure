@@ -17,9 +17,21 @@ param retentionInDays int = 30
 @description('Tags applied to V2 ingestion resources.')
 param tags object = {}
 
+@description('Microsoft Entra object ID allowed to send metadata to the V2 DCR.')
+param ingestionPrincipalId string = ''
+
+@description('Microsoft Entra principal type for the telemetry sender.')
+@allowed([
+  'User'
+  'ServicePrincipal'
+  'Group'
+])
+param ingestionPrincipalType string = 'User'
+
 var destinationName = 'agentops-log-analytics'
 var tablePlan = 'Analytics'
 var effectiveRetentionInDays = retentionInDays < 4 ? 4 : retentionInDays
+var spansTransformKql = 'source | project TimeGenerated, RunId, SessionId, TraceId, SpanId, ParentSpanId, SpanName, OperationName, AgentName, ToolName, ToolCallId, ToolCallEvidence, ScriptName, ScriptRuntimeName=tostring(ScriptRuntimeName), ScriptRuntimeVersion=tostring(ScriptRuntimeVersion), ScriptRuntimeImplementation=tostring(ScriptRuntimeImplementation), ScriptLoaderName=tostring(ScriptLoaderName), StepName, EventName, SkillName, LinkType, Outcome, ErrorType, DurationMs, DurationNs, Model, ModelRequested, ModelActual, Provider, InputTokens, OutputTokens, CacheReadTokens, CacheWriteTokens, SchemaVersion, ParentToolCallId, McpServerName, McpToolName'
 var v2Tables = [
   {
     name: 'AgentOpsRunSummary_CL'
@@ -74,6 +86,10 @@ var v2Tables = [
       { name: 'Sequence', type: 'long' }
       { name: 'EventId', type: 'string' }
       { name: 'ParentEventId', type: 'string' }
+      { name: 'AgentId', type: 'string' }
+      { name: 'ParentAgentId', type: 'string' }
+      { name: 'ParentToolCallId', type: 'string' }
+      { name: 'ExitCode', type: 'long' }
       { name: 'RunId', type: 'string' }
       { name: 'SessionId', type: 'string' }
       { name: 'TraceId', type: 'string' }
@@ -81,15 +97,23 @@ var v2Tables = [
       { name: 'SpanName', type: 'string' }
       { name: 'Status', type: 'string' }
       { name: 'ToolName', type: 'string' }
+      { name: 'ToolCallId', type: 'string' }
       { name: 'McpServerName', type: 'string' }
       { name: 'McpToolName', type: 'string' }
       { name: 'CommandName', type: 'string' }
+      { name: 'ReferenceName', type: 'string' }
       { name: 'ScriptName', type: 'string' }
+      { name: 'ScriptRuntimeName', type: 'string' }
+      { name: 'ScriptRuntimeVersion', type: 'string' }
+      { name: 'ScriptRuntimeImplementation', type: 'string' }
+      { name: 'ScriptLoaderName', type: 'string' }
       { name: 'AgentName', type: 'string' }
       { name: 'SkillName', type: 'string' }
       { name: 'SubAgentName', type: 'string' }
       { name: 'ParentAgentName', type: 'string' }
+      { name: 'ModelRequested', type: 'string' }
       { name: 'ModelActual', type: 'string' }
+      { name: 'Provider', type: 'string' }
       { name: 'InputTokens', type: 'long' }
       { name: 'OutputTokens', type: 'long' }
       { name: 'ReasoningTokens', type: 'long' }
@@ -123,6 +147,49 @@ var v2Tables = [
       { name: 'WorkingDirectoryHash', type: 'string' }
       { name: 'Surface', type: 'string' }
       { name: 'SchemaVersion', type: 'string' }
+    ]
+  }
+  {
+    name: 'AgentOpsSpans_CL'
+    stream: 'Custom-AgentOpsSpans_CL'
+    columns: [
+      { name: 'TimeGenerated', type: 'datetime' }
+      { name: 'RunId', type: 'string' }
+      { name: 'SessionId', type: 'string' }
+      { name: 'TraceId', type: 'string' }
+      { name: 'SpanId', type: 'string' }
+      { name: 'ParentSpanId', type: 'string' }
+      { name: 'SpanName', type: 'string' }
+      { name: 'OperationName', type: 'string' }
+      { name: 'AgentName', type: 'string' }
+      { name: 'ToolName', type: 'string' }
+      { name: 'ToolCallId', type: 'string' }
+      { name: 'ToolCallEvidence', type: 'string' }
+      { name: 'ScriptName', type: 'string' }
+      { name: 'ScriptRuntimeName', type: 'string' }
+      { name: 'ScriptRuntimeVersion', type: 'string' }
+      { name: 'ScriptRuntimeImplementation', type: 'string' }
+      { name: 'ScriptLoaderName', type: 'string' }
+      { name: 'StepName', type: 'string' }
+      { name: 'EventName', type: 'string' }
+      { name: 'SkillName', type: 'string' }
+      { name: 'LinkType', type: 'string' }
+      { name: 'Outcome', type: 'string' }
+      { name: 'ErrorType', type: 'string' }
+      { name: 'DurationMs', type: 'long' }
+      { name: 'DurationNs', type: 'long' }
+      { name: 'Model', type: 'string' }
+      { name: 'ModelRequested', type: 'string' }
+      { name: 'ModelActual', type: 'string' }
+      { name: 'Provider', type: 'string' }
+      { name: 'InputTokens', type: 'long' }
+      { name: 'OutputTokens', type: 'long' }
+      { name: 'CacheReadTokens', type: 'long' }
+      { name: 'CacheWriteTokens', type: 'long' }
+      { name: 'SchemaVersion', type: 'string' }
+      { name: 'ParentToolCallId', type: 'string' }
+      { name: 'McpServerName', type: 'string' }
+      { name: 'McpToolName', type: 'string' }
     ]
   }
   {
@@ -249,6 +316,15 @@ var v2Tables = [
       { name: 'Title', type: 'string' }
       { name: 'Summary', type: 'string' }
       { name: 'SuggestedNextStep', type: 'string' }
+      { name: 'Rule', type: 'string' }
+      { name: 'ArchitectureVersion', type: 'string' }
+      { name: 'Numerator', type: 'long' }
+      { name: 'Denominator', type: 'long' }
+      { name: 'CoverageRuns', type: 'long' }
+      { name: 'Status', type: 'string' }
+      { name: 'ComponentRefs', type: 'dynamic' }
+      // Metadata only: config version, units, uncertainty, and bounded evidence IDs.
+      { name: 'Evidence', type: 'dynamic' }
       { name: 'SchemaVersion', type: 'string' }
     ]
   }
@@ -324,6 +400,9 @@ resource tables 'Microsoft.OperationalInsights/workspaces/tables@2022-10-01' = [
     schema: {
       name: table.name
       columns: table.columns
+      // Preserve the service's current table setting; omitted schemas trigger a noisy delete in what-if.
+      #disable-next-line BCP037
+      isTroubleshootingAllowed: true
     }
   }
 }]
@@ -363,12 +442,25 @@ resource rule 'Microsoft.Insights/dataCollectionRules@2022-06-01' = {
       destinations: [
         destinationName
       ]
+      transformKql: table.stream == 'Custom-AgentOpsSpans_CL' ? spansTransformKql : 'source'
       outputStream: table.stream
     }]
   }
   dependsOn: [
     tables
   ]
+}
+
+var metricsPublisherRoleDefinitionId = '3913510d-42f4-4e42-8a64-420c390055eb'
+
+resource metadataDcrSender 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (ingestionPrincipalId != '') {
+  name: guid(rule.id, ingestionPrincipalId, metricsPublisherRoleDefinitionId)
+  scope: rule
+  properties: {
+    principalId: ingestionPrincipalId
+    principalType: ingestionPrincipalType
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', metricsPublisherRoleDefinitionId)
+  }
 }
 
 output dataCollectionEndpointName string = endpoint.name

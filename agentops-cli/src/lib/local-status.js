@@ -53,7 +53,7 @@ function createLocalStatus(options = {}) {
   function shadowObservesCopilot(shadowPath) {
     if (!fs.existsSync(shadowPath)) return false;
     try {
-      const resolved = fs.realpathSync(shadowPath);
+      const resolved = fs.realpathSync.native(shadowPath);
       const marker = /(?:copilot-agentops|copilot-observe|agentops-cli[\\/].*copilot)/i;
       if (marker.test(resolved)) return true;
       const stat = fs.statSync(resolved);

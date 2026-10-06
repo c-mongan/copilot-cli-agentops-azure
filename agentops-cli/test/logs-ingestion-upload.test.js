@@ -15,6 +15,10 @@ function approvedSubscriptionSpawn(command, args) {
   return { status: 0, stdout: '11111111-1111-4111-8111-111111111111\n', stderr: '' };
 }
 
+const budgetHomes = [];
+function budgetOptions() { const home = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-test-budget-')); budgetHomes.push(home); return { agentopsHome: home, deliveryLimits: { maxPublishBytesPerDay: 1048576 } }; }
+test.after(() => budgetHomes.forEach(home => fs.rmSync(home, { recursive: true, force: true })));
+
 test('runLogsIngestionUpload converts JSONL rows, posts them, and removes the temporary payload', () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-logs-ingestion-upload-'));
   try {
@@ -31,11 +35,12 @@ test('runLogsIngestionUpload converts JSONL rows, posts them, and removes the te
       uploads: [{
         table: 'AgentOpsEvents_CL',
         file: jsonlFile,
-        uri: 'https://ingest.example/dataCollectionRules/dcr/streams/Custom-AgentOpsEvents_CL?api-version=2023-01-01',
+        uri: 'https://example.ingest.monitor.azure.com/dataCollectionRules/dcr-test/streams/Custom-AgentOpsEvents_CL?api-version=2023-01-01',
         rows: 1
       }]
     }, {
-      expectedSubscriptionId: '11111111-1111-4111-8111-111111111111',
+      ...budgetOptions(),
+    expectedSubscriptionId: '11111111-1111-4111-8111-111111111111',
       approvedSubscriptionIds: ['11111111-1111-4111-8111-111111111111'],
       spawnSync(command, args) {
         calls.push([command, args]);
@@ -76,11 +81,12 @@ test('runLogsIngestionUpload removes temporary payloads when az upload fails', (
       uploads: [{
         table: 'AgentOpsContent_CL',
         file: jsonlFile,
-        uri: 'https://ingest.example/dataCollectionRules/dcr/streams/Custom-AgentOpsContent_CL?api-version=2023-01-01',
+        uri: 'https://example.ingest.monitor.azure.com/dataCollectionRules/dcr-test/streams/Custom-AgentOpsContent_CL?api-version=2023-01-01',
         rows: 1
       }]
     }, {
-      expectedSubscriptionId: '11111111-1111-4111-8111-111111111111',
+      ...budgetOptions(),
+    expectedSubscriptionId: '11111111-1111-4111-8111-111111111111',
       approvedSubscriptionIds: ['11111111-1111-4111-8111-111111111111'],
       spawnSync(_command, args) {
         if (args[0] === 'account') return { status: 0, stdout: '11111111-1111-4111-8111-111111111111\n', stderr: '' };
@@ -107,6 +113,7 @@ test('runLogsIngestionUpload refuses Azure writes when the active subscription d
     errors: [],
     uploads: [{ table: 'AgentOpsEvents_CL', file: '/tmp/not-read', uri: 'https://example', rows: 1 }]
   }, {
+    ...budgetOptions(),
     expectedSubscriptionId: '11111111-1111-4111-8111-111111111111',
     approvedSubscriptionIds: ['11111111-1111-4111-8111-111111111111'],
     spawnSync(command, args) {
@@ -128,6 +135,7 @@ test('durable uploader targets the canonical DCR stream and refreshes an expired
   const uploader = createDurableLogsIngestionUploader({
     endpoint: 'https://example.ingest.monitor.azure.com',
     dcrImmutableId: 'dcr-immutable-safe',
+    ...budgetOptions(),
     expectedSubscriptionId: '11111111-1111-4111-8111-111111111111',
     approvedSubscriptionIds: ['11111111-1111-4111-8111-111111111111'],
     spawnSync: approvedSubscriptionSpawn,
@@ -146,12 +154,67 @@ test('durable uploader targets the canonical DCR stream and refreshes an expired
   assert.equal(requests[0].request.headers.Authorization, 'Bearer expired-token');
   assert.equal(requests[1].request.headers.Authorization, 'Bearer fresh-token');
   assert.deepEqual(JSON.parse(requests[1].request.body), [row]);
+  assert.equal(requests[1].request.redirect, 'error');
+});
+
+test('embedded token publishing needs no Azure CLI and still reserves shared bytes', async () => {
+  let requests = 0;
+  const uploader = createDurableLogsIngestionUploader({
+    authenticationMode: 'embedded',
+    ...budgetOptions(), endpoint: 'https://example.ingest.monitor.azure.com', dcrImmutableId: 'dcr-safe',
+    expectedSubscriptionId: '11111111-1111-4111-8111-111111111111',
+    approvedSubscriptionIds: ['11111111-1111-4111-8111-111111111111'],
+    spawnSync() { assert.fail('embedded publisher must not invoke az'); },
+    tokenProvider: async () => 'mock-private-token',
+    fetchImpl: async () => { requests += 1; return { status: 204 }; }
+  });
+  assert.equal((await uploader({ RunId: 'safe' }, { table: 'AgentOpsEvents_CL' })).status, 204);
+  assert.equal(requests, 1);
+});
+
+test('embedded publisher refuses ambient or denied subscription approval before auth or network', () => {
+  const id = '11111111-1111-4111-8111-111111111111';
+  const common = {
+    authenticationMode: 'embedded',
+    endpoint: 'https://example.ingest.monitor.azure.com', dcrImmutableId: 'dcr-safe',
+    tokenProvider() { assert.fail('must not authenticate'); },
+    spawnSync() { assert.fail('must not invoke az'); }, fetchImpl() { assert.fail('must not send'); },
+    env: { AGENTOPS_AZURE_SUBSCRIPTION_ID: id, AGENTOPS_APPROVED_AZURE_SUBSCRIPTION_IDS: id }
+  };
+  for (const approval of [{}, { expectedSubscriptionId: id },
+    { expectedSubscriptionId: id, approvedSubscriptionIds: [] },
+    { expectedSubscriptionId: id, approvedSubscriptionIds: ['22222222-2222-4222-8222-222222222222'] },
+    { expectedSubscriptionId: 'invalid', approvedSubscriptionIds: ['invalid'] }]) {
+    assert.throws(() => createDurableLogsIngestionUploader({ ...common, ...approval }), /subscription guard refused/);
+  }
+  assert.throws(() => createDurableLogsIngestionUploader({ ...common, tokenProvider: 'not-callable' }), /callable token provider/);
+});
+
+test('custom CLI token providers retain active subscription checks and environment approval', async () => {
+  const id = '11111111-1111-4111-8111-111111111111';
+  let checks = 0;
+  const uploader = createDurableLogsIngestionUploader({
+    ...budgetOptions(), expectedSubscriptionId: id,
+    env: { AGENTOPS_APPROVED_AZURE_SUBSCRIPTION_IDS: id },
+    endpoint: 'https://example.ingest.monitor.azure.com', dcrImmutableId: 'dcr-safe',
+    spawnSync(command, args) { checks++; return approvedSubscriptionSpawn(command, args); },
+    tokenProvider: async () => 'mock-token', fetchImpl: async () => ({ status: 204 })
+  });
+  assert.equal(checks, 1);
+  assert.equal((await uploader({ RunId: 'safe' }, { table: 'AgentOpsEvents_CL' })).status, 204);
+  assert.throws(() => createDurableLogsIngestionUploader({
+    expectedSubscriptionId: id, env: { AGENTOPS_APPROVED_AZURE_SUBSCRIPTION_IDS: id },
+    tokenProvider: async () => 'must-not-acquire',
+    spawnSync() { return { status: 0, stdout: '22222222-2222-4222-8222-222222222222' }; }
+  }), /refused the write/);
+  assert.throws(() => createDurableLogsIngestionUploader({ authenticationMode: 'unknown' }), /authentication mode is invalid/);
 });
 
 test('durable uploader fails closed on subscription mismatch and non-canonical tables', async () => {
   assert.throws(() => createDurableLogsIngestionUploader({
     endpoint: 'https://example.ingest.monitor.azure.com',
     dcrImmutableId: 'dcr-safe',
+    ...budgetOptions(),
     expectedSubscriptionId: '11111111-1111-4111-8111-111111111111',
     approvedSubscriptionIds: ['11111111-1111-4111-8111-111111111111'],
     spawnSync() {
@@ -162,6 +225,7 @@ test('durable uploader fails closed on subscription mismatch and non-canonical t
   const uploader = createDurableLogsIngestionUploader({
     endpoint: 'https://example.ingest.monitor.azure.com',
     dcrImmutableId: 'dcr-safe',
+    ...budgetOptions(),
     expectedSubscriptionId: '11111111-1111-4111-8111-111111111111',
     approvedSubscriptionIds: ['11111111-1111-4111-8111-111111111111'],
     spawnSync: approvedSubscriptionSpawn,
@@ -174,6 +238,7 @@ test('durable uploader fails closed on subscription mismatch and non-canonical t
 test('durable uploader rejects token-exfiltration endpoints and malformed DCR IDs', () => {
   const common = {
     dcrImmutableId: 'dcr-safe',
+    ...budgetOptions(),
     expectedSubscriptionId: '11111111-1111-4111-8111-111111111111',
     approvedSubscriptionIds: ['11111111-1111-4111-8111-111111111111'],
     spawnSync: approvedSubscriptionSpawn
@@ -202,6 +267,7 @@ test('durable uploader applies a bounded timeout and cancels response bodies', a
     endpoint: 'https://example.ingest.monitor.azure.com',
     dcrImmutableId: 'dcr-safe',
     timeoutMs: 1234,
+    ...budgetOptions(),
     expectedSubscriptionId: '11111111-1111-4111-8111-111111111111',
     approvedSubscriptionIds: ['11111111-1111-4111-8111-111111111111'],
     spawnSync: approvedSubscriptionSpawn,
@@ -219,8 +285,35 @@ test('durable uploader applies a bounded timeout and cancels response bodies', a
     endpoint: 'https://example.ingest.monitor.azure.com',
     dcrImmutableId: 'dcr-safe',
     timeoutMs: 120001,
+    ...budgetOptions(),
     expectedSubscriptionId: '11111111-1111-4111-8111-111111111111',
     approvedSubscriptionIds: ['11111111-1111-4111-8111-111111111111'],
     spawnSync: approvedSubscriptionSpawn
   }), /timeoutMs/);
+});
+
+test('Azure CLI conservative reservation covers stdlib Python serialization across Unicode and numeric extremes', () => {
+  const { azureCliPayloadUpperBound } = require('../src/lib/azure/logs-ingestion-upload');
+  const { spawnSync } = require('node:child_process');
+  const fixtures = [
+    [{ text: '\x7f'.repeat(100) }],
+    [{ Label: 'é 🚀 中文', Escaped: '\\"\n\t', Value: 1e-7 }],
+    { nested: [null, true, false, { empty: '', key: '😀' }] },
+    [Number.MIN_VALUE, Number.MAX_VALUE, -Number.MAX_VALUE, 1e-6, 1e-7, 1e20, 1e21, -0, 1.2345678901234567],
+    Array.from({ length: 500 }, (_, index) => ({ [`é${index}`]: index / 13, unicode: '🚀é' }))
+  ];
+  const result = spawnSync('python3', ['-c', 'import json,sys; print(json.dumps([len(json.dumps(json.loads(item)).encode("utf-8")) for item in json.load(sys.stdin)]))'], { input: JSON.stringify(fixtures.map(JSON.stringify)), encoding: 'utf8', env: { ...process.env, PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8' } });
+  assert.equal(result.status, 0, result.stderr);
+  const actualBytes = JSON.parse(result.stdout);
+  fixtures.forEach((fixture, index) => assert.ok(azureCliPayloadUpperBound(JSON.stringify(fixture)) >= actualBytes[index], `fixture ${index} undercounted`));
+});
+
+test('direct uploader rejects non-Azure token destinations before any publishing attempt', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-endpoint-'));
+  try {
+    const file = path.join(tempDir, 'rows.jsonl'); fs.writeFileSync(file, '{"RunId":"fixture"}\n');
+    const calls = [];
+    assert.throws(() => runLogsIngestionUpload({ ok: true, errors: [], uploads: [{ table: 'AgentOpsEvents_CL', file, uri: 'https://evil.example/dataCollectionRules/dcr-test/streams/Custom-AgentOpsEvents_CL?api-version=2023-01-01' }] }, { agentopsHome: path.join(tempDir, 'home'), deliveryLimits: { maxPublishBytesPerDay: 1048576 }, expectedSubscriptionId: '11111111-1111-4111-8111-111111111111', approvedSubscriptionIds: ['11111111-1111-4111-8111-111111111111'], spawnSync(_command, args) { calls.push(args); return { status: 0, stdout: '11111111-1111-4111-8111-111111111111' }; } }), /Azure public Monitor ingestion endpoint/);
+    assert.equal(calls.some(args => args[0] === 'rest'), false);
+  } finally { fs.rmSync(tempDir, { recursive: true, force: true }); }
 });

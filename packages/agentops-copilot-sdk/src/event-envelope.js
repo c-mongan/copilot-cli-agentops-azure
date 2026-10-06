@@ -4,7 +4,8 @@ const safeEventFields = new Set([
   'TimeGenerated', 'Sequence', 'EventId', 'ParentEventId', 'RunId', 'SessionId',
   'TraceId', 'Surface', 'SchemaVersion', 'EventName', 'SpanName', 'Status',
   'AgentName', 'ParentAgentName', 'SubAgentName', 'SkillName', 'ToolName',
-  'McpServerName', 'McpToolName', 'ModelActual', 'InputTokens', 'OutputTokens',
+  'McpServerName', 'McpToolName', 'ModelRequested', 'ModelActual', 'Provider',
+  'InputTokens', 'OutputTokens',
   'ReasoningTokens', 'CacheReadTokens', 'CacheWriteTokens', 'TotalTokens',
   'TotalToolCalls', 'CopilotCost', 'EstimatedCostUsd', 'DurationMs',
   'PermissionKind', 'PermissionDecision', 'ErrorType', 'PremiumRequests',
@@ -15,6 +16,25 @@ const safeEventFields = new Set([
   'PromptSizeBytes', 'ArgsSchemaHash', 'ArgsSizeBytes', 'ResultSizeBytes',
   'ErrorSizeBytes'
 ]);
+
+// Model and provider identifiers are free-form upstream; admit only short identifier shapes so
+// URLs, credentials, or key=value payloads cannot ride out under metadata field names.
+const modelIdentifierPattern = /^[A-Za-z0-9][A-Za-z0-9._:+\/-]{0,127}$/;
+const providerIdentifierPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+const credentialHintPattern = /(?:api[_-]?key|token|secret|password|bearer|sig=)/i;
+
+function safeIdentifier(value, pattern) {
+  if (typeof value !== 'string') return undefined;
+  const text = value.trim();
+  if (!pattern.test(text) || text.includes('://') || text.includes('//') || credentialHintPattern.test(text)) return undefined;
+  return text;
+}
+
+const identifierFields = {
+  ModelRequested: modelIdentifierPattern,
+  ModelActual: modelIdentifierPattern,
+  Provider: providerIdentifierPattern
+};
 
 const otelAttributeMap = {
   RunId: 'agentops.run.id', SessionId: 'agentops.session.id', Surface: 'agentops.surface',
@@ -27,7 +47,8 @@ const otelAttributeMap = {
   AgentName: 'agentops.agent.name', ParentAgentName: 'agentops.parent_agent.name',
   SubAgentName: 'agentops.sub_agent.name', SkillName: 'agentops.skill.name',
   ToolName: 'gen_ai.tool.name', McpServerName: 'agentops.mcp.server', McpToolName: 'agentops.mcp.tool',
-  ModelActual: 'gen_ai.response.model', InputTokens: 'gen_ai.usage.input_tokens',
+  ModelRequested: 'gen_ai.request.model', ModelActual: 'gen_ai.response.model', Provider: 'gen_ai.provider.name',
+  InputTokens: 'gen_ai.usage.input_tokens',
   OutputTokens: 'gen_ai.usage.output_tokens', ReasoningTokens: 'gen_ai.usage.reasoning.output_tokens',
   CacheReadTokens: 'gen_ai.usage.cache_read.input_tokens', CacheWriteTokens: 'gen_ai.usage.cache_creation.input_tokens',
   TotalTokens: 'gen_ai.usage.total_tokens', TotalToolCalls: 'agentops.tools.count',
@@ -65,6 +86,9 @@ function createSafeEventNormalizer(options = {}) {
       EventName: name,
       SpanName: String(source.SpanName || name).slice(0, 200)
     };
+    for (const [field, pattern] of Object.entries(identifierFields)) {
+      if (field in normalized) normalized[field] = safeIdentifier(normalized[field], pattern);
+    }
     return Object.fromEntries(Object.entries(normalized).filter(([key, value]) => (
       safeEventFields.has(key) && value !== undefined && value !== null
     )));

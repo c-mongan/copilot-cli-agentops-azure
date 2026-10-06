@@ -1,11 +1,42 @@
 const childProcess = require('node:child_process');
+const crypto = require('node:crypto');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const { writeJsonFile } = require('./command-output');
 const { readJson } = require('./json');
 const { defaultUserAgentOpsPath } = require('./paths');
 
 const defaultConfigPath = process.env.AGENTOPS_CONFIG_PATH || defaultUserAgentOpsPath('config.json');
+
+function projectRootFor(cwd = process.cwd()) {
+  let current;
+  try {
+    current = fs.realpathSync.native(path.resolve(cwd));
+  } catch {
+    return '';
+  }
+  while (true) {
+    if (fs.existsSync(path.join(current, '.git'))) return current;
+    const parent = path.dirname(current);
+    if (parent === current) return '';
+    current = parent;
+  }
+}
+
+function projectAgentOpsConfigPath(options = {}) {
+  const root = projectRootFor(options.cwd || process.cwd());
+  if (!root) return '';
+  const homeDir = options.homeDir || os.homedir();
+  const agentOpsHome = options.agentOpsHome || process.env.AGENTOPS_HOME || defaultUserAgentOpsPath('', homeDir);
+  const projectId = crypto.createHash('sha256').update(root).digest('hex').slice(0, 24);
+  return path.join(agentOpsHome, 'projects', `${projectId}.json`);
+}
+
+function normalizeRuntimeLabel(value) {
+  const label = typeof value === 'string' ? value.trim() : '';
+  return /^[A-Za-z0-9][A-Za-z0-9._+@-]{0,63}$/.test(label) ? label : '';
+}
 
 function normalizeAgentOpsConfig(raw = {}) {
   return {
@@ -20,7 +51,10 @@ function normalizeAgentOpsConfig(raw = {}) {
     agentsViewUrl: raw.agentsViewUrl || raw.azureAgentsUrl || raw.AGENTOPS_AZURE_AGENTS_URL || '',
     logsIngestionEndpoint: raw.logsIngestionEndpoint || raw.AGENTOPS_LOGS_INGESTION_ENDPOINT || '',
     dcrImmutableId: raw.dcrImmutableId || raw.AGENTOPS_DCR_IMMUTABLE_ID || '',
-    portalLogsUrl: raw.portalLogsUrl || raw.AGENTOPS_AZURE_PORTAL_LOGS_URL || ''
+    portalLogsUrl: raw.portalLogsUrl || raw.AGENTOPS_AZURE_PORTAL_LOGS_URL || '',
+    pythonRuntime: normalizeRuntimeLabel(raw.pythonRuntime || raw.AGENTOPS_PYTHON_RUNTIME),
+    nodeRuntime: normalizeRuntimeLabel(raw.nodeRuntime || raw.AGENTOPS_NODE_RUNTIME),
+    typescriptLoader: normalizeRuntimeLabel(raw.typescriptLoader || raw.AGENTOPS_TYPESCRIPT_LOADER)
   };
 }
 
@@ -47,11 +81,18 @@ function readAgentOpsConfig(options = {}) {
 }
 
 function writeAgentOpsConfig(values, options = {}) {
-  const configPath = options.configPath || defaultConfigPath;
+  const configPath = options.scope === 'project'
+    ? projectAgentOpsConfigPath(options)
+    : (options.configPath || defaultConfigPath);
+  if (!configPath) throw new Error('Project-scoped AgentOps config requires a directory inside a Git repository.');
   const existing = readAgentOpsConfig({ configPath, quiet: true }).values;
   const next = compactConfig({ ...existing, ...values });
   if (!options.dryRun) {
     writeJsonFile(configPath, next);
+    if (options.scope === 'project') {
+      fs.chmodSync(path.dirname(configPath), 0o700);
+      fs.chmodSync(configPath, 0o600);
+    }
   }
   return { path: configPath, exists: true, values: next, dryRun: Boolean(options.dryRun) };
 }
@@ -100,17 +141,26 @@ function parseConfigureSetArgs(args) {
     '--agents-url': 'agentsViewUrl',
     '--logs-ingestion-endpoint': 'logsIngestionEndpoint',
     '--dcr-immutable-id': 'dcrImmutableId',
-    '--portal-logs-url': 'portalLogsUrl'
+    '--portal-logs-url': 'portalLogsUrl',
+    '--python-runtime': 'pythonRuntime',
+    '--node-runtime': 'nodeRuntime',
+    '--typescript-loader': 'typescriptLoader'
   };
   const values = {};
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
-    if (arg === '--json' || arg === '--dry-run') continue;
+    if (arg === '--json' || arg === '--dry-run' || arg === '--project' || arg === '--user') continue;
     const key = map[arg];
     if (!key) throw new Error(`Unknown configure set option: ${arg}`);
     if (!args[index + 1]) throw new Error(`${arg} requires a value`);
     values[key] = args[index + 1];
     index += 1;
+  }
+  for (const key of ['pythonRuntime', 'nodeRuntime', 'typescriptLoader']) {
+    if (values[key] !== undefined && !normalizeRuntimeLabel(values[key])) {
+      const flag = key === 'pythonRuntime' ? '--python-runtime' : key === 'nodeRuntime' ? '--node-runtime' : '--typescript-loader';
+      throw new Error(`${flag} requires a short label using letters, numbers, dot, underscore, plus, at sign, or hyphen; do not enter a path or command arguments`);
+    }
   }
   return compactConfig(values);
 }
@@ -119,23 +169,37 @@ function parseConfigureArgs(args) {
   const subcommandIndex = args.findIndex(arg => !arg.startsWith('--'));
   const subcommand = subcommandIndex === -1 ? 'show' : args[subcommandIndex];
   const subcommandArgs = subcommandIndex === -1 ? args : args.slice(subcommandIndex + 1);
+  if (args.includes('--project') && args.includes('--user')) {
+    throw new Error('--project and --user cannot be combined');
+  }
   return {
     subcommand,
     json: args.includes('--json'),
     dryRun: args.includes('--dry-run'),
+    scope: args.includes('--project') ? 'project' : (args.includes('--user') ? 'user' : undefined),
     values: subcommand === 'set' ? parseConfigureSetArgs(subcommandArgs) : {}
   };
 }
 
 function agentopsConfigure(options = {}) {
-  const configPath = options.configPath || defaultConfigPath;
   const subcommand = options.subcommand || 'show';
+  const projectConfigPath = projectAgentOpsConfigPath(options);
+  const autoProjectShow = subcommand === 'show'
+    && options.scope !== 'user'
+    && !process.env.AGENTOPS_CONFIG_PATH
+    && projectConfigPath
+    && fs.existsSync(projectConfigPath);
+  const scope = options.scope === 'project' || autoProjectShow ? 'project' : 'user';
+  const configPath = scope === 'project'
+    ? projectConfigPath
+    : (options.configPath || defaultConfigPath);
+  if (!configPath) throw new Error('Project-scoped AgentOps config requires a directory inside a Git repository.');
   if (subcommand === 'show') {
-    return { action: 'show', ...readAgentOpsConfig({ configPath }) };
+    return { action: 'show', scope, ...readAgentOpsConfig({ configPath }) };
   }
   if (subcommand === 'set') {
     if (Object.keys(options.values || {}).length === 0) throw new Error('configure set requires at least one value');
-    return { action: 'set', ...writeAgentOpsConfig(options.values, { configPath, dryRun: options.dryRun }) };
+    return { action: 'set', scope, ...writeAgentOpsConfig(options.values, { configPath, scope, cwd: options.cwd, homeDir: options.homeDir, agentOpsHome: options.agentOpsHome, dryRun: options.dryRun }) };
   }
   if (subcommand === 'import-azd') {
     const spawnSync = options.spawnSync || childProcess.spawnSync;
@@ -144,22 +208,35 @@ function agentopsConfigure(options = {}) {
       maxBuffer: 1024 * 1024
     });
     if (result.error) {
-      return { action: 'import-azd', path: configPath, ok: false, error: result.error.message };
+      return { action: 'import-azd', scope, path: configPath, ok: false, error: result.error.message };
     }
     if (result.status !== 0) {
-      return { action: 'import-azd', path: configPath, ok: false, error: (result.stderr || result.stdout || `azd exited with status ${result.status}`).trim() };
+      return { action: 'import-azd', scope, path: configPath, ok: false, error: (result.stderr || result.stdout || `azd exited with status ${result.status}`).trim() };
     }
     const values = configFromEnvValues(parseEnvAssignments(result.stdout));
     if (Object.keys(values).length === 0) {
-      return { action: 'import-azd', path: configPath, ok: false, error: 'azd env get-values did not include AgentOps configuration values' };
+      return { action: 'import-azd', scope, path: configPath, ok: false, error: 'azd env get-values did not include AgentOps configuration values' };
     }
-    return { action: 'import-azd', ok: true, ...writeAgentOpsConfig(values, { configPath, dryRun: options.dryRun }) };
+    return {
+      action: 'import-azd',
+      scope,
+      ok: true,
+      ...writeAgentOpsConfig(values, {
+        configPath,
+        scope,
+        cwd: options.cwd,
+        homeDir: options.homeDir,
+        agentOpsHome: options.agentOpsHome,
+        dryRun: options.dryRun
+      })
+    };
   }
   throw new Error('configure requires show, set, or import-azd');
 }
 
 function renderConfigure(result) {
   const lines = ['AgentOps config', '', `Path: ${result.path}`];
+  if (result.scope) lines.push(`Scope: ${result.scope}`);
   if (result.error) lines.push(`Status: ${result.error}`);
   if (result.dryRun) lines.push('Mode: dry-run');
   const values = result.values || {};
@@ -175,7 +252,10 @@ function renderConfigure(result) {
     ['agentsViewUrl', 'Azure Monitor Agents URL'],
     ['logsIngestionEndpoint', 'Logs ingestion endpoint'],
     ['dcrImmutableId', 'DCR immutable ID'],
-    ['portalLogsUrl', 'Portal logs URL']
+    ['portalLogsUrl', 'Portal logs URL'],
+    ['pythonRuntime', 'Python runtime label'],
+    ['nodeRuntime', 'Node runtime label'],
+    ['typescriptLoader', 'TypeScript loader label']
   ];
   for (const [key, label] of labels) {
     lines.push(`${label}: ${values[key] || 'not set'}`);
@@ -188,7 +268,14 @@ function renderConfigure(result) {
 
 function configuredCloudValues(options = {}) {
   const env = options.env || process.env;
-  const config = options.config || readAgentOpsConfig({ configPath: options.configPath, quiet: true }).values;
+  const userConfig = options.config || readAgentOpsConfig({ configPath: options.configPath, quiet: true }).values;
+  const projectConfigPath = options.projectConfigPath || projectAgentOpsConfigPath(options);
+  const scopedProjectConfig = !options.config && !options.disableProjectConfig && !env.AGENTOPS_CONFIG_PATH && projectConfigPath
+    ? readAgentOpsConfig({ configPath: projectConfigPath, quiet: true })
+    : null;
+  // A project config is a target boundary: omitted project fields must not
+  // silently inherit resource names or workspace IDs from another project.
+  const config = scopedProjectConfig?.exists ? scopedProjectConfig.values : options.projectOnly ? {} : userConfig;
   const defaults = options.defaults || {};
   const optionValueOr = (key, ...values) => {
     if (Object.prototype.hasOwnProperty.call(options, key)) return options[key];
@@ -220,6 +307,8 @@ module.exports = {
   parseConfigureArgs,
   parseConfigureSetArgs,
   parseEnvAssignments,
+  projectAgentOpsConfigPath,
+  projectRootFor,
   readAgentOpsConfig,
   renderConfigure,
   writeAgentOpsConfig

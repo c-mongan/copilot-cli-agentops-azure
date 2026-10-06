@@ -1,0 +1,11 @@
+title = "AgentOps repository secret scan"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Graphify writes this ignored cache from source-file hashes; scanning it can produce generic-key false positives."
+paths = [
+  '''(^|/)graphify-out/''',
+  '''^\.refs/'''
+]

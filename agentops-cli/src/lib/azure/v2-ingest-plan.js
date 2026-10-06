@@ -17,6 +17,7 @@ const {
 const requiredColumns = {
   AgentOpsRunSummary_CL: ['TimeGenerated', 'RunId', 'SessionId', 'TraceId', 'OutcomeStatus'],
   AgentOpsEvents_CL: ['TimeGenerated', 'RunId', 'SessionId', 'EventName'],
+  AgentOpsSpans_CL: ['TimeGenerated', 'RunId', 'SessionId', 'TraceId', 'SpanId', 'SpanName', 'LinkType', 'Outcome'],
   AgentOpsToolCalls_CL: ['RunId', 'ToolName', 'Status'],
   AgentOpsMcpCalls_CL: ['RunId', 'McpServerHash', 'ToolName', 'ToolRisk'],
   AgentOpsPrivacy_CL: ['RunId', 'ContentKind', 'Action', 'DroppedCount'],
@@ -40,7 +41,8 @@ const optionalEmptyTables = new Set([
   'AgentOpsRecommendations_CL',
   'AgentOpsSavedViews_CL',
   'AgentOpsCollectorHealth_CL',
-  'AgentOpsContent_CL'
+  'AgentOpsContent_CL',
+  'AgentOpsSpans_CL'
 ]);
 
 const logsIngestionResource = 'https://monitor.azure.com/';
@@ -160,14 +162,17 @@ function validateTable(table, dir, options = {}) {
   };
 }
 
-function buildAzureIngestPlan({ dir, allowContent = false } = {}) {
+function buildAzureIngestPlan({ dir, allowContent = false, contentOnly = false, spansOnly = false, eventsOnly = false } = {}) {
   const absoluteDir = path.resolve(dir);
   const errors = [];
   const warnings = [];
   const tables = {};
   const leaks = [];
 
-  for (const table of tableNames) {
+  const selectedModes = [contentOnly, spansOnly, eventsOnly].filter(Boolean).length;
+  if (selectedModes > 1) errors.push('--content-only, --spans-only, and --events-only cannot be combined');
+  if (contentOnly && !allowContent) errors.push('content-only ingestion requires --allow-content');
+  for (const table of contentOnly ? ['AgentOpsContent_CL'] : spansOnly ? ['AgentOpsSpans_CL'] : eventsOnly ? ['AgentOpsEvents_CL'] : tableNames) {
     const result = validateTable(table, absoluteDir, { allowContent });
     tables[table] = {
       file: result.file,
@@ -192,7 +197,7 @@ function buildAzureIngestPlan({ dir, allowContent = false } = {}) {
     errors.push('AgentOpsContent_CL has rows; rerun with --allow-content only for an explicitly approved content-capture workspace');
   }
 
-  const requiredRows = ['AgentOpsRunSummary_CL', 'AgentOpsEvents_CL'];
+  const requiredRows = contentOnly ? ['AgentOpsContent_CL'] : spansOnly ? ['AgentOpsSpans_CL'] : eventsOnly ? ['AgentOpsEvents_CL'] : ['AgentOpsRunSummary_CL', 'AgentOpsEvents_CL'];
   for (const table of requiredRows) {
     if ((tables[table]?.rows || 0) === 0) errors.push(`${table}: required table has no rows`);
   }
@@ -248,13 +253,34 @@ function buildLogsIngestionUploadPlan({
   endpoint,
   dcrImmutableId,
   allowContent = false,
+  contentOnly = false,
+  spansOnly = false,
+  eventsOnly = false,
   apiVersion = '2023-01-01'
 } = {}) {
-  const ingestPlan = buildAzureIngestPlan({ dir, allowContent });
+  const ingestPlan = buildAzureIngestPlan({ dir, allowContent, contentOnly, spansOnly, eventsOnly });
   const normalizedEndpoint = normalizeLogsEndpoint(endpoint);
   const immutableId = String(dcrImmutableId || '').trim();
   const errors = [...ingestPlan.errors];
   const uploads = [];
+
+  if (contentOnly || spansOnly || eventsOnly) {
+    let parsed;
+    try { parsed = new URL(normalizedEndpoint); } catch { /* reported below */ }
+    if (!parsed || parsed.protocol !== 'https:' || !parsed.hostname.toLowerCase().endsWith('.ingest.monitor.azure.com')
+      || parsed.username || parsed.password || parsed.search || parsed.hash || (parsed.pathname !== '/' && parsed.pathname !== '')) {
+      errors.push(`${contentOnly ? 'content-only' : spansOnly ? 'span-only' : 'events-only'} upload requires an Azure public Monitor ingestion endpoint with no credentials or path`);
+    }
+    if (!/^dcr-[A-Za-z0-9-]+$/.test(immutableId)) {
+      errors.push(`${contentOnly ? 'content-only' : spansOnly ? 'span-only' : 'events-only'} upload requires a valid DCR immutable ID`);
+    }
+    const selectedTable = contentOnly ? 'AgentOpsContent_CL' : spansOnly ? 'AgentOpsSpans_CL' : 'AgentOpsEvents_CL';
+    const selectedFile = ingestPlan.tables[selectedTable]?.file;
+    const uploadKind = contentOnly ? 'content-only' : spansOnly ? 'span-only' : 'events-only';
+    if (selectedFile && fs.existsSync(selectedFile) && fs.statSync(selectedFile).size > 1024 * 1024) {
+      errors.push(`${uploadKind} upload is limited to 1 MiB per reviewed batch`);
+    }
+  }
 
   if (!normalizedEndpoint) errors.push('logs-upload requires --endpoint <logs-ingestion-endpoint>');
   if (!immutableId) errors.push('logs-upload requires --dcr-immutable-id <immutable-id>');
@@ -293,6 +319,9 @@ function buildLogsIngestionUploadPlan({
   return {
     schema_version: 'agentops.logs-ingestion-upload-plan.v1',
     mode: 'dry-run-unless---yes',
+    content_only: contentOnly,
+    spans_only: spansOnly,
+    events_only: eventsOnly,
     ok: errors.length === 0,
     dir: ingestPlan.dir,
     endpoint: normalizedEndpoint || null,

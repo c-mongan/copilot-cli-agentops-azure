@@ -1,8 +1,39 @@
+// Every KQL builder in this file targets AZURE MONITOR LOGS (a Log Analytics
+// workspace), queried through the `AppDependencies`/`AppTraces`/`AppEvents`/
+// `AppMetrics` App Insights tables. That is a different product, endpoint and
+// identifier shape from AZURE DATA EXPLORER (ADX) Kusto clusters/databases,
+// even though both use the Kusto Query Language and so can look identical as
+// raw KQL text. A Log Analytics workspace ID is a GUID, not a Kusto cluster
+// URI, and the table names above do not exist in an ADX database. A
+// configured MCP server merely being named or labelled "Kusto" does NOT
+// establish that it can run a Log Analytics query, or that it is pointed at
+// this workspace at all — callers must verify the actual configured
+// endpoint/operation before trusting one of these canned queries to run
+// against it. `logAnalyticsTargetWarning` below is a cheap, local sanity
+// check against that specific failure mode (an obviously ADX-shaped target
+// where a Log Analytics workspace GUID is expected) — it is not capability
+// negotiation with the MCP server, which would be disproportionate here.
 const fs = require('node:fs');
 const path = require('node:path');
 const { repoRoot } = require('./paths');
 const { escapeKqlString, validateKqlDuration } = require('./kql');
 const { contentLikeKeys, safeAttributeKeys } = require('./privacy');
+
+const logAnalyticsWorkspaceIdPattern = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
+function logAnalyticsTargetWarning(workspaceId) {
+  const value = String(workspaceId || '').trim();
+  if (!value) {
+    return 'No Log Analytics workspace ID is configured. These queries target Azure Monitor Logs (a Log Analytics workspace), not an Azure Data Explorer Kusto cluster, and cannot run without one.';
+  }
+  if (/kusto\.windows\.net/i.test(value) || /^https?:\/\//i.test(value)) {
+    return `Configured target "${value}" looks like an Azure Data Explorer Kusto cluster URI, not a Log Analytics workspace ID. These queries read Azure Monitor Logs tables (AppDependencies/AppTraces/AppEvents/AppMetrics) via a Log Analytics workspace GUID, not an ADX cluster endpoint. Verify the configured MCP server/endpoint actually exposes Log Analytics query access before trusting this query to run.`;
+  }
+  if (!logAnalyticsWorkspaceIdPattern.test(value)) {
+    return `Configured target "${value}" does not look like a Log Analytics workspace ID (expected a GUID). Verify the configured MCP server/endpoint is actually an Azure Monitor Logs workspace, not an Azure Data Explorer Kusto database, before trusting this query to run.`;
+  }
+  return null;
+}
 
 const agentServiceNames = '("github-copilot", "copilot-chat", "github-copilot-cli", "codex", "openai-codex", "openai-codex-cli")';
 const baseFilter = `(Properties has "github.copilot" or Properties has "gen_ai.operation.name" or Properties has "agentops." or AppRoleName in ${agentServiceNames} or tostring(Properties["service.name"]) in ${agentServiceNames} or tostring(Properties["agent.runtime"]) in ("codex", "openai-codex-cli"))`;
@@ -74,18 +105,22 @@ function grafanaUrlWithVars(baseUrl, vars = {}) {
 }
 
 function sessionQuery(conversation, last = '24h') {
-  const escaped = conversation.replace(/"/g, '\\"');
-  return `let selected_session = "${escaped}";\nlet base = AppDependencies\n| where TimeGenerated > ago(${last})\n| where ${baseFilter}\n| extend direct_session=${directSessionKey}, fallback_session=${fallbackSessionKey};\nlet selected_operations = base\n| where direct_session == selected_session or fallback_session == selected_session\n| distinct OperationId;\nbase\n| extend linked_to_selected = OperationId in (selected_operations)\n| where direct_session == selected_session or fallback_session == selected_session or linked_to_selected\n| extend conversation=iff(linked_to_selected, selected_session, iff(isnotempty(direct_session), direct_session, fallback_session)), operation=tostring(Properties["gen_ai.operation.name"]), model=tostring(Properties["gen_ai.request.model"]), tool=tostring(Properties["gen_ai.tool.name"]), error=tostring(Properties["error.type"])\n| project TimeGenerated, conversation, OperationId, ParentId, Id, Name, operation, model, tool, DurationMs, Success, ResultCode, error, Properties\n| order by TimeGenerated asc`;
+  const escaped = escapeKqlString(conversation);
+  const lookback = validateKqlDuration(last);
+  return `let selected_session = "${escaped}";\nlet base = AppDependencies\n| where TimeGenerated > ago(${lookback})\n| where ${baseFilter}\n| extend direct_session=${directSessionKey}, fallback_session=${fallbackSessionKey};\nlet selected_operations = base\n| where direct_session == selected_session or fallback_session == selected_session\n| distinct OperationId;\nbase\n| extend linked_to_selected = OperationId in (selected_operations)\n| where direct_session == selected_session or fallback_session == selected_session or linked_to_selected\n| extend conversation=iff(linked_to_selected, selected_session, iff(isnotempty(direct_session), direct_session, fallback_session)), operation=tostring(Properties["gen_ai.operation.name"]), model=tostring(Properties["gen_ai.request.model"]), model_actual=tostring(Properties["gen_ai.response.model"]), provider=tostring(Properties["gen_ai.provider.name"]), tool=tostring(Properties["gen_ai.tool.name"]), tool_call_id=tostring(Properties["gen_ai.tool.call.id"]), error=tostring(Properties["error.type"]), input_tokens=tolong(Properties["gen_ai.usage.input_tokens"]), output_tokens=tolong(Properties["gen_ai.usage.output_tokens"]), cache_read_tokens=tolong(Properties["gen_ai.usage.cache_read.input_tokens"]), cache_write_tokens=tolong(Properties["gen_ai.usage.cache_creation.input_tokens"])\n| project TimeGenerated, conversation, OperationId, ParentId, Id, operation, model, model_actual, provider, tool, tool_call_id, DurationMs, Success, ResultCode, error, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens\n| order by TimeGenerated asc\n| take 200`;
 }
 
 function traceQuery(operationId, last = '24h') {
-  return `AppDependencies\n| where TimeGenerated > ago(${last})\n| where ${baseFilter}\n| where OperationId == "${operationId.replace(/"/g, '\\"')}"\n| extend conversation=${sessionKey}, operation=tostring(Properties["gen_ai.operation.name"]), model=tostring(Properties["gen_ai.request.model"]), tool=tostring(Properties["gen_ai.tool.name"]), error=tostring(Properties["error.type"])\n| project TimeGenerated, conversation, OperationId, ParentId, Id, Name, operation, model, tool, DurationMs, Success, ResultCode, error, Properties\n| order by TimeGenerated asc`;
+  const escaped = escapeKqlString(operationId);
+  const lookback = validateKqlDuration(last);
+  return `AppDependencies\n| where TimeGenerated > ago(${lookback})\n| where ${baseFilter}\n| where OperationId == "${escaped}"\n| extend conversation=${sessionKey}, operation=tostring(Properties["gen_ai.operation.name"]), model=tostring(Properties["gen_ai.request.model"]), model_actual=tostring(Properties["gen_ai.response.model"]), provider=tostring(Properties["gen_ai.provider.name"]), tool=tostring(Properties["gen_ai.tool.name"]), tool_call_id=tostring(Properties["gen_ai.tool.call.id"]), error=tostring(Properties["error.type"]), input_tokens=tolong(Properties["gen_ai.usage.input_tokens"]), output_tokens=tolong(Properties["gen_ai.usage.output_tokens"]), cache_read_tokens=tolong(Properties["gen_ai.usage.cache_read.input_tokens"]), cache_write_tokens=tolong(Properties["gen_ai.usage.cache_creation.input_tokens"])\n| project TimeGenerated, conversation, OperationId, ParentId, Id, operation, model, model_actual, provider, tool, tool_call_id, DurationMs, Success, ResultCode, error, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens\n| order by TimeGenerated asc\n| take 200`;
 }
 
 function fieldCatalogQuery(last = '7d') {
+  const lookback = validateKqlDuration(last);
   const contentKeys = contentLikeKeys.map(key => JSON.stringify(key)).join(', ');
   const safeKeys = safeAttributeKeys.map(key => JSON.stringify(key)).join(', ');
-  return `let exact_content_keys = dynamic([${contentKeys}]);\nlet known_safe_keys = dynamic([${safeKeys}]);\nAppDependencies\n| where TimeGenerated > ago(${last})\n| where ${baseFilter}\n| extend fields = bag_keys(Properties)\n| mv-expand field = fields to typeof(string)\n| extend value = tostring(Properties[field])\n| summarize observed=count(), example_values=make_set_if(value, isnotempty(value), 5) by field\n| extend content_risk = case(field in (exact_content_keys), "exact-content-key", field !in (known_safe_keys) and field matches regex "(?i)(prompt|completion|message|instruction|argument|result|body|secret|password|credential|cookie|url|filepath|file_path|path|token)", "sensitive-key-family", "")\n| order by content_risk desc, observed desc, field asc`;
+  return `let exact_content_keys = dynamic([${contentKeys}]);\nlet known_safe_keys = dynamic([${safeKeys}]);\nAppDependencies\n| where TimeGenerated > ago(${lookback})\n| where ${baseFilter}\n| extend fields = bag_keys(Properties)\n| mv-expand field = fields to typeof(string)\n| summarize observed=count() by field\n| extend content_risk = case(field in (exact_content_keys), "exact-content-key", field !in (known_safe_keys) and field matches regex "(?i)(prompt|completion|message|instruction|argument|result|body|secret|password|credential|cookie|url|filepath|file_path|path|token)", "sensitive-key-family", "")\n| order by content_risk desc, observed desc, field asc\n| take 200`;
 }
 
 function contextPressureQuery(last = '7d') {
@@ -296,6 +331,7 @@ module.exports = {
   fieldCatalogQuery,
   grafanaUrlWithVars,
   kqlFileQuery,
+  logAnalyticsTargetWarning,
   otelCompatibilityQuery,
   sessionFallbackPrefix,
   sessionFallbackTurn,

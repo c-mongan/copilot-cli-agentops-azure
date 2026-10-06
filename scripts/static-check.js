@@ -10,6 +10,9 @@ const skipDirs = new Set([
   '.agentops',
   '.azure',
   '.git',
+  '.refs',
+  '.worktrees',
+  '__pycache__',
   'node_modules'
 ]);
 const generatedCliAssetDirs = new Set([
@@ -24,6 +27,7 @@ const generatedCliAssetDirs = new Set([
   'examples',
   'grafana',
   'infra',
+  'instrumentation',
   'packages',
   'plugin',
   'scripts',
@@ -53,8 +57,23 @@ function walk(dir, files = [], root = repoRoot) {
     if (relativeDir === 'agentops-cli' && generatedCliAssetDirs.has(entry.name)) continue;
     if (relativeDir === 'agentops-cli/src' && entry.name === 'fixtures') continue;
     const fullPath = path.join(dir, entry.name);
-    if (entry.isDirectory()) walk(fullPath, files, root);
-    else files.push(fullPath);
+    if (entry.isDirectory()) {
+      walk(fullPath, files, root);
+    } else if (entry.isFile()) {
+      files.push(fullPath);
+    } else if (entry.isSymbolicLink()) {
+      // Directory symlinks must not be treated as files. File symlinks remain
+      // part of the repository checks only when their targets are readable
+      // files inside the scanned root, so external files are never read.
+      try {
+        const target = fs.realpathSync(fullPath);
+        const relativeTarget = path.relative(fs.realpathSync(root), target);
+        const insideRoot = relativeTarget !== '' && relativeTarget.split(path.sep)[0] !== '..' && !path.isAbsolute(relativeTarget);
+        if (insideRoot && fs.statSync(target).isFile()) files.push(fullPath);
+      } catch {
+        // Broken or inaccessible symlinks are not source files to inspect.
+      }
+    }
   }
   return files;
 }

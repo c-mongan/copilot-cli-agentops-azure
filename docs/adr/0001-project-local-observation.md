@@ -1,0 +1,5 @@
+# Project-local observation with a wrapper-free default
+
+Status: superseded by ADR-0003 for the activation and hook scope. Its script instrumentation decision remains in the master plan.
+
+The first installation path will use project-local configuration and Copilot's native telemetry and hooks. Native CLI telemetry still requires environment activation or enterprise managed settings; a project file alone cannot switch it on. Enterprise policy can cover ordinary `copilot`, with a reversible single-session launch as the local fallback. Full end-to-end coverage of in-scope owned skill scripts requires project-local Node/Python instrumentation and named internal steps; a controlled script entry point is required wherever exact process boundaries or trace-context bridging cannot otherwise be proved. The user prefers easy installation and removal, but accepted the instrumentation needed for complete observation. A mandatory global shim would simplify control but create an avoidable installation burden. Native and automatic signals alone cannot reveal arbitrary internal code, so coverage must state that limit.

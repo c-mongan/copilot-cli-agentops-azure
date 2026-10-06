@@ -60,7 +60,8 @@ function checkAzureSubscription(options = {}) {
   }
 
   const spawnSync = options.spawnSync || childProcess.spawnSync;
-  const result = spawnSync('az', ['account', 'show', '--query', 'id', '-o', 'tsv'], {
+  const accountArgs = ['account', 'show', ...(options.requireActive === false ? ['--subscription', expected] : []), '--query', 'id', '-o', 'tsv'];
+  const result = spawnSync('az', accountArgs, {
     encoding: 'utf8',
     maxBuffer: 1024 * 1024
   });
@@ -79,7 +80,7 @@ function checkAzureSubscription(options = {}) {
       ok: false,
       expected,
       active,
-      error: `Azure subscription guard refused the write: expected ${expected}, active ${active || 'unknown'}.`
+      error: `Azure subscription guard refused the write: expected ${expected}, ${options.requireActive === false ? 'selected' : 'active'} ${active || 'unknown'}.`
     };
   }
 

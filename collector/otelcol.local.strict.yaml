@@ -31,15 +31,35 @@ processors:
     trace_statements:
       - context: resource
         statements:
-          - keep_keys(attributes, ["service.name", "service.namespace", "service.version", "telemetry.sdk.name", "telemetry.sdk.language", "telemetry.sdk.version", "agent.framework", "agent.runtime", "agentops.profile", "agentops.experiment", "agentops.e2e.id", "agentops.pack.version", "agentops.repo.hash", "agentops.content_capture.enabled", "agentops.content_capture.scope", "agentops.content_capture.signal", "agentops.poison_id"])
+          - set(resource.schema_url, "")
+          - keep_keys(attributes, ["service.name","service.namespace","service.version","telemetry.sdk.name","telemetry.sdk.language","telemetry.sdk.version","agent.framework","agent.runtime","agentops.profile","agentops.experiment","agentops.e2e.id","agentops.pack.version","agentops.repo.hash","agentops.content_capture.enabled","agentops.content_capture.scope","agentops.content_capture.signal","agentops.poison_id","agentops.run.id","agentops.session.id","agentops.script.runtime.name","agentops.script.runtime.version","agentops.script.runtime.implementation","agentops.script.loader.name"])
+      - context: scope
+        statements:
+          - set(scope.name, "agentops.scope")
+          - set(scope.version, "")
+          - set(scope.schema_url, "")
+          - keep_keys(scope.attributes, [])
       - context: span
         statements:
           # Signal fields are outside the attribute allowlist. Replace them
           # before debug, relay, or file export so content cannot bypass it.
+          - set(trace_state, "")
           - set(name, "agentops.span") where name != nil
+          # Derive operation kind only from finite, validated semantic enums.
+          - delete_key(attributes, "agentops.operation.kind")
+          - delete_key(attributes, "http.request.method") where attributes["http.request.method"] != "GET" and attributes["http.request.method"] != "POST" and attributes["http.request.method"] != "PUT" and attributes["http.request.method"] != "PATCH" and attributes["http.request.method"] != "DELETE" and attributes["http.request.method"] != "HEAD" and attributes["http.request.method"] != "OPTIONS" and attributes["http.request.method"] != "CONNECT" and attributes["http.request.method"] != "TRACE"
+          - delete_key(attributes, "db.system.name") where attributes["db.system.name"] != "postgresql" and attributes["db.system.name"] != "mysql" and attributes["db.system.name"] != "sqlite" and attributes["db.system.name"] != "redis"
+          - set(attributes["agentops.operation.kind"], "http") where attributes["http.request.method"] != nil
+          - set(attributes["agentops.operation.kind"], "database") where attributes["db.system.name"] != nil
           - set(status.message, "redacted by AgentOps strict privacy mode") where status.message != nil
           - set(attributes["agentops.content_capture.signal"], true) where attributes["content.capture.enabled"] == true or attributes["gen_ai.input.messages"] != nil or attributes["gen_ai.output.messages"] != nil or attributes["gen_ai.prompt"] != nil or attributes["gen_ai.completion"] != nil or attributes["gen_ai.system_instructions"] != nil or attributes["gen_ai.tool.definitions"] != nil or attributes["gen_ai.tool.call.arguments"] != nil or attributes["gen_ai.tool.call.result"] != nil or attributes["github.copilot.message"] != nil or attributes["http.request.body.content"] != nil or attributes["http.response.body.content"] != nil or attributes["url.full"] != nil or attributes["code.filepath"] != nil
-          - keep_keys(attributes, ["agentops.schema.version","agentops.run.id","agentops.session.id","agentops.surface","agentops.privacy.mode","agentops.content_capture.mode","agentops.content_capture.signal","agentops.custom_event_id","agentops.parent_event_id","agentops.event.sequence","agentops.command.name","agentops.script.name","agentops.event.name","agentops.agent.name","agentops.agent.hash","agentops.parent_agent.name","agentops.sub_agent.name","agentops.delegation.id","agentops.subagent.duration_ms","agentops.subagent.total_tokens","agentops.subagent.tool_count","agentops.skill.name","agentops.skill.hash","agentops.workflow.name","agentops.step.name","agentops.outcome","agentops.mcp.server","agentops.mcp.tool","agentops.mcp.server.hash","agentops.mcp.allowed","agentops.mcp.tool.risk","agentops.poison_id","gen_ai.operation.name","gen_ai.provider.name","gen_ai.request.model","gen_ai.response.model","gen_ai.conversation.id","gen_ai.tool.name","gen_ai.tool.type","gen_ai.tool.call.id","gen_ai.usage.input_tokens","gen_ai.usage.output_tokens","gen_ai.usage.cache_read.input_tokens","gen_ai.usage.cache_creation.input_tokens","github.copilot.cost","github.copilot.aiu","github.copilot.turn_count","github.copilot.hook.type","github.copilot.hook.invocation_id","github.copilot.skill.name","github.copilot.skill.plugin_name","github.copilot.skill.plugin_version","error.type","exception.type","http.status_code","agentops.api.duration_ms","agentops.branch.hash","agentops.content.action","agentops.content.dropped_bytes","agentops.content.kind","agentops.content.secret_like","agentops.cost.estimated_usd","agentops.duration.ms","agentops.error.size_bytes","agentops.files.edited_count","agentops.lines.added","agentops.lines.removed","agentops.permission.decision","agentops.permission.kind","agentops.prompt.hash","agentops.prompt.size_bytes","agentops.repo.hash","agentops.tool.args_schema_hash","agentops.tool.args_size_bytes","agentops.tool.result_size_bytes","agentops.tools.count","agentops.workspace.hash","gen_ai.usage.reasoning.output_tokens","gen_ai.usage.total_tokens","github.copilot.aiu.nano","github.copilot.premium_requests"])
+          # model-provider-guard: drop model/provider values that are not plain identifiers (URLs, key=value, credentials).
+          - delete_key(attributes, "gen_ai.request.model") where attributes["gen_ai.request.model"] != nil and (not IsMatch(attributes["gen_ai.request.model"], "^[A-Za-z0-9][A-Za-z0-9._:+/-]{0,127}$") or IsMatch(attributes["gen_ai.request.model"], "//|(?i)(api[_-]?key|token|secret|password|bearer|sig=)"))
+          - delete_key(attributes, "gen_ai.response.model") where attributes["gen_ai.response.model"] != nil and (not IsMatch(attributes["gen_ai.response.model"], "^[A-Za-z0-9][A-Za-z0-9._:+/-]{0,127}$") or IsMatch(attributes["gen_ai.response.model"], "//|(?i)(api[_-]?key|token|secret|password|bearer|sig=)"))
+          - delete_key(attributes, "agentops.model.requested") where attributes["agentops.model.requested"] != nil and (not IsMatch(attributes["agentops.model.requested"], "^[A-Za-z0-9][A-Za-z0-9._:+/-]{0,127}$") or IsMatch(attributes["agentops.model.requested"], "//|(?i)(api[_-]?key|token|secret|password|bearer|sig=)"))
+          - delete_key(attributes, "agentops.model.actual") where attributes["agentops.model.actual"] != nil and (not IsMatch(attributes["agentops.model.actual"], "^[A-Za-z0-9][A-Za-z0-9._:+/-]{0,127}$") or IsMatch(attributes["agentops.model.actual"], "//|(?i)(api[_-]?key|token|secret|password|bearer|sig=)"))
+          - delete_key(attributes, "gen_ai.provider.name") where attributes["gen_ai.provider.name"] != nil and (not IsMatch(attributes["gen_ai.provider.name"], "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$") or IsMatch(attributes["gen_ai.provider.name"], "//|(?i)(api[_-]?key|token|secret|password|bearer|sig=)"))
+          - keep_keys(attributes, ["http.request.method","db.system.name","agentops.operation.kind","agentops.schema.version","agentops.run.id","agentops.session.id","agentops.surface","agentops.privacy.mode","agentops.content_capture.mode","agentops.content_capture.signal","agentops.custom_event_id","agentops.parent_event_id","agentops.event.sequence","agentops.command.name","agentops.script.name","agentops.event.name","agentops.agent.name","agentops.agent.hash","agentops.parent_agent.name","agentops.sub_agent.name","agentops.delegation.id","agentops.subagent.duration_ms","agentops.subagent.total_tokens","agentops.subagent.tool_count","agentops.skill.name","agentops.skill.hash","agentops.workflow.name","agentops.step.name","agentops.outcome","agentops.mcp.server","agentops.mcp.tool","agentops.mcp.server.hash","agentops.mcp.allowed","agentops.mcp.tool.risk","agentops.poison_id","gen_ai.operation.name","gen_ai.provider.name","gen_ai.request.model","gen_ai.response.model","gen_ai.conversation.id","gen_ai.tool.name","gen_ai.tool.type","gen_ai.tool.call.id","gen_ai.usage.input_tokens","gen_ai.usage.output_tokens","gen_ai.usage.cache_read.input_tokens","gen_ai.usage.cache_creation.input_tokens","github.copilot.cost","github.copilot.aiu","github.copilot.turn_count","github.copilot.hook.type","github.copilot.hook.invocation_id","github.copilot.skill.name","github.copilot.skill.plugin_name","github.copilot.skill.plugin_version","error.type","exception.type","http.status_code","agentops.api.duration_ms","agentops.branch.hash","agentops.content.action","agentops.content.dropped_bytes","agentops.content.kind","agentops.content.secret_like","agentops.cost.estimated_usd","agentops.duration.ms","agentops.error.size_bytes","agentops.files.edited_count","agentops.lines.added","agentops.lines.removed","agentops.permission.decision","agentops.permission.kind","agentops.prompt.hash","agentops.prompt.size_bytes","agentops.repo.hash","agentops.tool.args_schema_hash","agentops.tool.args_size_bytes","agentops.tool.result_size_bytes","agentops.tools.count","agentops.workspace.hash","gen_ai.usage.reasoning.output_tokens","gen_ai.usage.total_tokens","github.copilot.aiu.nano","github.copilot.premium_requests","agentops.script.runtime.name","agentops.script.runtime.version","agentops.script.runtime.implementation","agentops.script.loader.name","agentops.outcome.source","agentops.script.observer.role","agentops.script.observer.pid","agentops.script.child.pid","process.exit.code","process.signal.number"])
       - context: spanevent
         statements:
           - set(name, "agentops.event") where name != nil
@@ -47,22 +67,57 @@ processors:
     metric_statements:
       - context: resource
         statements:
-          - keep_keys(attributes, ["service.name", "service.namespace", "service.version", "telemetry.sdk.name", "telemetry.sdk.language", "telemetry.sdk.version", "agent.framework", "agent.runtime", "agentops.profile", "agentops.experiment", "agentops.e2e.id", "agentops.pack.version"])
+          - set(resource.schema_url, "")
+          - keep_keys(attributes, ["service.name","service.namespace","service.version","telemetry.sdk.name","telemetry.sdk.language","telemetry.sdk.version","agent.framework","agent.runtime","agentops.profile","agentops.experiment","agentops.e2e.id","agentops.pack.version","agentops.run.id","agentops.session.id","agentops.script.runtime.name","agentops.script.runtime.version","agentops.script.runtime.implementation","agentops.script.loader.name"])
+      - context: scope
+        statements:
+          - set(scope.name, "agentops.scope")
+          - set(scope.version, "")
+          - set(scope.schema_url, "")
+          - keep_keys(scope.attributes, [])
       - context: metric
         statements:
-          - set(name, "agentops.metric") where name != nil
+          # Keep instrument identity only after the exact name/type/unit filter.
+          - set(description, "")
       - context: datapoint
         statements:
-          - keep_keys(attributes, ["agentops.custom_event_id", "agentops.poison_id", "gen_ai.operation.name", "gen_ai.provider.name", "gen_ai.request.model", "gen_ai.response.model", "gen_ai.tool.name", "gen_ai.tool.type", "github.copilot.cost", "github.copilot.aiu", "error.type", "http.status_code"])
+          - keep_keys(attributes, ["gen_ai.operation.name", "gen_ai.token.type", "success"])
+          - delete_key(attributes, "gen_ai.operation.name") where attributes["gen_ai.operation.name"] != "chat" and attributes["gen_ai.operation.name"] != "invoke_agent" and attributes["gen_ai.operation.name"] != "execute_tool" and attributes["gen_ai.operation.name"] != "invoke_workflow"
+          - delete_key(attributes, "gen_ai.token.type") where attributes["gen_ai.token.type"] != "input" and attributes["gen_ai.token.type"] != "output"
+          - delete_key(attributes, "success") where attributes["success"] != true and attributes["success"] != false
     log_statements:
       - context: resource
         statements:
-          - keep_keys(attributes, ["service.name", "service.namespace", "service.version", "telemetry.sdk.name", "telemetry.sdk.language", "telemetry.sdk.version", "agent.framework", "agent.runtime", "agentops.profile", "agentops.experiment", "agentops.e2e.id", "agentops.pack.version"])
+          - set(resource.schema_url, "")
+          - keep_keys(attributes, ["service.name","service.namespace","service.version","telemetry.sdk.name","telemetry.sdk.language","telemetry.sdk.version","agent.framework","agent.runtime","agentops.profile","agentops.experiment","agentops.e2e.id","agentops.pack.version","agentops.run.id","agentops.session.id","agentops.script.runtime.name","agentops.script.runtime.version","agentops.script.runtime.implementation","agentops.script.loader.name"])
+      - context: scope
+        statements:
+          - set(scope.name, "agentops.scope")
+          - set(scope.version, "")
+          - set(scope.schema_url, "")
+          - keep_keys(scope.attributes, [])
       - context: log
         statements:
+          - set(event_name, "agentops.event")
+          - set(severity_text, "")
           - set(attributes["agentops.content_capture.signal"], true) where attributes["content.capture.enabled"] == true or attributes["gen_ai.input.messages"] != nil or attributes["gen_ai.output.messages"] != nil or attributes["gen_ai.prompt"] != nil or attributes["gen_ai.completion"] != nil or attributes["gen_ai.system_instructions"] != nil or attributes["gen_ai.tool.definitions"] != nil or attributes["gen_ai.tool.call.arguments"] != nil or attributes["gen_ai.tool.call.result"] != nil or attributes["github.copilot.message"] != nil or attributes["http.request.body.content"] != nil or attributes["http.response.body.content"] != nil or attributes["url.full"] != nil or attributes["code.filepath"] != nil
           - set(body, "redacted by AgentOps strict privacy mode") where body != nil
           - keep_keys(attributes, ["agentops.schema.version","agentops.run.id","agentops.session.id","agentops.surface","agentops.privacy.mode","agentops.content_capture.mode","agentops.content_capture.signal","agentops.custom_event_id","agentops.parent_event_id","agentops.event.sequence","agentops.command.name","agentops.script.name","agentops.event.name","agentops.agent.name","agentops.agent.hash","agentops.parent_agent.name","agentops.sub_agent.name","agentops.delegation.id","agentops.subagent.duration_ms","agentops.subagent.total_tokens","agentops.subagent.tool_count","agentops.skill.name","agentops.skill.hash","agentops.workflow.name","agentops.step.name","agentops.outcome","agentops.mcp.server","agentops.mcp.tool","agentops.mcp.server.hash","agentops.mcp.allowed","agentops.mcp.tool.risk","agentops.poison_id","gen_ai.operation.name","gen_ai.provider.name","gen_ai.request.model","gen_ai.response.model","gen_ai.conversation.id","gen_ai.tool.name","gen_ai.tool.type","gen_ai.tool.call.id","gen_ai.usage.input_tokens","gen_ai.usage.output_tokens","gen_ai.usage.cache_read.input_tokens","gen_ai.usage.cache_creation.input_tokens","github.copilot.cost","github.copilot.aiu","github.copilot.turn_count","github.copilot.hook.type","github.copilot.hook.invocation_id","github.copilot.skill.name","github.copilot.skill.plugin_name","github.copilot.skill.plugin_version","error.type","exception.type","http.status_code","agentops.api.duration_ms","agentops.branch.hash","agentops.content.action","agentops.content.dropped_bytes","agentops.content.kind","agentops.content.secret_like","agentops.cost.estimated_usd","agentops.duration.ms","agentops.error.size_bytes","agentops.files.edited_count","agentops.lines.added","agentops.lines.removed","agentops.permission.decision","agentops.permission.kind","agentops.prompt.hash","agentops.prompt.size_bytes","agentops.repo.hash","agentops.tool.args_schema_hash","agentops.tool.args_size_bytes","agentops.tool.result_size_bytes","agentops.tools.count","agentops.workspace.hash","gen_ai.usage.reasoning.output_tokens","gen_ai.usage.total_tokens","github.copilot.aiu.nano","github.copilot.premium_requests"])
+  # Fail closed: do not merge unknown metric instruments into one series.
+  filter/span_links:
+    error_mode: propagate
+    traces:
+      span:
+        - 'Len(links) > 0'
+  filter/native_metrics:
+    error_mode: propagate
+    metrics:
+      # OTTL cannot safely clear exemplar slices in this pinned version.
+      # Drop these points because exemplar filtered attributes can carry content.
+      datapoint:
+        - 'Len(exemplars) > 0'
+      metric:
+        - '(name != "gen_ai.client.operation.duration" or type != METRIC_DATA_TYPE_HISTOGRAM or unit != "s") and (name != "gen_ai.client.token.usage" or type != METRIC_DATA_TYPE_HISTOGRAM or unit != "tokens") and (name != "gen_ai.client.operation.time_to_first_chunk" or type != METRIC_DATA_TYPE_HISTOGRAM or unit != "s") and (name != "gen_ai.client.operation.time_per_output_chunk" or type != METRIC_DATA_TYPE_HISTOGRAM or unit != "s") and (name != "gen_ai.invoke_agent.duration" or type != METRIC_DATA_TYPE_HISTOGRAM or unit != "s") and (name != "gen_ai.invoke_agent.inference_calls" or type != METRIC_DATA_TYPE_HISTOGRAM or unit != "{inference_call}") and (name != "gen_ai.invoke_agent.tool_calls" or type != METRIC_DATA_TYPE_HISTOGRAM or unit != "{tool_call}") and (name != "gen_ai.invoke_workflow.duration" or type != METRIC_DATA_TYPE_HISTOGRAM or unit != "s") and (name != "github.copilot.tool.call.count" or type != METRIC_DATA_TYPE_SUM or unit != "calls") and (name != "github.copilot.tool.call.duration" or type != METRIC_DATA_TYPE_HISTOGRAM or unit != "s") and (name != "github.copilot.agent.turn.count" or type != METRIC_DATA_TYPE_HISTOGRAM or unit != "turns") and (name != "github.copilot.mcp.server.connection.count" or type != METRIC_DATA_TYPE_SUM or unit != "attempts") and (name != "github.copilot.code.lines_added" or type != METRIC_DATA_TYPE_SUM or unit != "lines") and (name != "github.copilot.code.lines_removed" or type != METRIC_DATA_TYPE_SUM or unit != "lines")'
   batch: {}
 
 exporters:
@@ -88,11 +143,11 @@ service:
   pipelines:
     traces:
       receivers: [otlp]
-      processors: [memory_limiter, transform/privacy_strict, batch]
+      processors: [memory_limiter, filter/span_links, transform/privacy_strict, batch]
       exporters: [otlp_http/local_receipt, debug]
     metrics:
       receivers: [otlp]
-      processors: [memory_limiter, transform/privacy_strict, batch]
+      processors: [memory_limiter, filter/native_metrics, transform/privacy_strict, batch]
       exporters: [otlp_http/local_receipt, debug]
     logs:
       receivers: [otlp]
@@ -100,11 +155,11 @@ service:
       exporters: [otlp_http/local_receipt, debug]
     traces/receipt:
       receivers: [otlp/receipt]
-      processors: [transform/privacy_strict, batch]
+      processors: [filter/span_links, transform/privacy_strict, batch]
       exporters: [file/receipt]
     metrics/receipt:
       receivers: [otlp/receipt]
-      processors: [transform/privacy_strict, batch]
+      processors: [filter/native_metrics, transform/privacy_strict, batch]
       exporters: [file/receipt]
     logs/receipt:
       receivers: [otlp/receipt]

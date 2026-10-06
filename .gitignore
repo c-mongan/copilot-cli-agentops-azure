@@ -9,9 +9,13 @@ coverage/
 *.local
 .DS_Store
 .pytest_cache/
+__pycache__/
 .agentops/
 .playwright-mcp/
 .azure/*
+!.azure/deployment-plan.md
+graphify-out/
+.refs/
 collector/*.local.out
 copilot-otel*.jsonl
 benchmarks/runs/

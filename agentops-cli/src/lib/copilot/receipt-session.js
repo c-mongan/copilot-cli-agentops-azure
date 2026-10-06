@@ -2,8 +2,10 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-function sessionStateDir(home = os.homedir()) {
-  return path.join(home, '.copilot', 'session-state');
+function sessionStateDir(copilotHome = process.env.COPILOT_HOME) {
+  return copilotHome
+    ? path.join(copilotHome, 'session-state')
+    : path.join(os.homedir(), '.copilot', 'session-state');
 }
 
 function snapshotCopilotSessions(root = sessionStateDir()) {
@@ -93,14 +95,18 @@ function readSessionSummary(file) {
   return summarizeSessionEvents(events, path.basename(path.dirname(file)));
 }
 
-function changedCopilotSession(before = new Map(), root = sessionStateDir()) {
+function changedCopilotSession(before = new Map(), root = sessionStateDir(), expectedSessionId = '') {
   const after = snapshotCopilotSessions(root);
   const changed = [...after.entries()]
-    .filter(([file, mtime]) => !before.has(file) || mtime > before.get(file))
-    .sort((left, right) => right[1] - left[1]);
-  if (!changed.length) return null;
+    .filter(([file, mtime]) => (!before.has(file) || mtime > before.get(file))
+      && (!expectedSessionId || path.basename(path.dirname(file)) === expectedSessionId));
+  // A shared COPILOT_HOME can change while this process runs. An mtime winner
+  // does not establish which process wrote the event stream.
+  if (changed.length !== 1) return null;
   try {
-    return readSessionSummary(changed[0][0]);
+    const selectedId = path.basename(path.dirname(changed[0][0]));
+    const summary = readSessionSummary(changed[0][0]);
+    return summary.sessionId === selectedId ? summary : null;
   } catch {
     return null;
   }

@@ -74,6 +74,25 @@ test('createCliMain exposes focused command help without dispatching the command
   assert.deepEqual(harness.calls, []);
 });
 
+test('createCliMain routes legacy core command help without invoking the command', async () => {
+  const calls = [];
+  const main = createCliMain({
+    commands: {},
+    coreCommands: ['validate-azure'],
+    legacy: {
+      main(args) {
+        calls.push(args);
+      }
+    },
+    stdout: { write(chunk) { calls.push(['stdout', String(chunk)]); } },
+    usage(command) { return `help for ${command}\n`; }
+  });
+
+  await main(['validate-azure', '--help']);
+
+  assert.deepEqual(calls, [['stdout', 'help for validate-azure\n']]);
+});
+
 test('createCliMain routes direct commands and collector aliases', async () => {
   const harness = createHarness();
 
@@ -84,6 +103,18 @@ test('createCliMain routes direct commands and collector aliases', async () => {
     ['status', ['--json']],
     ['collector', ['start', '--json']]
   ]);
+});
+
+test('createCliMain routes coverage as a direct core command', async () => {
+  const calls = [];
+  const main = createCliMain({
+    commands: { coverageCommand: args => calls.push(args) },
+    coreCommands: ['coverage'],
+    legacy: { main() { throw new Error('legacy path should not run'); } },
+    usage: () => ''
+  });
+  await main(['coverage', '--repo', '.', '--json']);
+  assert.deepEqual(calls, [['--repo', '.', '--json']]);
 });
 
 test('createCliMain keeps recommend V2 routing and legacy fallback', async () => {

@@ -26,6 +26,18 @@ function createCloudValidation(dependencies = {}) {
     });
   }
 
+  function validationCloudValues(options = {}) {
+    const cloud = configuredCloudValuesFromConfig({
+      ...options,
+      defaults: {
+        azureResourceGroup,
+        logAnalyticsWorkspaceName,
+        grafanaDatasourceUid
+      }
+    });
+    return cloud;
+  }
+
   function listGrafanaDashboardFiles(options = {}) {
     const dirs = [options.grafanaDir || path.join(root, 'grafana')];
     if (options.includeV2 !== false) dirs.push(path.join(root, 'grafana', 'dashboards', 'v2'));
@@ -99,7 +111,7 @@ function createCloudValidation(dependencies = {}) {
 
   function validateAzure(options = {}) {
     return validateAzureBase(options, {
-      configuredCloudValues,
+      configuredCloudValues: validationCloudValues,
       isConfiguredValue,
       runAzureLogAnalyticsQuery,
       listGrafanaDashboardFiles,

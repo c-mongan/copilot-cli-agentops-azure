@@ -121,6 +121,97 @@ test('durable evidence spool reports bounded overflow and TTL expiry', async t =
   assert.equal(drained.status.pending, 0);
 });
 
+test('durable delivery drain scopes lifecycle uploads by run and event ID', async t => {
+  const { spool } = tempSpool(t);
+  const firstRun = spool.enqueue({ ...row(1), RunId: 'run-scope-a' });
+  const secondRun = spool.enqueue({ ...row(2), RunId: 'run-scope-b' });
+  const anotherFirstRun = spool.enqueue({ ...row(3), RunId: 'run-scope-a' });
+  const sent = [];
+
+  const runDrain = await spool.drain(async evidence => {
+    sent.push(evidence.EventId);
+    return { status: 204 };
+  }, { runId: 'run-scope-a' });
+
+  assert.deepEqual(new Set(sent), new Set([firstRun.event_id, anotherFirstRun.event_id]));
+  assert.equal(runDrain.scope_matched, 2);
+  assert.equal(runDrain.skipped_scope, 1);
+  assert.equal(runDrain.status.pending, 1);
+  assert.equal(fs.existsSync(secondRun.file), true);
+
+  sent.length = 0;
+  const eventDrain = await spool.drain(async evidence => {
+    sent.push(evidence.EventId);
+    return { status: 204 };
+  }, { eventIds: [secondRun.event_id] });
+  assert.deepEqual(sent, [secondRun.event_id]);
+  assert.equal(eventDrain.scope_matched, 1);
+  assert.equal(eventDrain.status.pending, 0);
+});
+
+test('scoped restart recovery preserves stale claims from other runs and events', async t => {
+  const { directory, spool } = tempSpool(t, { claimLeaseMs: 20 });
+  const interrupted = spool.enqueue({ ...row(1), RunId: 'run-recovery-a' });
+  const otherRun = spool.enqueue({ ...row(2), RunId: 'run-recovery-b' });
+
+  await assert.rejects(spool.drain(async () => ({ status: 204 }), {
+    afterUploadBeforeAck() { throw new Error('simulated process exit after remote acceptance'); }
+  }), /simulated process exit/);
+  await new Promise(resolve => setTimeout(resolve, 35));
+
+  const restarted = createDurableEvidenceSpool({ directory, claimLeaseMs: 20 });
+  const selectedRunUploads = [];
+  const runDrain = await restarted.drain(async evidence => {
+    selectedRunUploads.push(evidence.EventId);
+    return { status: 204 };
+  }, { runId: 'run-recovery-b' });
+  assert.deepEqual(selectedRunUploads, [otherRun.event_id]);
+  assert.equal(runDrain.recovered, 0);
+  assert.equal(runDrain.acknowledged, 1);
+  assert.equal(restarted.status().uploading, 1);
+  assert.equal(fs.existsSync(interrupted.file.replace('.pending.json', '.uploading.json')), true);
+
+  const unrelatedEventDrain = await restarted.drain(async () => {
+    assert.fail('a different event ID must not recover or upload the stale claim');
+  }, { eventIds: ['event-not-selected'] });
+  assert.equal(unrelatedEventDrain.recovered, 0);
+  assert.equal(restarted.status().uploading, 1);
+
+  const selectedEventUploads = [];
+  const eventDrain = await restarted.drain(async evidence => {
+    selectedEventUploads.push(evidence.EventId);
+    return { status: 204 };
+  }, { eventIds: [interrupted.event_id] });
+  assert.deepEqual(selectedEventUploads, [interrupted.event_id]);
+  assert.equal(eventDrain.recovered, 1);
+  assert.equal(eventDrain.acknowledged, 1);
+  assert.equal(restarted.status().pending, 0);
+  assert.equal(restarted.status().uploading, 0);
+});
+
+test('durable evidence prune is preview-first and deletes only old held segments', async t => {
+  const { directory, spool } = tempSpool(t);
+  const queued = spool.enqueue(row());
+  await spool.drain(async () => ({ status: 400 }));
+  const heldName = fs.readdirSync(directory).find(name => name.endsWith('.quarantined.json'));
+  const old = Date.now() - 31 * 24 * 60 * 60 * 1000;
+  fs.utimesSync(path.join(directory, heldName), new Date(old), new Date(old));
+  const recent = spool.enqueue(row(2));
+
+  assert.ok(queued.event_id);
+  assert.throws(() => spool.pruneHeld({ olderThanDays: 29 }), /30 to 365 days/);
+  const preview = spool.pruneHeld({ olderThanDays: 30 });
+  assert.equal(preview.applied, false);
+  assert.equal(preview.candidates.length, 1);
+  assert.equal(fs.existsSync(path.join(directory, heldName)), true);
+
+  const applied = spool.pruneHeld({ olderThanDays: 30, apply: true });
+  assert.equal(applied.removed.length, 1);
+  assert.equal(fs.existsSync(path.join(directory, heldName)), false);
+  assert.equal(fs.existsSync(recent.file), true);
+  assert.equal(spool.status().pending, 1);
+});
+
 test('durable evidence spool retries network and retryable HTTP failures and honors Retry-After', async t => {
   let calls = 0;
   const sleeps = [];
@@ -168,6 +259,54 @@ test('durable evidence spool leaves exhausted transient failures pending and qua
   assert.equal(drained.quarantined, 1);
   assert.equal(drained.status.pending, 1);
   assert.equal(drained.status.quarantined, 1);
+});
+
+test('held evidence review omits payloads and only requeues valid non-expired quarantined rows', async t => {
+  let clock = Date.parse('2026-08-03T12:00:00Z');
+  const { directory, spool } = tempSpool(t, { now: () => clock, ttlMs: 60_000 });
+  const queued = spool.enqueue(row());
+  await spool.drain(async () => ({ status: 400 }));
+  const held = spool.inspectHeld({ eventId: queued.event_id });
+  assert.equal(held.length, 1);
+  assert.equal(held[0].integrity, 'valid');
+  assert.equal(held[0].requeueable, true);
+  assert.equal(Object.hasOwn(held[0], 'row'), false);
+  assert.equal(Object.hasOwn(held[0], 'ToolName'), false);
+
+  const requeued = spool.requeueHeld(queued.event_id);
+  assert.equal(requeued.status, 'pending');
+  assert.equal(spool.status().pending, 1);
+  assert.equal(spool.inspectHeld().length, 0);
+  const retried = await spool.drain(async () => ({ status: 204 }));
+  assert.equal(retried.acknowledged, 1);
+
+  const expired = spool.enqueue(row(2));
+  await spool.drain(async () => ({ status: 400 }));
+  clock += 60_001;
+  assert.equal(spool.inspectHeld({ eventId: expired.event_id })[0].requeueable, false);
+  assert.equal(spool.requeueHeld(expired.event_id).status, 'expired');
+  assert.equal(spool.inspectHeld({ eventId: expired.event_id })[0].state, 'quarantined');
+});
+
+test('held evidence requeue refuses corrupted rows and conflicting pending identities', async t => {
+  const { directory, spool } = tempSpool(t);
+  const queued = spool.enqueue(row());
+  await spool.drain(async () => ({ status: 400 }));
+  const heldFile = path.join(directory, fs.readdirSync(directory).find(name => name.endsWith('.quarantined.json')));
+  const segment = JSON.parse(fs.readFileSync(heldFile, 'utf8'));
+  segment.row.ToolName = 'tampered';
+  fs.writeFileSync(heldFile, JSON.stringify(segment));
+  assert.equal(spool.inspectHeld({ eventId: queued.event_id })[0].integrity, 'invalid');
+  assert.equal(spool.requeueHeld(queued.event_id).status, 'invalid');
+  assert.equal(fs.existsSync(heldFile), true);
+
+  const conflictCase = tempSpool(t);
+  const original = conflictCase.spool.enqueue(row());
+  await conflictCase.spool.drain(async () => ({ status: 400 }));
+  conflictCase.spool.enqueue({ ...row(2), EventId: original.event_id, ToolName: 'shell.different' });
+  assert.equal(conflictCase.spool.requeueHeld(original.event_id).status, 'conflict');
+  assert.equal(conflictCase.spool.status().quarantined, 1);
+  assert.equal(conflictCase.spool.status().pending, 1);
 });
 
 test('durable evidence spool is restart-safe and deliberately permits duplicate resend before atomic ack', async t => {
@@ -305,4 +444,35 @@ test('durable evidence spool authenticates immutable envelope metadata and fails
   const drained = await spool.drain(async () => { uploaded = true; return { status: 204 }; });
   assert.equal(uploaded, false);
   assert.equal(drained.quarantined, 1);
+});
+
+test('durable drain refuses hard-linked segments and preserves the linked original', async t => {
+  const { directory, spool } = tempSpool(t);
+  spool.enqueue(row());
+  const segment = fs.readdirSync(directory).find(name => name.endsWith('.pending.json'));
+  const outside = path.join(path.dirname(directory), 'outside.json');
+  fs.linkSync(path.join(directory, segment), outside);
+  await assert.rejects(() => spool.drain(async () => { throw new Error('must not upload'); }), /regular file/);
+  assert.equal(fs.existsSync(outside), true);
+});
+
+test('durable drain tightens legacy transport expiry while preserving held evidence', async t => {
+  let clock = Date.parse('2026-10-02T00:00:00Z');
+  const { directory, spool } = tempSpool(t, { now: () => clock, ttlMs: 7 * 86400000 });
+  spool.enqueue(row());
+  clock += 3 * 86400000;
+  const tightened = createDurableEvidenceSpool({ directory, now: () => clock, ttlMs: 48 * 3600000 });
+  const result = await tightened.drain(async () => { throw new Error('must not upload'); });
+  assert.equal(result.expired, 1);
+  assert.equal(fs.readdirSync(directory).some(name => name.endsWith('.expired.json')), true);
+});
+
+test('durable retry stops at expiry after a retry delay and preserves ambiguous attempt count', async t => {
+  let clock = Date.parse('2026-10-02T00:00:00Z'), calls = 0;
+  const { directory, spool } = tempSpool(t, { now: () => clock, ttlMs: 1000, sleep: async () => { clock += 2000; } });
+  spool.enqueue(row());
+  const result = await spool.drain(async () => { calls++; return { status: 503 }; }, { maxAttempts: 3 });
+  assert.equal(calls, 1); assert.equal(result.expired, 1);
+  const held = fs.readdirSync(directory).find(name => name.endsWith('.expired.json'));
+  assert.equal(JSON.parse(fs.readFileSync(path.join(directory, held))).attempts, 1);
 });

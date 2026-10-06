@@ -13,9 +13,13 @@ function safeName(value, fallback = '') {
 }
 
 function defaultSessionEventsPath(sessionId, home = os.homedir()) {
-  const safeSessionId = safeName(sessionId);
+  const safeSessionId = typeof sessionId === 'string' && /^[A-Za-z0-9_-]{1,100}$/.test(sessionId)
+    ? sessionId : '';
   if (!safeSessionId) throw new Error('session id is required');
-  return path.join(home, '.copilot', 'session-state', safeSessionId, 'events.jsonl');
+  const sessionStateRoot = process.env.COPILOT_HOME
+    ? path.join(process.env.COPILOT_HOME, 'session-state')
+    : path.join(home, '.copilot', 'session-state');
+  return path.join(sessionStateRoot, safeSessionId, 'events.jsonl');
 }
 
 function readCopilotSessionEvents(filePath) {
@@ -86,6 +90,7 @@ function enrichCopilotSessionEvents(events = [], options = {}) {
   const sessionId = options.sessionId || 'unknown-session';
   const rows = [];
   let activeAgent = safeName(options.agent || '');
+  const startedTools = new Map();
 
   events.forEach((entry, index) => {
     const type = entry.type || '';
@@ -240,9 +245,17 @@ function enrichCopilotSessionEvents(events = [], options = {}) {
       return;
     }
 
-    if (type === 'tool.execution_complete') {
+    if (type === 'tool.execution_start') {
+      const callId = typeof data.toolCallId === 'string' ? data.toolCallId : '';
       const name = safeName(data.toolName || '');
-      if (!name) return;
+      if (callId && name) startedTools.set(callId, name);
+      return;
+    }
+
+    if (type === 'tool.execution_complete') {
+      const callId = typeof data.toolCallId === 'string' ? data.toolCallId : '';
+      const name = safeName(data.toolName || '') || startedTools.get(callId) || 'unknown-tool';
+      if (callId) startedTools.delete(callId);
       rows.push({
         ...eventBase(entry, activeAgent, sessionId, index),
         event: 'tool.completed',

@@ -3,6 +3,7 @@ const durableReceiptSchema = Object.freeze({
   Sequence: 'long',
   EventId: 'string',
   ParentEventId: 'string',
+  AgentId: 'string', ParentAgentId: 'string', ParentToolCallId: 'string', ExitCode: 'long',
   RunId: 'string', SessionId: 'string', TraceId: 'string', Surface: 'string',
   EventName: 'string', SpanName: 'string', Status: 'string',
   AgentName: 'string', ParentAgentName: 'string', SubAgentName: 'string', SkillName: 'string',

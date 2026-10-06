@@ -1,0 +1,15 @@
+{
+  "name": "@agentops-eval/stockpilot-vally-harness",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Isolated Vally eval harness dependencies for the StockPilot pilot (Task 9). Deliberately NOT part of agentops-cli/package.json's dependency tree — see ../ATTRIBUTION.md and the plan's 'Keep Vally dependencies outside the core CLI runtime' constraint.",
+  "scripts": {
+    "pin-check": "npm view @microsoft/vally-cli@0.17.0 version && npm view @microsoft/vally@0.17.0 version",
+    "vally:help": "vally --help",
+    "proof": "node --test ./test/*.test.js"
+  },
+  "dependencies": {
+    "@microsoft/vally-cli": "0.17.0",
+    "@microsoft/vally": "0.17.0"
+  }
+}

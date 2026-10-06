@@ -1,0 +1,20 @@
+{
+  "verifiedAt": "2026-10-03",
+  "node": {
+    "@opentelemetry/auto-instrumentations-node": "0.80.0",
+    "@opentelemetry/sdk-node": "0.222.0",
+    "@opentelemetry/exporter-trace-otlp-proto": "0.222.0"
+  },
+  "python": {
+    "opentelemetry-sdk": "1.45.0",
+    "opentelemetry-exporter-otlp-proto-http": "1.45.0",
+    "opentelemetry-instrumentation-requests": "0.66b0"
+  },
+  "sources": [
+    "https://registry.npmjs.org/@opentelemetry/auto-instrumentations-node/latest",
+    "https://registry.npmjs.org/@opentelemetry/sdk-node/latest",
+    "https://registry.npmjs.org/@opentelemetry/exporter-trace-otlp-proto/0.222.0",
+    "https://pypi.org/pypi/opentelemetry-exporter-otlp-proto-http/json",
+    "https://pypi.org/pypi/opentelemetry-instrumentation-requests/json"
+  ]
+}

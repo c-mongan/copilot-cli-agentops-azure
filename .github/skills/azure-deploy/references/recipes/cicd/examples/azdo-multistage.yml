@@ -1,0 +1,42 @@
+# Manual, approval-gated example: run what-if/preview, review it, then apply. Never auto-deploy on push.
+trigger: none  # Run manually; configure approvals on both environments.
+
+stages:
+  - stage: Dev
+    jobs:
+      - deployment: DeployDev
+        environment: dev  # Configure approval in Azure DevOps
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self  # deployment jobs do not check out the repo by default
+                - task: AzureCLI@2
+                  inputs:
+                    azureSubscription: 'azure-dev'
+                    scriptType: 'bash'
+                    scriptLocation: 'inlineScript'
+                    inlineScript: |
+                      azd provision --preview --no-prompt --environment dev
+                      azd provision --no-prompt --environment dev
+                      azd deploy --no-prompt --environment dev
+
+  - stage: Prod
+    dependsOn: Dev
+    jobs:
+      - deployment: DeployProd
+        environment: prod  # Configure approval in Azure DevOps
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self  # deployment jobs do not check out the repo by default
+                - task: AzureCLI@2
+                  inputs:
+                    azureSubscription: 'azure-prod'
+                    scriptType: 'bash'
+                    scriptLocation: 'inlineScript'
+                    inlineScript: |
+                      azd provision --preview --no-prompt --environment prod
+                      azd provision --no-prompt --environment prod
+                      azd deploy --no-prompt --environment prod

@@ -6,6 +6,7 @@ const test = require('node:test');
 
 const {
   changedCopilotSession,
+  sessionStateDir,
   snapshotCopilotSessions,
   summarizeSessionEvents
 } = require('../src/lib/copilot/receipt-session');
@@ -52,4 +53,41 @@ test('changed session detection selects the newest created or updated event stre
   const summary = changedCopilotSession(before, root);
   assert.equal(summary.sessionId, 'session-a');
   assert.equal(summary.model, 'gpt-5.6-sol');
+});
+
+test('changed session detection refuses ambiguous concurrent sessions', t => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-ambiguous-session-'));
+  t.after(() => fs.rmSync(home, { recursive: true, force: true }));
+  const root = path.join(home, 'session-state');
+  for (const sessionId of ['session-a', 'session-b']) {
+    const directory = path.join(root, sessionId);
+    fs.mkdirSync(directory, { recursive: true });
+    fs.writeFileSync(path.join(directory, 'events.jsonl'), `${JSON.stringify({ type: 'session.start', data: { sessionId } })}\n`);
+  }
+  assert.equal(changedCopilotSession(new Map(), root), null);
+});
+
+test('session state lookup follows COPILOT_HOME when the CLI uses an isolated home', () => {
+  const previous = process.env.COPILOT_HOME;
+  const isolatedHome = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-isolated-copilot-home-'));
+  process.env.COPILOT_HOME = isolatedHome;
+  try {
+    assert.equal(sessionStateDir(), path.join(isolatedHome, 'session-state'));
+  } finally {
+    if (previous === undefined) delete process.env.COPILOT_HOME;
+    else process.env.COPILOT_HOME = previous;
+  }
+});
+
+test('explicit launched session identity ignores unrelated simultaneous session changes', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-bound-session-'));
+  try {
+    const before = snapshotCopilotSessions(root);
+    for (const id of ['launched-id', 'unrelated-id']) {
+      fs.mkdirSync(path.join(root,id));
+      fs.writeFileSync(path.join(root,id,'events.jsonl'),JSON.stringify({type:'session.start',data:{sessionId:id}})+'\n');
+    }
+    assert.equal(changedCopilotSession(before,root),null);
+    assert.equal(changedCopilotSession(before,root,'launched-id').sessionId,'launched-id');
+  } finally {fs.rmSync(root,{recursive:true,force:true});}
 });

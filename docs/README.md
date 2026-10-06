@@ -45,13 +45,22 @@ For rendered docs and presentations:
 
 ## Reading Paths
 
+### Product Direction
+
+1. [Copilot AgentOps master plan](plans/2026-09-29-copilot-agentops-observability.md)
+2. [Full agent observability requirements](requirements/full-agent-observability-requirements.md)
+3. [Requirements reconciliation and current research](research/2026-09-29/README.md)
+
+The master plan is the delivery and acceptance authority. The full requirements remain the exhaustive long-term scope. Build the Copilot CLI pilot first; defer other surfaces and the architecture-improvement loop until the synthetic end-to-end, process-isolation, onboarding, UX, and Azure security gates pass.
+
 ### New User
 
-1. [Simplified Azure-native design](simplified-azure-design.md)
-2. [Secure by default](secure-by-default.md)
-3. [Collector modes](collector-modes.md)
-4. [Privacy modes](privacy-modes.md)
-5. [E2E validation](e2e-validation.md)
+1. [CLI-first flight recorder](cli-first-flight-recorder.md)
+2. [Simplified Azure-native design](simplified-azure-design.md)
+3. [Secure by default](secure-by-default.md)
+4. [Collector modes](collector-modes.md)
+5. [Privacy modes](privacy-modes.md)
+6. [E2E validation](e2e-validation.md)
 
 ### Operator
 
@@ -70,6 +79,7 @@ For rendered docs and presentations:
 5. [MCP observability proxy](mcp-observability-proxy.md)
 6. [Azure V2 ingestion](azure-v2-ingestion.md)
 7. [Azure production hardening](azure-production-hardening.md)
+8. [Azure schema migration recovery](azure-schema-migration-recovery.md)
 
 ### Coding Agent Or LLM
 

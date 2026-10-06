@@ -32,16 +32,36 @@ function hasFlag(args, name) {
 
 function parseVars(values) {
   const vars = {
+    datasource: 'azure-monitor-oob',
+    workspace: '',
+    timeRange: '24h',
+    actioner_url: '/api',
+    run_id: '__all',
+    session_id: '__all',
+    trace_id: '__all',
+    surface: '__all',
+    repo_hash: '__all',
+    branch_hash: '__all',
     conversation: '__all',
     model: '__all',
     operation: '__all',
     agent: '__all',
+    agent_name: '__all',
     agentops_agent: '__all',
     skill: '__all',
+    skill_name: '__all',
     mcp_server: '__all',
     script: '__all',
     repo: '__all',
     tool: '__all',
+    tool_name: '__all',
+    sub_agent: '__all',
+    task_type: '__all',
+    privacy_mode: '__all',
+    outcome_status: '__all',
+    eval_bucket: '__all',
+    pattern_key: '__all',
+    tool_risk: '__all',
     risk: 'all',
     benchmark_suite: '__all',
     benchmark_task: '__all',
@@ -83,6 +103,8 @@ function textValue(value) {
 
 function substituteQuery(query, options) {
   let rendered = query;
+  rendered = rendered.replace(/\$__timeFrom\(\)/g, `ago(${options.last})`);
+  rendered = rendered.replace(/\$__timeTo\(\)/g, 'now()');
   rendered = rendered.replace(/\$__timeFilter\(([^)]+)\)/g, `$1 > ago(${options.last})`);
   rendered = rendered.replace(/\$__interval/g, options.interval);
   rendered = rendered.replace(/\$\{([A-Za-z0-9_]+):csv\}/g, (_, name) => csvValue(options.vars[name] ?? '__all'));
@@ -92,7 +114,7 @@ function substituteQuery(query, options) {
   rendered = rendered.replace(/\$\{([A-Za-z0-9_]+)\}/g, (_, name) => String(options.vars[name] ?? ''));
   rendered = rendered.replace(/\$\{workspaceResource\}/g, options.workspaceResource || '');
   rendered = rendered.replace(/\$risk\b/g, String(options.vars.risk ?? 'all'));
-  rendered = rendered.replace(/\$([A-Za-z][A-Za-z0-9_]*)\b/g, (_, name) => String(options.vars[name] ?? `\$${name}`));
+  rendered = rendered.replace(/\$([A-Za-z][A-Za-z0-9_]*)\b/g, (_, name) => String(options.vars[name] ?? '__all'));
   return rendered;
 }
 
@@ -314,3 +336,8 @@ if (require.main === module) {
     process.exitCode = 1;
   }
 }
+
+module.exports = {
+  parseVars,
+  substituteQuery
+};

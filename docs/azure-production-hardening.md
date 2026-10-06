@@ -49,6 +49,8 @@ After provisioning, run the read-only Azure check:
 node agentops-cli/src/index.js validate-azure --last 24h --json
 ```
 
+The default `personal` profile validates the metadata collection path. Application Insights and Managed Grafana are optional there and are reported as skipped when unconfigured. `--profile team` and `--profile internal` require both services plus a finite Log Analytics daily cap and an Azure budget; `internal` also requires least-privilege group RBAC. `--production` implies `internal` and adds the network, alert-routing, and production posture checks. The minimal EVAL target is not expected to pass the team/internal profiles.
+
 For production readiness, add `--production`:
 
 ```bash

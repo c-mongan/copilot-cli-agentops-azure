@@ -1,0 +1,16 @@
+{
+  "report_path": "/mnt/data/research/agent-observability-architecture.md",
+  "required_top_level_sections": 28,
+  "section_order_valid": true,
+  "source_link_definitions": 69,
+  "unresolved_reference_links": 0,
+  "code_fences_balanced": true,
+  "table_rows_checked": 541,
+  "table_dimension_errors": 0,
+  "word_count_whitespace": 20583,
+  "bytes": 157396,
+  "sha256": "34425a4a6ab80a564eaf368ef7ac8c18e26a102bf361d17d41ee1194d0198fe2",
+  "fresh_probe_assertions_passed": 4,
+  "live_copilot_vscode_azure_tests": "NOT RUN; unavailable in this environment",
+  "validation_scope": "Artifact structure, internal source references and local probe; not a new live-network check of all source URLs or full semantic verification."
+}

@@ -12,6 +12,10 @@ const {
 
 function dashboardCommand(args = []) {
   const [subcommand = 'validate'] = args;
+  if (subcommand === '--help' || subcommand === '-h') {
+    writeJson({ ok: true, mode: 'help', usage: 'agentops dashboard validate|links-check|filters-check|ux-check|content-check|kql-check|verify|import', kql_check: dashboardKqlCheck(['--help']) });
+    return;
+  }
   if (!['validate', 'links-check', 'filters-check', 'ux-check', 'content-check', 'kql-check', 'verify', 'import'].includes(subcommand)) throw new Error('dashboard supports: validate|links-check|filters-check|ux-check|content-check|kql-check|verify|import');
   const result = subcommand === 'links-check'
     ? validateDashboardLinks()

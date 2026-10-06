@@ -1,0 +1,11 @@
+{
+  "rule": "TOOL_THRASH",
+  "componentRefs": [
+    { "kind": "tool", "name": "notify-outbox-append" }
+  ],
+  "expectedBehavior": "Once real runs exist on the F3-style 'batch alerts' task, the planted variant should show the outbox-append call repeated >= DEFAULTS.thrashConsecutive times in a row within a run with no distinct ResultState/ArgHash between calls (a naive per-SKU loop), vs the healthy base which should show a single batched append call (state progress each call, or one call total).",
+  "proposedChange": "Batch the call behind a deterministic script, or add a clearer stopping instruction so the agent stops retrying. (Task 6's own proposedChange text for this rule.)",
+  "specSection": "§§43, 51",
+  "provenTier": "static-structure-proof-only",
+  "proofTest": "evals/stockpilot/test/fixture-architecture-proof.test.js"
+}

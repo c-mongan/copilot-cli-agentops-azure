@@ -2,6 +2,8 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 
+const { readPrivateFile } = require('../copilot/delivery-limits');
+
 const spoolVersion = 1;
 const defaultMaxBytes = 64 * 1024 * 1024;
 const defaultTtlMs = 7 * 24 * 60 * 60 * 1000;
@@ -11,6 +13,8 @@ const maximumRetryDelayMs = 60 * 1000;
 const maximumDrainAttempts = 10;
 const defaultClaimLeaseMs = 30 * 1000;
 const maximumClaimLeaseMs = 5 * 60 * 1000;
+const minimumHeldRetentionDays = 30;
+const maximumHeldRetentionDays = 365;
 const admissionLockLeaseMs = 10 * 1000;
 const admissionLockTimeoutMs = 2 * 1000;
 
@@ -21,7 +25,7 @@ const allowedEvidenceTables = new Set([
 // Canonical metadata fields only. Values are scalar so nested content cannot be
 // smuggled into an otherwise safe-looking envelope.
 const allowedEvidenceFields = new Set([
-  'TimeGenerated', 'Sequence', 'EventId', 'ParentEventId', 'RunId', 'SessionId',
+  'TimeGenerated', 'Sequence', 'EventId', 'ParentEventId', 'AgentId', 'ParentAgentId', 'ParentToolCallId', 'ExitCode', 'RunId', 'SessionId',
   'TraceId', 'Surface', 'EventName', 'SpanName', 'Status', 'DurationMs',
   'AgentName', 'ParentAgentName', 'SubAgentName', 'SkillName', 'CommandName', 'ScriptName',
   'ToolName', 'McpServerName', 'McpToolName', 'ModelActual', 'InputTokens', 'OutputTokens',
@@ -34,7 +38,7 @@ const allowedEvidenceFields = new Set([
   'SchemaVersion'
 ]);
 const eventLongFields = new Set([
-  'Sequence', 'InputTokens', 'OutputTokens', 'ReasoningTokens', 'CacheReadTokens',
+  'Sequence', 'ExitCode', 'InputTokens', 'OutputTokens', 'ReasoningTokens', 'CacheReadTokens',
   'CacheWriteTokens', 'TotalTokens', 'TotalToolCalls', 'DurationMs', 'PremiumRequests',
   'TotalNanoAiu', 'ApiDurationMs', 'LinesAdded', 'LinesRemoved', 'FilesModified',
   'ContentDroppedBytes', 'EstimatedCostUsd'
@@ -105,7 +109,8 @@ function safeEvidenceRow(input = {}) {
 function ensurePrivateDirectory(directory) {
   if (fs.existsSync(directory)) {
     const existing = fs.lstatSync(directory);
-    if (existing.isSymbolicLink() || !existing.isDirectory()) {
+    if (existing.isSymbolicLink() || !existing.isDirectory()
+      || (typeof process.getuid === 'function' && existing.uid !== process.getuid())) {
       throw new Error('AgentOps durable spool directory must be a real directory, not a symlink');
     }
   }
@@ -134,7 +139,7 @@ function atomicWrite(file, body) {
 }
 
 function readJson(file, fallback = null) {
-  try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return fallback; }
+  try { return JSON.parse(readPrivateFile(file, 1024 * 1024)); } catch { return fallback; }
 }
 
 function stateFile(directory) {
@@ -223,7 +228,8 @@ function segmentFiles(directory) {
         if (error.code === 'ENOENT') return false;
         throw error;
       }
-      if (entry.isSymbolicLink() || !entry.isFile()) {
+      if (entry.isSymbolicLink() || !entry.isFile() || entry.nlink !== 1
+        || (typeof process.getuid === 'function' && entry.uid !== process.getuid())) {
         throw new Error('AgentOps durable spool segment must be a regular file, not a symlink');
       }
       return true;
@@ -242,8 +248,20 @@ function spoolBytes(directory) {
 function transition(file, state) {
   const next = file.replace(/\.(pending|uploading|expired|quarantined|acknowledged)\.json$/, `.${state}.json`);
   fs.renameSync(file, next);
+  if (state === 'expired' || state === 'quarantined') {
+    const heldAt = new Date();
+    fs.utimesSync(next, heldAt, heldAt);
+  }
   fsyncDirectory(path.dirname(file));
   return next;
+}
+
+function retentionDays(value) {
+  const days = value === undefined || value === null || value === '' ? minimumHeldRetentionDays : Number(value);
+  if (!Number.isSafeInteger(days) || days < minimumHeldRetentionDays || days > maximumHeldRetentionDays) {
+    throw new Error(`AgentOps delivery retention must be an integer from ${minimumHeldRetentionDays} to ${maximumHeldRetentionDays} days`);
+  }
+  return days;
 }
 
 function retryableStatus(status) {
@@ -366,9 +384,123 @@ function createDurableEvidenceSpool(options = {}) {
     };
   }
 
-  function recoverStaleClaims() {
+  function inspectHeld(options = {}) {
+    const eventId = options.eventId ? String(options.eventId) : null;
+    return segmentFiles(directory)
+      .filter(file => /\.(expired|quarantined)\.json$/.test(file))
+      .map(file => {
+        const state = path.basename(file).match(/\.(expired|quarantined)\.json$/)?.[1];
+        const segment = readJson(file);
+        const row = segment?.row;
+        const createdAt = Date.parse(segment?.created_at);
+        const expiresAt = Date.parse(segment?.expires_at);
+        let integrity = 'invalid';
+        try {
+          const validated = safeEvidenceRow(row);
+          if (segment?.version === spoolVersion && allowedEvidenceTables.has(segment?.table)
+            && canonicalJson(validated) === canonicalJson(row)
+            && sha256(canonicalJson(validated)) === segment?.row_hash
+            && segment?.envelope_hash === immutableEnvelopeHash(segment)
+            && Number.isFinite(createdAt) && Number.isFinite(expiresAt)
+            && expiresAt > createdAt && expiresAt - createdAt <= maximumTtlMs) integrity = 'valid';
+        } catch { /* Held-record inspection is read-only; malformed data stays held. */ }
+        return {
+          event_id: typeof row?.EventId === 'string' ? row.EventId : null,
+          state,
+          table: typeof segment?.table === 'string' ? segment.table : null,
+          run_id: typeof row?.RunId === 'string' ? row.RunId : null,
+          sequence: Number.isSafeInteger(row?.Sequence) ? row.Sequence : null,
+          attempts: Number.isSafeInteger(segment?.attempts) ? segment.attempts : null,
+          last_status: ['string', 'number'].includes(typeof segment?.last_status) ? segment.last_status : null,
+          created_at: Number.isFinite(createdAt) ? new Date(createdAt).toISOString() : null,
+          expires_at: Number.isFinite(expiresAt) ? new Date(expiresAt).toISOString() : null,
+          integrity,
+          requeueable: state === 'quarantined' && integrity === 'valid' && expiresAt > now(),
+          file: path.basename(file)
+        };
+      })
+      .filter(item => !eventId || item.event_id === eventId);
+  }
+
+  function requeueHeld(eventId) {
+    if (!eventId || typeof eventId !== 'string') throw new Error('AgentOps delivery requeue requires --event-id');
+    return withAdmissionLock(directory, () => {
+      const matches = segmentFiles(directory).filter(file => file.endsWith('.quarantined.json'))
+        .filter(file => readJson(file)?.row?.EventId === eventId);
+      if (matches.length !== 1) {
+        return { ok: false, status: matches.length ? 'ambiguous' : 'not_found', event_id: eventId };
+      }
+      const file = matches[0];
+      const segment = readJson(file);
+      const createdAt = Date.parse(segment?.created_at);
+      const expiresAt = Date.parse(segment?.expires_at);
+      let validated;
+      try { validated = safeEvidenceRow(segment?.row); } catch { validated = null; }
+      const valid = segment?.version === spoolVersion && allowedEvidenceTables.has(segment?.table)
+        && validated && canonicalJson(validated) === canonicalJson(segment.row)
+        && sha256(canonicalJson(validated)) === segment.row_hash
+        && segment.envelope_hash === immutableEnvelopeHash(segment)
+        && Number.isFinite(createdAt) && Number.isFinite(expiresAt)
+        && expiresAt > createdAt && expiresAt - createdAt <= maximumTtlMs;
+      if (!valid) return { ok: false, status: 'invalid', event_id: eventId };
+      if (Math.min(expiresAt, createdAt + ttlMs) <= now()) return { ok: false, status: 'expired', event_id: eventId };
+
+      for (const existingFile of segmentFiles(directory).filter(item => /\.(pending|uploading)\.json$/.test(item))) {
+        const existing = readJson(existingFile);
+        if (existing?.table === segment.table && existing?.row?.EventId === eventId) {
+          if (existing.row_hash === segment.row_hash) {
+            return { ok: true, status: 'already_pending', event_id: eventId };
+          }
+          return { ok: false, status: 'conflict', event_id: eventId };
+        }
+      }
+
+      segment.state = 'pending';
+      delete segment.last_status;
+      const pendingFile = file.replace(/\.quarantined\.json$/, '.pending.json');
+      atomicWrite(pendingFile, `${canonicalJson(segment)}\n`);
+      fs.unlinkSync(file);
+      fsyncDirectory(directory);
+      return { ok: true, status: 'pending', event_id: eventId, run_id: validated.RunId, file: path.basename(pendingFile) };
+    });
+  }
+
+  function pruneHeld(pruneOptions = {}) {
+    const olderThanDays = retentionDays(pruneOptions.olderThanDays);
+    const cutoff = Number(pruneOptions.now ?? now()) - olderThanDays * 24 * 60 * 60 * 1000;
+    const removed = [];
+    const candidates = [];
+    withAdmissionLock(directory, () => {
+      for (const file of segmentFiles(directory).filter(item => /\.(expired|quarantined)\.json$/.test(item))) {
+        const stat = fs.lstatSync(file);
+        if (stat.mtimeMs > cutoff) continue;
+        const state = path.basename(file).match(/\.(expired|quarantined)\.json$/)?.[1];
+        const segment = readJson(file);
+        const item = {
+          state,
+          event_id: typeof segment?.row?.EventId === 'string' ? segment.row.EventId : null,
+          held_since: new Date(stat.mtimeMs).toISOString(),
+          bytes: stat.size,
+          file: path.basename(file)
+        };
+        candidates.push(item);
+        if (pruneOptions.apply) {
+          fs.unlinkSync(file);
+          removed.push(item);
+        }
+      }
+      if (removed.length) fsyncDirectory(directory);
+    });
+    return { older_than_days: olderThanDays, applied: Boolean(pruneOptions.apply), candidates, removed };
+  }
+
+  function recoverStaleClaims(scope = {}) {
     let recovered = 0;
     for (const file of segmentFiles(directory).filter(name => name.endsWith('.uploading.json'))) {
+      const segment = (scope.runId || scope.eventIds) ? readJson(file) : null;
+      if ((scope.runId || scope.eventIds) && (!segment?.row
+        || (scope.runId && segment.row.RunId !== scope.runId)
+        || (scope.eventIds && !scope.eventIds.has(segment.row.EventId)))) continue;
       let stale = false;
       try { stale = Date.now() - fs.statSync(file).mtimeMs >= claimLeaseMs; } catch (error) {
         if (error.code === 'ENOENT') continue;
@@ -400,11 +532,31 @@ function createDurableEvidenceSpool(options = {}) {
   async function drain(uploader, drainOptions = {}) {
     if (typeof uploader !== 'function') throw new Error('AgentOps durable spool drain requires an uploader');
     const maxAttempts = boundedOption(drainOptions.maxAttempts, 3, maximumDrainAttempts, 'maxAttempts');
-    const result = { acknowledged: 0, acknowledged_event_ids: [], pending: 0, expired: 0, quarantined: 0, attempts: 0, claimed: 0, recovered: recoverStaleClaims() };
+    const runId = drainOptions.runId || null;
+    const eventIds = Array.isArray(drainOptions.eventIds) && drainOptions.eventIds.length > 0
+      ? new Set(drainOptions.eventIds)
+      : null;
+    const scoped = Boolean(runId || eventIds);
+    const result = { acknowledged: 0, acknowledged_event_ids: [], pending: 0, expired: 0, quarantined: 0, attempts: 0, claimed: 0, scope_matched: 0, skipped_scope: 0, recovered: recoverStaleClaims({ runId, eventIds }) };
     for (const acknowledged of segmentFiles(directory).filter(name => name.endsWith('.acknowledged.json'))) {
+      if (scoped) {
+        const segment = readJson(acknowledged);
+        if (!segment?.row || (runId && segment.row.RunId !== runId) || (eventIds && !eventIds.has(segment.row.EventId))) continue;
+      }
       fs.unlinkSync(acknowledged);
     }
     for (const pendingFile of segmentFiles(directory).filter(name => name.endsWith('.pending.json'))) {
+      if (scoped) {
+        const candidate = readJson(pendingFile);
+        const candidateRow = candidate?.row;
+        if (!candidateRow
+          || (runId && candidateRow.RunId !== runId)
+          || (eventIds && !eventIds.has(candidateRow.EventId))) {
+          result.skipped_scope += 1;
+          continue;
+        }
+        result.scope_matched += 1;
+      }
       const file = claim(pendingFile);
       if (!file) continue;
       result.claimed += 1;
@@ -429,7 +581,13 @@ function createDurableEvidenceSpool(options = {}) {
         result.quarantined += 1;
         continue;
       }
-      if (expiresAt <= now()) {
+      if ((runId && validatedRow.RunId !== runId) || (eventIds && !eventIds.has(validatedRow.EventId))) {
+        transition(file, 'pending');
+        result.scope_matched -= 1;
+        result.skipped_scope += 1;
+        continue;
+      }
+      if (Math.min(expiresAt, createdAt + ttlMs) <= now()) {
         transition(file, 'expired');
         result.expired += 1;
         continue;
@@ -447,6 +605,14 @@ function createDurableEvidenceSpool(options = {}) {
       heartbeat.unref();
       try {
       for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        if (Math.min(expiresAt, createdAt + ttlMs) <= now()) {
+          segment.attempts += attempt - 1;
+          atomicWrite(file, `${canonicalJson(segment)}\n`);
+          transition(file, 'expired');
+          result.expired += 1;
+          terminal = true;
+          break;
+        }
         result.attempts += 1;
         let response;
         try {
@@ -502,7 +668,7 @@ function createDurableEvidenceSpool(options = {}) {
     return { ...result, status: status() };
   }
 
-  return { directory, drain, enqueue, status };
+  return { directory, drain, enqueue, inspectHeld, pruneHeld, requeueHeld, status };
 }
 
 module.exports = {
@@ -513,5 +679,6 @@ module.exports = {
   createDurableEvidenceSpool,
   retryDelayMs,
   retryableStatus,
+  retentionDays,
   safeEvidenceRow
 };

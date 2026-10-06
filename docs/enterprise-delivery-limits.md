@@ -1,0 +1,20 @@
+# Local publishing limits
+
+Cloud publishing defaults to **zero bytes**. Local capture continues. An explicit allowance is required for the reviewed target. The qualification policy is at most **1 MiB per UTC day**, shared by the selected AgentOps home. Configuring an allowance does not authorize uploading data or spending.
+
+| Control | Default | Scope |
+| --- | --- | --- |
+| Session retry age | 48 hours | Immutable outbox creation time; legacy state starts from its last stored update |
+| Session eligible backlog | 128 MiB | Sum of pending/in-flight event and span export bytes under one home's `runs` directory |
+| Publishing allowance | 0 bytes/day | All Logs Ingestion session, lifecycle, and direct-upload payload attempts using the same home |
+| Local evidence retention | Preserved | Expired/overflow exports and their loss receipts require operator review |
+
+Set `AGENTOPS_MAX_PUBLISH_BYTES_PER_DAY=1048576` for the qualification allowance. `agentops delivery drain` and `agentops azure-ingest logs-upload` also accept `--max-publish-bytes-per-day 1048576`. The existing `--yes` boundary still applies. Preview commands do not reserve bytes or acquire tokens. Programmatic callers can supply `deliveryLimits: { maxPublishBytesPerDay: 1048576 }` and `agentopsHome`; tests use temporary homes. `ttlMs` and `maxQueueBytes` may tighten the local policy, but cannot exceed 48 hours and 128 MiB per queue.
+
+Every request payload is reserved in `runs/.session-publish-budget.json` before publishing. Node fetch reserves exact UTF-8 body bytes; Azure CLI uploads reserve a conservative bound covering Python ASCII escaping, structural whitespace, and numeric formatting, because `az rest` reserializes the supplied JSON. All cooperating local processes share an exclusive owner claim. Failed commands, lost acknowledgments, token failures, and retried requests retain their reservations. A token-refresh resend requires a second reservation. This intentionally sacrifices some throughput to avoid refunding a remotely accepted request. The budget records only target and allowance-policy hashes, UTC day, and attempted byte total. A changed target, changed allowance during the same day, corrupt state, backward day, or unsafe file fails closed. A new forward UTC day resets the allowance for that same target.
+
+Session outboxes bind subscription, HTTPS endpoint, and DCR. Expiry uses creation time rather than retry time. Expired or overflow streams have a retained `lossReceipt` containing the reason, time, rows, attempt count, and whether remote acceptance is unknown. An oversized export records byte size and an unknown row count without reading the oversized payload. The original evidence files remain local. Pruning never automatically deletes these ambiguous/held runs. Existing live claims prevent concurrent drains; exited-process claims can be recovered. Acceptance remains at least once: a crash after remote acceptance can cause a duplicate on retry.
+
+These controls bound eligible transport backlog and local request attempts. They **do not bound all local evidence disk use**, enforce a fleet-wide limit across separate machines/homes, encrypt disks, revoke inherited Azure access, or guarantee a billing ceiling. A fleet needs a coordinated publisher or central allowance allocation. Azure ingestion size, pricing, other publishers, workspace emergency caps, clock changes, and administrator changes are outside this local accounting boundary. Keep live private queues on internal encrypted storage and arrange reviewed local evidence cleanup separately.
+
+The lifecycle spool uses the same 48-hour/128-MiB defaults when created through the wrapper. Its segments are separate from session exports; each queue has a 128-MiB hard maximum, providing a 256-MiB combined eligible-backlog ceiling for these two queues under one home. Publishing accounting is shared. Old lifecycle segments are held at the earlier of their stored expiry and the current 48-hour transport age. Lifecycle JSON records larger than 1 MiB are held without an unbounded parse. No lossless durability or business recovery objective is claimed.

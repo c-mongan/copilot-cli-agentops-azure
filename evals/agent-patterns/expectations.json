@@ -1,0 +1,9 @@
+{
+  "scope": "stimulus",
+  "components": {
+    "agents": { "supported": true, "expected": 1 },
+    "skills": { "supported": true, "expected": 2 },
+    "references": { "supported": true, "expected": 4 },
+    "scripts": { "supported": true, "expected": 2 }
+  }
+}

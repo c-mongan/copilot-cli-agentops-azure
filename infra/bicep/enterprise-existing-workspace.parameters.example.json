@@ -1,0 +1,22 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspaceName": { "value": "law-copilot-agentops-eval-eval930" },
+    "metadataDcrName": { "value": "dcr-copilot-agentops-eval930-v2" },
+    "dataCollectionEndpointName": { "value": "REPLACE_WITH_VERIFIED_EXISTING_DCE_NAME" },
+    "applicationInsightsName": { "value": "appi-copilot-agentops-eval-eval930" },
+    "location": { "value": "northeurope" },
+    "observers": { "value": [] },
+    "editors": { "value": [] },
+    "publishers": { "value": [] },
+    "metadataReaders": { "value": [] },
+    "deployBudget": { "value": false },
+    "monthlyBudgetAmount": { "value": 10 },
+    "budgetStartDate": { "value": "2026-10-01T00:00:00Z" },
+    "budgetContactEmails": { "value": [] },
+    "deployActionGroup": { "value": false },
+    "actionGroupContactEmails": { "value": [] },
+    "deployHealthRule": { "value": false }
+  }
+}

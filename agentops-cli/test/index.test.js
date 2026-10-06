@@ -223,8 +223,23 @@ test('CLI help exposes small core surface and hides experimental commands', () =
   assert.match(result.stdout, /agentops experimental <old-command>/);
   assert.doesNotMatch(result.stdout, /benchmark list/);
   assert.doesNotMatch(result.stdout, /saved-view add/);
-  assert.match(result.stdout, /Next:\n  agentops init --full/);
+  assert.match(result.stdout, /Next:\n  agentops product --help/);
+  assert.match(result.stdout, /agentops init --full\s+# advanced compatibility path/);
   assert.match(result.stdout, /agentops help <command>/);
+});
+
+test('Azure pilot provision help works before subscription details are supplied', () => {
+  const result = spawnSync(process.execPath, [
+    path.join(root, 'agentops-cli', 'src', 'index.js'),
+    'provision', 'azure', '--help'
+  ], { cwd: root, encoding: 'utf8' });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /agentops provision azure --subscription <id> --resource-group <new-agentops-rg>/);
+  assert.match(result.stdout, /Preview is the default/);
+  assert.match(result.stdout, /--yes\s+Apply only after Azure what-if passes/);
+  assert.match(result.stdout, /synthetic EVAL/);
+  assert.doesNotMatch(result.stdout, /requires --subscription/);
 });
 
 test('CLI offers focused per-command help with a path back to the full reference', () => {
@@ -234,7 +249,8 @@ test('CLI offers focused per-command help with a path back to the full reference
   });
 
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /^agentops delivery status\|drain/);
+  assert.match(result.stdout, /^agentops delivery status\|review\|requeue\|prune\|drain/);
+  assert.match(result.stdout, /--older-than <30-365-days>/);
   assert.match(result.stdout, /agentops --help/);
   assert.doesNotMatch(result.stdout, /dashboard validate/);
 });
@@ -501,6 +517,17 @@ test('Homebrew formula renderer replaces all release placeholders', () => {
   assert.ok(rendered.includes('sha256 "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"'));
 });
 
+test('CLI package asset copier resolves aliased roots and fails closed outside the repository', t => {
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-asset-alias-'));
+  t.after(() => fs.rmSync(temp, { recursive: true, force: true }));
+  const alias = path.join(temp, 'repo-alias');
+  try { fs.symlinkSync(root, alias, 'junction'); } catch { t.skip('symlinks unavailable'); return; }
+  assert.equal(shouldCopy(path.join(alias, 'workbooks', 'agentops-workbook.json')), true);
+  assert.equal(shouldCopy(path.join(alias, 'workbooks', 'README.md')), false);
+  assert.equal(shouldCopy(path.join(alias, 'scripts', 'qualify-enterprise-evidence.js')), false);
+  assert.equal(shouldCopy(path.join(temp, 'outside.json')), false);
+});
+
 test('CLI package asset copier excludes heavyweight and local-only files', () => {
   assert.equal(shouldCopy(path.join(root, 'docs', 'release-distribution.md')), true);
   assert.equal(shouldCopy(path.join(root, 'docs', 'screenshots', 'agentops-home.png')), false);
@@ -508,6 +535,11 @@ test('CLI package asset copier excludes heavyweight and local-only files', () =>
   assert.equal(shouldCopy(path.join(root, 'scripts', 'install-copilot-agentops-shim.sh')), true);
   assert.equal(shouldCopy(path.join(root, 'scripts', 'check-install-smoke.js')), false);
   assert.equal(shouldCopy(path.join(root, 'packages', 'agentops-copilot-sdk', 'node_modules', 'copilot', 'index.js')), false);
+  assert.equal(shouldCopy(path.join(root, 'instrumentation', 'python', 'agentops_script.py')), true);
+  assert.equal(shouldCopy(path.join(root, 'instrumentation', 'python', 'agentops_launcher.py')), true);
+  assert.equal(shouldCopy(path.join(root, 'instrumentation', 'python', 'bin-python3', 'python3')), true);
+  assert.equal(shouldCopy(path.join(root, 'instrumentation', 'python', '__pycache__', 'agentops_script.pyc')), false);
+  assert.equal(shouldCopy(path.join(root, 'instrumentation', 'python', 'test_agentops_script.py')), false);
   assert.equal(shouldCopy(path.join(root, 'packages', 'agentops-copilot-sdk', 'agentops-copilot-sdk-0.1.0.tgz')), false);
 });
 
@@ -755,6 +787,7 @@ test('azure-ingest logs-upload executes az rest only after a ready plan', () => 
     });
 
     const result = runLogsIngestionUpload(plan, {
+      agentopsHome: path.join(tempDir, 'budget-home'), deliveryLimits: { maxPublishBytesPerDay: 1048576 },
       expectedSubscriptionId: '11111111-1111-4111-8111-111111111111',
       approvedSubscriptionIds: ['11111111-1111-4111-8111-111111111111'],
       spawnSync: (command, args) => {
@@ -771,7 +804,9 @@ test('azure-ingest logs-upload executes az rest only after a ready plan', () => 
     assert.equal(result.executed, true);
     assert.equal(calls[0].command, 'az');
     assert.deepEqual(calls[0].args, ['account', 'show', '--query', 'id', '-o', 'tsv']);
-    assert.deepEqual(calls[1].args.slice(0, 4), ['rest', '--method', 'post', '--uri']);
+    assert.deepEqual(calls[1].args.slice(0, 6), [
+      'rest', '--subscription', '11111111-1111-4111-8111-111111111111', '--method', 'post', '--uri'
+    ]);
     assert.equal(calls[1].args[calls[1].args.indexOf('--resource') + 1], 'https://monitor.azure.com/');
     assert.ok(calls[1].args.includes('Content-Type=application/json'));
     assert.ok(calls[1].args.some(arg => /^@.*AgentOpsRunSummary_CL\.json$/.test(arg)));
@@ -2410,8 +2445,8 @@ test('default skills install copies bundled skills into Copilot home', () => {
     assert.equal(fs.existsSync(liveSkill), true);
     assert.equal(fs.existsSync(benchmarkSkill), true);
     assert.match(fs.readFileSync(latestSkill, 'utf8'), /find my latest AgentOps run/i);
-    assert.match(fs.readFileSync(setupSkill, 'utf8'), /init --full/);
-    assert.match(fs.readFileSync(setupSkill, 'utf8'), /one evidence-backed next action/);
+    assert.match(fs.readFileSync(setupSkill, 'utf8'), /agentops attach --repo \. --json/);
+    assert.match(fs.readFileSync(setupSkill, 'utf8'), /agentops detach --repo \. --yes/);
     assert.match(fs.readFileSync(liveSkill, 'utf8'), /what happened in the latest Copilot CLI session/);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
@@ -2667,32 +2702,40 @@ test('setup guide recommends the shortest non-mutating setup path', () => {
     assert.equal(result.mutates, false);
     assert.equal(result.azd.ok, true);
     assert.equal(result.first_run.read_only, true);
-    assert.equal(result.first_run.guided_command, 'agentops init --full');
+    assert.equal(result.first_run.guided_command, 'agentops attach --repo .');
     assert.equal(result.cloud.expected_subscription_id, TEST_APPROVED_SUBSCRIPTION_ID);
     assert.equal(result.cloud.active_subscription_id, TEST_APPROVED_SUBSCRIPTION_ID);
     assert.equal(result.cloud.subscription_match, true);
-    assert.equal(result.first_run.bind_command, 'agentops configure import-azd');
+    assert.equal(result.first_run.bind_command, 'agentops configure import-azd --project');
     assert.match(result.first_run.privacy_smoke_command, /collector smoke --privacy strict --poison/);
     assert.match(result.first_run.smoke_command, /smoke --real-copilot/);
     assert.match(result.first_run.smoke_command, /--open-browser/);
-    assert.match(result.first_run.run_command, /--no-remote/);
+    assert.equal(result.first_run.run_command, result.first_run.observe_command);
+    assert.match(result.first_run.run_command, /copilot-session launch --repo \. -- --agent/);
+    assert.match(result.first_run.upload_command, /--upload --yes/);
+    assert.match(result.first_run.runtime_profile_command, /--python-runtime <version>/);
+    assert.equal(result.first_run.coverage_command, 'agentops coverage --repo . --json');
+    assert.equal(result.first_run.azure_validation_command, 'agentops validate-azure --profile personal --json');
     assert.match(result.first_run.privacy_note, /Prompts and responses stay off by default/);
-    assert.ok(result.next.includes('agentops configure import-azd'));
+    assert.ok(result.next.includes('agentops configure import-azd --project'));
     assert.match(output, /This command is read-only/);
-    assert.match(output, /One-minute first run/);
-    assert.match(output, /Guided path: agentops init --full/);
+    assert.match(output, /Recommended Copilot CLI setup/);
+    assert.match(output, /No-write repo inventory: agentops attach --repo \./);
     assert.match(output, /Visual Studio Enterprise Subscription/);
     assert.match(output, /match=yes/);
-    assert.match(output, /Privacy smoke fallback: agentops collector smoke --privacy strict --poison --json/);
-    assert.match(output, /Real smoke fallback: agentops smoke --real-copilot --wait 2m --poll 10s --open-browser/);
-    assert.match(output, /zero-write preview/);
-    assert.match(output, /agentops init --full --yes/);
-    assert.match(output, /the smoke opens Run Story/);
+    assert.match(output, /Process-scoped observed run: agentops copilot-session launch/);
+    assert.match(output, /Record runtime labels: agentops configure set --project/);
+    assert.match(output, /Check declared-versus-observed coverage: agentops coverage --repo \. --json/);
+    assert.match(output, /Validate Azure before upload: agentops validate-azure --profile personal --json/);
+    assert.match(output, /Azure upload is separate and requires a complete validated project target/);
+    assert.match(output, /Project Azure binding: agentops configure import-azd --project/);
+    assert.match(output, /No-write repo inventory/);
+    assert.match(output, /agentops attach --repo \. --yes/);
+    assert.doesNotMatch(output, /agentops init --full --yes/);
     assert.match(output, /agentops dashboard import --yes --resource-group rg-agentops-dev --grafana-name graf-agentops-dev/);
-    assert.match(output, /Fastest path/);
-    assert.ok(result.next.includes('agentops init --full'));
-    assert.match(output, /agentops collector smoke --privacy strict --poison/);
-    assert.match(output, /more fallback commands are available in: agentops setup --json/);
+    assert.ok(result.next.includes('agentops attach --repo .'));
+    assert.doesNotMatch(output, /export PATH=.*local\/bin/);
+    assert.doesNotMatch(output, /Everyday observed use: agentops copilot /);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
@@ -2712,6 +2755,7 @@ test('enterprise validation confirms local guardrails', () => {
   assert.equal(result.enterprise_pilot_ready, false);
   assert.ok(result.score >= 88);
   assert.ok(result.checks.some(check => check.name === 'daily-ingestion-cap' && check.ok));
+  assert.ok(result.checks.some(check => check.name === 'pilot-provisions-workspace-app-insights' && check.ok));
   assert.ok(result.checks.some(check => check.name === 'least-privilege-rbac-module' && check.ok));
   assert.ok(result.checks.some(check => check.name === 'budget-module' && check.ok));
   assert.ok(result.checks.some(check => check.name === 'enterprise-deploy-script' && check.ok));
@@ -3794,9 +3838,38 @@ test('validateAzure reports missing local Azure prerequisites without mutating A
   assert.equal(result.ok, false);
   assert.equal(byName['az-cli'].ok, false);
   assert.equal(byName['log-analytics-workspace-id'].ok, false);
-  assert.equal(byName['grafana-base-url'].ok, false);
+  assert.equal(byName['grafana-base-url'].ok, true);
+  assert.equal(byName['grafana-base-url'].skipped, true);
   assert.ok(result.next.includes('agentops configure set --workspace-id "<workspace-id>"'));
   assert.match(output, /Azure validation is incomplete/);
+});
+
+test('validateAzure treats App Insights and Grafana as optional only for personal readiness', () => {
+  const personal = validateAzure({
+    azAvailable: false,
+    readinessProfile: 'personal'
+  });
+  const personalChecks = Object.fromEntries(personal.checks.map(check => [check.name, check]));
+
+  assert.equal(personal.config.app_insights_name, '');
+  assert.equal(personalChecks['application-insights'].ok, true);
+  assert.equal(personalChecks['application-insights'].skipped, true);
+  assert.equal(personalChecks['grafana-base-url'].ok, true);
+  assert.equal(personalChecks['grafana-base-url'].skipped, true);
+  assert.match(renderValidateAzure(personal), /application-insights: skipped/);
+  assert.match(renderValidateAzure(personal), /grafana-base-url: skipped/);
+
+  const internal = validateAzure({
+    azAvailable: false,
+    readinessProfile: 'internal'
+  });
+  const internalChecks = Object.fromEntries(internal.checks.map(check => [check.name, check]));
+
+  assert.equal(internalChecks['application-insights'].ok, false);
+  assert.equal(internalChecks['application-insights'].required, true);
+  assert.equal(internalChecks['grafana-base-url'].ok, false);
+  assert.equal(internalChecks['grafana-base-url'].required, true);
+  assert.equal(internalChecks['grafana-resource'].ok, false);
 });
 
 test('validateAzure runs read-only Azure checks with mocked az output', () => {
@@ -4920,8 +4993,8 @@ test('dashboard verify combines static UX and optional live KQL gates', () => {
   assert.equal(offline.summary.kql_checks, 0);
   assert.ok(offline.next.some(command => command.includes('--live')));
 
-  const live = dashboardVerify(['--live', '--last', '24h', '--workspace-id', 'workspace-123'], {
-    runQuery: (_query, options) => ({ ok: options.workspaceId === 'workspace-123', rows: [{ ok: true }] })
+  const live = dashboardVerify(['--live', '--last', '24h', '--workspace-id', '12345678-1234-1234-1234-123456789abc'], {
+    runQuery: (_query, options) => ({ ok: options.workspaceId === '12345678-1234-1234-1234-123456789abc', rows: [{ ok: true }] })
   });
   assert.equal(live.ok, true, live.errors.join('\n'));
   assert.equal(live.live, true);
@@ -5054,7 +5127,7 @@ test('dashboard import --yes invokes the import script with explicit env', () =>
 
 test('dashboard kql-check renders representative V2 panel queries', () => {
   const queries = [];
-  const result = dashboardKqlCheck(['--last', '24h', '--workspace-id', 'workspace-123'], {
+  const result = dashboardKqlCheck(['--last', '24h', '--workspace-id', '12345678-1234-1234-1234-123456789abc'], {
     runQuery: (query, options) => {
       queries.push({ query, options });
       return { ok: true, rows: [{ ok: true }] };
@@ -5063,7 +5136,7 @@ test('dashboard kql-check renders representative V2 panel queries', () => {
 
   assert.equal(result.ok, true, result.errors.join('\n'));
   assert.equal(result.checks.length, 35);
-  assert.ok(queries.every(item => item.options.workspaceId === 'workspace-123'));
+  assert.ok(queries.every(item => item.options.workspaceId === '12345678-1234-1234-1234-123456789abc'));
   assert.ok(queries.every(item => item.query.includes('ago(24h)')));
   assert.ok(queries.every(item => !item.query.includes('$__timeFrom')));
   assert.ok(queries.some(item => item.query.includes('AppDependencies')));
@@ -5106,7 +5179,7 @@ test('dashboard kql-check can require live rows', () => {
   });
 
   assert.equal(result.ok, false);
-  assert.equal(result.errors.length, 18);
+  assert.equal(result.errors.length, 14);
   assert.match(result.errors[0], /query returned no rows/);
   assert.equal(result.checks.find(check => check.panel === 'Prompt and response viewer (explicit opt-in)').ok, true);
 });
@@ -8562,6 +8635,24 @@ test('link trace builds OperationId query', () => {
   assert.match(result.query, /OperationId == "op-456"/);
 });
 
+test('session and trace links bound results and project only explicit metadata', () => {
+  for (const [kind, id] of [['session', 'conv-1'], ['trace', 'trace-1']]) {
+    const query = buildLink(kind, id, { last: '2h' }).query;
+    assert.match(query, /\| take 200$/);
+    assert.doesNotMatch(query, /, Properties\s*\n/);
+    assert.match(query, /model_actual/);
+    assert.match(query, /input_tokens/);
+  }
+});
+
+test('session and trace links validate lookback and escape exact IDs', () => {
+  for (const kind of ['session', 'trace']) {
+    assert.throws(() => buildLink(kind, 'safe', { last: '1h) | take 100000' }), /duration/);
+    const query = buildLink(kind, 'id\\"quoted', { last: '2h' }).query;
+    assert.match(query, /id\\\\\\"quoted/);
+  }
+});
+
 test('latest summarizes a fixture session in plain language', () => {
   const summary = latestSessionSummary({ filePath: path.join(root, 'fixtures', 'sample-otel', 'tool-failure.ndjson.fixture') });
   const output = renderLatest(summary);
@@ -9004,10 +9095,13 @@ test('field catalog query discovers Properties keys', () => {
   const query = fieldCatalogQuery('14d');
   assert.match(query, /ago\(14d\)/);
   assert.match(query, /bag_keys\(Properties\)/);
-  assert.match(query, /example_values/);
+  assert.match(query, /summarize observed=count\(\) by field/);
+  assert.doesNotMatch(query, /example_values|tostring\(Properties\[field\]\)/);
   assert.match(query, /content_risk/);
   assert.match(query, /exact_content_keys/);
   assert.match(query, /sensitive-key-family/);
+  assert.match(query, /\| take 200$/);
+  assert.throws(() => fieldCatalogQuery('14d) | take 100000'), /duration/);
 });
 
 test('context pressure query ranks inefficient sessions', () => {

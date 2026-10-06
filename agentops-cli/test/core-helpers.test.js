@@ -50,14 +50,40 @@ function withTempDir(fn) {
 test('copilot session paths reject unsafe session ids and preserve safe ids', () => {
   assert.equal(safeName(' agent-01_./:@* '), 'agent-01_./:@*');
   assert.equal(safeName('../bad session', 'fallback'), 'fallback');
-  assert.throws(
-    () => defaultSessionEventsPath('../bad session', '/tmp/home'),
-    /session id is required/
-  );
-  assert.equal(
-    defaultSessionEventsPath('session_123', '/tmp/home'),
-    path.join('/tmp/home', '.copilot', 'session-state', 'session_123', 'events.jsonl')
-  );
+  const previous = process.env.COPILOT_HOME;
+  delete process.env.COPILOT_HOME;
+  try {
+    assert.throws(
+      () => defaultSessionEventsPath('../bad session', '/tmp/home'),
+      /session id is required/
+    );
+    assert.throws(
+      () => defaultSessionEventsPath('../valid', '/tmp/home'),
+      /session id is required/
+    );
+    assert.equal(
+      defaultSessionEventsPath('session_123', '/tmp/home'),
+      path.join('/tmp/home', '.copilot', 'session-state', 'session_123', 'events.jsonl')
+    );
+  } finally {
+    if (previous !== undefined) process.env.COPILOT_HOME = previous;
+  }
+});
+
+test('copilot session path follows COPILOT_HOME for isolated session stores', () => {
+  const previous = process.env.COPILOT_HOME;
+  const isolatedHome = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-copilot-home-'));
+  process.env.COPILOT_HOME = isolatedHome;
+  try {
+    assert.equal(
+      defaultSessionEventsPath('session_123'),
+      path.join(isolatedHome, 'session-state', 'session_123', 'events.jsonl')
+    );
+  } finally {
+    if (previous === undefined) delete process.env.COPILOT_HOME;
+    else process.env.COPILOT_HOME = previous;
+    fs.rmSync(isolatedHome, { recursive: true, force: true });
+  }
 });
 
 test('copilot session reader parses jsonl and surfaces invalid file/json paths', () => {
@@ -146,6 +172,20 @@ test('copilot session enrichment emits MCP metadata, skill requests, and failed 
   assert.equal(rows[4].outcome, 'failed');
   assert.equal(rows[4].attributes['error.type'], 'tool_failed');
   assert.equal(rows[5].event, 'hook.started');
+});
+
+test('copilot session enrichment resolves tool completions through call IDs without leaking content', () => {
+  const rows = enrichCopilotSessionEvents([
+    { type: 'tool.execution_start', data: { toolCallId: 'call-one', toolName: 'view', arguments: { path: 'secret.txt' } } },
+    { type: 'tool.execution_start', data: { toolCallId: 'call-two', toolName: 'bash', arguments: { command: 'private' } } },
+    { type: 'tool.execution_complete', data: { toolCallId: 'call-two', success: false, result: 'private result' } },
+    { type: 'tool.execution_complete', data: { toolCallId: 'call-one', success: true, result: 'secret content' } },
+    { type: 'tool.execution_complete', data: { toolCallId: 'missing', success: false } }
+  ], { sessionId: 'synthetic-session' });
+
+  assert.deepEqual(rows.map(row => row.attributes['gen_ai.tool.name']), ['bash', 'view', 'unknown-tool']);
+  assert.deepEqual(rows.map(row => row.outcome), ['failed', 'success', 'failed']);
+  assert.doesNotMatch(JSON.stringify(rows), /call-one|call-two|secret|private/);
 });
 
 test('copilot session enrichment preserves ordered fleet subagent lifecycle metadata', () => {

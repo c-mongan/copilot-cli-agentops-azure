@@ -23,7 +23,7 @@ function azureIngestCommand(args = []) {
 
   if (subcommand === 'plan') {
     const dir = optionValue(args, '--dir', path.join(repoRoot, '.agentops', 'demo', 'latest'));
-    const plan = buildAzureIngestPlan({ dir, allowContent: hasFlag(args, '--allow-content') });
+    const plan = buildAzureIngestPlan({ dir, allowContent: hasFlag(args, '--allow-content'), contentOnly: hasFlag(args, '--content-only'), spansOnly: hasFlag(args, '--spans-only'), eventsOnly: hasFlag(args, '--events-only') });
 
     writeJsonOrRender(plan, hasFlag(args, '--json'), renderAzureIngestPlan);
     if (!plan.ok) process.exitCode = 1;
@@ -36,10 +36,13 @@ function azureIngestCommand(args = []) {
       dir,
       endpoint: optionValue(args, '--endpoint', process.env.AGENTOPS_LOGS_INGESTION_ENDPOINT || ''),
       dcrImmutableId: optionValue(args, '--dcr-immutable-id', process.env.AGENTOPS_DCR_IMMUTABLE_ID || ''),
-      allowContent: hasFlag(args, '--allow-content')
+      allowContent: hasFlag(args, '--allow-content'),
+      contentOnly: hasFlag(args, '--content-only'),
+      spansOnly: hasFlag(args, '--spans-only'),
+      eventsOnly: hasFlag(args, '--events-only')
     });
     const yes = hasFlag(args, '--yes');
-    const result = yes ? runLogsIngestionUpload(plan) : plan;
+    const result = yes ? runLogsIngestionUpload(plan, { deliveryLimits: optionValue(args, '--max-publish-bytes-per-day') === null ? undefined : { maxPublishBytesPerDay: /^\d+$/.test(String(optionValue(args, '--max-publish-bytes-per-day'))) ? Number(optionValue(args, '--max-publish-bytes-per-day')) : NaN } }) : plan;
 
     writeJsonOrRender(result, hasFlag(args, '--json'), yes ? renderLogsIngestionUploadResult : renderLogsIngestionUploadPlan);
     if (!result.ok) process.exitCode = 1;

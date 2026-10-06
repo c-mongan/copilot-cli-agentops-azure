@@ -1,0 +1,33 @@
+{
+  "id": "stockpilot-live-tool-thrash-20261001",
+  "status": "inconclusive",
+  "evidenceTier": "live-synthetic-vally-single-trial",
+  "change": "Remove batch guidance from notify-templates",
+  "reason": "Both variants passed their output grader in one trial each. Both made 11 tool calls. This sample does not establish the planted tool-thrash effect, correctness of every sink action, or an efficiency improvement. No candidate is accepted.",
+  "baseline": {
+    "architectureVersion": "unknown",
+    "configurationVersion": "3297203a679d97cb",
+    "passed": 1,
+    "trials": 1,
+    "durationMs": 35995,
+    "inputTokens": 100813,
+    "outputTokens": 2526,
+    "usageCoverage": 7,
+    "toolCalls": 11
+  },
+  "candidate": {
+    "architectureVersion": "unknown",
+    "configurationVersion": "146985b9255a56e8",
+    "passed": 1,
+    "trials": 1,
+    "durationMs": 28129,
+    "inputTokens": 131136,
+    "outputTokens": 2129,
+    "usageCoverage": 7,
+    "toolCalls": 11
+  },
+  "vallyVersion": "0.17.0",
+  "model": "gpt-5.5",
+  "planDigest": "ac4fce970d331912",
+  "runIdsRedacted": true
+}

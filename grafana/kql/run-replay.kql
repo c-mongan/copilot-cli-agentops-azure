@@ -1,4 +1,16 @@
-union isfuzzy=true AgentOpsEvents_CL
+union isfuzzy=true
+(
+    AgentOpsEvents_CL
+    | where TimeGenerated between ($__timeFrom() .. $__timeTo())
+    | extend EventKeyId=tostring(column_ifexists("EventId", "")), EventKeyRunId=tostring(column_ifexists("RunId", ""))
+    | where isnotempty(EventKeyId)
+    | summarize arg_max(TimeGenerated, *) by EventKeyRunId, EventKeyId
+),
+(
+    AgentOpsEvents_CL
+    | where TimeGenerated between ($__timeFrom() .. $__timeTo())
+    | where isempty(tostring(column_ifexists("EventId", "")))
+)
 | where TimeGenerated between ($__timeFrom() .. $__timeTo())
 | where '$run_id' == '__all' or RunId == '$run_id'
 | extend SkillName=tostring(column_ifexists("SkillName", ""))

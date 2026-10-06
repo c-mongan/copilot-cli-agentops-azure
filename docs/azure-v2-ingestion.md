@@ -57,9 +57,12 @@ agentops delivery drain
 agentops delivery drain --yes
 ```
 
-The drain command uploads only strict metadata-only `AgentOpsEvents_CL`
-lifecycle receipts. It does not make the complete native Copilot OTLP stream
-durable; that stream remains on the Collector/Application Insights path.
+The drain command uploads strict metadata-only wrapper lifecycle receipts and
+resumes pending per-run Copilot Events and Spans batches from their private
+outboxes. It skips batches already marked accepted. If Azure accepted a batch
+but the local checkpoint was not saved, a later drain may resend it; readers
+must deduplicate by stable event or span identity. Collector-native telemetry
+outside the session export remains on the Collector/Application Insights path.
 
 3. Confirm one custom Log Analytics table per `AgentOps*_CL` table and one DCR stream per table exist.
 4. Send each JSONL row to the matching DCR stream.
@@ -83,6 +86,42 @@ agentops azure-ingest logs-upload \
 ```
 
 Keep `AgentOpsContent_CL` disabled unless the target workspace is approved for restricted content review; pass `--allow-content` only for that separate workspace.
+
+For a reviewed metadata-only span export, `--spans-only` selects just `AgentOpsSpans_CL` and does not enable content capture:
+
+```bash
+agentops azure-ingest plan --dir <span-export-dir> --spans-only --json
+
+agentops azure-ingest logs-upload \
+  --dir <span-export-dir> \
+  --endpoint "$AGENTOPS_LOGS_INGESTION_ENDPOINT" \
+  --dcr-immutable-id "$AGENTOPS_SPANS_DCR_IMMUTABLE_ID" \
+  --spans-only \
+  --json
+```
+
+Copilot session events can be exported independently when the run does not have a summary row. `export-events` keeps reference paths repository-relative and allowlisted by the attached inventory. It retains event and tool-call IDs for joins, while omitting prompts, responses, reasoning, tool arguments, results, and raw commands. The resulting JSONL uses owner-only permissions and refuses to overwrite an existing file.
+
+For normal opted-in runs, `agentops copilot` now creates owner-only event and span exports under `~/.agentops/runs/<run-id>/` and attempts both metadata uploads to the project-bound DCR after Copilot exits. The receipt gives separate status for each stream. Azure API acceptance is not readback confirmation, and the local files remain available when the target is missing or an upload fails. The commands below remain useful for manual export/replay and explicit review.
+
+```bash
+agentops copilot-session export-events <session-id> \
+  --run-id <observed-run-id> \
+  --output <event-export-dir> \
+  --json
+
+agentops azure-ingest plan --dir <event-export-dir> --events-only --json
+
+agentops azure-ingest logs-upload \
+  --dir <event-export-dir> \
+  --endpoint "$AGENTOPS_LOGS_INGESTION_ENDPOINT" \
+  --dcr-immutable-id "$AGENTOPS_DCR_IMMUTABLE_ID" \
+  --events-only \
+  --json
+```
+
+Add `--yes` only after reviewing the metadata-only plan and confirming the DCR stream. Event-only, content-only, and spans-only uploads each validate the explicitly approved subscription and pass it to every Azure CLI request without changing the machine's default subscription.
+
 
 ## Shared Review Artifacts
 

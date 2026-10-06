@@ -1,0 +1,85 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const { spawnSync } = require('node:child_process');
+const sourceRoot = path.resolve(__dirname, '../..');
+const { prepare, gradeHeldoutTrial, DATA_DEST, SINK_DEST } = require('../../evals/stockpilot/scripts/heldout');
+const { readKey } = require('../../evals/diagnostics/common');
+function run(executable, args, options = {}) {
+  const result = spawnSync(executable, args, { encoding: 'utf8', timeout: 60000, shell: process.platform === 'win32', ...options });
+  assert.equal(result.status, 0, result.stderr || result.error?.message);
+  return result.stdout;
+}
+test('actual packed CLI runs runtime qualification and protected receipt replay without source checkout assets', t => {
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-packed-product-'));
+  t.after(() => fs.rmSync(temp, { recursive: true, force: true }));
+  const repo = path.join(temp, 'source-copy'), pkg = path.join(repo, 'agentops-cli');
+  fs.mkdirSync(pkg, { recursive: true });
+  const copy = relative => {
+    const dest = path.join(repo, relative);
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    fs.cpSync(path.join(sourceRoot, relative), dest, { recursive: true });
+  };
+  for (const relative of ['agentops-cli/src', 'agentops-cli/package.json', 'agentops-cli/README.md', 'collector/release-cadence.json', 'scripts/prepare-cli-package-assets.js', 'scripts/check-runtime-matrix.js', 'scripts/qualify-enterprise-evidence.js', 'infra/bicep/enterprise-workbook.bicep', 'workbooks/agentops-workbook.json', 'workbooks/agentops-enterprise-workbook.json', 'infra/bicep/v2-ingestion.bicep', 'infra/bicep/eval-content.bicep', 'evals/diagnostics/common.js', 'evals/stockpilot/scripts/heldout.js', 'evals/stockpilot/scripts/full-corpus.js', 'evals/stockpilot/graders/index.js', 'evals/stockpilot/graders/tasks.json']) copy(relative);
+  fs.writeFileSync(path.join(repo, 'workbooks/private-workbook.json'), 'PRIVATE_WORKBOOK_CANARY');
+  // Canary files under evals must not enter a published package.
+  fs.writeFileSync(path.join(repo, 'evals/private-answer-key.json'), 'PRIVATE_KEY_CANARY');
+  fs.mkdirSync(path.join(repo, 'evals/stockpilot/node_modules'), { recursive: true });
+  fs.writeFileSync(path.join(repo, 'evals/stockpilot/node_modules/private.js'), 'PRIVATE_DEPENDENCY');
+  const packed = JSON.parse(run(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['pack', '--json', '--offline'], { cwd: pkg, env: { ...process.env, npm_config_ignore_scripts: 'false', npm_config_cache: path.join(temp, 'npm-cache') } }))[0];
+  const names = packed.files.map(file => file.path);
+  assert.ok(names.includes('scripts/check-runtime-matrix.js'));
+  assert.ok(names.includes('evals/stockpilot/scripts/heldout.js'));
+  assert.ok(names.includes('workbooks/agentops-workbook.json'));
+  assert.ok(names.includes('workbooks/agentops-enterprise-workbook.json'));
+  assert.equal(names.includes('workbooks/private-workbook.json'), false);
+  assert.equal(names.includes('scripts/qualify-enterprise-evidence.js'), false);
+  assert.equal(names.some(name => /private-answer-key|node_modules|fixtures\/sinks/.test(name)), false);
+  const installed = path.join(temp, 'installed');
+  fs.mkdirSync(installed);
+  run('tar', ['-xzf', path.join(pkg, packed.filename), '-C', installed]);
+  // Remove the disposable source copy, making fallback into it impossible.
+  fs.rmSync(repo, { recursive: true, force: true });
+  const workbookModule = path.join(installed, 'package/infra/bicep/enterprise-workbook.bicep');
+  const workbookModuleSource = fs.readFileSync(workbookModule, 'utf8');
+  const workbookLoad = /loadJsonContent\('([^']+)'\)/.exec(workbookModuleSource);
+  assert.ok(workbookLoad, 'packed module loads maintained workbook JSON');
+  const workbookReference = workbookLoad[1];
+  assert.match(workbookModuleSource, /value: workspaceResourceId/);
+  assert.match(workbookModuleSource, /fallbackResourceIds: \[workspaceResourceId\]/);
+  assert.match(workbookModuleSource, /serializedData: string\(boundWorkbook\)/);
+  const workbookFile = path.resolve(path.dirname(workbookModule), workbookReference);
+  const workbook = JSON.parse(fs.readFileSync(workbookFile, 'utf8'));
+  assert.equal(fs.readFileSync(workbookFile, 'utf8'), fs.readFileSync(path.join(sourceRoot, 'workbooks/agentops-enterprise-workbook.json'), 'utf8'));
+  assert.ok(Array.isArray(workbook.items));
+  const installedCli = path.join(installed, 'package/src/index.js');
+  const env = { ...process.env, AGENTOPS_HOME: path.join(temp, 'unused-agent-home') };
+  const runtime = JSON.parse(run(process.execPath, [installedCli, 'product', 'runtime', '--json'], { cwd: installed, env }));
+  assert.equal(runtime.qualification, 'metadata_only');
+
+  for (const folder of ['keys', 'public', 'workspaces']) fs.mkdirSync(path.join(temp, folder));
+  const keyFile = path.join(temp, 'keys/key.json'), publicDir = path.join(temp, 'public/bundle'), workspaceRoot = path.join(temp, 'workspaces');
+  prepare('packaged-product-synthetic', publicDir, keyFile);
+  const key = readKey(keyFile), task = key.tasks[0], workspacePath = path.join(workspaceRoot, 'trial');
+  fs.mkdirSync(path.join(workspacePath, DATA_DEST), { recursive: true });
+  fs.mkdirSync(path.join(workspacePath, SINK_DEST), { recursive: true });
+  fs.copyFileSync(path.join(publicDir, 'data/dataset.json'), path.join(workspacePath, DATA_DEST, 'dataset.json'));
+  for (const [name, rows] of Object.entries(task.expected)) if (rows.length) fs.writeFileSync(path.join(workspacePath, SINK_DEST, name + '.jsonl'), rows.map(row => JSON.stringify(row)).join('\n') + '\n');
+  const record = { stimulus: task.id, taskHash: task.taskHash, specHash: key.specHash, workspacePath, runId: 'fixture-run', status: 'success', trajectory: { output: 'synthetic local fixture' }, sourceEventRefs: ['event-fixture'], provenance: { kind: 'fixture', observedModel: key.model, runtimeVersion: process.version, modelEvidenceRef: 'fixture-no-model-executed' } };
+  const receipt = gradeHeldoutTrial(record, key, workspaceRoot);
+  assert.equal(receipt.passed, true);
+  const recordsFile = path.join(temp, 'records.json'), receiptFile = path.join(temp, 'receipt.json'), ledger = path.join(temp, 'ledger');
+  fs.writeFileSync(recordsFile, JSON.stringify([record]));
+  fs.writeFileSync(receiptFile, JSON.stringify(receipt));
+  fs.mkdirSync(path.join(ledger, record.runId), { recursive: true });
+  fs.writeFileSync(path.join(ledger, record.runId, 'run-context.json'), JSON.stringify({ runId: record.runId, taskId: task.id, evidenceComplete: false }));
+  fs.writeFileSync(path.join(ledger, record.runId, 'AgentOpsEvents_CL.jsonl'), JSON.stringify({ RunId: record.runId, EventId: 'event-fixture', EventName: 'tool.execution_complete', TimeGenerated: '2026-10-02T12:00:00Z' }) + '\n');
+  const evidence = JSON.parse(run(process.execPath, [installedCli, 'product', 'evidence', '--ledger', ledger, '--evaluation', receiptFile, '--evaluation-key', keyFile, '--evaluation-records', recordsFile, '--evaluation-workspace', workspaceRoot, '--json'], { cwd: installed, env }));
+  assert.equal(evidence.bundle.manifest.evaluationReceipts[0].state, 'locally-regraded');
+  assert.equal(evidence.bundle.manifest.evaluationReceipts[0].independentlyVerifiedExecution, false);
+  assert.equal(evidence.bundle.tables.AgentOpsRunSummary_CL[0].OutcomeStatus, 'success');
+  assert.equal(evidence.cloudDelivery, 'pending');
+  assert.equal(fs.existsSync(env.AGENTOPS_HOME), false);
+});

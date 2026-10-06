@@ -5,6 +5,21 @@ const repoRoot = path.resolve(__dirname, '..', '..');
 const { otelAttributeMap } = require(path.join(repoRoot, 'packages', 'agentops-copilot-sdk', 'src', 'event-envelope'));
 
 const canonicalSdkAttributes = Object.freeze([...new Set(Object.values(otelAttributeMap))].sort());
+const resourceCorrelationAttributes = Object.freeze(['agentops.run.id', 'agentops.session.id']);
+const scriptRuntimeAttributes = Object.freeze([
+  'agentops.script.runtime.name',
+  'agentops.script.runtime.version',
+  'agentops.script.runtime.implementation',
+  'agentops.script.loader.name'
+]);
+const scriptOutcomeAttributes = Object.freeze([
+  'agentops.outcome.source',
+  'agentops.script.observer.role',
+  'agentops.script.observer.pid',
+  'agentops.script.child.pid',
+  'process.exit.code',
+  'process.signal.number'
+]);
 const forbiddenContentAttributes = Object.freeze([
   'gen_ai.input.messages',
   'gen_ai.output.messages',
@@ -30,9 +45,26 @@ function syncContext(text, context) {
   if (!expression.test(normalized)) throw new Error(`Missing ${context} keep_keys allowlist`);
   return normalized.replace(expression, (whole, prefix, raw, suffix) => {
     const existing = JSON.parse(raw);
-    const merged = [...existing, ...canonicalSdkAttributes.filter(attribute => !existing.includes(attribute))];
+    const required = context === 'span'
+      ? [...canonicalSdkAttributes, ...scriptRuntimeAttributes, ...scriptOutcomeAttributes]
+      : canonicalSdkAttributes;
+    const merged = [...existing, ...required.filter(attribute => !existing.includes(attribute))];
     return `${prefix}${JSON.stringify(merged)}${suffix}`;
   });
+}
+
+function syncResourceContext(text) {
+  const expression = /(- context: resource\n[\s\S]*?- keep_keys\(attributes, )(\[[^\n]+\])(\))/g;
+  let matches = 0;
+  const synchronized = String(text).replace(expression, (whole, prefix, raw, suffix) => {
+    matches += 1;
+    const existing = JSON.parse(raw);
+    const required = [...resourceCorrelationAttributes, ...scriptRuntimeAttributes];
+    const merged = [...existing, ...required.filter(attribute => !existing.includes(attribute))];
+    return `${prefix}${JSON.stringify(merged)}${suffix}`;
+  });
+  if (!matches) throw new Error('Missing resource keep_keys allowlist');
+  return synchronized;
 }
 
 function strictCollectorFiles() {
@@ -50,7 +82,8 @@ function syncStrictCollectorFiles(options = {}) {
   for (const file of strictCollectorFiles()) {
     const original = fs.readFileSync(file, 'utf8');
     const normalized = original.replace(/\r\n/g, '\n');
-    let rendered = syncContext(normalized, 'span');
+    let rendered = syncResourceContext(normalized);
+    rendered = syncContext(rendered, 'span');
     if (/- context: log\n/.test(rendered)) rendered = syncContext(rendered, 'log');
     if (rendered !== normalized) {
       changed.push(path.relative(repoRoot, file));
@@ -65,7 +98,10 @@ module.exports = {
   canonicalSdkAttributes,
   forbiddenContentAttributes,
   repoRoot,
+  resourceCorrelationAttributes,
+  scriptOutcomeAttributes,
   strictCollectorFiles,
   syncContext,
+  syncResourceContext,
   syncStrictCollectorFiles
 };

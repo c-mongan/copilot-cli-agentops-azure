@@ -16,5 +16,13 @@ union isfuzzy=true AgentOpsInsights_CL
     PatternKey,
     PatternRuns,
     PatternDimension,
-    SuggestedNextStep
+    SuggestedNextStep,
+    Rule,
+    ArchitectureVersion,
+    Numerator,
+    Denominator,
+    CoverageRuns,
+    Status,
+    ComponentRefs,
+    Evidence
 | order by TimeGenerated desc

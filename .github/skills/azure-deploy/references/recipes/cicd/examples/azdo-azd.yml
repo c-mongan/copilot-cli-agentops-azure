@@ -1,0 +1,46 @@
+# Manual, approval-gated example: run what-if/preview, review it, then apply. Never auto-deploy on push.
+trigger: none  # Run manually; never auto-deploy on push.
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+stages:
+  - stage: Preview
+    jobs:
+      - job: PreviewInfrastructure
+        steps:
+          - task: setup-azd@0
+
+          - task: AzureCLI@2
+            inputs:
+              azureSubscription: 'azure-service-connection'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: azd provision --preview --no-prompt
+            env:
+              AZURE_ENV_NAME: $(AZURE_ENV_NAME)
+              AZURE_LOCATION: $(AZURE_LOCATION)
+
+  - stage: Deploy
+    dependsOn: Preview
+    jobs:
+      - deployment: DeployToAzure
+        environment: production  # Configure approval in Azure DevOps after reviewing the preview
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+                - task: setup-azd@0
+
+                - task: AzureCLI@2
+                  inputs:
+                    azureSubscription: 'azure-service-connection'
+                    scriptType: 'bash'
+                    scriptLocation: 'inlineScript'
+                    inlineScript: |
+                      azd provision --no-prompt
+                      azd deploy --no-prompt
+                  env:
+                    AZURE_ENV_NAME: $(AZURE_ENV_NAME)
+                    AZURE_LOCATION: $(AZURE_LOCATION)
