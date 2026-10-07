@@ -47,6 +47,9 @@ test('smoke CLI helpers parse durations flags and real Copilot commands', () => 
   });
 
   assert.equal(parseSmokeArgs([]).last, '2h');
+  assert.equal(parseSmokeArgs([]).waitMs, 300000);
+  assert.equal(parseSmokeArgs(['--local']).waitMs, 60000);
+  assert.equal(parseSmokeArgs(['--no-verify']).waitMs, 60000);
   assert.equal(durationToMs('2m'), 120000);
   assert.equal(durationToMs('', 42), 42);
   assert.throws(() => durationToMs('7d'), /duration must look like/);
