@@ -8,6 +8,9 @@
   const SVG_NS = 'http://www.w3.org/2000/svg';
   const KIND_LABEL = { session: 'Session', turn: 'Turn', chat: 'Model call', tool: 'Tool call', hook: 'Hook', agent: 'Subagent', compaction: 'Compaction' };
   const STATUS_LABEL = { ok: 'Completed', attention: 'Needs attention', failed: 'Failed', live: 'Live', incomplete: 'Incomplete' };
+  const ISSUES = ['failed', 'nonzero', 'denied'];
+  const ISSUE_LABEL = { failed: 'Failed', nonzero: 'Non-zero exit', denied: 'Denied' };
+  const ISSUE_JUMP = { failed: 'Jump to first failure', nonzero: 'Jump to first non-zero exit', denied: 'Jump to first denial' };
   const state = { runs: null, detail: null, selected: null, pinned: null, collapsed: new Set(), routeKey: '' };
 
   // ---------- helpers ----------
@@ -92,6 +95,22 @@
     if (date >= new Date(today.getTime() - 864e5)) return { text: `Yesterday ${tf.format(date)}`, title };
     return { text: `${df.format(date)}, ${tf.format(date)}`, title };
   }
+  // Mirrors data.js nonZeroExitSpans: a shell command that exited non-zero while Copilot reported success.
+  function spanIssue(span) {
+    if (span.status === 'failed') return 'failed';
+    if (span.status === 'denied') return 'denied';
+    const attrs = span.attrs || {};
+    const nonZero = (Number.isSafeInteger(attrs.exitCode) && attrs.exitCode !== 0) || attrs.outcome === 'nonzero_exit';
+    return span.kind === 'tool' && span.status === 'ok' && nonZero ? 'nonzero' : null;
+  }
+  function issueNote(span, issue) {
+    const attrs = span.attrs || {};
+    if (issue === 'failed') return attrs.outcome || 'failed';
+    if (issue === 'denied') return 'denied';
+    if (issue === 'nonzero') return Number.isSafeInteger(attrs.exitCode) ? `exit ${attrs.exitCode}` : 'non-zero exit';
+    return '';
+  }
+  function canHover() { return window.matchMedia('(hover: hover)').matches; }
   function plural(n, word, many) { return `${fmtInt(n)} ${n === 1 ? word : (many || `${word}s`)}`; }
   function announce(text) { announcer.textContent = ''; setTimeout(() => { announcer.textContent = text; }, 30); }
 
@@ -227,11 +246,11 @@
       h('div', { class: 'kpi-sub', text: sub }));
     const tokenTotal = k.tokens.input + k.tokens.output;
     return h('section', { class: 'kpis', 'aria-label': 'Summary for the runs shown' },
-      tile('Runs', fmtInt(k.runs), `${fmtInt(k.toolCalls)} tool calls`),
+      tile('Runs', fmtInt(k.runs), plural(k.toolCalls, 'tool call')),
       tile('Failed tool calls', fmtInt(k.toolFailures || 0), [k.failedRuns ? `in ${fmtInt(k.failedRuns)} of ${plural(k.runs, 'run')}` : 'No failed runs', attentionNote(k)].filter(Boolean).join(' · '), { bad: k.toolFailures > 0 }),
       tile('p95 tool latency', fmtDuration(k.p95ToolMs), 'across all tool calls'),
       tile('Tokens', fmtTokens(tokenTotal), `${fmtTokens(k.tokens.input)} in · ${fmtTokens(k.tokens.output)} out`, { title: `${fmtInt(tokenTotal)} tokens in ${plural(k.tokens.runsWithTokens, 'run')} with usage data` }),
-      tile('Cost', fmtCost(k.costUsd), unpricedNote(k.unpricedModels) || capNote(data) || (k.premiumRequests ? `${fmtInt(Math.round(k.premiumRequests * 100) / 100)} premium requests` : 'list-price estimate'), { est: true, title: k.costLabel || null }));
+      tile('Cost', fmtCost(k.costUsd), unpricedNote(k.unpricedModels) || capNote(data) || (k.premiumRequests ? plural(Math.round(k.premiumRequests * 100) / 100, 'premium request') : 'list-price estimate'), { est: true, title: k.costLabel || null }));
   }
 
   // Same wording as the CLI: denials and non-zero exits need attention; they are not failures.
@@ -500,15 +519,15 @@
       tile('Tool calls', fmtInt(run.toolCalls), run.p95ToolMs !== null ? `p95 ${fmtDuration(run.p95ToolMs)}` : 'no tool calls'),
       tile('Failed tool calls', fmtInt(run.toolFailures || 0), [otherFailureNote(run), attentionNote(run)].filter(Boolean).join(' · ') || 'Nothing failed', { bad: run.failures > 0 }),
       tile('Tokens', run.tokens.known ? fmtTokens(run.tokens.input + run.tokens.output) : '—', run.tokens.known ? `${fmtTokens(run.tokens.input)} in · ${fmtTokens(run.tokens.output)} out` : 'not recorded yet'),
-      tile('Cost', fmtCost(run.costUsd), unpricedNote(run.unpricedModels) || (run.premiumRequests !== null ? `${fmtInt(run.premiumRequests)} premium requests` : 'list-price estimate'), { est: true, title: run.costLabel || null }));
+      tile('Cost', fmtCost(run.costUsd), unpricedNote(run.unpricedModels) || (run.premiumRequests !== null ? plural(run.premiumRequests, 'premium request') : 'list-price estimate'), { est: true, title: run.costLabel || null }));
   }
 
   function legend(spans) {
     const kinds = [...new Set(spans.map(span => span.kind))];
     const items = kinds.map(kind => h('span', null, h('i', { class: `swatch k-${kind}` }), KIND_LABEL[kind] || kind));
-    if (spans.some(span => span.status === 'failed')) items.push(h('span', null, h('i', { class: 'swatch k-failed' }), 'Failed'));
-    if (spans.some(span => span.status === 'denied')) items.push(h('span', null, h('i', { class: 'swatch k-denied' }), 'Denied'));
-    return h('div', { class: 'legend', 'aria-label': 'Legend' }, items);
+    const issues = new Set(spans.map(spanIssue));
+    for (const issue of ISSUES) if (issues.has(issue)) items.push(h('span', null, h('i', { class: `swatch k-${issue}` }), ISSUE_LABEL[issue]));
+    return h('div', { class: 'legend', role: 'group', 'aria-label': 'Legend' }, items);
   }
 
   function traceToolbar(detail) {
@@ -620,22 +639,33 @@
 
   function findSpan(id) { return state.detail.spans.find(span => span.id === id) || null; }
 
+  // Worst issue among a span's descendants, so a folded turn still shows that it hides a failure.
+  function descendantIssue(span) {
+    const spans = state.detail.spans;
+    let worst = null;
+    for (let i = spans.indexOf(span) + 1; i < spans.length && spans[i].depth > span.depth; i += 1) {
+      const issue = spanIssue(spans[i]);
+      if (issue && (!worst || ISSUES.indexOf(issue) < ISSUES.indexOf(worst))) worst = issue;
+    }
+    return worst;
+  }
+
   function spanRow(span, tabbable) {
-    const failed = span.status === 'failed';
-    const denied = span.status === 'denied';
-    const flagged = failed || denied;
+    const issue = spanIssue(span);
+    const hiddenIssue = span.childCount && state.collapsed.has(span.id) ? descendantIssue(span) : null;
     const expanded = !state.collapsed.has(span.id);
     const start = span.startMs;
     const endPct = ((start + span.durationMs) / totalMs()) * 100;
     const textOnLeft = endPct > 88;
+    const durationText = issue ? `${fmtDuration(span.durationMs)} · ${issueNote(span, issue)}` : fmtDuration(span.durationMs);
     const row = h('div', {
-      class: `span-row${failed ? ' failed' : denied ? ' denied' : ''}`,
+      class: `span-row${issue ? ` ${issue}` : ''}`,
       role: 'treeitem',
       tabindex: tabbable ? '0' : '-1',
       'aria-level': span.depth + 1,
       'aria-expanded': span.childCount ? String(expanded) : null,
       'aria-selected': state.pinned === span.id ? 'true' : 'false',
-      'aria-label': `${KIND_LABEL[span.kind] || span.kind} ${span.name}, ${fmtDuration(span.durationMs)}${flagged ? `, ${denied ? 'denied' : `failed (${span.attrs.outcome || 'failed'})`}` : ''}`,
+      'aria-label': `${KIND_LABEL[span.kind] || span.kind} ${span.name}, ${fmtDuration(span.durationMs)}${issue ? `, ${issue === 'failed' ? `failed (${issueNote(span, issue)})` : issue === 'nonzero' ? `non-zero exit (${issueNote(span, issue)})` : 'denied'}` : ''}${hiddenIssue ? `, contains a ${ISSUE_LABEL[hiddenIssue].toLowerCase()} span` : ''}`,
       dataset: { id: span.id, kind: span.kind },
       onclick: () => pin(span.id),
       onmouseenter: () => renderInspector(span),
@@ -646,12 +676,14 @@
       span.childCount
         ? h('button', { type: 'button', class: 'caret', tabindex: '-1', 'aria-hidden': 'true', 'aria-expanded': String(expanded), onclick: event => { event.stopPropagation(); toggle(span.id); } }, icon('caret', 14))
         : h('span', { class: 'caret-spacer' }),
-      h('i', { class: `swatch k-${failed ? 'failed' : denied ? 'denied' : span.kind}` }),
+      h('i', { class: `swatch k-${issue || span.kind}` }),
       h('span', { class: 'name', text: span.name, title: span.name }),
-      span.childCount && !expanded ? h('span', { class: 'child-count', text: `+${span.childCount}` }) : null),
+      span.childCount && !expanded ? h('span', { class: 'child-count', text: `+${span.childCount}` }) : null,
+      !expanded && hiddenIssue ? h('span', { class: `hidden-issue ${hiddenIssue}`, title: `Contains a ${ISSUE_LABEL[hiddenIssue].toLowerCase()} span` }, h('i', { class: `swatch k-${hiddenIssue}`, 'aria-hidden': 'true' }), ISSUE_LABEL[hiddenIssue].toLowerCase()) : null,
+      h('span', { class: 'label-dur', 'aria-hidden': 'true', text: durationText })),
     h('div', { class: 'track' },
-      h('span', { class: `bar k-${span.kind} ${span.kind}${failed ? ' failed' : denied ? ' denied' : ''}`, style: { left: pct(start), width: `max(2px, ${pct(span.durationMs)})` } }),
-      h('span', { class: 'bar-text', style: textOnLeft ? { right: `calc(${100 - (start / totalMs()) * 100}% + 6px)` } : { left: `calc(${endPct}% + 6px)` }, text: flagged ? `${fmtDuration(span.durationMs)} · ${span.attrs.outcome || 'failed'}` : fmtDuration(span.durationMs) })));
+      h('span', { class: `bar k-${span.kind} ${span.kind}${issue ? ` ${issue}` : ''}`, style: { left: pct(start), width: `max(2px, ${pct(span.durationMs)})` } }),
+      h('span', { class: 'bar-text', style: textOnLeft ? { right: `calc(${100 - (start / totalMs()) * 100}% + 6px)` } : { left: `calc(${endPct}% + 6px)` }, text: durationText })));
     return row;
   }
 
@@ -663,6 +695,18 @@
       row.tabIndex = row.dataset.id === id ? 0 : -1;
     }
     renderInspector(state.pinned ? findSpan(state.pinned) : findSpan(id));
+  }
+
+  function revealSpan(id) {
+    let changed = false;
+    for (let span = findSpan(id); span && span.parentId; span = findSpan(span.parentId)) {
+      if (state.collapsed.delete(span.parentId)) changed = true;
+    }
+    if (changed) renderRows();
+    state.pinned = null;
+    pin(id);
+    const row = document.querySelector(`.span-row[data-id="${CSS.escape(id)}"]`);
+    if (row) { row.scrollIntoView({ block: 'center' }); row.focus({ preventScroll: true }); }
   }
 
   function toggle(id) {
@@ -699,17 +743,22 @@
     const panel = document.getElementById('inspector');
     if (!panel) return;
     if (!span) {
-      const failed = state.detail.spans.find(item => item.status === 'failed');
+      const jumps = ISSUES.map(issue => [issue, state.detail.spans.find(item => spanIssue(item) === issue)]).filter(([, span]) => span);
       panel.replaceChildren(h('div', { class: 'inspector-empty' },
         h('h3', { text: 'Span details' }),
-        h('p', { style: { marginTop: '10px' }, text: 'Hover or select a span to see its timing, status and token counts.' }),
-        failed ? h('button', { type: 'button', class: 'button', onclick: () => { pin(failed.id); document.querySelector(`.span-row[data-id="${CSS.escape(failed.id)}"]`)?.scrollIntoView({ block: 'center' }); } }, 'Jump to first failure') : null,
+        h('p', { style: { marginTop: '10px' }, text: `${canHover() ? 'Hover over or select' : 'Tap'} a span to see its timing, status and token counts.` }),
+        jumps.length ? h('div', { class: 'jumps' }, jumps.map(([issue, target]) => h('button', { type: 'button', class: `button jump-${issue}`, onclick: () => revealSpan(target.id) }, h('i', { class: `swatch k-${issue}`, 'aria-hidden': 'true' }), ISSUE_JUMP[issue]))) : null,
         h('p', { class: 'hint', text: state.detail.allowContent ? 'Content mode is on: tool arguments and results can be loaded for tool spans.' : 'Metadata only. Prompts, tool arguments and results are never sent to this page.' })));
       return;
     }
     const a = span.attrs || {};
+    const issue = spanIssue(span);
+    const statusText = issue === 'failed' ? `Failed · ${a.outcome || 'failed'}`
+      : issue === 'denied' ? 'Denied · permission not granted'
+        : issue === 'nonzero' ? `Non-zero exit${Number.isSafeInteger(a.exitCode) ? ` (${a.exitCode})` : ''} · tool call reported success`
+          : span.status === 'incomplete' ? 'Did not finish' : 'OK';
     const rows = [
-      ['Status', span.status === 'failed' ? `Failed · ${a.outcome || 'failed'}` : span.status === 'denied' ? 'Denied · permission not granted' : (span.status === 'incomplete' ? 'Did not finish' : 'OK')],
+      ['Status', statusText],
       ['Starts at', `+${fmtDuration(span.startMs)}`],
       ['Duration', fmtDuration(span.durationMs)],
       a.model ? ['Model', a.model] : null,
@@ -725,11 +774,13 @@
     ].filter(Boolean);
     const content = state.detail.allowContent && span.kind === 'tool' && a.toolCallId ? contentBlock(a.toolCallId) : null;
     panel.replaceChildren(...[
-      h('h3', null, h('i', { class: `swatch k-${span.status === 'failed' ? 'failed' : span.status === 'denied' ? 'denied' : span.kind}` }), h('span', { text: span.name })),
+      h('h3', null, h('i', { class: `swatch k-${issue || span.kind}` }), h('span', { text: span.name })),
       h('div', { class: 'kind', text: `${KIND_LABEL[span.kind] || span.kind}${state.pinned === span.id ? ' · pinned' : ''}` }),
-      h('dl', null, rows.map(([term, value]) => [h('dt', { text: term }), h('dd', { text: value, class: term === 'Status' && span.status === 'failed' ? 'fail-count' : null })])),
+      h('dl', null, rows.map(([term, value]) => [h('dt', { text: term }), h('dd', { text: value, class: term === 'Status' && issue ? `status-${issue}` : null })])),
       content,
-      h('p', { class: 'hint', text: state.pinned === span.id ? 'Click the span again or press Enter to unpin.' : 'Click or press Enter to pin this span.' })].filter(Boolean));
+      h('p', { class: 'hint', text: canHover()
+        ? (state.pinned === span.id ? 'Click the span again or press Enter to unpin.' : 'Click or press Enter to pin this span.')
+        : (state.pinned === span.id ? 'Tap the span again to unpin.' : 'Tap the span to pin it.') })].filter(Boolean));
   }
 
   function contentBlock(toolCallId) {
@@ -761,17 +812,17 @@
         h('thead', null, h('tr', null,
           h('th', { scope: 'col', text: 'Tool' }),
           h('th', { scope: 'col', class: 'num', text: 'Calls' }),
-          h('th', { scope: 'col', class: 'num', text: 'p50' }),
+          h('th', { scope: 'col', class: 'num col-phone', text: 'p50' }),
           h('th', { scope: 'col', class: 'num', text: 'p95' }),
-          h('th', { scope: 'col', class: 'num', text: 'Max' }),
+          h('th', { scope: 'col', class: 'num col-phone', text: 'Max' }),
           h('th', { scope: 'col', class: 'num', text: 'Total' }),
           h('th', { scope: 'col', class: 'num', text: 'Failures' }))),
         h('tbody', null, stats.map(stat => h('tr', { class: stat.failures ? 'has-fail' : null },
-          h('td', null, h('span', { class: 'tool-name', text: stat.tool })),
+          h('td', { class: 'name-cell' }, h('span', { class: 'tool-name', text: stat.tool })),
           h('td', { class: 'num', text: fmtInt(stat.count) }),
-          h('td', { class: 'num', text: fmtDuration(stat.p50Ms) }),
+          h('td', { class: 'num col-phone', text: fmtDuration(stat.p50Ms) }),
           h('td', { class: 'num', text: fmtDuration(stat.p95Ms) }),
-          h('td', { class: 'num', text: fmtDuration(stat.maxMs) }),
+          h('td', { class: 'num col-phone', text: fmtDuration(stat.maxMs) }),
           h('td', { class: 'num' }, h('span', { class: 'lat-cell' }, h('span', { class: 'lat-bar', style: { width: `${Math.max(2, (stat.totalMs / maxTotal) * 56)}px` } }), fmtDuration(stat.totalMs))),
           h('td', { class: 'num' }, stat.failures ? h('span', { class: 'fail-count', text: fmtInt(stat.failures) }) : h('span', { class: 'zero', text: '0' }))))))) :
         h('div', { class: 'empty' }, h('p', { text: 'This run made no tool calls.' }))));
@@ -785,15 +836,15 @@
         h('thead', null, h('tr', null,
           h('th', { scope: 'col', text: 'Model' }),
           h('th', { scope: 'col', class: 'num', text: 'Input' }),
-          h('th', { scope: 'col', class: 'num', title: 'Tokens read from the prompt cache, already included in Input', text: 'Cache read' }),
-          h('th', { scope: 'col', class: 'num', title: 'Tokens written to the prompt cache, already included in Input', text: 'Cache write' }),
+          h('th', { scope: 'col', class: 'num col-phone', title: 'Tokens read from the prompt cache, already included in Input', text: 'Cache read' }),
+          h('th', { scope: 'col', class: 'num col-phone', title: 'Tokens written to the prompt cache, already included in Input', text: 'Cache write' }),
           h('th', { scope: 'col', class: 'num', text: 'Output' }),
           h('th', { scope: 'col', class: 'num' }, 'Cost ', h('span', { class: 'est', text: 'EST.' })))),
         h('tbody', null, rows.map(row => h('tr', null,
-          h('td', null, h('span', { class: 'tool-name', text: row.model })),
+          h('td', { class: 'name-cell' }, h('span', { class: 'tool-name', text: row.model })),
           h('td', { class: 'num', text: fmtTokens(row.input), title: fmtInt(row.input) }),
-          h('td', { class: 'num muted', text: fmtTokens(row.cacheRead), title: fmtInt(row.cacheRead) }),
-          h('td', { class: 'num muted', text: fmtTokens(row.cacheWrite), title: fmtInt(row.cacheWrite) }),
+          h('td', { class: 'num muted col-phone', text: fmtTokens(row.cacheRead), title: fmtInt(row.cacheRead) }),
+          h('td', { class: 'num muted col-phone', text: fmtTokens(row.cacheWrite), title: fmtInt(row.cacheWrite) }),
           h('td', { class: 'num', text: fmtTokens(row.output), title: fmtInt(row.output) }),
           h('td', { class: 'num', text: fmtCost(row.costUsd) }))))))
         : h('div', { class: 'empty' }, h('p', { text: 'No token usage recorded yet. Copilot CLI writes totals when the session ends.' }))));

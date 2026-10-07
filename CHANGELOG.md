@@ -16,6 +16,10 @@ project. Package versions stay at `0.1.0` until a package is published to npm.
 - Launch JSON adds `evidence.spanRows` for the span-table row count; `evidence.spans` stays as a deprecated alias.
 - The UI "Tokens by model" table shows cache read and cache write in separate columns instead of an "of which cached" total that included writes. Cost math is unchanged.
 - `copilot-session launch --json` and `collect --json` print paths under your home directory as `~/…` instead of the absolute path.
+- Local UI run page no longer scrolls sideways on phones: the trace and inspector columns now shrink, tables wrap long tool names and hide secondary columns, and the waterfall stacks each span label above its bar at 390 px. KPI captions wrap instead of being cut off, and the KPI grid and filters are compact so the first run sits higher on the list.
+- The waterfall now marks tool calls that reported success but exited non-zero (for example a failing `npm test`) in orange with an "exit N" note. Denied spans use a distinct hatched violet. The legend lists Failed, Non-zero exit and Denied, the empty inspector offers "Jump to first…" buttons for each issue type, folded turns say when they hide an issue, and the inspector status explains the non-zero exit.
+- Tree fold buttons, run links, breadcrumbs and copy buttons have hit areas of at least 24×24 px. Inspector hints no longer say "Hover" on touch-only devices.
+- "1 premium requests" and "1 tool calls" now pluralise correctly. The README explains that the Deploy to Azure budget is 5 units of the billing currency by default (`monthlyBudgetAmount`) and alerts only.
 
 ## v0.3.2-preview: 2026-10-07
 
