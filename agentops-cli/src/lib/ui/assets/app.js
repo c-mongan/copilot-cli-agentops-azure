@@ -64,11 +64,11 @@
     if (ms < 1000) return `${Math.round(ms)} ms`;
     const s = ms / 1000;
     if (s < 10) return `${s.toFixed(1)} s`;
-    if (s < 60) return `${Math.round(s)} s`;
-    const m = Math.floor(s / 60);
-    if (m < 60) return `${m} m ${String(Math.round(s % 60)).padStart(2, '0')} s`;
-    const hrs = Math.floor(m / 60);
-    return `${hrs} h ${String(m % 60).padStart(2, '0')} m`;
+    const total = Math.round(s);
+    if (total < 60) return `${total} s`;
+    if (total < 3600) return `${Math.floor(total / 60)} m ${String(total % 60).padStart(2, '0')} s`;
+    const totalMin = Math.round(total / 60);
+    return `${Math.floor(totalMin / 60)} h ${String(totalMin % 60).padStart(2, '0')} m`;
   }
   function fmtCost(value) {
     if (value === null || value === undefined) return 'n/a';
@@ -476,8 +476,10 @@
     if (ms === 0) return '0';
     if (step < 1000) return `${ms} ms`;
     if (ms < 60000) return `${Math.round(ms / 1000)} s`;
-    if (ms < 3600000) return `${Math.floor(ms / 60000)}m${ms % 60000 ? ` ${Math.round((ms % 60000) / 1000)}s` : ''}`;
-    return `${Math.floor(ms / 3600000)}h${ms % 3600000 ? ` ${Math.round((ms % 3600000) / 60000)}m` : ''}`;
+    const sec = Math.round(ms / 1000);
+    if (sec < 3600) return `${Math.floor(sec / 60)}m${sec % 60 ? ` ${sec % 60}s` : ''}`;
+    const min = Math.round(sec / 60);
+    return `${Math.floor(min / 60)}h${min % 60 ? ` ${min % 60}m` : ''}`;
   }
 
   function totalMs() { return Math.max(1, state.detail.spans[0]?.durationMs || 1); }
