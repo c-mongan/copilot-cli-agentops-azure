@@ -41,7 +41,7 @@ test('AgentOpsSpans schema adds precise nanosecond duration without changing mil
     assert.match(runtimeMigrationBicep, new RegExp(`${name}=tostring\\(${name}\\)`));
   }
   assert.match(bicep, /var spansTransformKql = 'source \| project .*DurationNs/);
-  assert.match(bicep, /transformKql: table\.stream == 'Custom-AgentOpsSpans_CL' \? spansTransformKql : 'source'/);
+  assert.match(bicep, /: table\.stream == 'Custom-AgentOpsSpans_CL' \? spansTransformKql : 'source'/);
   assert.match(evalSpansBicep, /transformKql: 'source \| project .*DurationNs/);
 });
 
@@ -76,7 +76,7 @@ test('AgentOpsInsights schema accepts additive architecture hypothesis evidence'
   for (const [name, type] of Object.entries(expected)) {
     assert.match(schema, new RegExp(`name: '${name}', type: '${type}'`));
   }
-  assert.match(bicep, /streamDeclarations: toObject\(v2Tables/);
+  assert.match(bicep, /streamDeclarations: toObject\(effectiveTables/);
 });
 
 test('v2 Bicep declares each custom table once and spans use the exported outcome column', () => {

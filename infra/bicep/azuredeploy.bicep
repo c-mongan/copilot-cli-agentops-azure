@@ -22,7 +22,7 @@ param environmentName string = 'dev'
 @maxValue(730)
 param retentionInDays int = 30
 
-@description('Log Analytics daily ingestion cap in GB. Keeps an accidental flood cheap.')
+@description('Log Analytics daily ingestion cap in GB. Cost safeguard, not a precise spending limit; excess ingestion can still be billed.')
 @minValue(1)
 @maxValue(100)
 param dailyIngestionCapGb int = 1
@@ -31,7 +31,10 @@ param dailyIngestionCapGb int = 1
 param deployWorkbook bool = true
 
 @description('Give the identity running this deployment permission to upload AgentOps metadata (Monitoring Metrics Publisher on the DCR). Needs Owner or User Access Administrator on the resource group.')
-param grantDeployerUpload bool = true
+param grantDeployerUpload bool = false
+
+@description('Allow public ingestion and workspace query access. Disabled by default; private access requires separately configured Azure Monitor Private Link.')
+param allowPublicNetworkAccess bool = false
 
 @description('Optional extra Microsoft Entra object ID (user, group or service principal) allowed to upload AgentOps metadata.')
 param uploaderPrincipalId string = ''
@@ -51,7 +54,7 @@ param deployBudget bool = true
 @minValue(1)
 param monthlyBudgetAmount int = 5
 
-@description('Email for budget alerts at 80% and 100% of actual spend. Leave blank to notify the subscription Owner role instead. No action group is created.')
+@description('Email for budget alerts at 80% and 100% of actual spend. Leave blank to notify effective Owners at this resource-group scope instead. No action group is created.')
 param budgetAlertEmail string = ''
 
 @description('Budget start date, which must be the first day of a month (yyyy-MM-dd). Defaults to the current month. When redeploying in a later month, pass the original value: Azure does not allow changing a budget start date.')
@@ -75,6 +78,7 @@ module logAnalytics 'log-analytics.bicep' = {
     tags: tags
     retentionInDays: retentionInDays
     dailyQuotaGb: dailyIngestionCapGb
+    allowPublicNetworkAccess: allowPublicNetworkAccess
   }
 }
 
@@ -88,6 +92,8 @@ module ingestion 'v2-ingestion.bicep' = {
     environmentName: environmentName
     retentionInDays: retentionInDays
     tags: tags
+    metadataOnly: true
+    allowPublicNetworkAccess: allowPublicNetworkAccess
     ingestionPrincipalId: uploaderPrincipalId
     ingestionPrincipalType: uploaderPrincipalType
   }
@@ -140,4 +146,5 @@ output AGENTOPS_DCR_RESOURCE_ID string = ingestion.outputs.dataCollectionRuleRes
 output AGENTOPS_TABLE_COUNT int = ingestion.outputs.tableCount
 output WORKBOOK_DEPLOYED bool = deployWorkbook
 output BUDGET_DEPLOYED bool = deployBudget
-output UPLOAD_COMMAND string = 'agentops azure-ingest logs-upload --dir <AgentOps table dir> --endpoint ${ingestion.outputs.logsIngestionEndpoint} --dcr-immutable-id ${ingestion.outputs.dataCollectionRuleImmutableId} --max-publish-bytes-per-day 5000000 --yes'
+output UPLOAD_COMMAND string = 'agentops azure-ingest logs-upload --dir <run-directory> --events-only --endpoint ${ingestion.outputs.logsIngestionEndpoint} --dcr-immutable-id ${ingestion.outputs.dataCollectionRuleImmutableId} --max-publish-bytes-per-day 5000000 --yes'
+output UPLOAD_SPANS_COMMAND string = 'agentops azure-ingest logs-upload --dir <run-directory> --spans-only --endpoint ${ingestion.outputs.logsIngestionEndpoint} --dcr-immutable-id ${ingestion.outputs.dataCollectionRuleImmutableId} --max-publish-bytes-per-day 5000000 --yes'

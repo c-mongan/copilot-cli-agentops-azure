@@ -25,12 +25,12 @@ function columnsFrom(body) {
   if (columns.some(column => !['string', 'datetime', 'long', 'real', 'boolean', 'dynamic'].includes(column.type))) throw new Error('Unsupported evidence schema type');
   return columns;
 }
-// Read the maintained resource definitions. The content table is isolated and
+// Read the maintained resource definitions (the default, non-metadataOnly path). The content table is isolated and
 // deliberately never produced by this metadata-only bundle.
 function loadEvidenceSchemas({ v2Source, contentSource } = {}) {
   const source = v2Source ?? fs.readFileSync(path.join(REPO_ROOT, 'infra/bicep/v2-ingestion.bicep'), 'utf8');
   const content = contentSource ?? fs.readFileSync(path.join(REPO_ROOT, 'infra/bicep/eval-content.bicep'), 'utf8');
-  if (!/transformKql:\s*table\.stream\s*==\s*'Custom-AgentOpsSpans_CL'\s*\?\s*spansTransformKql\s*:\s*'source'/.test(source) || !/transformKql:\s*'source'/.test(content)) throw new Error('Unsupported ingestion transform selection');
+  if (!/transformKql:\s*(?:metadataOnly\s*\?\s*'source \| project \$\{join\(map\(table\.columns, column => column\.name\), ', '\)\}'\s*:\s*)?table\.stream\s*==\s*'Custom-AgentOpsSpans_CL'\s*\?\s*spansTransformKql\s*:\s*'source'/.test(source) || !/transformKql:\s*'source'/.test(content)) throw new Error('Unsupported ingestion transform selection');
   const schemas = {};
   for (const match of source.matchAll(/name:\s*'(AgentOps\w+_CL)'\s+stream:\s*'([^']+)'\s+columns:\s*\[([\s\S]*?)\]/g)) {
     schemas[match[1]] = { stream: match[2], columns: columnsFrom(match[3]), transform: 'source' };

@@ -27,6 +27,16 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Check Deploy to Azure generated template
+        if: runner.os == 'Linux'
+        env:
+          BICEP_CLI: ${{ runner.temp }}/agentops-bicep
+        run: |
+          curl --fail --silent --show-error --location https://github.com/Azure/bicep/releases/download/v0.38.33/bicep-linux-x64 --output "$BICEP_CLI"
+          echo "07e28411c2cb3a731660a32bb735268c2d1506c564bcea613eed1323e9926712  $BICEP_CLI" | sha256sum --check
+          chmod +x "$BICEP_CLI"
+          node scripts/check-deploy-to-azure-template.js
+
       - name: Run CLI tests
         run: npm --prefix agentops-cli test
 

@@ -69,7 +69,7 @@ Prefer a source checkout? `git clone` the repository and use `alias agentops="no
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fc-mongan%2Fcopilot-cli-agentops-azure%2Fmain%2Finfra%2Fazuredeploy.json)
 
-To publish to your own Azure workspace, click **Deploy to Azure** (metadata-only Log Analytics, ingestion endpoint and rule, Workbook and a monthly budget alert of 5 in your billing currency; see [Deploy to Azure](docs/deploy-to-azure.md)) or follow the [diagnostic pilot quickstart](docs/diagnostic-pilot-quickstart.md). Then add `--upload --yes` with an explicit daily byte cap (`AGENTOPS_MAX_PUBLISH_BYTES_PER_DAY`), and check storage with the [KQL query library](docs/kql-query-library.md).
+To publish to your own Azure workspace, click **Deploy to Azure** (metadata-only Log Analytics, ingestion endpoint and rule, Workbook and a monthly budget alert of 5 in your billing currency; see [Deploy to Azure](docs/deploy-to-azure.md)) or follow the [diagnostic pilot quickstart](docs/diagnostic-pilot-quickstart.md). Explicitly opt into upload RBAC and public network access, or configure a separately authorized sender and private connectivity. Then add `--upload --yes` with an explicit daily byte cap (`AGENTOPS_MAX_PUBLISH_BYTES_PER_DAY`), and check storage with the [KQL query library](docs/kql-query-library.md).
 
 ## Privacy by default
 
