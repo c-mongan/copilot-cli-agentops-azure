@@ -49,14 +49,14 @@ function summarizeSessionEvents(events = [], options = {}) {
     shutdownObserved: false,
     premiumRequests: null,
     tokenSource: 'unavailable',
-    tokensByModel: {},
+    tokensByModel: Object.create(null),
     toolDurations: [],
     failures: []
   };
   const pendingTools = new Map();
   const seenCompletions = new Set();
   const seenModelCalls = new Set();
-  const callUsage = {};
+  const callUsage = Object.create(null);
   let lastShutdown = null;
   for (const { event, time } of ordered) {
     const data = event.data || {};

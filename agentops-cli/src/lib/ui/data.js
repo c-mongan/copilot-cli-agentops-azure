@@ -83,7 +83,7 @@ function minimalEvent(raw) {
       event.model = safeModel(data.selectedModel);
       break;
     case 'session.shutdown': {
-      const usage = {};
+      const usage = Object.create(null);
       let requests = 0;
       for (const [model, metrics] of Object.entries(data.modelMetrics || {})) {
         const name = safeModel(model);
@@ -332,7 +332,7 @@ function addUsage(target, model, usage) {
 
 function usageFromLedger(spans) {
   const chats = spans.filter(span => span.op === 'chat' && span.model);
-  const usage = {};
+  const usage = Object.create(null);
   if (chats.length) {
     for (const span of chats) addUsage(usage, span.model, span);
     return usage;
@@ -343,7 +343,7 @@ function usageFromLedger(spans) {
 }
 
 function usageFromCalls(events) {
-  const usage = {};
+  const usage = Object.create(null);
   const seen = new Set();
   for (const event of events) {
     if (event.type !== 'model.model_call_success' || !event.callUsage || !event.callModel) continue;
@@ -618,7 +618,9 @@ function tokenSeries(spans, sessionUsage, sessionEndMs) {
   }
   const total = totals(sessionUsage);
   if (total.input || total.output) {
-    return { granularity: 'session', points: [{ tMs: sessionEndMs, input: total.input, output: total.output, costUsd: estimateUsageCost(sessionUsage).costUsd }] };
+    const estimate = estimateUsageCost(sessionUsage);
+    const costUsd = estimate.unpricedModels.length ? null : estimate.costUsd;
+    return { granularity: 'session', points: [{ tMs: sessionEndMs, input: total.input, output: total.output, costUsd }] };
   }
   return { granularity: 'none', points: [] };
 }

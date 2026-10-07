@@ -11,6 +11,65 @@ const { readLocalSessions } = require('../src/lib/digest/session-metadata');
 const { renderDigestMarkdown } = require('../src/lib/digest/render-markdown');
 const { line, T0 } = require('./support/ui-fixture');
 
+test('cost estimate: prototype-named models retain usage and remain explicitly unpriced', () => {
+  const usage = JSON.parse('{"constructor":{"input":10},"__proto__":{"input":20},"toString":{"output":30}}');
+  const merged = pricing.mergeUsageByModel([usage, usage]);
+  assert.deepEqual(Object.keys(merged).sort(), ['__proto__', 'constructor', 'toString']);
+  assert.equal(merged.constructor.input, 20);
+  assert.equal(merged.__proto__.input, 40);
+  assert.equal(merged.toString.output, 60);
+  assert.deepEqual(pricing.estimateRunsCost([usage, usage]).unpricedModels, ['__proto__', 'constructor', 'toString']);
+});
+
+test('cost estimate: prototype-named price overrides are own entries', t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-prototype-prices-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const file = path.join(root, 'prices.json');
+  fs.writeFileSync(file, '{"__proto__":{"input":2,"output":3},"constructor":{"input":4,"output":5}}');
+  const { table } = pricing.loadPriceTable(file);
+  assert.equal(pricing.estimateModelCostUsd('__proto__', { input: 1e6 }, table), 2);
+  assert.equal(pricing.estimateModelCostUsd('constructor', { output: 1e6 }, table), 5);
+});
+
+test('cost estimate: session-only timeline does not present a mixed-price subtotal as complete', () => {
+  const series = data.tokenSeries([], { 'claude-haiku-4.5': { input: 1e6 }, 'mystery-model': { input: 5 } }, 100);
+  assert.equal(series.points[0].input, 1000005);
+  assert.equal(series.points[0].costUsd, null);
+  assert.equal(data.tokenSeries([], { 'claude-haiku-4.5': { input: 1e6 } }, 100).points[0].costUsd, 1);
+});
+
+for (const source of ['shutdown', 'call']) {
+  test(`cost estimate: UI and digest retain prototype-named models from ${source} events`, async t => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-model-keys-'));
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+    const copilotHome = path.join(root, 'copilot');
+    const agentOpsHome = path.join(root, 'agentops');
+    const id = 'prototype-model-session';
+    const dir = path.join(copilotHome, 'session-state', id);
+    fs.mkdirSync(dir, { recursive: true });
+    // These pass the UI model-identity allowlist; __proto__ is covered directly above.
+    const models = ['constructor', 'toString'];
+    const events = [line('session.start', 0, { sessionId: id })];
+    if (source === 'shutdown') {
+      events.push(shutdown(1000, Object.fromEntries(models.map(model => [model, { inputTokens: 10, outputTokens: 2 }]))));
+    } else {
+      for (const model of models) events.push(line('model.model_call_success', 1000, {
+        callId: model, modelCall: { model }, responseChunk: { usage: { prompt_tokens: 10, completion_tokens: 2 } }
+      }));
+    }
+    fs.writeFileSync(path.join(dir, 'events.jsonl'), events.join('\n') + '\n');
+    const store = new data.RunStore({ copilotHome, agentOpsHome, now: () => T0 + 3600000 });
+    const ui = await store.list();
+    const read = readLocalSessions({ copilotHome, agentopsHome: agentOpsHome, sinceMs: 0 });
+    const digest = buildDigest({ sessions: read.sessions, nowMs: T0 + 3600000, period: parsePeriod('7d'), prices: pricing.loadPriceTable() });
+    assert.equal(ui.runs[0].tokens.input, 20);
+    assert.equal(ui.runs[0].tokens.output, 4);
+    assert.deepEqual(ui.kpis.unpricedModels.slice().sort(), models.slice().sort());
+    assert.deepEqual(digest.current.tokens.unpricedModels.slice().sort(), models.slice().sort());
+    assert.equal(digest.current.tokens.models.reduce((sum, model) => sum + model.inputTokens, 0), 20);
+  });
+}
+
 test('cost estimate: table is dated, sourced and uses per-million token prices', () => {
   assert.match(pricing.PRICE_TABLE_DATE, /^\d{4}-\d{2}-\d{2}$/);
   assert.match(pricing.PRICE_TABLE_LABEL, new RegExp(pricing.PRICE_TABLE_DATE));
