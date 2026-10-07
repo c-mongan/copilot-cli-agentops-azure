@@ -27,7 +27,7 @@ It exports metadata only. Prompts, responses, tool arguments and tool results ar
 
 Trace and span IDs are reused from Copilot CLI's native OTel, so the exported spans join `AgentOpsSpans_CL` on `TraceId` / `SpanId`. Copilot CLI 1.0.93 parents tool calls on `invoke_agent`, not on the preceding `chat`. The export keeps that native parentage rather than inventing one.
 
-A failed tool span gets status `ERROR` and `error.type` (for example `denied`), and App Insights shows `success == false`.
+A failed tool span gets status `ERROR` and `error.type` (for example `denied`), and App Insights shows `success == false`. A shell command that exited non-zero is also exported as `ERROR` with `error.type = shell_nonzero_exit`; filter it out if you only want hard failures.
 
 ## Attributes
 
@@ -44,7 +44,7 @@ A failed tool span gets status `ERROR` and `error.type` (for example `denied`), 
 | `gen_ai.tool.name` | `execute_tool` | native tool name | Required. |
 | `gen_ai.tool.call.id` | `execute_tool` | native tool call ID | |
 | `gen_ai.tool.type` | `execute_tool` | `extension` for MCP tools, else `function` | |
-| `error.type` | failed spans | native error type, else `_OTHER` | |
+| `error.type` | failed spans | native error type, else `_OTHER`; `shell_nonzero_exit` for a shell exit code other than 0 | |
 | `agentops.run.id` | all | `--run-id` | Joins to the AgentOps ledger. |
 | `agentops.agent.name_source` | all | `override`, `native` or `default` | |
 | `agentops.semconv.version` | all | `1.41.0` | |
@@ -120,7 +120,7 @@ The portal visual for this export has **not been captured yet**: it needs an int
 - **Agent name:** Copilot CLI 1.0.93 does not record an agent name. Without `--agent-name`, every session shows as `GitHub Copilot CLI`.
 - **Parentage:** tools are siblings of `chat` under `invoke_agent`, as Copilot CLI emits them.
 - **Skipped records:** AgentOps script spans and other operations outside the GenAI model are skipped and counted (`non_genai_skipped`).
-- **Shell exit codes:** a shell command that exits non-zero is still a successful tool span, because Copilot CLI reports it that way. Only denied or errored tool calls are failures.
+- **Shell exit codes:** Copilot CLI reports a shell command that exits non-zero as a successful tool call. AgentOps reads the numeric `shellExecution.exitCode` from the matching `tool.execution_complete` event (by tool call ID; never the command or output) and exports that span with status `ERROR` and `error.type = shell_nonzero_exit`. The CLI summary counts it as a shell non-zero exit (a warning), not a failed tool. Without the session `events.jsonl`, or for tools that report no exit code, the span stays successful.
 - **Spec stability:** the GenAI conventions are still in Development. `gen_ai.system` is deprecated, and `github` is not a well-known provider value.
 - **Ingestion cost:** each exported span is billable App Insights ingestion (a few cents for a handful of sessions).
 

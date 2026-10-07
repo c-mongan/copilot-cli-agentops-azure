@@ -149,7 +149,10 @@ function toGenAiSpans(spans = [], context = {}) {
     const responseModel = safeString(span.modelActual);
     const toolName = safeString(span.toolName);
     const toolCallId = safeString(span.toolCallId);
-    const errorType = span.failed ? (safeString(span.errorType) || '_OTHER') : '';
+    // A shell non-zero exit is exported as an error span with a bounded error.type,
+    // even though Copilot reported the tool call as successful.
+    const errorType = span.failed ? (safeString(span.errorType) || '_OTHER')
+      : span.errorType === 'shell_nonzero_exit' ? 'shell_nonzero_exit' : '';
 
     const attributes = { [ATTR.OPERATION_NAME]: operation };
     if (provider) { attributes[ATTR.PROVIDER_NAME] = provider; attributes[ATTR.SYSTEM] = provider; }

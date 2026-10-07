@@ -11,7 +11,7 @@ const { sleep } = require('../timing');
 const { CONTENT_ATTRIBUTES, SEMCONV_VERSION, safeString: safeAgentName, toGenAiSpans, toOtlpTraceRequest } = require('../otel/genai-semconv');
 const { defaultSessionEventsPath, readCopilotSessionEvents } = require('./session-enricher');
 const { defaultReceiptFiles, readSessionOtelSpans } = require('./session-otel');
-const { enrichSpansWithSessionToolContext, readSessionSpanRows } = require('./session-span-export');
+const { SHELL_NONZERO_EXIT, enrichSpansWithSessionToolContext, readSessionSpanRows } = require('./session-span-export');
 
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const ENV_NAME = /^[A-Z_][A-Z0-9_]{0,127}$/;
@@ -220,10 +220,13 @@ async function startAzureMonitorCollector(options = {}) {
 function summarise(genAi) {
   const operations = {};
   let failedTools = 0;
+  let nonZeroExitTools = 0;
   for (const span of genAi.spans) {
     const op = span.attributes['gen_ai.operation.name'];
     operations[op] = (operations[op] || 0) + 1;
-    if (op === 'execute_tool' && span.status.code === 2) failedTools += 1;
+    if (op !== 'execute_tool' || span.status.code !== 2) continue;
+    if (span.attributes['error.type'] === SHELL_NONZERO_EXIT) nonZeroExitTools += 1;
+    else failedTools += 1;
   }
   const sum = (op, key) => genAi.spans
     .filter(span => span.attributes['gen_ai.operation.name'] === op)
@@ -231,6 +234,7 @@ function summarise(genAi) {
   return {
     operations,
     failed_tools: failedTools,
+    nonzero_exit_tools: nonZeroExitTools,
     trace_ids: [...new Set(genAi.spans.map(span => span.traceId))],
     tokens: {
       invoke_agent_input: sum('invoke_agent', 'gen_ai.usage.input_tokens'),
@@ -337,7 +341,7 @@ function renderGenAiExport(value) {
     `GenAI OTLP export (semconv ${value.semconv_version}) · ${value.delivery}`,
     resend,
     `Session ${value.session_id} · run ${value.run_id} · source ${value.source}`,
-    `Spans ${value.spans} (${ops}) · duplicates dropped ${value.duplicates_dropped} · failed tools ${value.failed_tools}`,
+    `Spans ${value.spans} (${ops}) · duplicates dropped ${value.duplicates_dropped} · failed tools ${value.failed_tools}${value.nonzero_exit_tools ? ` · shell non-zero exits ${value.nonzero_exit_tools} (warning)` : ''}`,
     `Tokens invoke_agent ${value.tokens.invoke_agent_input} in / ${value.tokens.invoke_agent_output} out · chat ${value.tokens.chat_input} in / ${value.tokens.chat_output} out`,
     value.output ? `OTLP JSON: ${value.output}` : '',
     value.marker_warning ? `Warning: ${value.marker_warning}` : '',

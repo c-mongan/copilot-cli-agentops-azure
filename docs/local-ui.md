@@ -141,5 +141,5 @@ Copilot CLI bills by premium requests, not tokens, and emits no cost metadata. T
 - Per-call token points need an AgentOps ledger run (`agentops copilot-session launch`). For plain Copilot CLI sessions the meter shows one end-of-session point from the shutdown totals. With a ledger, the estimated cost is spread across calls by token share so it ends at the run's figure.
 - Only the newest 100 sessions are analysed by default. Use `--limit` for more.
 - A session that is still running, or ended without a shutdown event, is shown as `incomplete` with partial data.
-- A shell command that exits non-zero is a successful tool call to Copilot CLI. AgentOps marks the run `attention`, not `failed`. See [How run status is decided](#how-run-status-is-decided).
+- A shell command that exits non-zero is a successful tool call to Copilot CLI. AgentOps marks the run `attention`, not `failed`. Span ledger rows for that call get `ErrorType = shell_nonzero_exit` with `Outcome = ok`. See [How run status is decided](#how-run-status-is-decided).
 - The UI reads local files only. For team-wide views, use the [Azure Workbook](enterprise-workbook.md) or [Grafana](grafana-dashboard-tour-v2.md).
