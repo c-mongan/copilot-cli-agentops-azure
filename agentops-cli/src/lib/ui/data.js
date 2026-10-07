@@ -23,6 +23,13 @@ const TRACKED_TYPES = new Set([
 ]);
 const SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 const LIVE_WINDOW_MS = 5 * 60 * 1000;
+// A Copilot process holding the session's inuse lock keeps an idle session live, but
+// only this long after its last write, so a recycled PID cannot keep an old one live.
+const LOCK_LIVE_MAX_MS = 24 * 60 * 60 * 1000;
+// With a time window the newest-N cap is lifted up to this many sessions.
+const WINDOW_SCAN_MAX = 5000;
+// Run IDs written by `agentops copilot-session launch`.
+const LAUNCH_RUN_ID = /^native_run_/;
 
 function defaultCopilotHome(env = process.env) {
   return env.COPILOT_HOME || path.join(os.homedir(), '.copilot');
@@ -76,7 +83,11 @@ function minimalEvent(raw) {
       event.copilotVersion = safeLabel(data.copilotVersion, 40);
       event.repo = repoIdentity(context.gitRoot || context.cwd);
       const started = Date.parse(data.startTime || '');
-      if (Number.isFinite(started) && event.time === null) event.time = started;
+      if (Number.isFinite(started)) {
+        // The digest windows sessions by startTime, so the UI does too.
+        event.startTime = started;
+        if (event.time === null) event.time = started;
+      }
       break;
     }
     case 'session.resume':
@@ -291,6 +302,40 @@ function readLedgerIndex(agentOpsHome) {
     index.set(sessionId, runs);
   }
   return index;
+}
+
+// True when a running process holds this session's Copilot CLI inuse lock
+// (session-state/<id>/inuse.<pid>.lock).
+function sessionLockAlive(sessionDir) {
+  let names;
+  try {
+    names = fs.readdirSync(sessionDir);
+  } catch {
+    return false;
+  }
+  for (const name of names) {
+    const match = /^inuse\.(\d{1,10})\.lock$/.exec(name);
+    const pid = match ? Number(match[1]) : 0;
+    if (!pid || pid === process.pid) continue;
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch (error) {
+      if (error.code === 'EPERM') return true;
+    }
+  }
+  return false;
+}
+
+// A session has ended when its last lifecycle event is a shutdown; a resume after a
+// shutdown means it is running again.
+function sessionEnded(events) {
+  let ended = false;
+  for (const event of events) {
+    if (event.type === 'session.shutdown') ended = true;
+    else if (event.type === 'session.start' || event.type === 'session.resume') ended = false;
+  }
+  return ended;
 }
 
 function discoverSessions({ copilotHome, agentOpsHome } = {}) {
@@ -627,7 +672,7 @@ function tokenSeries(spans, sessionUsage, sessionEndMs) {
   return { granularity: 'none', points: [] };
 }
 
-function summarize(entry, parsed, ledgerSpans, now = Date.now()) {
+function summarize(entry, parsed, ledgerSpans, now = Date.now(), { lockAlive = false } = {}) {
   const { events, firstTime, lastTime } = parsed;
   const start = events.find(event => event.type === 'session.start');
   const shutdowns = events.filter(event => event.type === 'session.shutdown');
@@ -656,11 +701,12 @@ function summarize(entry, parsed, ledgerSpans, now = Date.now()) {
     .map(span => ({ kind: span.kind, name: span.name, outcome: 'denied' }));
   let nonZeroItems = nonZeroExitSpans(toolSpans)
     .map(span => ({ kind: span.kind, name: span.name, outcome: 'nonzero_exit' }));
-  const startedAt = start?.time ?? firstTime ?? (ledgerSpans.length ? Math.min(...ledgerSpans.map(span => span.start)) : null);
+  const startedAt = start?.startTime ?? start?.time ?? firstTime ?? (ledgerSpans.length ? Math.min(...ledgerSpans.map(span => span.start)) : null);
   const endedAt = lastTime ?? (ledgerSpans.length ? Math.max(...ledgerSpans.map(span => span.end)) : startedAt);
   const durationMs = events.length ? activeDuration(events, firstTime, lastTime) : Math.max(0, (endedAt || 0) - (startedAt || 0));
-  const ended = Boolean(lastShutdown) || (!events.length && ledgerSpans.length > 0);
-  const live = !ended && entry.mtimeMs && now - entry.mtimeMs < LIVE_WINDOW_MS;
+  const ended = events.length ? sessionEnded(events) : ledgerSpans.length > 0;
+  const idleMs = entry.mtimeMs ? now - entry.mtimeMs : Infinity;
+  const live = !ended && (idleMs < LIVE_WINDOW_MS || (lockAlive && idleMs < LOCK_LIVE_MAX_MS));
   // A running session is shown as live even if a tool already failed; the failure count still shows.
   if (events.length) {
     const starts = new Map(events.filter(e => e.type === 'tool.execution_start').map(e => [e.toolCallId, e.toolName]));
@@ -676,7 +722,7 @@ function summarize(entry, parsed, ledgerSpans, now = Date.now()) {
     toolFailures = failedItems.filter(item => item.kind === 'tool').length;
   }
   const { status, statusLabel, statusReasons } = events.length
-    ? sessionRunStatus(events, { live: Boolean(live) })
+    ? sessionRunStatus(events, { live: Boolean(live), ended })
     : classifyRunStatus({ failures: failedItems.length, denials: deniedItems.length, nonZeroExits: nonZeroItems.length, live: Boolean(live), ended });
   const repo = start?.repo?.name ? start.repo : { name: '', hash: entry.ledgerRuns[0]?.repoHash || '' };
 
@@ -714,12 +760,13 @@ function summarize(entry, parsed, ledgerSpans, now = Date.now()) {
     status,
     statusLabel,
     statusReasons,
+    _ended: ended,
     _toolDurations: toolSpans.map(span => span.durationMs)
   };
 }
 
 function publicRow(row) {
-  const { _toolDurations, usageByModel, ...rest } = row;
+  const { _toolDurations, _ended, usageByModel, ...rest } = row;
   return rest;
 }
 
@@ -843,23 +890,34 @@ class RunStore {
   }
 
   async load(entry) {
-    const key = `${entry.id}:${entry.mtimeMs}:${entry.size}:${entry.ledgerRuns.map(run => run.runId).join(',')}`;
+    const baseKey = `${entry.id}:${entry.mtimeMs}:${entry.size}:${entry.ledgerRuns.map(run => run.runId).join(',')}`;
     const cached = this.cache.get(entry.id);
+    // Only a session that has not shut down can be held open by a running Copilot process.
+    const lockAlive = entry.eventsFile && !(cached?.baseKey === baseKey && cached.value.row._ended)
+      ? sessionLockAlive(path.dirname(entry.eventsFile))
+      : false;
+    const key = `${baseKey}:${lockAlive ? 'locked' : ''}`;
     // "live" depends on the clock, so a quiet live session is re-summarised once it goes stale.
-    const stale = cached?.value.row.status === 'live' && this.now() - entry.mtimeMs >= LIVE_WINDOW_MS;
+    const idleMs = this.now() - entry.mtimeMs;
+    const stale = cached?.value.row.status === 'live' && idleMs >= LIVE_WINDOW_MS && !(lockAlive && idleMs < LOCK_LIVE_MAX_MS);
     if (cached && cached.key === key && !stale) return cached.value;
     const parsed = entry.eventsFile
       ? await readSessionEvents(entry.eventsFile).catch(() => ({ events: [], firstTime: null, lastTime: null, malformed: 0 }))
       : { events: [], firstTime: null, lastTime: null, malformed: 0 };
     const ledgerSpans = entry.ledgerRuns[0] ? readLedgerSpans(entry.ledgerRuns[0].dir) : [];
-    const value = { parsed, ledgerSpans, row: summarize(entry, parsed, ledgerSpans, this.now()) };
-    this.cache.set(entry.id, { key, value });
+    const value = { parsed, ledgerSpans, row: summarize(entry, parsed, ledgerSpans, this.now(), { lockAlive }) };
+    this.cache.set(entry.id, { key, baseKey, value });
     return value;
   }
 
   async list(filters = {}) {
     const { sessions } = this.discover();
-    const scanned = sessions.slice(0, this.limit);
+    // With a time window, analyse every session written inside it (the set `agentops
+    // digest --since` reads) instead of only the newest N, up to WINDOW_SCAN_MAX.
+    const windowed = Number.isFinite(filters.sinceMs);
+    const candidates = windowed ? sessions.filter(entry => entry.mtimeMs >= filters.sinceMs) : sessions;
+    const cap = windowed ? Math.max(this.limit, WINDOW_SCAN_MAX) : this.limit;
+    const scanned = candidates.slice(0, cap);
     const loaded = await mapLimit(scanned, 6, entry => this.load(entry));
     const all = loaded.map(item => item.row).sort((a, b) => String(b.startedAt || '').localeCompare(String(a.startedAt || '')));
     const rows = all.filter(row => matchesFilters(row, filters));
@@ -868,6 +926,9 @@ class RunStore {
       scanned: scanned.length,
       totalSessions: sessions.length,
       limit: this.limit,
+      window: windowed
+        ? { since: filters.since || null, start: new Date(filters.sinceMs).toISOString(), sessions: candidates.length, cap, capped: candidates.length > scanned.length }
+        : null,
       allowContent: this.allowContent,
       kpis: aggregateKpis(rows),
       facets: facets(all),
@@ -881,18 +942,26 @@ class RunStore {
     return sessions.find(entry => entry.id === id || entry.ledgerRuns.some(run => run.runId === id)) || null;
   }
 
-  // "latest" = the most recently active run that is either an AgentOps ledger run
-  // (from `agentops copilot-session launch`) or a finished Copilot session. A live
-  // session that was not launched through AgentOps is only chosen when nothing else exists.
+  // "latest" = the session of the newest `agentops copilot-session launch` run
+  // (native_run_* by createdAt). Without one, the most recently written session that
+  // has finished; an in-progress session is only chosen when nothing has finished.
   async latestEntry() {
     const { sessions } = this.discover();
-    const activity = entry => Math.max(entry.mtimeMs || 0, entry.ledgerRuns[0]?.createdAt || 0);
-    const ordered = [...sessions].sort((a, b) => activity(b) - activity(a) || a.id.localeCompare(b.id));
+    let launched = null;
+    let launchedAt = -Infinity;
+    for (const entry of sessions) {
+      for (const run of entry.ledgerRuns) {
+        if (LAUNCH_RUN_ID.test(run.runId) && run.createdAt > launchedAt) {
+          launched = entry;
+          launchedAt = run.createdAt;
+        }
+      }
+    }
+    if (launched) return launched;
+    const ordered = [...sessions].sort((a, b) => (b.mtimeMs || 0) - (a.mtimeMs || 0) || a.id.localeCompare(b.id));
     for (const entry of ordered) {
-      if (entry.ledgerRuns.length) return entry;
-      if (this.now() - entry.mtimeMs >= LIVE_WINDOW_MS) return entry;
       const { row } = await this.load(entry);
-      if (row.status !== 'live') return entry;
+      if (row._ended && row.status !== 'live') return entry;
     }
     return ordered[0] || null;
   }
@@ -950,6 +1019,8 @@ module.exports = {
   readSessionEvents,
   repoIdentity,
   safeLabel,
+  sessionEnded,
+  sessionLockAlive,
   summarize,
   tokenSeries,
   toolStats

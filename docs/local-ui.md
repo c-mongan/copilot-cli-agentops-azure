@@ -19,18 +19,19 @@ agentops open latest --ui   # same thing, from the run receipt command
 
 The command prints `AgentOps UI running at http://127.0.0.1:<port>/`. Press `Ctrl+C` to stop it.
 
-`latest` (in `agentops ui latest`, `agentops open latest --ui` and `/api/runs/latest`) picks, in order of most recent activity:
+`latest` (in `agentops ui latest`, `agentops open latest --ui` and `/api/runs/latest`) picks the first of:
 
-1. a run recorded by AgentOps (`agentops copilot-session launch`, from its `~/.agentops/runs/*/run-context.json`) or a finished Copilot CLI session, whichever is newest;
-2. a still-running (live) Copilot CLI session only when there is nothing else.
+1. the newest run started by `agentops copilot-session launch` (a `native_run_*` run in `~/.agentops/runs/*/run-context.json`, by creation time), even if other sessions were written to later;
+2. otherwise, the most recently active Copilot CLI session that has finished (its last lifecycle event is `session.shutdown` and it is not live);
+3. a still-running (live) Copilot CLI session only when there is nothing else.
 
-So a Copilot session you have open in another terminal never hides the run you just launched.
+So a Copilot session you have open in another terminal, even one that an older AgentOps wrapper run recorded, never hides the run you just launched.
 
 | Option | Effect |
 |---|---|
 | `--open` / `--no-open` | Launch the browser, or only print the URL. By default it opens only in an interactive terminal outside CI. |
 | `--port <n>` | Bind a fixed port. The default is a free port chosen by the operating system. |
-| `--limit <n>` | Analyse the newest `n` sessions (default 100, maximum 5000). |
+| `--limit <n>` | Analyse the newest `n` sessions when no time window is picked (default 100, maximum 5000). |
 | `--allow-content` | Also serve redacted prompts, tool arguments and results for local sessions. See [privacy](#privacy). |
 | `--copilot-home`, `--agentops-home` | Read from other homes than `~/.copilot` and `~/.agentops`. |
 
@@ -51,7 +52,8 @@ The browser was already running during these measurements.
 
 - **KPI strip:** runs, failed runs, p95 tool latency, total tokens in/out and estimated cost.
 - **Runs table:** newest first. Each row shows when the run started, repository (basename only), model, duration, tokens in/out, tool calls, failures and a status pill (`ok`, `attention`, `failed`, `incomplete`, `live`). See [How run status is decided](#how-run-status-is-decided).
-- **Filters:** model, repository, status and a search box. Filters are kept in the URL, so you can reload or share a view on the same machine.
+- **Filters:** time window, model, repository, status and a search box. Filters are kept in the URL (for example `#/?since=7d`), so you can reload or share a view on the same machine.
+- **Time window:** `Newest N` (the default, set by `--limit`), `Last 24 hours`, `Last 7 days` or `Last 30 days`. A window analyses every session active in it, not just the newest `--limit`, and counts runs that started inside it. It uses the same session selection, start time and cost estimator as `agentops digest --since`, so with `source=copilot` the run count and estimated cost match `agentops digest --since 7d` for the same sessions. Ledger-only runs (no Copilot session folder) appear in the UI but not in the digest. A window analyses at most 5000 sessions; if that cap applies, the cost tile and the table footer say so.
 
 Sources are Copilot CLI session folders (`~/.copilot/session-state/*/events.jsonl`) and AgentOps ledger runs (`~/.agentops/runs`). A session that also has a ledger run is merged into one row.
 
@@ -99,7 +101,7 @@ The run status is the first rule that matches:
 
 | Status | Label | Rule |
 |---|---|---|
-| `live` | Live | The session is still running (UI only). |
+| `live` | Live | The session is still running (UI only): its last lifecycle event is not `session.shutdown` (a `session.resume` after a shutdown means it is running again) and it was written in the last 5 minutes, or a Copilot process still holds its `inuse.<pid>.lock` and it was written in the last 24 hours. A live session is never shown as Failed or Completed; its failures still appear as counts. |
 | `failed` | Failed | The run errored (launch: Copilot exited non-zero, was cancelled or was signalled) or at least one failure was observed. |
 | `incomplete` | Incomplete | No `session.shutdown` event was observed. |
 | `attention` | Needs attention | At least one denial or non-zero shell exit, and no failures. |

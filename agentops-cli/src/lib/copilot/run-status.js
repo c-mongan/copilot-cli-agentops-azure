@@ -70,6 +70,9 @@ function sessionStatusSignals(events = []) {
       signals.subagentFailures += 1;
     } else if (event?.type === 'session.shutdown') {
       signals.ended = true;
+    } else if (event?.type === 'session.start' || event?.type === 'session.resume') {
+      // A resume after a shutdown means the session is running again.
+      signals.ended = false;
     }
   }
   signals.failures = signals.toolFailures + signals.hookFailures + signals.subagentFailures;

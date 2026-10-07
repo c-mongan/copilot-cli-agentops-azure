@@ -81,7 +81,9 @@ function createUiServer(options = {}) {
       const since = url.searchParams.get('since');
       if (since) {
         try {
-          filters.sinceMs = store.now() - parsePeriod(since.slice(0, 20)).periodMs;
+          const period = parsePeriod(since.slice(0, 20));
+          filters.sinceMs = store.now() - period.periodMs;
+          filters.since = period.label;
         } catch {
           return sendJson(res, 400, { error: 'bad-since', hint: 'since must look like 24h, 7d or 2w' });
         }
