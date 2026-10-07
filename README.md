@@ -39,7 +39,7 @@ You need Node.js 20+ and the GitHub Copilot CLI, signed in. Azure is optional.
 
 ```bash
 # 1. Get the CLI (one command, no global install; npx fetches the release tarball)
-alias agentops='npx --yes -p https://github.com/c-mongan/copilot-cli-agentops-azure/releases/download/v0.2.1-preview/copilot-agentops-cli-0.1.0.tgz agentops'
+alias agentops='npx --yes -p https://github.com/c-mongan/copilot-cli-agentops-azure/releases/download/v0.3.0-preview/copilot-agentops-cli-0.1.0.tgz agentops'
 
 # 2. Run an observed Copilot session (local only, no upload)
 agentops copilot-session launch --repo /path/to/repo --json -- -p "Run the tests and explain any failure"
@@ -48,7 +48,7 @@ agentops copilot-session launch --repo /path/to/repo --json -- -p "Run the tests
 agentops copilot-session view <session-id> --run-id <run-id> --output run.html
 ```
 
-From a source checkout, `agentops ui latest` opens the same run in the [local web UI](docs/local-ui.md). It is not in the v0.2.1-preview tarball yet.
+`agentops ui latest` opens the same run in the [local web UI](docs/local-ui.md).
 
 Prefer a source checkout? `git clone` the repository and use `alias agentops="node $PWD/agentops-cli/src/index.js"`. Each release lists its tarball's SHA256 in `SHA256SUMS`. The package is not on the npm registry yet.
 

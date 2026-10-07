@@ -5,13 +5,48 @@ project. Package versions stay at `0.1.0` until a package is published to npm.
 
 ## Unreleased
 
+## v0.3.0-preview: 2026-10-07
+
+### Added
+
 - **Local web UI.** `agentops ui` (also `agentops ui latest` and `agentops open
   latest --ui`) serves a zero-dependency, read-only, metadata-only web UI on
   127.0.0.1. It shows a runs list with KPIs and filters, and a per-run span
   waterfall with a failure callout, cumulative token and estimated-cost meter,
-  and per-tool latency. See [docs/local-ui.md](docs/local-ui.md).
+  and per-tool latency. First graph in about 2 s with no Azure or Docker. See
+  [docs/local-ui.md](docs/local-ui.md) (#180).
+- **Pipeline doctor.** `agentops doctor` prints a six-stage ready / warning /
+  blocked checklist (Copilot CLI, native OTel capture, local Collector, local
+  ledger, local report, Azure publishing) with a fix command for each stage. JSON output gains a
+  backward-compatible `pipeline` section (#176).
+- **OpenTelemetry GenAI export.** `copilot-session export-otel` re-emits a
+  captured session as standard `gen_ai.*` spans (semantic conventions pinned to
+  1.41.0), metadata only, to an OTLP endpoint, Application Insights or a file, so
+  runs appear in the Application Insights Agents (preview) view. See
+  [docs/otel-genai.md](docs/otel-genai.md) (#177).
+- **Weekly digest.** `agentops digest --since 7d` clusters failures by tool,
+  error type and model, lists slow tools and token trends, and writes Markdown,
+  HTML or JSON. See [docs/digest.md](docs/digest.md) (#178).
+- **Portable Grafana dashboard.** `grafana/agentops-copilot-cli.json` imports
+  into Azure Monitor dashboards with Grafana, Azure Managed Grafana or
+  self-hosted Grafana. See [docs/grafana.md](docs/grafana.md) (#179).
+- **Deploy to Azure.** A one-click, metadata-only template
+  (`infra/azuredeploy.json`) with a 1 GB/day ingestion cap and a monthly budget
+  alert. See [docs/deploy-to-azure.md](docs/deploy-to-azure.md) (#181).
+
+### Fixed
+
 - `copilot-session view` no longer shows a stale note about Architecture and
   Compare views.
+- Test fixtures moved to the OS temp directory, which removes parallel and
+  Windows CI flakes (#182).
+
+### Known limits
+
+- Copilot CLI does not report cost; cost figures are estimates from public
+  per-token list prices and are labelled as such.
+- `azd up` for the template is documented but not yet verified.
+- The package is not on the npm registry; install from the release tarball.
 
 ## v0.2.1-preview: 2026-10-07
 
