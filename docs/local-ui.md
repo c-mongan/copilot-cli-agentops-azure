@@ -50,7 +50,7 @@ The browser was already running during these measurements.
 ![Runs home: KPI strip, filters and a list of real Copilot CLI sessions](images/ui-home-light.png)
 
 - **KPI strip:** runs, failed runs, p95 tool latency, total tokens in/out and estimated cost.
-- **Runs table:** newest first. Each row shows when the run started, repository (basename only), model, duration, tokens in/out, tool calls, failures and a status pill (`ok`, `failed`, `incomplete`).
+- **Runs table:** newest first. Each row shows when the run started, repository (basename only), model, duration, tokens in/out, tool calls, failures and a status pill (`ok`, `attention`, `failed`, `incomplete`, `live`). See [How run status is decided](#how-run-status-is-decided).
 - **Filters:** model, repository, status and a search box. Filters are kept in the URL, so you can reload or share a view on the same machine.
 
 Sources are Copilot CLI session folders (`~/.copilot/session-state/*/events.jsonl`) and AgentOps ledger runs (`~/.agentops/runs`). A session that also has a ledger run is merged into one row.
@@ -58,7 +58,7 @@ Sources are Copilot CLI session folders (`~/.copilot/session-state/*/events.json
 ### Run detail
 
 - **Failure callout:** for example "1 tool call denied: bash". It uses only the tool name and outcome, never arguments.
-- **Waterfall:** session → hooks, turns → chat calls and tool calls, on a shared time axis. Bars are coloured by kind; failed spans are red. Hover or focus a row to inspect it; click to pin. The inspector shows metadata only: kind, tool name, duration, status, token counts and span ID. Duplicate spans with the same span ID are shown once.
+- **Waterfall:** session → hooks, turns → chat calls and tool calls, on a shared time axis. Bars are coloured by kind; failed spans are red and denied tool calls are amber. Hover or focus a row to inspect it; click to pin. The inspector shows metadata only: kind, tool name, duration, status, token counts and span ID. Duplicate spans with the same span ID are shown once.
 - **Token and cost meter:** cumulative tokens and estimated cost along the same time axis.
 - **Tool latency:** count, p50, p95, max and failures per tool.
 - **Tokens by model:** input, output, cache reads and estimated cost per model.
@@ -79,6 +79,45 @@ Sources are Copilot CLI session folders (`~/.copilot/session-state/*/events.json
 | `t` | Cycle theme: system, light, dark | Same |
 
 The theme follows `prefers-color-scheme` until you pick one. Motion is reduced when the operating system asks for it.
+
+## How run status is decided
+
+`copilot-session launch`, `copilot-session view` and this UI use one shared classifier ([`run-status.js`](../agentops-cli/src/lib/copilot/run-status.js)). The same session gets the same status everywhere.
+
+Each completed tool call is classified from its `tool.execution_complete` event:
+
+| Tool outcome | Rule | Counts as |
+|---|---|---|
+| `ok` | `success` is not `false` and any shell exit code is 0 | — |
+| `denied` | `success: false` with `error.code` `denied`, `rejected`, `permission_denied`, `user_rejected` or `policy_denied` | denial |
+| `failed` | `success: false` with any other or no error code | failure |
+| `nonzero_exit` | `success: true` but `shellExecution.exitCode` is not 0 (for example a failing `npm test`) | non-zero exit |
+
+A failed hook (`hook.end` with `success: false`) and a failed sub-agent (`subagent.failed`) also count as failures. A denial means a permission gate stopped the tool before it ran. It is not a tool malfunction. A non-zero shell exit is a successful tool call to Copilot CLI: the command ran and reported a result, which the agent may have expected.
+
+The run status is the first rule that matches:
+
+| Status | Label | Rule |
+|---|---|---|
+| `live` | Live | The session is still running (UI only). |
+| `failed` | Failed | The run errored (launch: Copilot exited non-zero, was cancelled or was signalled) or at least one failure was observed. |
+| `incomplete` | Incomplete | No `session.shutdown` event was observed. |
+| `attention` | Needs attention | At least one denial or non-zero shell exit, and no failures. |
+| `ok` | Completed | None of the above. |
+
+The `copilot-session view` HTML still shows a detail card for every denial and non-zero shell exit, so you can inspect them. Its summary states the run status and the breakdown, so the card count does not imply a failed run.
+
+JSON output keeps every existing field and adds `status`, `statusLabel` / `status_label`, `statusReasons` / `status_reasons` (`run_errored`, `failures`, `denials`, `nonzero_exits`) and the signal counts. `ok` in `launch --json` still means "Copilot exited 0 and evidence was collected"; it is not the run status.
+
+### What each span count means
+
+| Name | Where | Counts |
+|---|---|---|
+| Native OTel spans | launch `spanCounts.nativeSpans`, view `native_spans`, UI toolbar | Unique native spans, deduplicated by trace ID and span ID. Span-event rows are excluded. |
+| Span-table rows | launch `spanCounts.spanRows` and the legacy `evidence.spans` | Rows written to `AgentOpsSpans_CL.jsonl`: each span plus one row per span event. Always at least the native span count. |
+| Trace spans | UI toolbar | Rows in the UI waterfall: session, turns, hooks, model calls and tool calls, built from session events and spans. |
+
+For example, one QA run had 57 span-table rows, 16 native OTel spans and 24 trace spans. These numbers describe different things and are labelled as such on every surface. `copilot-session view` counts native spans only when `--run-id` points to the run's local evidence.
 
 ## Privacy
 
@@ -102,5 +141,5 @@ Copilot CLI bills by premium requests, not tokens, and emits no cost metadata. T
 - Per-call token points need an AgentOps ledger run (`agentops copilot-session launch`). For plain Copilot CLI sessions the meter shows one end-of-session point from the shutdown totals. With a ledger, the estimated cost is spread across calls by token share so it ends at the run's figure.
 - Only the newest 100 sessions are analysed by default. Use `--limit` for more.
 - A session that is still running, or ended without a shutdown event, is shown as `incomplete` with partial data.
-- A shell command that exits non-zero is a successful tool call to Copilot CLI. The UI counts it as a warning, not a failure.
+- A shell command that exits non-zero is a successful tool call to Copilot CLI. AgentOps marks the run `attention`, not `failed`. See [How run status is decided](#how-run-status-is-decided).
 - The UI reads local files only. For team-wide views, use the [Azure Workbook](enterprise-workbook.md) or [Grafana](grafana-dashboard-tour-v2.md).
