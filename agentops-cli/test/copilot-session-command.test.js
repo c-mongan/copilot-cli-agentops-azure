@@ -768,3 +768,22 @@ test('cancelled startup cleans a collector returned after cancellation without s
   assert.equal(signals.listenerCount('SIGINT'), 0);
   assert.equal(signals.listenerCount('SIGTERM'), 0);
 });
+
+test('successful launch without session shutdown remains incomplete', async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-incomplete-launch-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const home = path.join(root, 'copilot');
+  const dir = path.join(home, 'session-state', 'incomplete-fixture');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'events.jsonl'), JSON.stringify({ type: 'session.start', data: { sessionId: 'incomplete-fixture' } }) + '\n');
+  const result = await launchObservedCopilot({ repo: root, copilotHome: home, commandArgs: ['--version'], json: true }, {
+    env: { PATH: process.env.PATH }, agentopsHome: path.join(root, 'agentops'), stdout: { write() {} },
+    startScopedStrictCollector: async () => ({ endpoint: 'http://127.0.0.1:14320', receiptPath: path.join(root, 'receipt.jsonl'), stop: async () => {} }),
+    resolveCopilotBinary: () => ({ ok: true, path: '/synthetic/copilot' }),
+    snapshotCopilotSessions: () => new Map(), changedCopilotSession: () => ({ sessionId: 'incomplete-fixture' }),
+    spawnSync: () => ({ status: 0, signal: null }),
+    deliverCopilotSession: () => ({ state: 'local_pending', sessionId: 'incomplete-fixture', spans: 0 })
+  });
+  assert.equal(result.exitCode, 0);
+  assert.equal(result.status, 'incomplete');
+});

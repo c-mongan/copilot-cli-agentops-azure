@@ -67,7 +67,7 @@
     const total = Math.round(s);
     if (total < 60) return `${total} s`;
     if (total < 3600) return `${Math.floor(total / 60)} m ${String(total % 60).padStart(2, '0')} s`;
-    const totalMin = Math.round(total / 60);
+    const totalMin = Math.round(ms / 60000);
     return `${Math.floor(totalMin / 60)} h ${String(totalMin % 60).padStart(2, '0')} m`;
   }
   function fmtCost(value) {
@@ -437,7 +437,7 @@
     return h('section', { class: 'kpis', 'aria-label': 'Run summary' },
       tile('Active time', fmtDuration(run.durationMs), `${plural(run.turns, 'turn')}${run.subagents ? ` · ${plural(run.subagents, 'subagent')}` : ''}`),
       tile('Tool calls', fmtInt(run.toolCalls), run.p95ToolMs !== null ? `p95 ${fmtDuration(run.p95ToolMs)}` : 'no tool calls'),
-      tile('Failures', fmtInt(run.failures), run.failures ? `${plural(run.toolFailures, 'tool call')} failed` : (run.denials || run.nonZeroExits ? [run.denials ? `${fmtInt(run.denials)} denied` : '', run.nonZeroExits ? `${fmtInt(run.nonZeroExits)} non-zero exit` : ''].filter(Boolean).join(' · ') : 'Nothing failed'), { bad: run.failures > 0 }),
+      tile('Failures', fmtInt(run.failures), run.failures ? `${plural(run.toolFailures, 'tool call')} failed` : (run.denials || run.nonZeroExits ? [run.denials ? `${fmtInt(run.denials)} denied` : '', run.nonZeroExits ? plural(run.nonZeroExits, 'non-zero exit') : ''].filter(Boolean).join(' · ') : 'Nothing failed'), { bad: run.failures > 0 }),
       tile('Tokens', run.tokens.known ? fmtTokens(run.tokens.input + run.tokens.output) : '—', run.tokens.known ? `${fmtTokens(run.tokens.input)} in · ${fmtTokens(run.tokens.output)} out` : 'not recorded yet'),
       tile('Cost', fmtCost(run.costUsd), unpricedNote(run.unpricedModels) || (run.premiumRequests !== null ? `${fmtInt(run.premiumRequests)} premium requests` : 'list-price estimate'), { est: true, title: run.costLabel || null }));
   }
@@ -476,10 +476,10 @@
   function tickLabel(ms, step) {
     if (ms === 0) return '0';
     if (step < 1000) return `${ms} ms`;
-    if (ms < 60000) return `${Math.round(ms / 1000)} s`;
     const sec = Math.round(ms / 1000);
+    if (sec < 60) return `${sec} s`;
     if (sec < 3600) return `${Math.floor(sec / 60)}m${sec % 60 ? ` ${sec % 60}s` : ''}`;
-    const min = Math.round(sec / 60);
+    const min = Math.round(ms / 60000);
     return `${Math.floor(min / 60)}h${min % 60 ? ` ${min % 60}m` : ''}`;
   }
 

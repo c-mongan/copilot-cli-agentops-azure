@@ -7,7 +7,7 @@ const readline = require('node:readline');
 const { safeModelIdentity } = require('../copilot/execution-configuration');
 const { redactContent } = require('../copilot/session-content');
 const { estimateModelCostUsd, estimateRunsCost, estimateUsageCost, formatCostTotal } = require('../cost-estimate');
-const { SPAN_COUNT_LABELS, classifyRunStatus, classifyToolCompletionEvent, uniqueNativeSpans } = require('../copilot/run-status');
+const { SPAN_COUNT_LABELS, classifyRunStatus, classifyToolCompletionEvent, sessionRunStatus, uniqueNativeSpans } = require('../copilot/run-status');
 
 // Only these event types are parsed. Large content-bearing events (assistant.message,
 // system.message, reasoning) are skipped without JSON parsing, which keeps both the
@@ -647,12 +647,12 @@ function summarize(entry, parsed, ledgerSpans, now = Date.now()) {
 
   const { spans } = buildSpans(events, ledgerSpans, { firstTime, lastTime });
   const toolSpans = spans.filter(span => span.kind === 'tool');
-  const failedItems = spans.filter(span => span.status === 'failed' && span.kind !== 'session')
+  let failedItems = spans.filter(span => span.status === 'failed' && span.kind !== 'session')
     .map(span => ({ kind: span.kind, name: span.name, outcome: span.attrs.outcome || 'failed' }));
-  const toolFailures = toolSpans.filter(span => span.status === 'failed').length;
-  const deniedItems = spans.filter(span => span.status === 'denied')
+  let toolFailures = toolSpans.filter(span => span.status === 'failed').length;
+  let deniedItems = spans.filter(span => span.status === 'denied')
     .map(span => ({ kind: span.kind, name: span.name, outcome: 'denied' }));
-  const nonZeroItems = nonZeroExitSpans(toolSpans)
+  let nonZeroItems = nonZeroExitSpans(toolSpans)
     .map(span => ({ kind: span.kind, name: span.name, outcome: 'nonzero_exit' }));
   const startedAt = start?.time ?? firstTime ?? (ledgerSpans.length ? Math.min(...ledgerSpans.map(span => span.start)) : null);
   const endedAt = lastTime ?? (ledgerSpans.length ? Math.max(...ledgerSpans.map(span => span.end)) : startedAt);
@@ -660,7 +660,22 @@ function summarize(entry, parsed, ledgerSpans, now = Date.now()) {
   const ended = Boolean(lastShutdown) || (!events.length && ledgerSpans.length > 0);
   const live = !ended && entry.mtimeMs && now - entry.mtimeMs < LIVE_WINDOW_MS;
   // A running session is shown as live even if a tool already failed; the failure count still shows.
-  const { status, statusLabel, statusReasons } = classifyRunStatus({ failures: failedItems.length, denials: deniedItems.length, nonZeroExits: nonZeroItems.length, live: Boolean(live), ended });
+  if (events.length) {
+    const starts = new Map(events.filter(e => e.type === 'tool.execution_start').map(e => [e.toolCallId, e.toolName]));
+    const items = events.map(e => {
+      if (e.type === 'tool.execution_complete') return { kind: 'tool', name: starts.get(e.toolCallId) || 'unknown-tool', outcome: e.signal || classifyToolCompletionEvent({ success: e.success, error: { code: e.outcome }, shellExecution: { exitCode: e.exitCode } }) };
+      if (e.type === 'hook.end' && e.success === false) return { kind: 'hook', name: e.hookType || 'hook', outcome: 'failed' };
+      if (e.type === 'subagent.failed') return { kind: 'agent', name: e.agentName || 'subagent', outcome: 'failed' };
+      return null;
+    }).filter(Boolean);
+    failedItems = items.filter(item => item.outcome === 'failed');
+    deniedItems = items.filter(item => item.outcome === 'denied');
+    nonZeroItems = items.filter(item => item.outcome === 'nonzero_exit');
+    toolFailures = failedItems.filter(item => item.kind === 'tool').length;
+  }
+  const { status, statusLabel, statusReasons } = events.length
+    ? sessionRunStatus(events, { live: Boolean(live) })
+    : classifyRunStatus({ failures: failedItems.length, denials: deniedItems.length, nonZeroExits: nonZeroItems.length, live: Boolean(live), ended });
   const repo = start?.repo?.name ? start.repo : { name: '', hash: entry.ledgerRuns[0]?.repoHash || '' };
 
   return {
