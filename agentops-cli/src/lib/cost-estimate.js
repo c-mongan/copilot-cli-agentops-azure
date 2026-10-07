@@ -90,7 +90,7 @@ function roundUsd(value) {
 // Sums one or more usage-by-model maps per model, so a set of runs is priced the
 // same way whichever surface asks.
 function mergeUsageByModel(maps = []) {
-  const merged = {};
+  const merged = Object.create(null);
   for (const usageByModel of maps) {
     for (const [model, usage] of Object.entries(usageByModel || {})) {
       if (!model) continue;
@@ -172,7 +172,7 @@ function normalizePrice(price) {
 
 // Default table plus optional `--prices <file.json>` overrides (USD per 1M tokens).
 function loadPriceTable(file) {
-  const table = {};
+  const table = Object.create(null);
   for (const [model, price] of Object.entries(PRICES)) table[model] = normalizePrice(price);
   if (!file) return { table, label: PRICE_TABLE_LABEL, date: PRICE_TABLE_DATE, sources: PRICE_TABLE_SOURCES, overrides: 0 };
   const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));

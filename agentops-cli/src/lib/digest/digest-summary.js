@@ -67,7 +67,7 @@ function costStatusOf(modelCount, pricedCount, unpricedCount) {
 }
 
 function tokenTotals(sessions, priceTable = {}) {
-  const byModel = {};
+  const byModel = Object.create(null);
   let premiumRequests = 0;
   let premiumObserved = false;
   let sessionsWithoutTokens = 0;
