@@ -3,6 +3,21 @@
 All notable changes to this project are recorded here. This is a preview
 project. Package versions stay at `0.1.0` until a package is published to npm.
 
+## v0.2.1-preview: 2026-10-07
+
+### Fixed
+
+- `agentops copilot-session launch -- -p "..."` with no `--model` or tool
+  flags (the README quickstart) no longer exits 1 with "supplied execution
+  configuration identity must be ... hash" after Copilot finishes (#174).
+
+### Added
+
+- One-command install: the release attaches the packed CLI tarball
+  (`copilot-agentops-cli-0.1.0.tgz`), CycloneDX SBOMs, `release-manifest.json`
+  and `SHA256SUMS`, so `npx -p <release tarball URL> agentops ...` works
+  without cloning or a global install.
+
 ## v0.2.0-preview: 2026-10-07
 
 The first preview since `v0.1.0-preview`. It covers 211 commits.
