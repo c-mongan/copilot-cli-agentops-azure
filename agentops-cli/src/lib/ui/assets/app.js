@@ -7,7 +7,7 @@
   const announcer = document.getElementById('announcer');
   const SVG_NS = 'http://www.w3.org/2000/svg';
   const KIND_LABEL = { session: 'Session', turn: 'Turn', chat: 'Model call', tool: 'Tool call', hook: 'Hook', agent: 'Subagent', compaction: 'Compaction' };
-  const STATUS_LABEL = { ok: 'Completed', failed: 'Failed', live: 'Live', incomplete: 'Incomplete' };
+  const STATUS_LABEL = { ok: 'Completed', attention: 'Needs attention', failed: 'Failed', live: 'Live', incomplete: 'Incomplete' };
   const state = { runs: null, detail: null, selected: null, pinned: null, collapsed: new Set(), routeKey: '' };
 
   // ---------- helpers ----------
@@ -437,7 +437,7 @@
     return h('section', { class: 'kpis', 'aria-label': 'Run summary' },
       tile('Active time', fmtDuration(run.durationMs), `${plural(run.turns, 'turn')}${run.subagents ? ` · ${plural(run.subagents, 'subagent')}` : ''}`),
       tile('Tool calls', fmtInt(run.toolCalls), run.p95ToolMs !== null ? `p95 ${fmtDuration(run.p95ToolMs)}` : 'no tool calls'),
-      tile('Failures', fmtInt(run.failures), run.failures ? `${plural(run.toolFailures, 'tool call')} failed` : 'Nothing failed', { bad: run.failures > 0 }),
+      tile('Failures', fmtInt(run.failures), run.failures ? `${plural(run.toolFailures, 'tool call')} failed` : (run.denials || run.nonZeroExits ? [run.denials ? `${fmtInt(run.denials)} denied` : '', run.nonZeroExits ? `${fmtInt(run.nonZeroExits)} non-zero exit` : ''].filter(Boolean).join(' · ') : 'Nothing failed'), { bad: run.failures > 0 }),
       tile('Tokens', run.tokens.known ? fmtTokens(run.tokens.input + run.tokens.output) : '—', run.tokens.known ? `${fmtTokens(run.tokens.input)} in · ${fmtTokens(run.tokens.output)} out` : 'not recorded yet'),
       tile('Cost', fmtCost(run.costUsd), unpricedNote(run.unpricedModels) || (run.premiumRequests !== null ? `${fmtInt(run.premiumRequests)} premium requests` : 'list-price estimate'), { est: true, title: run.costLabel || null }));
   }
@@ -446,13 +446,14 @@
     const kinds = [...new Set(spans.map(span => span.kind))];
     const items = kinds.map(kind => h('span', null, h('i', { class: `swatch k-${kind}` }), KIND_LABEL[kind] || kind));
     if (spans.some(span => span.status === 'failed')) items.push(h('span', null, h('i', { class: 'swatch k-failed' }), 'Failed'));
+    if (spans.some(span => span.status === 'denied')) items.push(h('span', null, h('i', { class: 'swatch k-denied' }), 'Denied'));
     return h('div', { class: 'legend', 'aria-label': 'Legend' }, items);
   }
 
   function traceToolbar(detail) {
     const hasCollapsible = detail.spans.some(span => span.childCount && span.depth > 0);
     return h('div', { class: 'trace-toolbar' },
-      h('span', { class: 'muted', text: `${plural(detail.spans.length, 'span')} · ${fmtDuration(detail.spans[0]?.durationMs)} wall clock` }),
+      h('span', { class: 'muted', title: 'Trace spans: session, turns, tool calls, hooks and model calls. Native OTel spans: unique trace/span IDs in the AgentOps ledger.', text: `${plural(detail.spans.length, 'trace span')}${detail.run.nativeSpans ? ` · ${plural(detail.run.nativeSpans, 'native OTel span')}` : ''} · ${fmtDuration(detail.spans[0]?.durationMs)} wall clock` }),
       hasCollapsible ? h('div', { class: 'head-actions' },
         h('button', { type: 'button', class: 'button quiet', onclick: () => { state.collapsed.clear(); renderRows(); }, text: 'Expand all' }),
         h('button', { type: 'button', class: 'button quiet', onclick: () => { for (const span of detail.spans) if (span.childCount && span.depth > 0) state.collapsed.add(span.id); renderRows(); }, text: 'Collapse all' })) : null);
@@ -558,18 +559,20 @@
 
   function spanRow(span, tabbable) {
     const failed = span.status === 'failed';
+    const denied = span.status === 'denied';
+    const flagged = failed || denied;
     const expanded = !state.collapsed.has(span.id);
     const start = span.startMs;
     const endPct = ((start + span.durationMs) / totalMs()) * 100;
     const textOnLeft = endPct > 88;
     const row = h('div', {
-      class: `span-row${failed ? ' failed' : ''}`,
+      class: `span-row${failed ? ' failed' : denied ? ' denied' : ''}`,
       role: 'treeitem',
       tabindex: tabbable ? '0' : '-1',
       'aria-level': span.depth + 1,
       'aria-expanded': span.childCount ? String(expanded) : null,
       'aria-selected': state.pinned === span.id ? 'true' : 'false',
-      'aria-label': `${KIND_LABEL[span.kind] || span.kind} ${span.name}, ${fmtDuration(span.durationMs)}${failed ? `, failed (${span.attrs.outcome || 'failed'})` : ''}`,
+      'aria-label': `${KIND_LABEL[span.kind] || span.kind} ${span.name}, ${fmtDuration(span.durationMs)}${flagged ? `, ${denied ? 'denied' : `failed (${span.attrs.outcome || 'failed'})`}` : ''}`,
       dataset: { id: span.id, kind: span.kind },
       onclick: () => pin(span.id),
       onmouseenter: () => renderInspector(span),
@@ -580,12 +583,12 @@
       span.childCount
         ? h('button', { type: 'button', class: 'caret', tabindex: '-1', 'aria-hidden': 'true', 'aria-expanded': String(expanded), onclick: event => { event.stopPropagation(); toggle(span.id); } }, icon('caret', 14))
         : h('span', { class: 'caret-spacer' }),
-      h('i', { class: `swatch k-${failed ? 'failed' : span.kind}` }),
+      h('i', { class: `swatch k-${failed ? 'failed' : denied ? 'denied' : span.kind}` }),
       h('span', { class: 'name', text: span.name, title: span.name }),
       span.childCount && !expanded ? h('span', { class: 'child-count', text: `+${span.childCount}` }) : null),
     h('div', { class: 'track' },
-      h('span', { class: `bar k-${span.kind} ${span.kind}${failed ? ' failed' : ''}`, style: { left: pct(start), width: `max(2px, ${pct(span.durationMs)})` } }),
-      h('span', { class: 'bar-text', style: textOnLeft ? { right: `calc(${100 - (start / totalMs()) * 100}% + 6px)` } : { left: `calc(${endPct}% + 6px)` }, text: failed ? `${fmtDuration(span.durationMs)} · ${span.attrs.outcome || 'failed'}` : fmtDuration(span.durationMs) })));
+      h('span', { class: `bar k-${span.kind} ${span.kind}${failed ? ' failed' : denied ? ' denied' : ''}`, style: { left: pct(start), width: `max(2px, ${pct(span.durationMs)})` } }),
+      h('span', { class: 'bar-text', style: textOnLeft ? { right: `calc(${100 - (start / totalMs()) * 100}% + 6px)` } : { left: `calc(${endPct}% + 6px)` }, text: flagged ? `${fmtDuration(span.durationMs)} · ${span.attrs.outcome || 'failed'}` : fmtDuration(span.durationMs) })));
     return row;
   }
 
@@ -643,7 +646,7 @@
     }
     const a = span.attrs || {};
     const rows = [
-      ['Status', span.status === 'failed' ? `Failed · ${a.outcome || 'failed'}` : (span.status === 'incomplete' ? 'Did not finish' : 'OK')],
+      ['Status', span.status === 'failed' ? `Failed · ${a.outcome || 'failed'}` : span.status === 'denied' ? 'Denied · permission not granted' : (span.status === 'incomplete' ? 'Did not finish' : 'OK')],
       ['Starts at', `+${fmtDuration(span.startMs)}`],
       ['Duration', fmtDuration(span.durationMs)],
       a.model ? ['Model', a.model] : null,
@@ -659,7 +662,7 @@
     ].filter(Boolean);
     const content = state.detail.allowContent && span.kind === 'tool' && a.toolCallId ? contentBlock(a.toolCallId) : null;
     panel.replaceChildren(...[
-      h('h3', null, h('i', { class: `swatch k-${span.status === 'failed' ? 'failed' : span.kind}` }), h('span', { text: span.name })),
+      h('h3', null, h('i', { class: `swatch k-${span.status === 'failed' ? 'failed' : span.status === 'denied' ? 'denied' : span.kind}` }), h('span', { text: span.name })),
       h('div', { class: 'kind', text: `${KIND_LABEL[span.kind] || span.kind}${state.pinned === span.id ? ' · pinned' : ''}` }),
       h('dl', null, rows.map(([term, value]) => [h('dt', { text: term }), h('dd', { text: value, class: term === 'Status' && span.status === 'failed' ? 'fail-count' : null })])),
       content,

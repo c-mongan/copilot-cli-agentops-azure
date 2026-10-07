@@ -19,6 +19,13 @@ project. Package versions stay at `0.1.0` until a package is published to npm.
   the newest AgentOps ledger run or finished session, and picks a still-running
   Copilot session only when nothing else exists. `agentops open latest --ui`
   uses the same rule.
+- `copilot-session launch --json` now writes only the JSON document to stdout. The Copilot transcript goes to stderr, so `launch --json | jq .` works.
+- A permission-denied tool call no longer marks a run `failed`. Launch, `copilot-session view` and the local UI share one status classifier: failures (tool calls Copilot reports as failed, failed hooks and sub-agents, or a Copilot run error) give `failed`; denials and non-zero shell exits give the new `attention` status ("Needs attention"). See [How run status is decided](docs/local-ui.md#how-run-status-is-decided).
+- Span counts are reconciled and labelled. Launch, view and the UI report the same deduplicated native OTel span count. Launch also reports span-table rows, and the UI also reports trace spans, each with its own label.
+
+### Added
+
+- `launch --json` adds `status`, `statusLabel`, `statusReasons`, `signals` and `spanCounts`. `view --json` adds `status`, `status_label`, `status_reasons`, `signals` and `native_spans_label`. UI run rows add `denials`, `nonZeroExits`, `nativeSpans`, `traceSpans` and `statusLabel`. Existing fields are unchanged.
 
 ## v0.3.0-preview: 2026-10-07
 

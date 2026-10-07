@@ -225,6 +225,7 @@ test('native Copilot launch scopes strict OTel to the real CLI process and keeps
     assert.deepEqual(launch.args.slice(0, 4), ['--agent', 'reviewer', '-p', 'synthetic test']);
     assert.equal(launch.args[4], '--session-id');
     assert.match(launch.args[5], /^[a-f0-9-]{36}$/);
+    assert.deepEqual(launch.options.stdio, ['inherit', 2, 'inherit'], '--json sends the Copilot transcript to stderr');
     assert.equal(launch.options.env.COPILOT_OTEL_ENABLED, 'true');
     assert.equal(launch.options.env.COPILOT_OTEL_CAPTURE_CONTENT, 'false');
     assert.equal(launch.options.env.AGENTOPS_PRIVACY_MODE, 'strict');
@@ -238,6 +239,70 @@ test('native Copilot launch scopes strict OTel to the real CLI process and keeps
     assert.equal(parentEnv.COPILOT_OTEL_CAPTURE_CONTENT, 'true');
   } finally {
     process.exitCode = previousExitCode;
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('native Copilot launch --json keeps stdout parseable and moves the Copilot transcript to stderr', {
+  skip: process.platform === 'win32' ? 'fake Copilot binary uses a shebang script' : false
+}, () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-launch-json-'));
+  const repo = path.join(root, 'repo');
+  const copilotHome = path.join(root, 'copilot-home');
+  const runDir = path.join(root, 'agentops', 'runs', 'fixture');
+  fs.mkdirSync(repo, { recursive: true });
+  fs.mkdirSync(runDir, { recursive: true });
+  const fakeCopilot = path.join(root, 'copilot');
+  fs.writeFileSync(fakeCopilot, `#!${process.execPath}
+const fs = require('node:fs');
+const path = require('node:path');
+const sessionId = process.argv[process.argv.indexOf('--session-id') + 1];
+const dir = path.join(process.env.COPILOT_HOME, 'session-state', sessionId);
+fs.mkdirSync(dir, { recursive: true });
+fs.writeFileSync(path.join(dir, 'events.jsonl'), [
+  { type: 'session.start', data: { sessionId } },
+  { type: 'tool.execution_complete', data: { toolCallId: 'a', success: false, error: { code: 'denied' } } },
+  { type: 'tool.execution_complete', data: { toolCallId: 'b', success: true, shellExecution: { exitCode: 1 } } },
+  { type: 'session.shutdown', data: {} }
+].map(event => JSON.stringify(event)).join('\\n') + '\\n');
+process.stdout.write('● Running npm test\\nTranscript line that must not reach JSON stdout\\n');
+`, { mode: 0o755 });
+  fs.writeFileSync(path.join(runDir, 'AgentOpsSpans_CL.jsonl'), [
+    { TraceId: 't', SpanId: 'root', SpanName: 'agentops.span' },
+    { TraceId: 't', SpanId: 'tool', SpanName: 'agentops.span' },
+    { TraceId: 't', SpanId: 'tool', SpanName: 'agentops.span' },
+    { TraceId: 't', SpanId: 'tool', SpanName: 'agentops.event' }
+  ].map(row => JSON.stringify(row)).join('\n') + '\n');
+  const harness = path.join(root, 'harness.js');
+  fs.writeFileSync(harness, `
+const { launchObservedCopilot } = require(${JSON.stringify(path.resolve(__dirname, '../src/lib/copilot/session-command'))});
+launchObservedCopilot({ repo: ${JSON.stringify(repo)}, copilotHome: ${JSON.stringify(copilotHome)}, commandArgs: ['-p', 'synthetic'], upload: false, json: true }, {
+  env: { PATH: process.env.PATH },
+  agentopsHome: ${JSON.stringify(path.join(root, 'agentops'))},
+  startScopedStrictCollector: async () => ({ endpoint: 'http://127.0.0.1:14320', receiptPath: 'receipt.jsonl', stop: async () => {} }),
+  resolveCopilotBinary: () => ({ ok: true, path: ${JSON.stringify(fakeCopilot)} }),
+  snapshotCopilotSessions: () => new Map(),
+  changedCopilotSession: (_snapshot, _root, expected) => ({ sessionId: expected }),
+  deliverCopilotSession: options => ({ state: 'local_pending', sessionId: options.summary.sessionId, runId: options.runId, events: 4, spans: 4, outputDir: ${JSON.stringify(runDir)} })
+}).catch(error => { console.error(error); process.exit(2); });
+`);
+  try {
+    const result = spawnSync(process.execPath, [harness], { encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr);
+    const output = JSON.parse(result.stdout);
+    assert.doesNotMatch(result.stdout, /Transcript line/);
+    assert.match(result.stderr, /Transcript line that must not reach JSON stdout/);
+    assert.equal(output.exitCode, 0);
+    assert.equal(output.status, 'attention');
+    assert.equal(output.statusLabel, 'Needs attention');
+    assert.deepEqual(output.statusReasons, ['denials', 'nonzero_exits']);
+    assert.equal(output.signals.denials, 1);
+    assert.equal(output.signals.nonZeroExits, 1);
+    assert.equal(output.signals.failures, 0);
+    assert.equal(output.spanCounts.nativeSpans, 2);
+    assert.equal(output.spanCounts.spanRows, 4);
+    assert.equal(output.evidence.spans, 4, 'legacy evidence.spans keeps the row count');
+  } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
@@ -298,6 +363,11 @@ test('copilot-session view joins payload-free per-stream delivery state by run a
     const summary = JSON.parse(result.stdout);
     assert.equal(summary.native_spans, 1);
     assert.equal(summary.run_linked_script_spans, 1);
+    assert.equal(summary.native_spans_label, 'native OTel spans (unique trace/span ID)');
+    assert.equal(summary.status, 'incomplete', 'no session.shutdown was observed');
+    assert.equal(summary.status_label, 'Incomplete');
+    assert.equal(summary.signals.failures, 0);
+    assert.match(fs.readFileSync(output, 'utf8'), /data-run-status="incomplete"/);
     const html = fs.readFileSync(output, 'utf8');
     assert.match(html, /execute_tool: bash/);
     assert.match(html, /script: scripts\/probe\.py/);
