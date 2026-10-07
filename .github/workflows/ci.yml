@@ -18,7 +18,8 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - ubuntu-26.04
+          - ubuntu-latest
+          - windows-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
@@ -104,7 +105,7 @@ jobs:
 
   collector-binary:
     name: collector binary install
-    runs-on: ubuntu-26.04
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
       AGENTOPS_COLLECTOR_HOME: ${{ github.workspace }}/.agentops-collector
