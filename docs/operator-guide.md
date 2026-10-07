@@ -158,7 +158,7 @@ agentops setup
 agentops install
 agentops uninstall
 agentops status
-agentops doctor
+agentops doctor [--verbose] [--cloud] [--json]   # see docs/doctor.md
 agentops doctor --local-only
 agentops health --json
 agentops configure show|set|import-azd [--project]
