@@ -31,6 +31,7 @@ const { deleteSessionContent, writeSessionContent } = require('./session-content
 const { writeSessionEvents } = require('./session-event-export');
 const { readSessionOutbox } = require('./session-delivery-outbox');
 const { exportSessionGenAi, renderGenAiExport } = require('./session-genai-export');
+const { SPAN_COUNT_LABELS, countNativeSpans, sessionRunStatus } = require('./run-status');
 
 function parseCopilotSessionArgs(args = []) {
   const [subcommand, positional] = args;
@@ -86,6 +87,44 @@ function incompatibleInheritedOtelSettings(env) {
     names.push('OTEL_EXPORTER_OTLP_TRACES_PROTOCOL');
   }
   return names;
+}
+
+function launchRunStatus({ copilotHome, sessionId, runErrored }) {
+  let events = [];
+  if (sessionId && /^[A-Za-z0-9_-]{1,100}$/.test(sessionId)) {
+    try {
+      events = readCopilotSessionEvents(path.join(copilotHome, 'session-state', sessionId, 'events.jsonl'));
+    } catch {
+      events = [];
+    }
+  }
+  // The launched process has exited, so the run is over even if Copilot
+  // did not write a session.shutdown event.
+  return sessionRunStatus(events, { runErrored, ended: true });
+}
+
+function launchSpanCounts(evidence) {
+  const counts = { nativeSpans: 0, spanRows: Number(evidence?.spans) || 0, labels: { nativeSpans: SPAN_COUNT_LABELS.nativeSpans, spanRows: SPAN_COUNT_LABELS.spanRows } };
+  if (evidence?.outputDir) {
+    try {
+      const rows = fs.readFileSync(path.join(evidence.outputDir, 'AgentOpsSpans_CL.jsonl'), 'utf8')
+        .split(/\r?\n/).filter(Boolean).map(line => { try { return JSON.parse(line); } catch { return null; } });
+      counts.nativeSpans = countNativeSpans(rows);
+    } catch {}
+  }
+  return counts;
+}
+
+function renderStatusSignals(signals = {}) {
+  const parts = [];
+  if (signals.failures) parts.push(`${signals.failures} failed`);
+  if (signals.denials) parts.push(`${signals.denials} denied`);
+  if (signals.nonZeroExits) parts.push(`${signals.nonZeroExits} shell non-zero exit${signals.nonZeroExits === 1 ? '' : 's'}`);
+  return parts.length ? ` (${parts.join(', ')})` : '';
+}
+
+function renderSpanCounts(counts = {}) {
+  return `${counts.nativeSpans} native OTel spans (unique) · ${counts.spanRows} span-table rows`;
 }
 
 async function launchObservedCopilot(options = {}, dependencies = {}) {
@@ -171,9 +210,12 @@ async function launchObservedCopilot(options = {}, dependencies = {}) {
     const snapshot = (dependencies.snapshotCopilotSessions || snapshotCopilotSessions)(sessionRoot);
     // Legacy injected synchronous runner is retained for existing embedders/tests.
     // Production always uses asynchronous supervision.
+    // With --json, stdout carries only the JSON document; Copilot's transcript
+    // is routed to stderr so it stays visible without corrupting the output.
+    const stdio = options.json ? ['inherit', 2, 'inherit'] : 'inherit';
     const result = dependencies.spawnSync
-      ? dependencies.spawnSync(resolved.path, launchArgs, { cwd, env: observedEnv, stdio: 'inherit' })
-      : await (dependencies.superviseProcess || superviseProcess)(resolved.path, launchArgs, { cwd, env: observedEnv, stdio: 'inherit' }, scopedCollector, { ...dependencies, abortSignal: launchAbort.signal });
+      ? dependencies.spawnSync(resolved.path, launchArgs, { cwd, env: observedEnv, stdio })
+      : await (dependencies.superviseProcess || superviseProcess)(resolved.path, launchArgs, { cwd, env: observedEnv, stdio }, scopedCollector, { ...dependencies, abortSignal: launchAbort.signal });
 
     // Graceful Collector shutdown flushes the final OTel batches to its
     // strict-redacted local receipt before delivery reads that file.
@@ -201,6 +243,8 @@ async function launchObservedCopilot(options = {}, dependencies = {}) {
     if (result.error) throw result.error;
     const exitCode = result.status === null ? 1 : result.status;
     const uploadAccepted = !options.upload || evidence?.state === 'azure_acknowledged';
+    const runStatus = launchRunStatus({ copilotHome, sessionId: summary?.sessionId, runErrored: exitCode !== 0 || Boolean(result.cancelled) || Boolean(result.signal) });
+    const spanCounts = launchSpanCounts(evidence);
     const output = {
       runId,
       sessionId: summary?.sessionId || '',
@@ -210,6 +254,11 @@ async function launchObservedCopilot(options = {}, dependencies = {}) {
       ok: exitCode === 0 && uploadAccepted && !result.collectorFailed && !result.cancelled,
       cancelled: Boolean(result.cancelled),
       collectorStatus: result.collectorFailed ? 'failed' : 'completed',
+      status: runStatus.status,
+      statusLabel: runStatus.statusLabel,
+      statusReasons: runStatus.statusReasons,
+      signals: runStatus.signals,
+      spanCounts,
       evidence
     };
     writeJsonOrRender(output, options.json, value => [
@@ -217,7 +266,8 @@ async function launchObservedCopilot(options = {}, dependencies = {}) {
       `Run: ${value.runId}`,
       `Session: ${value.sessionId || 'not detected'}`,
       `Copilot exit: ${value.exitCode}${value.signal ? ` (${value.signal})` : ''}`,
-      `Evidence: ${value.evidence ? `${value.evidence.events} events, ${value.evidence.spans} spans · ${value.evidence.state}` : 'not collected'}`,
+      `Status: ${value.statusLabel}${renderStatusSignals(value.signals)}`,
+      `Evidence: ${value.evidence ? `${value.evidence.events} events · ${renderSpanCounts(value.spanCounts)} · ${value.evidence.state}` : 'not collected'}`,
       ...(value.evidence?.outputDir ? [`Local evidence: ${value.evidence.outputDir}`] : []),
       ...(options.upload ? [] : ['Azure: not requested; evidence remains local'])
     ].join('\n') + '\n');
@@ -475,11 +525,27 @@ async function copilotSessionCommand(args = [], dependencies = {}) {
         }
       }
     }
-    const output = writeSessionWaterfall(sessionEvents, sessionId, options.output, { nativeSpans: joinedSpans, deliveryStatus, metadataOnly, launchExecutionConfiguration, modelProvenance });
+    const runStatus = sessionRunStatus(sessionEvents);
+    const output = writeSessionWaterfall(sessionEvents, sessionId, options.output, { nativeSpans: joinedSpans, deliveryStatus, metadataOnly, launchExecutionConfiguration, modelProvenance, runStatus });
     const contentWarning = metadataOnly
       ? 'Metadata only: prompts, tool arguments/results and other raw content are redacted. Pass --allow-content to render full content (persists raw content in this local HTML file).'
       : 'Full content rendered: this local HTML file contains raw prompts, tool arguments/results and other captured payloads. Treat it as sensitive.';
-    writeJsonOrRender({ ok: true, session_id: sessionId, output, content_mode: metadataOnly ? 'metadata_only' : 'full_content_local_only', content_warning: contentWarning, native_spans: joinedSpans.filter(span => span.match === 'exact-session').length, run_linked_script_spans: joinedSpans.filter(span => span.match === 'run-linked-script').length, native_receipt_files: native.files.length, invalid_native_records: invalidNativeRecords }, options.json, result => `Local waterfall: ${result.output} · ${result.native_spans} native OTel spans · ${result.run_linked_script_spans} run-linked script spans\n${result.content_warning}\n`);
+    writeJsonOrRender({
+      ok: true,
+      session_id: sessionId,
+      output,
+      content_mode: metadataOnly ? 'metadata_only' : 'full_content_local_only',
+      content_warning: contentWarning,
+      status: runStatus.status,
+      status_label: runStatus.statusLabel,
+      status_reasons: runStatus.statusReasons,
+      signals: runStatus.signals,
+      native_spans: countNativeSpans(joinedSpans.filter(span => span.match === 'exact-session')),
+      native_spans_label: SPAN_COUNT_LABELS.nativeSpans,
+      run_linked_script_spans: countNativeSpans(joinedSpans.filter(span => span.match === 'run-linked-script')),
+      native_receipt_files: native.files.length,
+      invalid_native_records: invalidNativeRecords
+    }, options.json, result => `Local waterfall: ${result.output}\nStatus: ${result.status_label}${renderStatusSignals(result.signals)}\nSpans: ${result.native_spans} native OTel spans (unique) · ${result.run_linked_script_spans} run-linked script spans\n${result.content_warning}\n`);
     return;
   }
   const result = await buildCopilotSessionEnrichment(options);

@@ -81,19 +81,31 @@ test('ui data: summarize uses the last shutdown, active time and failure outcome
   const list = await storeFor(fixture).list();
   assert.deepEqual(list.runs.map(run => run.id), [FAILED_ID, OPEN_ID, LEDGER_ONLY_ID]);
   const failed = list.runs[0];
-  assert.equal(failed.status, 'failed');
+  // A permission denial plus a non-zero shell exit needs attention; neither is a failure.
+  assert.equal(failed.status, 'attention');
+  assert.equal(failed.statusLabel, 'Needs attention');
+  assert.deepEqual(failed.statusReasons, ['denials', 'nonzero_exits']);
   assert.equal(failed.source, 'copilot+ledger');
   assert.equal(failed.runId, RUN_ID);
   assert.equal(failed.model, 'claude-haiku-4.5');
   assert.equal(failed.durationMs, 44000);
   assert.equal(failed.turns, 2);
   assert.equal(failed.toolCalls, 3);
-  assert.equal(failed.toolFailures, 1);
+  assert.equal(failed.toolFailures, 0);
+  assert.equal(failed.failures, 0);
+  assert.equal(failed.denials, 1);
+  assert.equal(failed.nonZeroExits, 1);
   assert.deepEqual(failed.tokens, { input: 60000, output: 500, cacheRead: 50000, cacheWrite: 8000, known: true });
   assert.equal(failed.premiumRequests, 0.33);
   assert.equal(failed.costUsd, 0.0195);
   assert.deepEqual(failed.repo.name, 'demo-repo');
-  assert.deepEqual(failed.failureGroups, [{ kind: 'tool', name: 'bash', outcome: 'denied', count: 1 }]);
+  assert.deepEqual(failed.failureGroups, []);
+  assert.deepEqual(failed.attentionGroups, [
+    { kind: 'tool', name: 'bash', outcome: 'denied', count: 1 },
+    { kind: 'tool', name: 'unknown-tool', outcome: 'nonzero_exit', count: 1 }
+  ]);
+  assert.equal(failed.traceSpans, 9);
+  assert.equal(failed.nativeSpans, 4, 'root, two chats and one tool; span-event rows and duplicates excluded');
 
   const open = list.runs[1];
   assert.equal(open.status, 'incomplete');
@@ -112,12 +124,20 @@ test('ui data: a recently written session without shutdown is live, even after a
   const events = [
     { type: 'session.start', time: 0, model: 'gpt-6.1-sol' },
     { type: 'tool.execution_start', time: 10, toolCallId: 'a', toolName: 'bash', turnId: '' },
-    { type: 'tool.execution_complete', time: 20, toolCallId: 'a', success: false, outcome: 'denied' }
+    { type: 'tool.execution_complete', time: 20, toolCallId: 'a', success: false, outcome: 'failed', signal: 'failed' }
   ];
   const row = data.summarize(entry, { events, firstTime: 0, lastTime: 20 }, [], 2000);
   assert.equal(row.status, 'live');
   assert.equal(row.failures, 1);
   assert.equal(data.summarize(entry, { events, firstTime: 0, lastTime: 20 }, [], 10 * 60 * 1000).status, 'failed');
+  const deniedEvents = [...events.slice(0, 2), { type: 'tool.execution_complete', time: 20, toolCallId: 'a', success: false, outcome: 'denied', signal: 'denied' }];
+  const denied = data.summarize(entry, { events: deniedEvents, firstTime: 0, lastTime: 20 }, [], 2000);
+  assert.equal(denied.status, 'live');
+  assert.equal(denied.failures, 0);
+  assert.equal(denied.denials, 1);
+  assert.equal(data.summarize(entry, { events: deniedEvents, firstTime: 0, lastTime: 20 }, [], 10 * 60 * 1000).status, 'incomplete');
+  const shutdown = { type: 'session.shutdown', time: 30, usage: {} };
+  assert.equal(data.summarize(entry, { events: [...deniedEvents, shutdown], firstTime: 0, lastTime: 30 }, [], 10 * 60 * 1000).status, 'attention');
 });
 
 test('ui data: resumed sessions sum active segments and use cumulative last shutdown usage', () => {
@@ -159,7 +179,7 @@ test('ui data: detail builds a deduplicated session -> turn -> tool/chat tree', 
     '  turn:turn 1:ok',
     '    chat:claude-haiku-4.5:ok',
     '    tool:bash:ok',
-    '    tool:bash:failed',
+    '    tool:bash:denied',
     '    tool:unknown-tool:ok',
     '  turn:turn 2:ok',
     '    chat:claude-haiku-4.5:ok'
@@ -170,9 +190,13 @@ test('ui data: detail builds a deduplicated session -> turn -> tool/chat tree', 
   assert.equal(okTool.durationMs, 12000);
   assert.equal(okTool.attrs.spanId, 'tool0001', 'ledger tool spans join by toolCallId instead of duplicating');
   assert.equal(detail.spans.filter(span => span.kind === 'chat').length, 2, 'duplicate chat SpanId rows are dropped');
-  assert.deepEqual(detail.failures, [{ kind: 'tool', name: 'bash', outcome: 'denied', count: 1, message: '1 tool call denied: bash' }]);
-  assert.equal(detail.warnings.length, 1);
-  assert.match(detail.warnings[0], /exited non-zero/);
+  assert.deepEqual(detail.failures, []);
+  assert.deepEqual(detail.attention.map(item => item.message), [
+    '1 tool call denied: bash',
+    '1 shell command exited non-zero: unknown-tool. Copilot reported the tool call as successful, so it is not counted as a failure.'
+  ]);
+  assert.equal(detail.warnings.length, 2);
+  assert.match(detail.warnings[1], /exited non-zero/);
   assert.equal(detail.allowContent, false);
 });
 
@@ -184,8 +208,8 @@ test('ui data: tool stats report count, p50, p95, max and failures', () => {
     { kind: 'turn', name: 'turn 1', durationMs: 99999, status: 'ok' }
   ];
   assert.deepEqual(data.toolStats(spans), [
-    { tool: 'bash', count: 2, p50Ms: 57, p95Ms: 12000, maxMs: 12000, totalMs: 12057, failures: 1 },
-    { tool: 'view', count: 1, p50Ms: 5, p95Ms: 5, maxMs: 5, totalMs: 5, failures: 0 }
+    { tool: 'bash', count: 2, p50Ms: 57, p95Ms: 12000, maxMs: 12000, totalMs: 12057, failures: 1, denied: 0 },
+    { tool: 'view', count: 1, p50Ms: 5, p95Ms: 5, maxMs: 5, totalMs: 5, failures: 0, denied: 0 }
   ]);
   assert.equal(data.percentile([], 95), null);
   assert.equal(data.percentile([3, 1, 2, NaN], 50), 2);
@@ -218,15 +242,16 @@ test('ui data: KPIs, facets and filters aggregate the visible runs', async t => 
   assert.equal(all.totalSessions, 3);
   assert.equal(all.scanned, 3);
   assert.deepEqual(all.kpis, {
-    runs: 3, failedRuns: 2, failures: 2, toolCalls: 5, p95ToolMs: 12000,
+    runs: 3, failedRuns: 1, attentionRuns: 1, failures: 1, toolCalls: 5, p95ToolMs: 12000,
     tokens: { input: 61000, output: 510, runsWithTokens: 2 },
     premiumRequests: 0.33, costUsd: 0.0195, costLabel: '$0.02 est. (1 model unpriced)', unpricedModels: ['unknown'], costRuns: 1, unpricedRuns: 1
   });
-  assert.deepEqual(all.facets.statuses, [{ value: 'failed', count: 2 }, { value: 'incomplete', count: 1 }]);
+  assert.deepEqual(all.facets.statuses, [{ value: 'attention', count: 1 }, { value: 'failed', count: 1 }, { value: 'incomplete', count: 1 }]);
 
   assert.deepEqual((await store.list({ model: 'gpt-6.1-sol' })).runs.map(run => run.id), [OPEN_ID]);
   assert.deepEqual((await store.list({ repo: 'demo-repo' })).runs.map(run => run.id), [FAILED_ID]);
-  assert.deepEqual((await store.list({ status: 'failed' })).runs.map(run => run.id), [FAILED_ID, LEDGER_ONLY_ID]);
+  assert.deepEqual((await store.list({ status: 'failed' })).runs.map(run => run.id), [LEDGER_ONLY_ID]);
+  assert.deepEqual((await store.list({ status: 'attention' })).runs.map(run => run.id), [FAILED_ID]);
   assert.deepEqual((await store.list({ q: 'grep timeout' })).runs.map(run => run.id), []);
   assert.deepEqual((await store.list({ q: 'GREP failed' })).runs.map(run => run.id), [LEDGER_ONLY_ID]);
   const none = await store.list({ q: 'no-such-run' });
