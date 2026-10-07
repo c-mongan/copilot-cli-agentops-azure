@@ -128,7 +128,8 @@ Limits found by this run:
   `error.type` to `shell_nonzero_exit` on the span, as a warning.
 - **Duplicate spans.** Each tool span is stored twice in `AgentOpsSpans_CL`,
   with the same `SpanId`. Run 3 therefore shows two denied rows for one denied
-  `curl`.
+  `curl`. v0.3.2 (#199) deduplicates by trace and span ID before
+  upload; this run predates that fix.
 - **Token sums.** Sum tokens over `OperationName == 'chat'` rows or the
   `session.shutdown` event. A naive sum over every span row over-counts by
   roughly 60x, because span-event rows repeat the token attributes.

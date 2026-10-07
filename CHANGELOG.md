@@ -3,9 +3,16 @@
 All notable changes to this project are recorded here. This is a preview
 project. Package versions stay at `0.1.0` until a package is published to npm.
 
-## Unreleased
+## v0.3.2-preview: 2026-10-07
+
+Round-2 hardening: native-capture rough edges, a hiring-manager UX pass, and live re-verification of the Azure templates.
 
 ### Fixed
+
+- Model names such as `constructor` or `toString` no longer lose token usage or crash digest aggregation (null-prototype maps). A session-only timeline with any unpriced model shows cost as unavailable instead of a partial subtotal. (#188)
+- Session receipts no longer print `60s` for 59.5–59.99 s; they carry into `1m 0s`. (#194)
+- Programmatic smoke verification now waits up to 5 minutes for Azure ingestion by default, matching the CLI (was 60 s). (#196)
+- Spool recovery test no longer depends on directory ordering. (#190)
 
 - Run status, native span counts and duration labels: a launch without `session.shutdown` stays `incomplete`; failed hooks and sub-agents count as failures while failed ledger chat spans do not; native spans are counted by trace/span ID excluding span-event rows; hour-scale durations round from milliseconds. (#191)
 - Strict collector traces keep `gen_ai.agent.name` so Application Insights Agents (Preview) can group runs. The built-in labels `copilot`, `copilotcli` and `claude` stay readable; other string labels become SHA-256 digests, and empty or non-string labels are removed. The digests let runs be grouped, but they are not anonymous IDs. No content attributes are added.
@@ -13,6 +20,16 @@ project. Package versions stay at `0.1.0` until a package is published to npm.
 - `copilot-session export-otel` reruns no longer duplicate rows. After a successful send, a local marker under `~/.agentops/exports/otel/` (keyed by session, run and a SHA-256 hash of the destination; never the endpoint or connection string) records which spans were sent. A rerun to the same destination sends only new spans or reports `skipped-already-exported`; `--force` re-sends all. `--dry-run` and `--output` never write the marker. Trace and span IDs stay the native Copilot IDs, so repeated exports are identical.
 - Shell non-zero exits are no longer silently `ok` on native tool spans. Copilot CLI marks a failing shell command as a successful tool call; AgentOps now reads the numeric `shellExecution.exitCode` (never the command or output) by tool call ID and sets `ErrorType` / `error.type` to `shell_nonzero_exit`. `export-otel` sends these spans with status `ERROR`, `export-spans` and run delivery write the error type with `Outcome = ok`, and the UI and run status count them as a warning (`attention`), not a failure.
 - Local UI polish from a hiring-manager review: the runs table becomes cards on phones; the Failures column is no longer clipped on run pages; overflowing tables are keyboard-focusable (axe: 0 violations on list, run and empty pages at 1440 and 390 px); Esc returns focus to the run you left; sessions with no activity are dimmed; the KPI reads "Failed tool calls … in X of N runs"; the first-run command includes `--allow-all-tools` with a trusted-repo note. README GIF refreshed.
+
+### Deployment
+
+- Deploy to Azure is metadata-only by default: a positive column policy on every button-path schema, stream and DCR projection excludes content diffs, commands and narrative fields; deployer RBAC and public ingestion/query access now default to off. Re-verified with a throwaway resource-group deploy, readback and deletion. (#193)
+- `azd provision` / `azd down` verified live with defaults: only a Log Analytics workspace (30 d, 2 GB/day cap) and Application Insights are created. (#198)
+
+### Documentation
+
+- Quickstart offers the local UI and a static HTML report as alternatives. (#192)
+- Dated Azure AgentOps platform design and research snapshot. (#195)
 
 ## v0.3.1-preview: 2026-10-07
 
