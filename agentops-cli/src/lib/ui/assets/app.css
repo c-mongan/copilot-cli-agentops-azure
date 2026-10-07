@@ -405,7 +405,7 @@ td.name-cell { white-space: normal; overflow-wrap: anywhere; min-width: 10ch; }
   .page-head { margin-bottom: 14px; }
   .result-count { margin-left: 0; width: 100%; }
   .search { max-width: none; flex-basis: 100%; }
-  .select { flex: 1 1 0; min-width: 0; }
+  .select { flex: 1 1 calc(50% - 4px); min-width: 0; }
   .select select { width: 100%; max-width: none; text-overflow: ellipsis; }
 
   /* Compact three-up KPI grid so the first run or the trace is near the fold. */
