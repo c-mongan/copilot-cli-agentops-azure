@@ -1,4 +1,5 @@
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 
 // Content markers planted in every field that can carry prompt, argument, result or
@@ -111,10 +112,10 @@ function writeRun(agentOpsHome, runId, sessionId, rows, createdMs) {
   fs.writeFileSync(path.join(dir, 'AgentOpsSpans_CL.jsonl'), `${rows.join('\n')}\n`);
 }
 
-// Creates COPILOT_HOME and AGENTOPS_HOME trees inside the test directory (not the OS
-// temp dir) and returns their paths plus a cleanup function.
+// Creates COPILOT_HOME and AGENTOPS_HOME trees in the OS temp dir, so repo-walking
+// tests never race with them, and returns their paths plus a cleanup function.
 function createUiFixture(name = 'ui') {
-  const root = fs.mkdtempSync(path.join(__dirname, '..', `.ui-fixture-${name}-`));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), `agentops-ui-fixture-${name}-`));
   const copilotHome = path.join(root, 'copilot');
   const agentOpsHome = path.join(root, 'agentops');
   const writeSession = (id, lines, mtimeMs) => {
@@ -134,7 +135,7 @@ function createUiFixture(name = 'ui') {
     copilotHome,
     agentOpsHome,
     now: () => T0 + 3600000,
-    cleanup: () => fs.rmSync(root, { recursive: true, force: true })
+    cleanup: () => fs.rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
   };
 }
 
