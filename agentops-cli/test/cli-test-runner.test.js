@@ -10,7 +10,8 @@ const {
   hermeticEnv,
   writeCliStubs,
   prependPath,
-  sideEffects
+  sideEffects,
+  withoutRealCliDirs
 } = require('../../scripts/run-cli-tests');
 const { isAgentOpsShim } = require('../src/lib/copilot-resolver');
 const { commandCandidates } = require('../src/lib/shell');
@@ -51,6 +52,30 @@ test('Windows stubs redirect before echo so a trailing digit argument still logs
   const stub = fs.readFileSync(path.join(dir, 'az.cmd'), 'utf8');
   assert.match(stub, new RegExp(`>>"%${STUB_LOG_ENV}%" echo az %\\*`));
   assert.doesNotMatch(stub, /%\*>>/);
+});
+
+test('Windows sandbox PATH drops directories that hold real stubbed CLIs but keeps node', () => {
+  const present = new Set([
+    'C:\\Program Files\\GitHub CLI\\gh.exe',
+    'C:\\Program Files\\Microsoft SDKs\\Azure\\CLI2\\wbin\\az.cmd',
+    'C:\\Program Files\\nodejs\\node.exe',
+    'C:\\Program Files\\nodejs\\copilot.cmd',
+    'C:\\Program Files\\Git\\cmd\\git.exe'
+  ]);
+  const env = withoutRealCliDirs({
+    Path: 'C:\\Program Files\\GitHub CLI;C:\\Program Files\\Microsoft SDKs\\Azure\\CLI2\\wbin;C:\\Program Files\\nodejs;C:\\Program Files\\Git\\cmd'
+  }, 'win32', file => present.has(file));
+  assert.equal(env.Path, 'C:\\Program Files\\nodejs;C:\\Program Files\\Git\\cmd');
+  assert.deepEqual(withoutRealCliDirs({ PATH: '/usr/bin' }, 'linux', () => true), { PATH: '/usr/bin' });
+});
+
+test('a stub launched through the sandbox PATH is logged by the guard', { skip: process.platform !== 'win32' && 'POSIX launch is covered by the stub invocation test below' }, t => {
+  const sandbox = createSandbox();
+  t.after(() => fs.rmSync(sandbox.root, { recursive: true, force: true }));
+  const env = hermeticEnv(sandbox);
+  const result = childProcess.spawnSync('az', ['account', 'show', '2'], { env, encoding: 'utf8', shell: true });
+  assert.equal(result.status, 1);
+  assert.deepEqual(sideEffects(sandbox).invocations, ['az account show 2']);
 });
 
 test('hermetic runner keeps the Windows Path key casing when prepending stubs', () => {

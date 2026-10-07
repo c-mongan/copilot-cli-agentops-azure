@@ -74,8 +74,28 @@ function createSandbox(options = {}) {
   return { root, home, bin, log };
 }
 
-function hermeticEnv(sandbox, baseEnv = process.env, platform = process.platform) {
-  const env = Object.fromEntries(Object.entries(baseEnv).filter(([key]) => !STRIPPED_ENV_PATTERN.test(key)));
+// On Windows, spawnSync('gh') without a shell resolves only .exe/.com files, so
+// the .cmd stubs cannot intercept it. Drop PATH entries that hold a real
+// stubbed CLI; the directory holding node.exe is always kept.
+const WINDOWS_EXECUTABLE_EXTENSIONS = Object.freeze(['.exe', '.com', '.cmd', '.bat', '.ps1', '']);
+
+function withoutRealCliDirs(env, platform = process.platform, exists = fs.existsSync) {
+  if (platform !== 'win32') return env;
+  const key = pathKey(env, platform);
+  const entries = String(env[key] || '').split(';').filter(Boolean);
+  const kept = entries.filter(entry => {
+    if (exists(path.win32.join(entry, 'node.exe'))) return true;
+    return !STUBBED_COMMANDS.some(name => WINDOWS_EXECUTABLE_EXTENSIONS.some(ext => exists(path.win32.join(entry, `${name}${ext}`))));
+  });
+  return { ...env, [key]: kept.join(';') };
+}
+
+function hermeticEnv(sandbox, baseEnv = process.env, platform = process.platform, exists = fs.existsSync) {
+  const env = withoutRealCliDirs(
+    Object.fromEntries(Object.entries(baseEnv).filter(([key]) => !STRIPPED_ENV_PATTERN.test(key))),
+    platform,
+    exists
+  );
   Object.assign(env, {
     HOME: sandbox.home,
     USERPROFILE: sandbox.home,
@@ -144,5 +164,6 @@ module.exports = {
   hermeticEnv,
   prependPath,
   sideEffects,
+  withoutRealCliDirs,
   writeCliStubs
 };
