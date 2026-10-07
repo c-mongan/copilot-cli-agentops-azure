@@ -2,7 +2,7 @@
 
 **Local diagnostics for GitHub Copilot CLI sessions, with optional investigation in Azure Monitor.** It shows failures, latency and token use per run. Prompts, code, tool arguments and tool results are not recorded by default.
 
-![Local web UI: runs list, then a run's span waterfall with a denied shell call highlighted](docs/images/ui-demo.gif)
+![Local web UI: runs list, then a run's span waterfall with a failed tool call pinned and per-tool latency](docs/images/ui-demo.gif)
 
 **See your sessions in about 2 seconds, with no Azure and no Docker:**
 
