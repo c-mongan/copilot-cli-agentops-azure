@@ -65,6 +65,7 @@ See [privacy modes](docs/privacy-modes.md), [secure by default](docs/secure-by-d
 - [`agentops doctor`](docs/doctor.md): a green/red checklist of your whole setup, with a fix for each step
 - [Operator guide](docs/operator-guide.md): all commands, Collector modes, Azure setup, plugin and removal
 - [E2E validation](docs/e2e-validation.md): CLI and VS Code walkthroughs with screenshots
+- [Weekly digest](docs/digest.md): `agentops digest` failure clusters, slow tools, tokens and trends
 - [VS Code native capture extension](extensions/agentops-native/README.md)
 - [Azure Workbook](docs/enterprise-workbook.md), [Grafana tour](docs/grafana-dashboard-tour-v2.md) and [KQL query library](docs/kql-query-library.md)
 - [OpenTelemetry GenAI export](docs/otel-genai.md): send sessions to the App Insights Agents (preview) view

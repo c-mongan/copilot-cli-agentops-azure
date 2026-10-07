@@ -13,6 +13,7 @@ const { copilotSessionCommand } = require('./commands/copilot-session');
 const { dashboardCommand } = require('./commands/dashboard');
 const { demoCommand } = require('./commands/demo');
 const { deliveryCommand } = require('./commands/delivery');
+const { digestCommand } = require('./commands/digest');
 const { doctorCommand } = require('./commands/doctor');
 const { e2eCommand } = require('./commands/e2e');
 const { explainCommand } = require('./commands/explain');
@@ -46,6 +47,7 @@ const commandHandlers = {
   dashboardCommand,
   demoCommand,
   deliveryCommand,
+  digestCommand,
   doctorCommand,
   e2eCommand,
   explainCommand,
@@ -97,6 +99,7 @@ module.exports = {
   dashboardCommand,
   demoCommand,
   deliveryCommand,
+  digestCommand,
   doctorCommand,
   e2eCommand,
   explainCommand,

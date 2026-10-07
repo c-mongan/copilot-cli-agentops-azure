@@ -47,6 +47,7 @@ function createCliMain(dependencies = {}) {
     demo: commands.demoCommand,
     detach: commands.detachCommand,
     delivery: commands.deliveryCommand,
+    digest: commands.digestCommand,
     doctor: commands.doctorCommand,
     e2e: commands.e2eCommand,
     explain: commands.explainCommand,
