@@ -57,12 +57,13 @@ The master plan is the delivery and acceptance authority. The full requirements 
 
 ### New User
 
-1. [CLI-first flight recorder](cli-first-flight-recorder.md)
-2. [Simplified Azure-native design](simplified-azure-design.md)
-3. [Secure by default](secure-by-default.md)
-4. [Collector modes](collector-modes.md)
-5. [Privacy modes](privacy-modes.md)
-6. [E2E validation](e2e-validation.md)
+1. [Local web UI](local-ui.md)
+2. [CLI-first flight recorder](cli-first-flight-recorder.md)
+3. [Simplified Azure-native design](simplified-azure-design.md)
+4. [Secure by default](secure-by-default.md)
+5. [Collector modes](collector-modes.md)
+6. [Privacy modes](privacy-modes.md)
+7. [E2E validation](e2e-validation.md)
 
 ### Operator
 

@@ -28,6 +28,7 @@ const { schemaCommand } = require('./commands/schema');
 const { securityCommand } = require('./commands/security');
 const { statusCommand } = require('./commands/status');
 const { triageCommand } = require('./commands/triage');
+const { uiCommand } = require('./commands/ui');
 const { createCliMain } = require('./lib/cli-dispatch');
 const { coreCommands, experimentalCommands, usage } = require('./lib/cli-surface');
 
@@ -60,7 +61,8 @@ const commandHandlers = {
   schemaCommand,
   securityCommand,
   statusCommand,
-  triageCommand
+  triageCommand,
+  uiCommand
 };
 
 const main = createCliMain({
@@ -111,5 +113,6 @@ module.exports = {
   schemaCommand,
   securityCommand,
   statusCommand,
+  uiCommand,
   usage
 };

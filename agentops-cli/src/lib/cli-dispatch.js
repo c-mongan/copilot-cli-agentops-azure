@@ -60,7 +60,8 @@ function createCliMain(dependencies = {}) {
     schema: commands.schemaCommand,
     security: commands.securityCommand,
     status: commands.statusCommand,
-    triage: commands.triageCommand
+    triage: commands.triageCommand,
+    ui: commands.uiCommand
   };
 
   function legacyWithMigration(command, args) {

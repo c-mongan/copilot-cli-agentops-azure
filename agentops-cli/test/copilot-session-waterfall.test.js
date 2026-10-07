@@ -801,9 +801,10 @@ test('a text search box exists alongside category filters and composes with them
   assert.match(html, /filter\('all'\)/);
 });
 
-test('Architecture and Compare navigation is an inert placeholder note, never a fabricated link to nonexistent pages', () => {
+test('standalone view points to agentops ui instead of a stale roadmap note or fabricated links', () => {
   const html = renderSessionWaterfall([], 'nav-placeholder-fixture', {});
-  assert.match(html, /Architecture and Compare views/);
+  assert.match(html, /<code>agentops ui<\/code>/);
+  assert.doesNotMatch(html, /Task 6\/7|land once/);
   assert.doesNotMatch(html, /<a[^>]*>\s*Architecture[^<]*<\/a>/);
   assert.doesNotMatch(html, /<a[^>]*>\s*Compare[^<]*<\/a>/);
 });

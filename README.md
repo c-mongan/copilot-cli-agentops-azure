@@ -2,7 +2,16 @@
 
 **Local diagnostics for GitHub Copilot CLI sessions, with optional investigation in Azure Monitor.** It shows failures, latency and token use per run. Prompts, code, tool arguments and tool results are not recorded by default.
 
-![Demo: run summary, failure detail, Azure KQL readback and local Runs report from real Copilot CLI sessions](docs/images/agentops-cli-demo.gif)
+![Local web UI: runs list, then a run's span waterfall with a denied shell call highlighted](docs/images/ui-demo.gif)
+
+**See your sessions in about 2 seconds, with no Azure and no Docker:**
+
+```bash
+git clone https://github.com/c-mongan/copilot-cli-agentops-azure && cd copilot-cli-agentops-azure
+node agentops-cli/src/index.js ui latest
+```
+
+It opens a local, read-only waterfall of your newest Copilot CLI session: failures, slow tools, tokens and estimated cost. It serves metadata only and binds to 127.0.0.1. See the [local UI guide](docs/local-ui.md).
 
 > Independent personal open-source project. Not an official Microsoft, GitHub, OpenAI, Azure or Grafana product. Preview quality.
 
@@ -13,7 +22,7 @@
 | Which tool call failed or was denied, and what came before it? | Local run view, failure detail | Yes: a denied `curl` appears as a failure signal |
 | Where did the time go? | End-to-end timeline, span durations | Yes: a 12 s shell step reads back as 12,109 ms |
 | How many tokens did each model call use? | Run summary, `AgentOpsSpans_CL` | Yes: tokens match Copilot CLI's own summary |
-| What did a run cost? | `EstimatedCostUsd` (nullable) | Only when the runtime emits cost metadata. Copilot CLI 1.0.93 did not, so cost stays empty instead of being guessed |
+| What did a run cost? | `EstimatedCostUsd` (nullable); local UI "est." column | Only when the runtime emits cost metadata. Copilot CLI 1.0.93 did not, so Azure cost stays empty. The local UI shows a clearly labelled estimate from a dated public price table |
 | Did Azure store exactly what was sent? | KQL readback | Yes: local and Azure row counts matched for all 3 runs |
 
 Evidence: [CLI E2E walkthrough, 2026-10-07](docs/e2e-validation.md#copilot-cli-walkthrough-2026-10-07).
@@ -39,6 +48,8 @@ agentops copilot-session launch --repo /path/to/repo --json -- -p "Run the tests
 agentops copilot-session view <session-id> --run-id <run-id> --output run.html
 ```
 
+From a source checkout, `agentops ui latest` opens the same run in the [local web UI](docs/local-ui.md). It is not in the v0.2.1-preview tarball yet.
+
 Prefer a source checkout? `git clone` the repository and use `alias agentops="node $PWD/agentops-cli/src/index.js"`. Each release lists its tarball's SHA256 in `SHA256SUMS`. The package is not on the npm registry yet.
 
 To publish to your own Azure workspace, provision it with the [diagnostic pilot quickstart](docs/diagnostic-pilot-quickstart.md). Then add `--upload --yes` with an explicit daily byte cap (`AGENTOPS_MAX_PUBLISH_BYTES_PER_DAY`), and check storage with the [KQL query library](docs/kql-query-library.md).
@@ -53,7 +64,7 @@ See [privacy modes](docs/privacy-modes.md), [secure by default](docs/secure-by-d
 
 ## Known limits
 
-- Cost is an estimate from runtime cost metadata only. Current Copilot CLI builds emit none, so it is usually empty.
+- Azure cost comes from runtime cost metadata only. Current Copilot CLI builds emit none, so it is usually empty. The local UI's cost is an estimate from public list prices, not billed cost.
 - A shell command that exits non-zero is recorded as a successful tool span. The local session event still marks it as failed.
 - Each native tool span is currently stored twice in `AgentOpsSpans_CL`. Count by `SpanId` or by `chat` operations, not by raw rows.
 - Token totals must come from `chat` spans or the shutdown event. Summing every span row over-counts.
@@ -62,6 +73,7 @@ See [privacy modes](docs/privacy-modes.md), [secure by default](docs/secure-by-d
 
 ## Learn more
 
+- [Local web UI](docs/local-ui.md): runs list, span waterfall, tool latency and estimated cost
 - [`agentops doctor`](docs/doctor.md): a green/red checklist of your whole setup, with a fix for each step
 - [Operator guide](docs/operator-guide.md): all commands, Collector modes, Azure setup, plugin and removal
 - [E2E validation](docs/e2e-validation.md): CLI and VS Code walkthroughs with screenshots

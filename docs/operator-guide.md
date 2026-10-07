@@ -186,6 +186,8 @@ agentops run-summary generate
 agentops latest
 agentops replay
 agentops open
+agentops open latest --ui
+agentops ui [latest|<session-id>|<run-id>] [--open|--no-open] [--port <n>] [--allow-content]
 agentops product audit
 agentops product audit --live --require-rows
 agentops product audit --live --require-rows --require-visual

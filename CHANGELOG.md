@@ -3,6 +3,16 @@
 All notable changes to this project are recorded here. This is a preview
 project. Package versions stay at `0.1.0` until a package is published to npm.
 
+## Unreleased
+
+- **Local web UI.** `agentops ui` (also `agentops ui latest` and `agentops open
+  latest --ui`) serves a zero-dependency, read-only, metadata-only web UI on
+  127.0.0.1. It shows a runs list with KPIs and filters, and a per-run span
+  waterfall with a failure callout, cumulative token and estimated-cost meter,
+  and per-tool latency. See [docs/local-ui.md](docs/local-ui.md).
+- `copilot-session view` no longer shows a stale note about Architecture and
+  Compare views.
+
 ## v0.2.1-preview: 2026-10-07
 
 ### Fixed
