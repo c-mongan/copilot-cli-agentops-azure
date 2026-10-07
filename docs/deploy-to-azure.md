@@ -123,10 +123,26 @@ The button reads `infra/azuredeploy.json` from the `main` branch.
 ## azd
 
 `azure.yaml` points `azd` at `infra/bicep/main.bicep`, the larger developer
-template, not at this button template. `azd` 1.19.0 was found locally, but
-`azd up` / `azd provision` was **not** run for this change and remains
-unverified here. Use the button or the `az deployment group` commands above
-for the metadata-only path.
+template, not at this button template. Use `azd` only for a **new, empty**
+resource group: `main.bicep` creates its own workspace and Application
+Insights component and must not be pointed at an existing deployment (see
+[enterprise deployment](enterprise-deployment.md)).
+
+Verified on 2026-10-07 with azd 1.19.0 in a throwaway resource group in
+Sweden Central, which was then deleted:
+
+| Step | Result |
+|---|---|
+| `azd provision` (default parameters) | Succeeded in 1 min 13 s |
+| Resources | Log Analytics workspace and Application Insights only |
+| Workspace settings | 30-day retention, 2 GB daily cap, PerGB2018 |
+| `postprovision` hook | Skipped cleanly: Managed Grafana is disabled by default |
+| `azd down --force --purge` | Succeeded in 1 min 21 s; resource group gone |
+
+`azd provision` deploys infrastructure only. There is no app to deploy, so
+`azd deploy` has nothing to do. The default `azd` path does not create the
+metadata-only custom tables or the DCR; use the button or the
+`az deployment group` commands above for those.
 
 ## Historical pilot evidence (2026-10-07, before privacy/access hardening)
 
