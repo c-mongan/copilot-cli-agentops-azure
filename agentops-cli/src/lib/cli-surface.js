@@ -41,7 +41,8 @@ const coreCommands = [
   'security',
   'smoke',
   'triage',
-  'e2e'
+  'e2e',
+  'ui'
 ];
 
 const experimentalCommands = new Set([
@@ -102,7 +103,8 @@ Local native path:
 
 Then:
   Everyday use: agentops copilot ...         # observed; plain copilot stays unchanged by default
-  See results:  agentops open latest
+  See results:  agentops ui                  # local web UI; no Azure or Docker
+               agentops open latest
   Troubleshoot: agentops status
 
 Help:
@@ -155,7 +157,8 @@ Core commands:
   mcp-proxy --server-name <name> [--out <jsonl>] -- <server command> [args...]
   latest [--file <jsonl>] [--last <duration>] [--json]
   replay <session|latest> [--file <jsonl>] [--last <duration>]
-  open [latest|<run-id>] [--runs <jsonl>] [--file <jsonl>] [--last <duration>] [--json]
+  open [latest|<run-id>] [--ui] [--runs <jsonl>] [--file <jsonl>] [--last <duration>] [--json]
+  ui [latest|<session-id>] [--open|--no-open] [--port <n>] [--limit <n>] [--allow-content]
   product audit|build|evidence|compare|runtime [--help] [--json]
   validate-azure [--last <duration>] [--profile personal|team|internal] [--import-dashboards] [--verify-dashboard-content] [--production] [--remediation-plan] [--json]
   validate-enterprise [--json]

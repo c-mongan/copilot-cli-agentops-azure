@@ -10,7 +10,10 @@ const {
 } = require('./native-receipt');
 const { openV2FromFiles, renderOpenV2, v2OpenLinksForRun } = require('./v2-open-links');
 
-function openCommand(args = []) {
+function openCommand(args = [], io = {}) {
+  if (hasFlag(args, '--ui')) {
+    return require('./ui-command').uiCommand(args.filter(arg => arg !== '--ui'), io);
+  }
   if (!optionValue(args, '--runs')) {
     const native = readNativeReceiptFromArgs(args);
     const shouldUseNative = native.recognized || ['env', 'default'].includes(native.selected_by);
