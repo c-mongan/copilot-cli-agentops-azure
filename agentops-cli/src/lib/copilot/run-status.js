@@ -44,15 +44,6 @@ function severityOfOutcome(outcome) {
   return Object.prototype.hasOwnProperty.call(OUTCOME_SEVERITY, outcome) ? OUTCOME_SEVERITY[outcome] : 'failure';
 }
 
-// The shared count shape every surface reports for one run or a window.
-function toolOutcomeCounts({ toolFailures = 0, denials = 0, nonZeroExits = 0 } = {}) {
-  return {
-    failedToolCalls: Number(toolFailures) || 0,
-    deniedToolCalls: Number(denials) || 0,
-    nonZeroExitToolCalls: Number(nonZeroExits) || 0
-  };
-}
-
 function attentionText({ denials = 0, nonZeroExits = 0 } = {}) {
   return `${denials} denied, ${nonZeroExits} non-zero exit${nonZeroExits === 1 ? '' : 's'}`;
 }
@@ -163,6 +154,5 @@ module.exports = {
   sessionRunStatus,
   sessionStatusSignals,
   severityOfOutcome,
-  toolOutcomeCounts,
   uniqueNativeSpans
 };

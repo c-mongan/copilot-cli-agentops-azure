@@ -209,3 +209,12 @@ test('JSON output replaces the home directory with ~ and leaves other values alo
   assert.equal(value.outputDir, path.join(home, '.agentops', 'runs', 'r1'), 'input is not mutated');
   assert.equal(shortenHomePaths({ a: '/x' }, '/').a, '/x', 'a root home is never collapsed');
 });
+
+test('skipped-operation labels that match Object.prototype keys are counted, not corrupted', () => {
+  const { toGenAiSpans } = require('../src/lib/otel/genai-semconv');
+  const span = operation => ({ operation, traceId: TRACE, spanId: '0fc76571f496443a', startTimeUnixNano: '1', endTimeUnixNano: '2' });
+  const { stats } = toGenAiSpans([span('constructor'), span('constructor'), span('toString')]);
+  assert.equal(stats.skipped, 3);
+  assert.equal(stats.skippedOperations.constructor, 2);
+  assert.equal(stats.skippedOperations.toString, 1);
+});

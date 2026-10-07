@@ -46,7 +46,7 @@ function shortId(id) {
 // Returns { text, direction } where direction is 'up', 'down' or 'flat';
 // withTone() then says whether that direction is good for the metric.
 function trendText(trend, format = 'count') {
-  if (!trend || trend.current == null || trend.previous == null) return { text: 'no previous data', direction: 'flat' };
+  if (!trend || trend.current === null || trend.current === undefined || trend.previous === null || trend.previous === undefined) return { text: 'no previous data', direction: 'flat' };
   const { delta, pctChange, kind } = trend;
   if (delta === 0) return { text: 'no change', direction: 'flat' };
   const arrow = delta > 0 ? '▲' : '▼';

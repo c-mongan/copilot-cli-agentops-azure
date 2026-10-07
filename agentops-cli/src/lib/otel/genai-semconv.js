@@ -100,9 +100,10 @@ function spanTiming(span) {
 
 function operationOf(span) {
   const declared = String(span.operation || '').trim();
-  if (OPERATIONS[declared]) return declared;
+  const known = name => Object.prototype.hasOwnProperty.call(OPERATIONS, name);
+  if (known(declared)) return declared;
   const prefix = String(span.spanName || '').split(' ')[0];
-  return OPERATIONS[prefix] ? prefix : '';
+  return known(prefix) ? prefix : '';
 }
 
 /**
@@ -116,7 +117,7 @@ function toGenAiSpans(spans = [], context = {}) {
   const runId = safeString(context.runId);
   const overrideAgent = safeString(context.agentName);
   const byIdentity = new Map();
-  const stats = { input: 0, mapped: 0, duplicates: 0, skipped: 0, invalid: 0, skippedOperations: {} };
+  const stats = { input: 0, mapped: 0, duplicates: 0, skipped: 0, invalid: 0, skippedOperations: Object.create(null) };
   for (const span of spans) {
     stats.input += 1;
     const operation = operationOf(span || {});
