@@ -58,7 +58,7 @@ function sessionStatusSignals(events = []) {
     const data = event?.data || event || {};
     if (event?.type === 'tool.execution_complete') {
       signals.toolCalls += 1;
-      const outcome = event?.data ? classifyToolCompletionEvent(data) : classifyToolOutcome({ success: data.success, errorCode: data.outcome, exitCode: data.exitCode });
+      const outcome = event?.data ? classifyToolCompletionEvent(data) : data.signal || classifyToolOutcome({ success: data.success, errorCode: data.outcome, exitCode: data.exitCode });
       if (outcome === 'failed') signals.toolFailures += 1;
       else if (outcome === 'denied') signals.denials += 1;
       else if (outcome === 'nonzero_exit') signals.nonZeroExits += 1;

@@ -5,6 +5,10 @@ project. Package versions stay at `0.1.0` until a package is published to npm.
 
 ## Unreleased
 
+### Fixed
+
+- Run status, native span counts and duration labels: a launch without `session.shutdown` stays `incomplete`; failed hooks and sub-agents count as failures while failed ledger chat spans do not; native spans are counted by trace/span ID excluding span-event rows; hour-scale durations round from milliseconds. (#191)
+
 ## v0.3.1-preview: 2026-10-07
 
 Fixes from an independent hiring-manager QA pass.
