@@ -39,7 +39,7 @@ You need Node.js 20+ and the GitHub Copilot CLI, signed in. Azure is optional.
 
 ```bash
 # 1. Get the CLI (one command, no global install; npx fetches the release tarball)
-alias agentops='npx --yes -p https://github.com/c-mongan/copilot-cli-agentops-azure/releases/download/v0.3.1-preview/copilot-agentops-cli-0.1.0.tgz agentops'
+alias agentops='npx --yes -p https://github.com/c-mongan/copilot-cli-agentops-azure/releases/download/v0.3.2-preview/copilot-agentops-cli-0.1.0.tgz agentops'
 
 # 2. Run an observed Copilot session (local only, no upload). In -p mode Copilot
 #    cannot ask for permission, so allow tools explicitly; use a repo you trust.
@@ -83,7 +83,7 @@ See [privacy modes](docs/privacy-modes.md), [secure by default](docs/secure-by-d
 
 - Cost is an estimate from public list prices, not billed cost. Models without a published price show "n/a" and are left out of totals. Azure cost comes from runtime cost metadata only; current Copilot CLI builds emit none, so it is usually empty.
 - Copilot CLI records a shell command that exits non-zero as a successful tool span. AgentOps reads the exit code (metadata only) from the session events and tags that span `shell_nonzero_exit`. The run is marked `attention`, not `failed`.
-- Each native tool span is currently stored twice in `AgentOpsSpans_CL`. Count by `SpanId` or by `chat` operations, not by raw rows.
+- Before v0.3.2, each native tool span was stored twice in `AgentOpsSpans_CL`. v0.3.2 deduplicates by trace and span ID before upload, but Logs Ingestion is at-least-once and older rows remain, so keep counting by `SpanId` or by `chat` operations, not by raw rows.
 - Token totals must come from `chat` spans or the shutdown event. Summing every span row over-counts.
 - The Azure Workbook reads usage from run summaries, so native-only runs show usage as "partial or unknown".
 - Not a hosted service, a governance platform or a security boundary. Hooks, benchmarks and advanced dashboards are experimental.
