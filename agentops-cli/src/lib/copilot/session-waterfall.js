@@ -3,6 +3,7 @@ const path = require('node:path');
 
 const { attachmentReferencePaths, attachmentSkillReferences, directShellPathRead, operationFields } = require('./session-event-export');
 const { redactContent } = require('./session-content');
+const { dedupeNativeSpans } = require('./native-span-identity');
 const { reconcileModelProvenance, safeModelIdentity } = require('./execution-configuration');
 
 const RAW_CONTENT_FIELD_NAMES = new Set([
@@ -80,14 +81,7 @@ function safeReferenceToolCompletion(data) {
 }
 
 function sessionWaterfall(events = [], inputSpans = [], options = {}) {
-  const seenSpanIds = new Set();
-  const nativeSpans = inputSpans.filter(span => {
-    if (!span.traceId || !span.spanId) return true;
-    const key = `${span.traceId}:${span.spanId}`;
-    if (seenSpanIds.has(key)) return false;
-    seenSpanIds.add(key);
-    return true;
-  });
+  const nativeSpans = dedupeNativeSpans(inputSpans, { keepUnidentified: true });
   const repoRoot = path.resolve(options.repoRoot || process.cwd());
   const referencePaths = options.referencePaths || attachmentReferencePaths(repoRoot);
   const skillReferences = options.skillReferences || attachmentSkillReferences(repoRoot);

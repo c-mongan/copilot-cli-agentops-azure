@@ -4,6 +4,8 @@
 // `copilot-session view` and the local UI. See docs/local-ui.md
 // ("How run status is decided") before changing any rule here.
 
+const { dedupeNativeSpans } = require('./native-span-identity');
+
 const STATUS_LABELS = Object.freeze({
   ok: 'Completed',
   attention: 'Needs attention',
@@ -83,23 +85,11 @@ function sessionRunStatus(events = [], { runErrored = false, live = false, ended
   };
 }
 
-// A native OTel span is one unique (TraceId, SpanId). Span-event rows
-// (LinkType 'span-event') and repeated exports are not spans.
+// A native OTel span is one unique (TraceId, SpanId); a re-emitted execute_tool
+// span with the same tool call ID and identical start/end is the same call.
+// Span-event rows (LinkType 'span-event') and repeated exports are not spans.
 function uniqueNativeSpans(rows = []) {
-  const seen = new Set();
-  const result = [];
-  for (const row of rows) {
-    if (!row || typeof row !== 'object') continue;
-    if (row.LinkType === 'span-event' || row.linkType === 'span-event') continue;
-    const spanId = row.SpanId || row.spanId;
-    const traceId = row.TraceId || row.traceId;
-    if (!spanId || !traceId) continue;
-    const key = `${traceId}:${spanId}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    result.push(row);
-  }
-  return result;
+  return dedupeNativeSpans(rows);
 }
 
 function countNativeSpans(rows = []) {
