@@ -4,6 +4,8 @@ const path = require('node:path');
 const test = require('node:test');
 
 const data = require('../src/lib/ui/data');
+const { generateDigest } = require('../src/lib/digest-command');
+const { parsePeriod } = require('../src/lib/digest/digest-summary');
 const {
   FAILED_ID,
   LEDGER_ONLY_ID,
@@ -289,7 +291,7 @@ test('ui data: latest prefers the newest AgentOps ledger run over a live Copilot
   assert.equal((await store.detail('latest')).run.id, FAILED_ID);
 });
 
-test('ui data: latest picks a newer completed session, and a live one only when nothing else exists', async t => {
+test('ui data: without a launch run, latest picks the newest completed session, and a live one only when nothing else exists', async t => {
   const fixture = createUiFixture('latest-done');
   t.after(fixture.cleanup);
   const DONE_ID = 'e0000000-0000-4000-8000-000000000005';
@@ -297,7 +299,9 @@ test('ui data: latest picks a newer completed session, and a live one only when 
     line('session.start', 3000000, { sessionId: DONE_ID, selectedModel: 'claude-haiku-4.5' }),
     line('session.shutdown', 3100000, { shutdownType: 'routine', modelMetrics: {} })
   ], fixture.now() - 30000);
-  assert.equal((await storeFor(fixture).resolveEntry('latest')).id, DONE_ID, 'a completed session newer than the ledger run is latest');
+  assert.equal((await storeFor(fixture).resolveEntry('latest')).id, FAILED_ID, 'the launch run wins over a newer plain session');
+  fs.rmSync(fixture.agentOpsHome, { recursive: true, force: true });
+  assert.equal((await storeFor(fixture).resolveEntry('latest')).id, DONE_ID, 'with no launch run the newest completed session is latest');
 
   const lonely = createUiFixture('latest-only-live');
   t.after(lonely.cleanup);
@@ -312,9 +316,146 @@ test('ui data: latest picks a newer completed session, and a live one only when 
   assert.equal(await empty.resolveEntry('latest'), null);
 });
 
+function writeLedgerRun(agentOpsHome, runId, sessionId, createdMs) {
+  const dir = path.join(agentOpsHome, 'runs', runId);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'run-context.json'), JSON.stringify({ runId, sessionId, createdAt: new Date(createdMs).toISOString() }));
+}
+
+function holdLock(fixture, id, pid) {
+  fs.writeFileSync(path.join(fixture.copilotHome, 'session-state', id, `inuse.${pid}.lock`), String(pid));
+}
+
+test('ui data: latest opens the newest launch run, not a constantly written live session with an older ledger run', async t => {
+  const fixture = createUiFixture('latest-concurrent');
+  t.after(fixture.cleanup);
+  const now = fixture.now();
+  const BUSY_ID = 'e0000000-0000-4000-8000-000000000010';
+  const LAUNCHED_ID = 'e0000000-0000-4000-8000-000000000011';
+  // Another agent's long-running session: shut down once, resumed, still writing,
+  // with tool failures and an old wrapper ledger run.
+  fixture.writeSession(BUSY_ID, [
+    line('session.start', -7200000, { sessionId: BUSY_ID, selectedModel: 'gpt-6.1-sol' }),
+    line('session.shutdown', -7100000, { shutdownType: 'routine', modelMetrics: {} }),
+    line('session.resume', -7000000, { selectedModel: 'gpt-6.1-sol' }),
+    line('tool.execution_start', 3590000, { toolCallId: 'busy1', toolName: 'view', turnId: '0' }),
+    line('tool.execution_complete', 3595000, { toolCallId: 'busy1', success: false, error: { code: 'failure' } })
+  ], now - 1000);
+  holdLock(fixture, BUSY_ID, process.ppid);
+  writeLedgerRun(fixture.agentOpsHome, 'wrapper_run_0000000000000001', BUSY_ID, now - 7200000);
+  // The run just launched through AgentOps: older file mtime, newest launch run.
+  fixture.writeSession(LAUNCHED_ID, [
+    line('session.start', 3000000, { sessionId: LAUNCHED_ID, selectedModel: 'claude-haiku-4.5' }),
+    line('session.shutdown', 3060000, { shutdownType: 'routine', modelMetrics: {} })
+  ], now - 540000);
+  writeLedgerRun(fixture.agentOpsHome, 'native_run_1790000003000_cccccccccc', LAUNCHED_ID, now - 600000);
+
+  const store = storeFor(fixture);
+  assert.equal((await store.resolveEntry('latest')).id, LAUNCHED_ID);
+  assert.equal((await store.detail('latest')).run.id, LAUNCHED_ID);
+  const busy = (await store.list()).runs.find(run => run.id === BUSY_ID);
+  assert.equal(busy.status, 'live', 'a resumed, still-running session is Live even with a failed tool');
+  assert.equal(busy.statusLabel, 'Live');
+  assert.equal(busy.failures, 1, 'failures still show as a count');
+
+  // A wrapper run created after the launch run does not displace it.
+  writeLedgerRun(fixture.agentOpsHome, 'wrapper_run_0000000000000002', BUSY_ID, now - 1000);
+  assert.equal((await storeFor(fixture).resolveEntry('latest')).id, LAUNCHED_ID);
+  // A newer launch run wins over an older one.
+  writeLedgerRun(fixture.agentOpsHome, 'native_run_1790000004000_dddddddddd', FAILED_ID, now - 60000);
+  assert.equal((await storeFor(fixture).resolveEntry('latest')).id, FAILED_ID);
+});
+
+test('ui data: without launch runs, latest never picks an in-progress session over a completed one', async t => {
+  const fixture = createUiFixture('latest-in-progress');
+  t.after(fixture.cleanup);
+  fs.rmSync(fixture.agentOpsHome, { recursive: true, force: true });
+  const now = fixture.now();
+  const RESUMED_ID = 'e0000000-0000-4000-8000-000000000012';
+  const QUIET_ID = 'e0000000-0000-4000-8000-000000000013';
+  fixture.writeSession(RESUMED_ID, [
+    line('session.start', 0, { sessionId: RESUMED_ID }),
+    line('session.shutdown', 1000, { shutdownType: 'routine', modelMetrics: {} }),
+    line('session.resume', 3500000, {})
+  ], now - 2000);
+  // Not shut down and quiet for an hour with no lock: incomplete, not finished either.
+  fixture.writeSession(QUIET_ID, [line('session.start', 0, { sessionId: QUIET_ID })], now - 3000000);
+  const store = storeFor(fixture);
+  assert.equal((await store.resolveEntry('latest')).id, FAILED_ID, 'the newest session that has shut down');
+  const rows = (await store.list()).runs;
+  assert.equal(rows.find(run => run.id === RESUMED_ID).status, 'live');
+  assert.equal(rows.find(run => run.id === QUIET_ID).status, 'incomplete');
+});
+
+test('ui data: a new session held open by a running Copilot process is Live, not Completed', async t => {
+  const fixture = createUiFixture('lock-live');
+  t.after(fixture.cleanup);
+  const now = fixture.now();
+  const NEW_ID = 'e0000000-0000-4000-8000-000000000014';
+  const DEAD_ID = 'e0000000-0000-4000-8000-000000000015';
+  const OLD_ID = 'e0000000-0000-4000-8000-000000000016';
+  fixture.writeSession(NEW_ID, [line('session.start', 2400000, { sessionId: NEW_ID })], now - 20 * 60000);
+  holdLock(fixture, NEW_ID, process.ppid);
+  fixture.writeSession(DEAD_ID, [line('session.start', 2400000, { sessionId: DEAD_ID })], now - 20 * 60000);
+  holdLock(fixture, DEAD_ID, 999999999);
+  fixture.writeSession(OLD_ID, [line('session.start', -200000000, { sessionId: OLD_ID })], now - 2 * 86400000);
+  holdLock(fixture, OLD_ID, process.ppid);
+  const store = storeFor(fixture);
+  const rows = (await store.list()).runs;
+  const fresh = rows.find(run => run.id === NEW_ID);
+  assert.equal(fresh.status, 'live');
+  assert.equal(fresh.toolCalls, 0);
+  assert.equal(rows.find(run => run.id === DEAD_ID).status, 'incomplete', 'a lock from a dead process is ignored');
+  assert.equal(rows.find(run => run.id === OLD_ID).status, 'incomplete', 'a lock does not keep a day-old session live');
+  assert.equal(data.sessionLockAlive(path.join(fixture.root, 'nope')), false);
+  assert.equal(data.sessionEnded([{ type: 'session.start' }, { type: 'session.shutdown' }]), true);
+  assert.equal(data.sessionEnded([{ type: 'session.shutdown' }, { type: 'session.resume' }]), false);
+});
+
+test('ui data: a time window matches agentops digest session count and cost and lifts the newest-N cap', async t => {
+  const fixture = createUiFixture('digest-parity');
+  t.after(fixture.cleanup);
+  const now = fixture.now();
+  const DAY = 86400000;
+  const usage = (model, input, output) => ({ [model]: { requests: { count: 1 }, usage: { inputTokens: input, outputTokens: output, cacheReadTokens: input / 2, cacheWriteTokens: 100 } } });
+  const sessions = [
+    ['e0000000-0000-4000-8000-000000000020', -2 * DAY, usage('claude-haiku-4.5', 40000, 900)],
+    ['e0000000-0000-4000-8000-000000000021', -5 * DAY, usage('gpt-6.1-sol', 120000, 3000)],
+    ['e0000000-0000-4000-8000-000000000022', -6 * DAY, usage('claude-haiku-4.5', 9000, 300)],
+    ['e0000000-0000-4000-8000-000000000023', -9 * DAY, usage('claude-haiku-4.5', 77000, 700)],
+    ['e0000000-0000-4000-8000-000000000024', -20 * DAY, usage('gpt-6.1-sol', 5000, 50)]
+  ];
+  for (const [id, offset, metrics] of sessions) {
+    fixture.writeSession(id, [
+      line('session.start', offset, { sessionId: id, startTime: new Date(T0 + offset).toISOString(), selectedModel: Object.keys(metrics)[0] }),
+      line('session.shutdown', offset + 60000, { shutdownType: 'routine', modelMetrics: metrics })
+    ], T0 + offset + 60000);
+  }
+  fs.utimesSync(path.join(fixture.copilotHome, 'session-state', OPEN_ID, 'events.jsonl'), new Date(T0 + 530), new Date(T0 + 530));
+  const store = storeFor(fixture, { limit: 2 });
+  for (const since of ['24h', '7d', '30d']) {
+    const digest = generateDigest(['--since', since, '--copilot-home', fixture.copilotHome, '--agentops-home', fixture.agentOpsHome], { nowMs: now });
+    const ui = await store.list({ sinceMs: now - parsePeriod(since).periodMs, since, source: 'copilot' });
+    assert.equal(ui.kpis.runs, digest.current.sessions, `${since} session count`);
+    assert.equal(ui.kpis.costUsd, digest.current.tokens.estCostUsd, `${since} cost`);
+    assert.equal(ui.kpis.costLabel, digest.current.tokens.costLabel, `${since} cost label`);
+    assert.equal(ui.window.since, since);
+    assert.equal(ui.window.capped, false);
+  }
+  const week = await store.list({ sinceMs: now - 7 * DAY, since: '7d' });
+  assert.ok(week.scanned > 2, 'a window is not truncated to --limit');
+  assert.equal(week.window.sessions, week.scanned);
+  const newest = await store.list();
+  assert.equal(newest.scanned, 2);
+  assert.equal(newest.window, null);
+});
+
 test('ui data: since filter keeps runs that started inside the window', async t => {
   const fixture = createUiFixture('since');
   t.after(fixture.cleanup);
+  // Real session files are last written after their last event; the window prefilters on mtime.
+  const openFile = path.join(fixture.copilotHome, 'session-state', OPEN_ID, 'events.jsonl');
+  fs.utimesSync(openFile, new Date(T0 + 530), new Date(T0 + 530));
   const store = storeFor(fixture);
   const recent = await store.list({ sinceMs: T0 - 1000 });
   assert.deepEqual(recent.runs.map(run => run.id).sort(), [FAILED_ID, OPEN_ID].sort(), 'the ledger-only run started an hour earlier');

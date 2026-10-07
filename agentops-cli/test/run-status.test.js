@@ -66,6 +66,14 @@ test('run status: failed tools, hooks and sub-agents are failures', () => {
   assert.equal(sessionRunStatus([{ type: 'subagent.failed', data: {} }], { ended: true }).status, 'failed');
 });
 
+test('run status: a session resumed after a shutdown is running again', () => {
+  const resumed = [{ type: 'session.start', data: {} }, { type: 'session.shutdown', data: {} }, { type: 'session.resume', data: {} }];
+  assert.equal(sessionStatusSignals(resumed).ended, false);
+  assert.equal(sessionRunStatus(resumed).status, 'incomplete');
+  assert.equal(sessionRunStatus([...resumed, { type: 'tool.execution_complete', data: { success: false } }], { live: true }).status, 'live');
+  assert.equal(sessionStatusSignals([...resumed, { type: 'session.shutdown', data: {} }]).ended, true);
+});
+
 test('run status: native span count dedupes by trace and span ID and skips span-event rows', () => {
   const rows = [];
   for (let index = 0; index < 16; index += 1) {

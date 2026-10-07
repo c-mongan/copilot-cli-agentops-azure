@@ -78,6 +78,9 @@ test('ui server: run detail, filters and errors', async t => {
   const since = await request(port, '/api/runs?since=365d');
   assert.equal(since.status, 200);
   assert.equal(typeof since.json().kpis.costLabel, 'string');
+  assert.equal(since.json().window.since, '365d', 'the window label is echoed for the UI');
+  assert.equal(since.json().window.capped, false);
+  assert.equal((await request(port, '/api/runs')).json().window, null);
   const copilotOnly = (await request(port, '/api/runs?source=copilot')).json();
   assert.ok(copilotOnly.runs.length > 0);
   assert.ok(copilotOnly.runs.every(run => run.source !== 'ledger'));

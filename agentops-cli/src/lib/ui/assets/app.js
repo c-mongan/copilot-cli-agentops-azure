@@ -136,7 +136,7 @@
   }
   function homeHash(params) {
     const query = new URLSearchParams();
-    for (const key of ['q', 'model', 'repo', 'status']) if (params[key]) query.set(key, params[key]);
+    for (const key of ['since', 'q', 'model', 'repo', 'status']) if (params[key]) query.set(key, params[key]);
     const text = query.toString();
     return text ? `#/?${text}` : '#/';
   }
@@ -162,7 +162,7 @@
   // ---------- home ----------
   let searchTimer = null;
   async function renderHome(params, keepFocus) {
-    const filters = { q: params.get('q') || '', model: params.get('model') || '', repo: params.get('repo') || '', status: params.get('status') || '' };
+    const filters = { since: params.get('since') || '', q: params.get('q') || '', model: params.get('model') || '', repo: params.get('repo') || '', status: params.get('status') || '' };
     if (!state.runs) main.replaceChildren(h('p', { class: 'loading', role: 'status', text: 'Reading local Copilot CLI sessions…' }));
     const query = new URLSearchParams(Object.entries(filters).filter(([, value]) => value)).toString();
     let data;
@@ -180,17 +180,15 @@
     const focusId = keepFocus && active && active.id ? active.id : null;
     const caret = focusId === 'search' ? active.selectionStart : null;
 
-    const anyFilter = Object.values(filters).some(Boolean);
+    const anyFilter = hasFilter(filters);
     const view = h('div', { class: 'home' },
       h('div', { class: 'page-head' },
         h('div', null,
           h('h1', { text: 'Copilot CLI runs' }),
-          h('p', { text: data.totalSessions
-            ? `${plural(data.totalSessions, 'session')} on this machine · newest ${fmtInt(data.scanned)} analysed`
-            : 'Sessions on this machine appear here automatically.' })),
+          h('p', { text: data.totalSessions ? scopeText(data) : 'Sessions on this machine appear here automatically.' })),
         h('div', { class: 'head-actions' },
           h('button', { type: 'button', class: 'button quiet', onclick: () => { state.routeKey = ''; route(); }, title: 'Refresh (r)' }, icon('refresh', 14), 'Refresh'))),
-      data.totalSessions ? kpiStrip(data.kpis) : null,
+      data.totalSessions ? kpiStrip(data.kpis, data) : null,
       data.totalSessions ? filterBar(data, filters) : null,
       data.totalSessions ? runsTable(data, anyFilter) : firstRunEmpty(),
       footnote(data.pricing, true));
@@ -207,7 +205,22 @@
     announce(`${plural(data.runs.length, 'run')} shown`);
   }
 
-  function kpiStrip(k) {
+  // Window and search/select filters are separate: "Clear filters" keeps the window.
+  function hasFilter(filters) { return ['q', 'model', 'repo', 'status'].some(key => filters[key]); }
+
+  function scopeText(data) {
+    const w = data.window;
+    if (!w) return `${plural(data.totalSessions, 'session')} on this machine · newest ${fmtInt(data.scanned)} analysed`;
+    return `${plural(w.sessions, 'session')} active in the last ${w.since || 'window'} · ${w.capped ? `newest ${fmtInt(data.scanned)}` : 'all'} analysed`;
+  }
+
+  // Shown beside the cost KPI whenever the total does not cover every session in scope.
+  function capNote(data) {
+    if (data.window) return data.window.capped ? `newest ${fmtInt(data.scanned)} of ${fmtInt(data.window.sessions)} sessions` : '';
+    return data.totalSessions > data.scanned ? `newest ${fmtInt(data.scanned)} of ${fmtInt(data.totalSessions)} sessions` : '';
+  }
+
+  function kpiStrip(k, data) {
     const tile = (label, value, sub, opts = {}) => h('div', { class: 'kpi' },
       h('div', { class: 'kpi-label' }, label, opts.est ? h('span', { class: 'est', title: 'Estimate from public list prices', text: 'EST.' }) : null),
       h('div', { class: `kpi-value${opts.bad ? ' bad' : ''}`, text: value, title: opts.title || null }),
@@ -218,7 +231,7 @@
       tile('Failed tool calls', fmtInt(k.failures), k.failedRuns ? `in ${fmtInt(k.failedRuns)} of ${plural(k.runs, 'run')}` : 'No failed runs', { bad: k.failures > 0 }),
       tile('p95 tool latency', fmtDuration(k.p95ToolMs), 'across all tool calls'),
       tile('Tokens', fmtTokens(tokenTotal), `${fmtTokens(k.tokens.input)} in · ${fmtTokens(k.tokens.output)} out`, { title: `${fmtInt(tokenTotal)} tokens in ${plural(k.tokens.runsWithTokens, 'run')} with usage data` }),
-      tile('Cost', fmtCost(k.costUsd), unpricedNote(k.unpricedModels) || (k.premiumRequests ? `${fmtInt(Math.round(k.premiumRequests * 100) / 100)} premium requests` : 'list-price estimate'), { est: true, title: k.costLabel || null }));
+      tile('Cost', fmtCost(k.costUsd), unpricedNote(k.unpricedModels) || capNote(data) || (k.premiumRequests ? `${fmtInt(Math.round(k.premiumRequests * 100) / 100)} premium requests` : 'list-price estimate'), { est: true, title: k.costLabel || null }));
   }
 
   function unpricedNote(models) {
@@ -249,22 +262,29 @@
       oninput: event => { clearTimeout(searchTimer); const value = event.target.value; searchTimer = setTimeout(() => setFilter('q', value.trim()), 160); },
       onkeydown: event => { if (event.key === 'ArrowDown') { event.preventDefault(); focusRunRow(0); } if (event.key === 'Escape' && event.target.value) { event.target.value = ''; setFilter('q', ''); } }
     });
-    const anyFilter = Object.values(filters).some(Boolean);
+    const anyFilter = hasFilter(filters);
+    const windows = [['', `Newest ${fmtInt(data.limit)}`], ['24h', 'Last 24 hours'], ['7d', 'Last 7 days'], ['30d', 'Last 30 days']];
+    if (filters.since && !windows.some(([value]) => value === filters.since)) windows.push([filters.since, `Last ${filters.since}`]);
+    const windowSelect = h('label', { class: 'select' },
+      h('span', { class: 'sr-only', text: 'Time window' }),
+      h('select', { id: 'filter-since', class: filters.since ? 'active' : null, title: 'Time window (matches agentops digest --since)', onchange: event => setFilter('since', event.target.value) },
+        windows.map(([value, text]) => h('option', { value, selected: value === filters.since, text }))));
     return h('div', { class: 'filters', role: 'search' },
       h('div', { class: 'search' }, icon('search', 14), search, filters.q ? null : h('kbd', { text: '/', 'aria-hidden': 'true' })),
+      windowSelect,
       select('model', 'Models', data.facets.models),
       select('repo', 'Repos', data.facets.repos),
       select('status', 'Statuses', data.facets.statuses, value => STATUS_LABEL[value] || value),
-      anyFilter ? h('button', { type: 'button', class: 'button quiet', onclick: () => { history.replaceState(null, '', '#/'); route(); }, text: 'Clear filters' }) : null,
+      anyFilter ? h('button', { type: 'button', class: 'button quiet', onclick: () => { history.replaceState(null, '', homeHash({ since: filters.since })); route(); }, text: 'Clear filters' }) : null,
       h('span', { class: 'result-count', role: 'status', text: `${plural(data.runs.length, 'run')}${anyFilter ? ` of ${fmtInt(data.scanned)}` : ''}` }));
   }
 
   function runsTable(data, anyFilter) {
     if (!data.runs.length) {
       return h('div', { class: 'card' }, h('div', { class: 'empty' },
-        h('h2', { text: 'No runs match these filters' }),
-        h('p', { text: 'Try a different search term, or clear the filters to see every analysed run.' }),
-        h('button', { type: 'button', class: 'button', onclick: () => { history.replaceState(null, '', '#/'); route(); }, text: 'Clear filters' })));
+        h('h2', { text: anyFilter ? 'No runs match these filters' : 'No runs in this time window' }),
+        h('p', { text: anyFilter ? 'Try a different search term, or clear the filters to see every analysed run.' : 'Choose a longer window to see older runs.' }),
+        h('button', { type: 'button', class: 'button', onclick: () => { history.replaceState(null, '', '#/'); route(); }, text: anyFilter ? 'Clear filters' : 'Show newest runs' })));
     }
     const rows = data.runs.map((run, index) => {
       const when = fmtWhen(run.startedAt);
@@ -301,9 +321,13 @@
             h('th', { scope: 'col', class: 'num col-optional' }, 'Cost ', h('span', { class: 'est', text: 'EST.' })))),
           h('tbody', null, rows))),
       h('div', { class: 'table-foot' },
-        h('span', { text: data.totalSessions > data.scanned
-          ? `Showing the newest ${fmtInt(data.scanned)} of ${plural(data.totalSessions, 'session')}. Start with --limit <n> to analyse more.`
-          : `All ${plural(data.totalSessions, 'session')} analysed.` }),
+        h('span', { text: data.window
+          ? (data.window.capped
+            ? `Showing the newest ${fmtInt(data.scanned)} of ${plural(data.window.sessions, 'session')} in the last ${data.window.since}.`
+            : `All ${plural(data.window.sessions, 'session')} active in the last ${data.window.since} analysed, as agentops digest --since ${data.window.since} reads them.`)
+          : data.totalSessions > data.scanned
+            ? `Showing the newest ${fmtInt(data.scanned)} of ${plural(data.totalSessions, 'session')}. Pick a time window, or start with --limit <n>, to analyse more.`
+            : `All ${plural(data.totalSessions, 'session')} analysed.` }),
         h('span', { class: 'cost-total', text: `Cost total: ${data.kpis.costLabel || fmtCost(data.kpis.costUsd)}` }),
         h('span', { text: anyFilter ? 'KPIs reflect the filtered runs.' : 'Newest first.' })));
   }

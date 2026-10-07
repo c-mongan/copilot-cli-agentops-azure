@@ -3,6 +3,14 @@
 All notable changes to this project are recorded here. This is a preview
 project. Package versions stay at `0.1.0` until a package is published to npm.
 
+## Unreleased
+
+### Fixed
+
+- `agentops ui latest` (and `/api/runs/latest`) opens the run from your most recent `copilot-session launch` instead of another agent's busy session. It prefers the newest `native_run_*` ledger run, then the newest finished session, and picks a live session only when there is nothing else.
+- A running Copilot session is shown as Live, never Failed or Completed. Liveness now uses the session's `inuse.<pid>.lock` and treats `session.resume` after a `session.shutdown` as running again, so a brand-new session with no activity is Live, and a long-running resumed session is no longer marked failed.
+- The UI runs list has a time window (Newest N, 24 hours, 7 days, 30 days) kept in the URL (`#/?since=7d`). A window analyses every session in it (up to 5000, disclosed next to the cost if capped) with the same selection, start time and estimator as `agentops digest --since`, so the 7-day Copilot session count and cost match the digest.
+
 ## v0.3.2-preview: 2026-10-07
 
 Round-2 hardening: native-capture rough edges, a hiring-manager UX pass, and live re-verification of the Azure templates.
