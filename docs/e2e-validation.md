@@ -74,7 +74,81 @@ are not exported.
 Coverage and task outcome stay unverified by design. This run proves capture,
 delivery and readback; it does not prove that every span was captured.
 
-## CLI live E2E
+## Copilot CLI walkthrough (2026-10-07)
+
+Three real Copilot CLI 1.0.93 sessions (`claude-haiku-4.5`) ran against a small
+demo repository. The repository has a `divide` bug, and its test fails until the
+bug is fixed. Each session was launched with
+`agentops copilot-session launch --repo . --upload --yes --json -- -p "..."`.
+This starts a scoped strict Collector and runs Copilot with native
+OpenTelemetry, content capture off. It then publishes the metadata streams
+through the Data Collection Rule to Log Analytics. The daily publish cap was
+1 MiB.
+
+| Run | Scenario | Local rows (spans / events) | Azure rows | Result |
+|---|---|---|---|---|
+| 1 | Run the failing test | 65 / 14 | 65 / 14 | Accepted and read back |
+| 2 | Fix the bug and retest | 67 / 26 | 67 / 26 | Accepted and read back |
+| 3 | `sleep 12` test plus a `curl` the policy denied | 55 / 16 | 55 / 16 | Accepted and read back |
+
+What this verified:
+
+- **Delivery.** Azure accepted every stream. A KQL readback returned exactly the
+  local row counts for each run.
+- **Tokens.** For run 1, the `chat` spans sum to 60,243 input tokens: 15 fresh,
+  29,804 cache read and 30,424 cache write. That equals Copilot CLI's own
+  "↑ 60.2k" summary. The 351 output tokens also match.
+- **Latency.** The `sleep 12` shell step reads back as a 12,109 ms
+  `execute_tool` span.
+- **Failures.** The denied `curl` reads back with `ErrorType=denied` and
+  `Outcome=failed`. The local run view shows it as a failure signal with its
+  preceding context, with the content redacted.
+- **Privacy.** The metadata-only run view contains no prompt or command text.
+  We searched it for the prompt keywords and found no matches.
+
+![Run summary: failure signals, duration, model requests and token cards](images/cli-e2e-01-run-summary.png)
+
+![Failure detail with redacted context and the failures-only timeline filter](images/cli-e2e-02-failure-detail.png)
+
+![KQL readback: local and Azure row counts, tokens, denied tool and slowest tool per run](images/cli-e2e-03-kql-readback.png)
+
+A fourth, local-only session (no `--upload`) checked the README quickstart. It
+kept both streams `pending` with 0 upload attempts, and `copilot-session view`
+rendered the run.
+
+Limits found by this run:
+
+- **Cost.** Copilot CLI 1.0.93 emitted no cost or premium-request fields, so
+  `EstimatedCostUsd` stays null. Cost appears only where the runtime emits cost
+  metadata.
+- **Non-zero exits.** A shell command that exits non-zero, such as the failing
+  `node test.js`, is a successful `execute_tool` span. The local
+  `tool.execution_complete` event still records it as failed.
+- **Duplicate spans.** Each tool span is stored twice in `AgentOpsSpans_CL`,
+  with the same `SpanId`. Run 3 therefore shows two denied rows for one denied
+  `curl`.
+- **Token sums.** Sum tokens over `OperationName == 'chat'` rows or the
+  `session.shutdown` event. A naive sum over every span row over-counts by
+  roughly 60x, because span-event rows repeat the token attributes.
+- **Workbook usage.** The Azure Workbook reads usage from
+  `AgentOpsRunSummary_CL`. A launch-only run has no run summary there, so its
+  usage shows as "partial or unknown".
+- **Local report.** The `product build` report needs `agentops attach` first and
+  a ledger directory that contains only complete runs.
+
+Readback query:
+
+```kusto
+AgentOpsSpans_CL
+| where RunId in ("<run-1>", "<run-2>", "<run-3>")
+| summarize Rows=count(), ChatCalls=countif(OperationName == "chat"),
+    InTok=sumif(toint(InputTokens), OperationName == "chat"),
+    OutTok=sumif(toint(OutputTokens), OperationName == "chat"),
+    Denied=countif(ErrorType == "denied"),
+    MaxToolMs=maxif(DurationMs, OperationName startswith "execute_tool") by RunId
+```
+
+## CLI live E2E (scripted)
 
 ```bash
 agentops e2e run --live --browser-report --last 2h --json

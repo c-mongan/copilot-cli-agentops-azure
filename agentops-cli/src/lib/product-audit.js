@@ -47,12 +47,12 @@ function productAudit(options = {}) {
 
   checks.push(check(
     'privacy-defaults',
-    fileIncludes('README.md', ['without recording prompts', 'tool arguments', 'tool results by default'])
+    fileIncludes('docs/operator-guide.md', ['without recording prompts', 'tool arguments', 'tool results by default'])
       && fileIncludes('agentops-cli/src/lib/copilot/run-metadata.js', ['promptHash', 'commandHash'])
       && fileIncludes('copilot/copilot-observe', ['capture_content_enabled="${AGENTOPS_CAPTURE_CONTENT:-false}"', 'COPILOT_OTEL_CAPTURE_CONTENT="false"'])
       && fileIncludes('copilot/copilot-observe.ps1', ['$captureContentEnabled', 'COPILOT_OTEL_CAPTURE_CONTENT = "false"']),
     [
-      'README.md',
+      'docs/operator-guide.md',
       'agentops-cli/src/lib/copilot/run-metadata.js',
       'copilot/copilot-observe',
       'copilot/copilot-observe.ps1'
@@ -373,18 +373,18 @@ function productAudit(options = {}) {
   checks.push(check(
     'content-transcript-opt-in',
     fileIncludes('docs/grafana-ux-spec.md', ['AgentOpsContent_CL', 'opt-in'])
-      && fileIncludes('README.md', ['agentops content status', 'AgentOpsContent_CL'])
+      && fileIncludes('docs/operator-guide.md', ['agentops content status', 'AgentOpsContent_CL'])
       && fileIncludes('grafana/kql/content-viewer.kql', ['AgentOpsContent_CL', 'MessageText']),
-    ['docs/grafana-ux-spec.md', 'README.md', 'grafana/kql/content-viewer.kql'],
+    ['docs/grafana-ux-spec.md', 'docs/operator-guide.md', 'grafana/kql/content-viewer.kql'],
     []
   ));
 
   checks.push(check(
     'first-run-loop',
-    fileIncludes('README.md', ['agentops init --full --yes', 'agentops copilot', 'agentops open latest'])
+    fileIncludes('docs/operator-guide.md', ['agentops init --full --yes', 'agentops copilot', 'agentops open latest'])
       && fileIncludes('docs/release-checklist-v2.md', ['init --dry-run --provision-cloud', 'smoke --real-copilot'])
       && fileIncludes('agentops-cli/src/lib/setup-init.js', ['Everyday observed use: agentops copilot', 'Cloud provision failed at:']),
-    ['README.md', 'docs/release-checklist-v2.md', 'agentops-cli/src/lib/setup-init.js'],
+    ['docs/operator-guide.md', 'docs/release-checklist-v2.md', 'agentops-cli/src/lib/setup-init.js'],
     []
   ));
 
