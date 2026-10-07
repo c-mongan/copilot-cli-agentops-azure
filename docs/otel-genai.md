@@ -67,6 +67,9 @@ agentops copilot-session export-otel <session-id> --run-id <run-id> --endpoint h
 # Send to Application Insights through a short-lived local Collector (azuremonitor exporter)
 export APPI_CS="$(az monitor app-insights component show -g <rg> -a <app-insights> --query connectionString -o tsv)"
 agentops copilot-session export-otel <session-id> --run-id <run-id> --appinsights-connection-string-env APPI_CS --json
+
+# Re-running the same command sends nothing new; --force re-sends every span
+agentops copilot-session export-otel <session-id> --run-id <run-id> --appinsights-connection-string-env APPI_CS --force
 ```
 
 In `--appinsights-connection-string-env` mode, the CLI reads the connection string only from the named environment variable. It then starts `otelcol-contrib` from `~/.agentops/collector/bin` on loopback ports and gives it the secret through its process environment only. The generated config holds `${env:...}`, never the value. The CLI posts OTLP JSON, waits for the exporter to flush, stops the Collector and fails if the exporter logged errors.
@@ -113,7 +116,7 @@ The portal visual for this export has **not been captured yet**: it needs an int
 ## Limits
 
 - **Tokens:** `invoke_agent` carries the session total, which equals the sum of its `chat` spans. Sum one or the other, never both.
-- **Re-exporting** a session sends the same trace and span IDs again, and App Insights stores them as duplicate rows. Export each run once, or dedupe on `id` in KQL. Duplicate records within one export are dropped (a failure on any copy is kept).
+- **Re-exporting** is idempotent per destination. Trace and span IDs are the native Copilot IDs, so the same session always exports the same IDs. After a successful send, the CLI records a local marker in `~/.agentops/exports/otel/` keyed by session, run and a SHA-256 hash of the destination. A rerun to the same destination sends only spans not already sent, and skips with `skipped-already-exported` when nothing is new. `--force` re-sends every span, and App Insights then stores duplicate rows (dedupe on `id` in KQL). The marker holds the session ID, run ID, destination kind, the destination hash and hashed span identities. It never holds the endpoint URL or the connection string. `--dry-run` and `--output` never write it. Exports to a different destination, or from another machine, are not tracked. Duplicate records within one export are dropped (a failure on any copy is kept).
 - **Agent name:** Copilot CLI 1.0.93 does not record an agent name. Without `--agent-name`, every session shows as `GitHub Copilot CLI`.
 - **Parentage:** tools are siblings of `chat` under `invoke_agent`, as Copilot CLI emits them.
 - **Skipped records:** AgentOps script spans and other operations outside the GenAI model are skipped and counted (`non_genai_skipped`).
