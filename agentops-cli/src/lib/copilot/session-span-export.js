@@ -4,6 +4,9 @@ const { AGENTOPS_SCHEMA_VERSION } = require('../schema/agentops-attributes');
 const { dedupeNativeSpans } = require('./native-span-identity');
 
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+// Bounded error type for a shell tool call that Copilot reported as successful
+// even though the command exited non-zero. It is a warning, not a failure.
+const SHELL_NONZERO_EXIT = 'shell_nonzero_exit';
 const SESSION_SPAN_MAX_BYTES = 20 * 1024 * 1024;
 
 // Mirrors the DurationNs null-preserving pattern: absent/unparseable stays
@@ -41,8 +44,22 @@ function sessionToolContext(events = []) {
   return toolsByCallId;
 }
 
+// Only the numeric exit code is read; the command text and output are never touched.
+function nonZeroShellExitsByCallId(events = []) {
+  const exits = new Map();
+  for (const event of events) {
+    const data = event?.data || {};
+    if (event?.type !== 'tool.execution_complete' || typeof data.toolCallId !== 'string' || !data.toolCallId) continue;
+    const exitCode = data.shellExecution?.exitCode;
+    if (data.success === false || !Number.isSafeInteger(exitCode) || exitCode === 0) continue;
+    exits.set(data.toolCallId, exitCode);
+  }
+  return exits;
+}
+
 function enrichSpansWithSessionToolContext(spans = [], events = []) {
   const contexts = sessionToolContext(events);
+  const shellExits = nonZeroShellExitsByCallId(events);
   const toolSpansByCallId = new Map();
   for (const span of spans) {
     if (!span.toolCallId || !span.spanName?.startsWith('execute_tool ')) continue;
@@ -69,6 +86,10 @@ function enrichSpansWithSessionToolContext(spans = [], events = []) {
         mcpToolName: context.mcpToolName,
         toolCallEvidence: 'exact-session-tool-call-id'
       };
+    }
+    const shellExitCode = span.toolCallId && span.spanName?.startsWith('execute_tool ') ? shellExits.get(span.toolCallId) : undefined;
+    if (shellExitCode !== undefined && !span.failed && !span.errorType) {
+      span = { ...span, errorType: SHELL_NONZERO_EXIT };
     }
     if (span.match !== 'run-linked-script' || !span.scriptName) return span;
 
@@ -162,6 +183,7 @@ function spanRowsFromOtelSpans(spans, sessionId, runId) {
         ? Math.max(0, Math.round(span.end - span.start))
         : Math.round(Number(durationNs) / 1000000),
       DurationNs: durationNs === null ? null : Number(durationNs),
+      // A shell non-zero exit keeps Outcome 'ok' (Copilot reported success); ErrorType carries the warning.
       Outcome: span.failed ? 'failed' : span.outcome === 'unknown' ? 'unknown' : 'ok',
       LinkType: span.match === 'run-linked-script' ? 'run-id-logical-link' : 'native-session',
       SchemaVersion: AGENTOPS_SCHEMA_VERSION
@@ -310,4 +332,4 @@ function readSessionSpanRows(runDirectory, runId, sessionId) {
   return { spans: dedupeNativeSpans([...canonical.values()]), invalid };
 }
 
-module.exports = { enrichSpansWithSessionToolContext, readSessionSpanRows, sessionToolContext, spanRowsFromOtelSpans, writeSessionSpans };
+module.exports = { SHELL_NONZERO_EXIT, enrichSpansWithSessionToolContext, readSessionSpanRows, sessionToolContext, spanRowsFromOtelSpans, writeSessionSpans };

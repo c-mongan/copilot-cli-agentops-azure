@@ -123,7 +123,9 @@ Limits found by this run:
   metadata.
 - **Non-zero exits.** A shell command that exits non-zero, such as the failing
   `node test.js`, is a successful `execute_tool` span. The local
-  `tool.execution_complete` event still records it as failed.
+  `tool.execution_complete` event still records it as failed. AgentOps now
+  joins that exit code by tool call ID and sets `ErrorType` /
+  `error.type` to `shell_nonzero_exit` on the span, as a warning.
 - **Duplicate spans.** Each tool span is stored twice in `AgentOpsSpans_CL`,
   with the same `SpanId`. Run 3 therefore shows two denied rows for one denied
   `curl`.

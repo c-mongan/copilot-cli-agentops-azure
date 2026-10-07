@@ -232,8 +232,9 @@ function normalizeLedgerSpan(row) {
     cacheWrite: nullableCount(row.CacheWriteTokens),
     start,
     end: start + durationMs,
-    failed: row.Outcome === 'failed' || Boolean(row.ErrorType),
-    outcome: row.Outcome === 'failed' || row.ErrorType ? (safeLabel(row.ErrorType, 40) || 'failed') : 'ok'
+    failed: row.Outcome === 'failed' || Boolean(row.ErrorType) && row.ErrorType !== 'shell_nonzero_exit',
+    outcome: row.Outcome !== 'failed' && row.ErrorType === 'shell_nonzero_exit' ? 'nonzero_exit'
+      : row.Outcome === 'failed' || row.ErrorType ? (safeLabel(row.ErrorType, 40) || 'failed') : 'ok'
   };
 }
 
@@ -402,7 +403,8 @@ function failureSentence(group) {
 }
 
 function nonZeroExitSpans(toolSpans) {
-  return toolSpans.filter(span => span.status === 'ok' && Number.isSafeInteger(span.attrs.exitCode) && span.attrs.exitCode !== 0);
+  return toolSpans.filter(span => span.status === 'ok'
+    && (Number.isSafeInteger(span.attrs.exitCode) && span.attrs.exitCode !== 0 || span.attrs.outcome === 'nonzero_exit'));
 }
 
 // Builds a deduplicated span tree (session -> subagents/turns -> tools/hooks/chat)
@@ -939,6 +941,7 @@ module.exports = {
   failureSentence,
   matchesFilters,
   minimalEvent,
+  normalizeLedgerSpan,
   percentile,
   publicRow,
   readLedgerIndex,
