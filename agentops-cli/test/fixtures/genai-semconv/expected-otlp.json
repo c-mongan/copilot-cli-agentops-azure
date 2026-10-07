@@ -1,0 +1,451 @@
+{
+  "resourceSpans": [
+    {
+      "resource": {
+        "attributes": [
+          {
+            "key": "service.name",
+            "value": {
+              "stringValue": "github-copilot-cli"
+            }
+          }
+        ]
+      },
+      "schemaUrl": "https://opentelemetry.io/schemas/1.41.0",
+      "scopeSpans": [
+        {
+          "scope": {
+            "name": "agentops.genai-export",
+            "version": "0.1.0"
+          },
+          "schemaUrl": "https://opentelemetry.io/schemas/1.41.0",
+          "spans": [
+            {
+              "traceId": "8e448dcef3b0e3f5336d47ecc1e304cf",
+              "spanId": "5f33b1c18707c7ad",
+              "name": "invoke_agent GitHub Copilot CLI",
+              "kind": 1,
+              "startTimeUnixNano": "1791369907494000000",
+              "endTimeUnixNano": "1791369928123000000",
+              "attributes": [
+                {
+                  "key": "gen_ai.operation.name",
+                  "value": {
+                    "stringValue": "invoke_agent"
+                  }
+                },
+                {
+                  "key": "gen_ai.provider.name",
+                  "value": {
+                    "stringValue": "github"
+                  }
+                },
+                {
+                  "key": "gen_ai.system",
+                  "value": {
+                    "stringValue": "github"
+                  }
+                },
+                {
+                  "key": "gen_ai.conversation.id",
+                  "value": {
+                    "stringValue": "00000000-0000-4000-8000-00000000f1a7"
+                  }
+                },
+                {
+                  "key": "gen_ai.agent.name",
+                  "value": {
+                    "stringValue": "GitHub Copilot CLI"
+                  }
+                },
+                {
+                  "key": "gen_ai.usage.input_tokens",
+                  "value": {
+                    "intValue": "60177"
+                  }
+                },
+                {
+                  "key": "gen_ai.usage.output_tokens",
+                  "value": {
+                    "intValue": "525"
+                  }
+                },
+                {
+                  "key": "agentops.run.id",
+                  "value": {
+                    "stringValue": "native_run_fixture_0000000001"
+                  }
+                },
+                {
+                  "key": "agentops.agent.name_source",
+                  "value": {
+                    "stringValue": "default"
+                  }
+                },
+                {
+                  "key": "agentops.semconv.version",
+                  "value": {
+                    "stringValue": "1.41.0"
+                  }
+                }
+              ],
+              "status": {
+                "code": 0
+              }
+            },
+            {
+              "traceId": "8e448dcef3b0e3f5336d47ecc1e304cf",
+              "spanId": "30ea7c140884bf12",
+              "parentSpanId": "5f33b1c18707c7ad",
+              "name": "chat claude-haiku-4.5",
+              "kind": 3,
+              "startTimeUnixNano": "1791369908003000000",
+              "endTimeUnixNano": "1791369913760000000",
+              "attributes": [
+                {
+                  "key": "gen_ai.operation.name",
+                  "value": {
+                    "stringValue": "chat"
+                  }
+                },
+                {
+                  "key": "gen_ai.provider.name",
+                  "value": {
+                    "stringValue": "github"
+                  }
+                },
+                {
+                  "key": "gen_ai.system",
+                  "value": {
+                    "stringValue": "github"
+                  }
+                },
+                {
+                  "key": "gen_ai.conversation.id",
+                  "value": {
+                    "stringValue": "00000000-0000-4000-8000-00000000f1a7"
+                  }
+                },
+                {
+                  "key": "gen_ai.agent.name",
+                  "value": {
+                    "stringValue": "GitHub Copilot CLI"
+                  }
+                },
+                {
+                  "key": "gen_ai.request.model",
+                  "value": {
+                    "stringValue": "claude-haiku-4.5"
+                  }
+                },
+                {
+                  "key": "gen_ai.response.model",
+                  "value": {
+                    "stringValue": "claude-haiku-4.5"
+                  }
+                },
+                {
+                  "key": "gen_ai.usage.input_tokens",
+                  "value": {
+                    "intValue": "29820"
+                  }
+                },
+                {
+                  "key": "gen_ai.usage.output_tokens",
+                  "value": {
+                    "intValue": "441"
+                  }
+                },
+                {
+                  "key": "gen_ai.usage.cache_read.input_tokens",
+                  "value": {
+                    "intValue": "13920"
+                  }
+                },
+                {
+                  "key": "agentops.run.id",
+                  "value": {
+                    "stringValue": "native_run_fixture_0000000001"
+                  }
+                },
+                {
+                  "key": "agentops.agent.name_source",
+                  "value": {
+                    "stringValue": "default"
+                  }
+                },
+                {
+                  "key": "agentops.semconv.version",
+                  "value": {
+                    "stringValue": "1.41.0"
+                  }
+                }
+              ],
+              "status": {
+                "code": 0
+              }
+            },
+            {
+              "traceId": "8e448dcef3b0e3f5336d47ecc1e304cf",
+              "spanId": "86483cd9903c50ac",
+              "parentSpanId": "5f33b1c18707c7ad",
+              "name": "execute_tool bash",
+              "kind": 1,
+              "startTimeUnixNano": "1791369913769000000",
+              "endTimeUnixNano": "1791369925878000000",
+              "attributes": [
+                {
+                  "key": "gen_ai.operation.name",
+                  "value": {
+                    "stringValue": "execute_tool"
+                  }
+                },
+                {
+                  "key": "gen_ai.provider.name",
+                  "value": {
+                    "stringValue": "github"
+                  }
+                },
+                {
+                  "key": "gen_ai.system",
+                  "value": {
+                    "stringValue": "github"
+                  }
+                },
+                {
+                  "key": "gen_ai.conversation.id",
+                  "value": {
+                    "stringValue": "00000000-0000-4000-8000-00000000f1a7"
+                  }
+                },
+                {
+                  "key": "gen_ai.agent.name",
+                  "value": {
+                    "stringValue": "GitHub Copilot CLI"
+                  }
+                },
+                {
+                  "key": "gen_ai.tool.name",
+                  "value": {
+                    "stringValue": "bash"
+                  }
+                },
+                {
+                  "key": "gen_ai.tool.call.id",
+                  "value": {
+                    "stringValue": "toolu_01G3BeJ8rqSt3ZJRroNAZ7Wa"
+                  }
+                },
+                {
+                  "key": "gen_ai.tool.type",
+                  "value": {
+                    "stringValue": "function"
+                  }
+                },
+                {
+                  "key": "agentops.run.id",
+                  "value": {
+                    "stringValue": "native_run_fixture_0000000001"
+                  }
+                },
+                {
+                  "key": "agentops.agent.name_source",
+                  "value": {
+                    "stringValue": "default"
+                  }
+                },
+                {
+                  "key": "agentops.semconv.version",
+                  "value": {
+                    "stringValue": "1.41.0"
+                  }
+                }
+              ],
+              "status": {
+                "code": 0
+              }
+            },
+            {
+              "traceId": "8e448dcef3b0e3f5336d47ecc1e304cf",
+              "spanId": "494963f67f367043",
+              "parentSpanId": "5f33b1c18707c7ad",
+              "name": "execute_tool bash",
+              "kind": 1,
+              "startTimeUnixNano": "1791369913771000000",
+              "endTimeUnixNano": "1791369913830000000",
+              "attributes": [
+                {
+                  "key": "gen_ai.operation.name",
+                  "value": {
+                    "stringValue": "execute_tool"
+                  }
+                },
+                {
+                  "key": "gen_ai.provider.name",
+                  "value": {
+                    "stringValue": "github"
+                  }
+                },
+                {
+                  "key": "gen_ai.system",
+                  "value": {
+                    "stringValue": "github"
+                  }
+                },
+                {
+                  "key": "gen_ai.conversation.id",
+                  "value": {
+                    "stringValue": "00000000-0000-4000-8000-00000000f1a7"
+                  }
+                },
+                {
+                  "key": "gen_ai.agent.name",
+                  "value": {
+                    "stringValue": "GitHub Copilot CLI"
+                  }
+                },
+                {
+                  "key": "gen_ai.tool.name",
+                  "value": {
+                    "stringValue": "bash"
+                  }
+                },
+                {
+                  "key": "gen_ai.tool.call.id",
+                  "value": {
+                    "stringValue": "toolu_01VF9qXhXzjQSVnAnfsbZWub"
+                  }
+                },
+                {
+                  "key": "gen_ai.tool.type",
+                  "value": {
+                    "stringValue": "function"
+                  }
+                },
+                {
+                  "key": "error.type",
+                  "value": {
+                    "stringValue": "denied"
+                  }
+                },
+                {
+                  "key": "agentops.run.id",
+                  "value": {
+                    "stringValue": "native_run_fixture_0000000001"
+                  }
+                },
+                {
+                  "key": "agentops.agent.name_source",
+                  "value": {
+                    "stringValue": "default"
+                  }
+                },
+                {
+                  "key": "agentops.semconv.version",
+                  "value": {
+                    "stringValue": "1.41.0"
+                  }
+                }
+              ],
+              "status": {
+                "code": 2
+              }
+            },
+            {
+              "traceId": "8e448dcef3b0e3f5336d47ecc1e304cf",
+              "spanId": "f19431211f48ee61",
+              "parentSpanId": "5f33b1c18707c7ad",
+              "name": "chat claude-haiku-4.5",
+              "kind": 3,
+              "startTimeUnixNano": "1791369925915000000",
+              "endTimeUnixNano": "1791369928028000000",
+              "attributes": [
+                {
+                  "key": "gen_ai.operation.name",
+                  "value": {
+                    "stringValue": "chat"
+                  }
+                },
+                {
+                  "key": "gen_ai.provider.name",
+                  "value": {
+                    "stringValue": "github"
+                  }
+                },
+                {
+                  "key": "gen_ai.system",
+                  "value": {
+                    "stringValue": "github"
+                  }
+                },
+                {
+                  "key": "gen_ai.conversation.id",
+                  "value": {
+                    "stringValue": "00000000-0000-4000-8000-00000000f1a7"
+                  }
+                },
+                {
+                  "key": "gen_ai.agent.name",
+                  "value": {
+                    "stringValue": "GitHub Copilot CLI"
+                  }
+                },
+                {
+                  "key": "gen_ai.request.model",
+                  "value": {
+                    "stringValue": "claude-haiku-4.5"
+                  }
+                },
+                {
+                  "key": "gen_ai.response.model",
+                  "value": {
+                    "stringValue": "claude-haiku-4.5"
+                  }
+                },
+                {
+                  "key": "gen_ai.usage.input_tokens",
+                  "value": {
+                    "intValue": "30357"
+                  }
+                },
+                {
+                  "key": "gen_ai.usage.output_tokens",
+                  "value": {
+                    "intValue": "84"
+                  }
+                },
+                {
+                  "key": "gen_ai.usage.cache_read.input_tokens",
+                  "value": {
+                    "intValue": "29810"
+                  }
+                },
+                {
+                  "key": "agentops.run.id",
+                  "value": {
+                    "stringValue": "native_run_fixture_0000000001"
+                  }
+                },
+                {
+                  "key": "agentops.agent.name_source",
+                  "value": {
+                    "stringValue": "default"
+                  }
+                },
+                {
+                  "key": "agentops.semconv.version",
+                  "value": {
+                    "stringValue": "1.41.0"
+                  }
+                }
+              ],
+              "status": {
+                "code": 0
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

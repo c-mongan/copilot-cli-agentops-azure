@@ -65,6 +65,7 @@ See [privacy modes](docs/privacy-modes.md), [secure by default](docs/secure-by-d
 - [E2E validation](docs/e2e-validation.md): CLI and VS Code walkthroughs with screenshots
 - [VS Code native capture extension](extensions/agentops-native/README.md)
 - [Azure Workbook](docs/enterprise-workbook.md), [Grafana tour](docs/grafana-dashboard-tour-v2.md) and [KQL query library](docs/kql-query-library.md)
+- [OpenTelemetry GenAI export](docs/otel-genai.md): send sessions to the App Insights Agents (preview) view
 - [Telemetry schema](docs/telemetry-schema.md) and the [documentation index](docs/README.md)
 - [Changelog](CHANGELOG.md)
 

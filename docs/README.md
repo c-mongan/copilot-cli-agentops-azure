@@ -75,12 +75,13 @@ The master plan is the delivery and acceptance authority. The full requirements 
 
 1. [Agent run data model](agent-run-data-model.md)
 2. [OTel GenAI and MCP schema](otel-genai-mcp-schema.md)
-3. [Copilot CLI instrumentation](copilot-cli-instrumentation.md)
-4. [Copilot SDK adapter](copilot-sdk-adapter.md)
-5. [MCP observability proxy](mcp-observability-proxy.md)
-6. [Azure V2 ingestion](azure-v2-ingestion.md)
-7. [Azure production hardening](azure-production-hardening.md)
-8. [Azure schema migration recovery](azure-schema-migration-recovery.md)
+3. [OpenTelemetry GenAI export to the App Insights Agents view](otel-genai.md)
+4. [Copilot CLI instrumentation](copilot-cli-instrumentation.md)
+5. [Copilot SDK adapter](copilot-sdk-adapter.md)
+6. [MCP observability proxy](mcp-observability-proxy.md)
+7. [Azure V2 ingestion](azure-v2-ingestion.md)
+8. [Azure production hardening](azure-production-hardening.md)
+9. [Azure schema migration recovery](azure-schema-migration-recovery.md)
 
 ### Coding Agent Or LLM
 
