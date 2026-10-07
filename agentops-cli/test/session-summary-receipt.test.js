@@ -13,6 +13,35 @@ function receipt() {
   });
 }
 
+for (const [durationMs, expected] of [
+  [250, '250ms'],
+  [1250, '1.3s'],
+  [59499, '59s'],
+  [59500, '1m 0s'],
+  [59950, '1m 0s'],
+  [60000, '1m 0s'],
+  [60499, '1m 0s'],
+  [60500, '1m 1s'],
+  [3599499, '59m 59s'],
+  [3599500, '60m 0s'],
+  [3600000, '60m 0s'],
+  [3629500, '60m 30s'],
+  [3629999, '60m 30s'],
+  [3630000, '60m 30s'],
+  [7199500, '120m 0s'],
+  [NaN, 'not in this data']
+]) {
+  test(`receipt duration carries rounded seconds: ${durationMs}ms`, () => {
+    const api = receipt();
+    const summary = api.latestSessionSummary({
+      source: 'local',
+      rows: [{ TimeGenerated: '2026-08-03T12:00:00.000Z', SessionId: 'duration-session' }]
+    });
+    summary.session.duration_ms = durationMs;
+    assert.equal(api.renderLatest(summary).split('\n').find(line => line.startsWith('Time: ')), `Time: ${expected}`);
+  });
+}
+
 test('open links prefer the native Application Insights resource before Grafana', () => {
   const api = receipt();
   const links = api.openLinksSummary({ session: null });

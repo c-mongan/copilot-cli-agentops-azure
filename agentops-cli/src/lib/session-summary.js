@@ -361,7 +361,7 @@ function createSessionSummary(config = {}) {
   function readableDuration(durationMs) {
     if (!Number.isFinite(durationMs)) return 'not in this data';
     if (durationMs < 1000) return `${Math.round(durationMs)}ms`;
-    if (durationMs < 60000) return `${(durationMs / 1000).toFixed(durationMs < 10000 ? 1 : 0)}s`;
+    if (durationMs < 10000) return `${(durationMs / 1000).toFixed(1)}s`;
     const totalSeconds = Math.round(durationMs / 1000);
     if (totalSeconds < 60) return `${totalSeconds}s`;
     return `${Math.floor(totalSeconds / 60)}m ${totalSeconds % 60}s`;
