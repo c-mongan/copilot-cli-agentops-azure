@@ -1,5 +1,7 @@
 # Native monitoring and practical value audit
 
+> Dated research snapshot (2026-10-07, before v0.2.0-preview). For what has shipped since, see [CHANGELOG.md](../../CHANGELOG.md).
+
 Audit date: 2026-10-07. Baseline: main at
 `4e1d3fbccd96a96e96aa027c89c02adcfd9f70c6` (PR #171).
 

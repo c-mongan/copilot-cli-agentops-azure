@@ -1,5 +1,7 @@
 # Branch integration and upstream reuse audit
 
+> Dated research snapshot (2026-10-07, before v0.2.0-preview). For what has shipped since, see [CHANGELOG.md](../../CHANGELOG.md).
+
 Date: 2026-10-07. Repository: c-mongan/copilot-cli-agentops-azure.
 Baseline: `4e1d3fbccd96a96e96aa027c89c02adcfd9f70c6`.
 Scope: full fetched Git history and source inspection; no branch merges,

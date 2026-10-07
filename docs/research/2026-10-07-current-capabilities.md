@@ -1,5 +1,7 @@
 # AgentOps: current Microsoft capabilities and product direction
 
+> Dated research snapshot (2026-10-07, before v0.2.0-preview). For what has shipped since, see [CHANGELOG.md](../../CHANGELOG.md).
+
 Checked against first-party documentation on 2026-10-07 UTC. This is a
 documentation and repository assessment, not evidence of deployment or feature
 availability in Conor's subscription. Documentation update dates below are not

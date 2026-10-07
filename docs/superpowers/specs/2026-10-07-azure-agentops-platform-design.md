@@ -1,6 +1,14 @@
 # Azure AgentOps: dashboard, conversational investigation and evaluation
 
 Status: architecture direction accepted for publication; not implemented or cloud-qualified.
+
+> **Dated snapshot (written the morning of 2026-10-07).** Later the same day,
+> v0.2.0-preview to v0.3.1-preview shipped part of this direction: `agentops
+> doctor`, the local web UI (`agentops ui`), OTel `gen_ai.*` span export for the
+> Application Insights Agents view, a portable Grafana dashboard, a metadata-only
+> Deploy to Azure template, and `agentops digest`. See [CHANGELOG.md](../../../CHANGELOG.md).
+> The workbench, Copilot analyst and controlled-experiment milestones below are
+> still unbuilt. Read the rest as the design rationale at that time.
 Date: 2026-10-07.
 Code inspected: main `4e1d3fbccd96a96e96aa027c89c02adcfd9f70c6` plus
 local collector-label patch `0217469`. That code patch is separate from this
