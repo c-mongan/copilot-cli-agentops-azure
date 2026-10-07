@@ -62,6 +62,7 @@ function parseCopilotSessionArgs(args = []) {
     agentName: optionValue(optionArgs, '--agent-name'),
     id: optionValue(optionArgs, '--id') || legacy.customEventId(),
     dryRun: optionArgs.includes('--dry-run'),
+    force: optionArgs.includes('--force'),
     json: parseJsonFlag(optionArgs),
     commandArgs
   };
@@ -463,6 +464,7 @@ async function copilotSessionCommand(args = [], dependencies = {}) {
       agentName: options.agentName,
       output: options.output,
       dryRun: options.dryRun,
+      force: options.force,
       endpoint: options.explicitEndpoint ? options.endpoint : undefined,
       connectionStringEnv: options.connectionStringEnv
     });

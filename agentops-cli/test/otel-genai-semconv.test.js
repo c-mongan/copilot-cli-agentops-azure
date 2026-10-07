@@ -15,6 +15,7 @@ const {
 const {
   azureMonitorConfig,
   connectionStringFromEnv,
+  exportMarkerPath,
   exportSessionGenAi,
   loadSessionSpans,
   startAzureMonitorCollector,
@@ -205,7 +206,7 @@ test('Azure Monitor path reads the connection string from a named env var only',
   const posted = [];
   const result = await exportSessionGenAi({
     sessionId: SESSION_ID, runId: RUN_ID, agentopsHome: fixtureHome(t), eventsFile: path.join(FIXTURE, 'missing-events.jsonl'),
-    connectionStringEnv: 'APPI_CS', flushWaitMs: 0,
+    connectionStringEnv: 'APPI_CS', env: { APPI_CS: value }, flushWaitMs: 0,
     startCollector: async () => ({ endpoint: 'http://127.0.0.1:40001', stop: async () => { stopped = true; return { exportErrors: 0 }; } }),
     fetchImpl: async url => { posted.push(url); return { ok: true, status: 200, text: async () => '' }; }
   });
@@ -314,4 +315,93 @@ test('Azure Monitor Collector stops and removes its scoped directory after a hea
   const stopped = await collector.stop();
   assert.equal(stopped.exportErrors, 0);
   assert.deepEqual(fs.readdirSync(path.join(home, 'scoped-collectors')), []);
+});
+
+function okFetch(calls) {
+  return async (url, init) => {
+    calls.push({ url, body: JSON.parse(init.body) });
+    return { ok: true, status: 200, text: async () => '{}' };
+  };
+}
+
+function sentSpanIds(call) {
+  return call.body.resourceSpans[0].scopeSpans[0].spans.map(span => `${span.traceId}:${span.spanId}`);
+}
+
+test('export-otel: the same session exports byte-identical trace and span IDs every time', async t => {
+  const home = fixtureHome(t);
+  const base = { sessionId: SESSION_ID, runId: RUN_ID, agentopsHome: home, eventsFile: path.join(FIXTURE, 'missing-events.jsonl'), dryRun: true };
+  await exportSessionGenAi({ ...base, output: path.join(home, 'first.json') });
+  await exportSessionGenAi({ ...base, output: path.join(home, 'second.json') });
+  assert.equal(fs.readFileSync(path.join(home, 'first.json'), 'utf8'), fs.readFileSync(path.join(home, 'second.json'), 'utf8'));
+  assert.equal(fs.existsSync(path.join(home, 'exports')), false, '--dry-run and --output never write the export marker');
+  await exportSessionGenAi({ ...base, dryRun: false, output: path.join(home, 'third.json') });
+  assert.equal(fs.existsSync(path.join(home, 'exports')), false, '--output alone never writes the export marker');
+});
+
+test('export-otel: a second export to the same destination is skipped; --force re-sends', async t => {
+  const home = fixtureHome(t);
+  const calls = [];
+  const endpoint = 'http://127.0.0.1:4318/?token=secret-value';
+  const base = { sessionId: SESSION_ID, runId: RUN_ID, agentopsHome: home, eventsFile: path.join(FIXTURE, 'missing-events.jsonl'), endpoint, fetchImpl: okFetch(calls) };
+
+  const first = await exportSessionGenAi(base);
+  assert.equal(first.delivery, 'otlp-http');
+  assert.equal(first.sent_spans, 5);
+  assert.equal(first.already_exported, 0);
+  const marker = fs.readFileSync(first.marker, 'utf8');
+  assert.equal(first.marker, exportMarkerPath(home, SESSION_ID, RUN_ID, JSON.parse(marker).destination_hash));
+  assert.doesNotMatch(marker, /127\.0\.0\.1|4318|secret-value|token/);
+  assert.equal(JSON.parse(marker).span_identities.length, 5);
+  if (process.platform !== 'win32') assert.equal(fs.statSync(first.marker).mode & 0o777, 0o600);
+
+  const second = await exportSessionGenAi(base);
+  assert.equal(second.delivery, 'skipped-already-exported');
+  assert.equal(second.sent_spans, 0);
+  assert.equal(second.already_exported, 5);
+  assert.equal(calls.length, 1, 'skipped export sends nothing');
+  assert.match(require('../src/lib/copilot/session-genai-export').renderGenAiExport(second), /Already exported.*--force/);
+
+  const forced = await exportSessionGenAi({ ...base, force: true });
+  assert.equal(forced.delivery, 'otlp-http');
+  assert.equal(forced.sent_spans, 5);
+  assert.equal(calls.length, 2);
+  assert.deepEqual(sentSpanIds(calls[1]), sentSpanIds(calls[0]), 'forced re-send reuses identical IDs');
+
+  const other = await exportSessionGenAi({ ...base, endpoint: 'http://127.0.0.1:4319' });
+  assert.equal(other.delivery, 'otlp-http', 'a different destination is not skipped');
+  assert.equal(calls.length, 3);
+});
+
+test('export-otel: only spans not already sent are sent after the session grows', async t => {
+  const home = fixtureHome(t);
+  const calls = [];
+  const base = { sessionId: SESSION_ID, runId: RUN_ID, agentopsHome: home, eventsFile: path.join(FIXTURE, 'missing-events.jsonl'), endpoint: 'http://127.0.0.1:4318', fetchImpl: okFetch(calls) };
+  const first = await exportSessionGenAi(base);
+  const marker = JSON.parse(fs.readFileSync(first.marker, 'utf8'));
+  marker.span_identities = marker.span_identities.slice(0, 3);
+  fs.writeFileSync(first.marker, JSON.stringify(marker));
+  const second = await exportSessionGenAi(base);
+  assert.equal(second.sent_spans, 2);
+  assert.equal(second.already_exported, 3);
+  assert.equal(sentSpanIds(calls[1]).length, 2);
+  assert.equal(JSON.parse(fs.readFileSync(first.marker, 'utf8')).span_identities.length, 5);
+});
+
+test('export-otel: a failed send writes no marker, and the Azure marker never holds the connection string', async t => {
+  const home = fixtureHome(t);
+  const base = { sessionId: SESSION_ID, runId: RUN_ID, agentopsHome: home, eventsFile: path.join(FIXTURE, 'missing-events.jsonl') };
+  await assert.rejects(exportSessionGenAi({ ...base, endpoint: 'http://127.0.0.1:4318', fetchImpl: async () => ({ ok: false, status: 503, text: async () => '' }) }), /HTTP 503/);
+  assert.equal(fs.existsSync(path.join(home, 'exports')), false);
+
+  const value = 'InstrumentationKey=00000000-0000-0000-0000-00000000c0de;IngestionEndpoint=https://example.invalid/';
+  const azure = { ...base, connectionStringEnv: 'APPI_CS', env: { APPI_CS: value }, flushWaitMs: 0, fetchImpl: okFetch([]) };
+  let starts = 0;
+  const startCollector = async () => { starts += 1; return { endpoint: 'http://127.0.0.1:40001', stop: async () => ({ exportErrors: 0 }) }; };
+  const sent = await exportSessionGenAi({ ...azure, startCollector });
+  assert.equal(sent.delivery, 'azure-monitor-via-local-collector');
+  assert.doesNotMatch(fs.readFileSync(sent.marker, 'utf8'), /InstrumentationKey|c0de|example\.invalid|APPI_CS/);
+  const skipped = await exportSessionGenAi({ ...azure, startCollector });
+  assert.equal(skipped.delivery, 'skipped-already-exported');
+  assert.equal(starts, 1, 'no Collector is started when nothing needs sending');
 });

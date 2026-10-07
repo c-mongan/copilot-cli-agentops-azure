@@ -60,6 +60,7 @@ test('copilot session command library parses args and renders enrichment summary
     endpoint: 'http://127.0.0.1:4319',
     id: 'import-1',
     dryRun: true,
+    force: false,
     json: true,
     commandArgs: []
   });

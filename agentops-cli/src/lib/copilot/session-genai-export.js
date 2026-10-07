@@ -1,4 +1,5 @@
 const childProcess = require('node:child_process');
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const net = require('node:net');
 const path = require('node:path');
@@ -16,6 +17,8 @@ const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const ENV_NAME = /^[A-Z_][A-Z0-9_]{0,127}$/;
 const CHILD_ENV = 'AGENTOPS_GENAI_EXPORT_CONNECTION_STRING';
 const MAX_BODY_BYTES = 4 * 1024 * 1024;
+const EXPORT_MARKER_VERSION = 1;
+const EXPORT_MARKER_MAX_BYTES = 4 * 1024 * 1024;
 const packageVersion = require('../../../package.json').version;
 
 function freePort() {
@@ -124,6 +127,49 @@ function connectionStringFromEnv(envName, env = process.env) {
   return value;
 }
 
+function sha256(text) {
+  return crypto.createHash('sha256').update(text).digest('hex');
+}
+
+// Identifies the destination by a one-way hash only. The endpoint URL and the
+// connection string are never written to the marker.
+function exportDestination(options = {}) {
+  if (options.connectionStringEnv) {
+    const value = connectionStringFromEnv(options.connectionStringEnv, options.env || process.env);
+    return { kind: 'azure-monitor', hash: sha256(`agentops-export-otel\u0000azure-monitor\u0000${value}`) };
+  }
+  if (options.endpoint) return { kind: 'otlp-http', hash: sha256(`agentops-export-otel\u0000otlp-http\u0000${tracesUrl(options.endpoint)}`) };
+  return null;
+}
+
+function exportMarkerPath(home, sessionId, runId, destinationHash) {
+  const key = sha256(`${sessionId}\u0000${runId}\u0000${destinationHash}`).slice(0, 32);
+  return path.join(home || defaultAgentopsHome, 'exports', 'otel', `${key}.json`);
+}
+
+function exportedSpanIdentity(span) {
+  return sha256(`${span.traceId}:${span.spanId}`).slice(0, 32);
+}
+
+// A missing, unreadable or mismatched marker counts as "not exported yet".
+function readExportMarker(file, { sessionId, runId, destination }) {
+  let stat;
+  try { stat = fs.lstatSync(file); } catch { return null; }
+  if (!stat.isFile() || stat.size > EXPORT_MARKER_MAX_BYTES) return null;
+  let marker;
+  try { marker = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return null; }
+  if (marker?.schema_version !== EXPORT_MARKER_VERSION || marker.session_id !== sessionId || marker.run_id !== runId
+    || marker.destination_hash !== destination.hash || !Array.isArray(marker.span_identities)) return null;
+  return marker;
+}
+
+function writeExportMarker(file, marker) {
+  fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+  const temporary = `${file}.${process.pid}.${crypto.randomBytes(4).toString('hex')}.tmp`;
+  fs.writeFileSync(temporary, `${JSON.stringify(marker, null, 2)}\n`, { flag: 'wx', mode: 0o600 });
+  fs.renameSync(temporary, file);
+}
+
 async function waitForExit(pid, timeoutMs) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -218,11 +264,33 @@ async function exportSessionGenAi(options = {}) {
     result.output = output;
   }
   if (options.dryRun) return { ...result, delivery: 'dry-run' };
-  if (options.connectionStringEnv) {
+  const destination = exportDestination(options);
+  if (!destination) {
+    if (result.output) return { ...result, delivery: 'file' };
+    throw new Error('export-otel requires --endpoint <otlp-http-url>, --appinsights-connection-string-env <VAR>, --output <file.json> or --dry-run');
+  }
+
+  // Re-running export for the same session, run and destination sends only spans
+  // not already sent; --force re-sends everything.
+  const markerFile = exportMarkerPath(options.agentopsHome, options.sessionId, options.runId, destination.hash);
+  const previous = readExportMarker(markerFile, { sessionId: options.sessionId, runId: options.runId, destination });
+  const alreadySent = new Set(options.force ? [] : previous?.span_identities || []);
+  const pending = genAi.spans.filter(span => !alreadySent.has(exportedSpanIdentity(span)));
+  const exportState = {
+    destination_kind: destination.kind,
+    already_exported: genAi.spans.length - pending.length,
+    previously_exported_at: previous?.exported_at || null,
+    forced: Boolean(options.force)
+  };
+  if (!pending.length) return { ...result, ...exportState, sent_spans: 0, delivery: 'skipped-already-exported', marker: markerFile };
+  const sendRequest = pending.length === genAi.spans.length ? request : toOtlpTraceRequest(pending, {}, packageVersion);
+
+  let delivered;
+  if (destination.kind === 'azure-monitor') {
     const collector = await (options.startCollector || startAzureMonitorCollector)(options);
     let sent;
     try {
-      sent = await postOtlpJson(collector.endpoint, request, options);
+      sent = await postOtlpJson(collector.endpoint, sendRequest, options);
       await sleep(options.flushWaitMs ?? 3000);
     } catch (error) {
       await collector.stop({ keep: true });
@@ -230,20 +298,39 @@ async function exportSessionGenAi(options = {}) {
     }
     const stopped = await collector.stop();
     if (stopped.exportErrors) throw new Error(`Azure Monitor exporter logged ${stopped.exportErrors} export error(s); spans may not have been ingested`);
-    return { ...result, delivery: 'azure-monitor-via-local-collector', http_status: sent.status, bytes: sent.bytes };
+    delivered = { delivery: 'azure-monitor-via-local-collector', http_status: sent.status, bytes: sent.bytes };
+  } else {
+    const sent = await postOtlpJson(options.endpoint, sendRequest, options);
+    delivered = { delivery: 'otlp-http', http_status: sent.status, bytes: sent.bytes };
   }
-  if (!options.endpoint) {
-    if (result.output) return { ...result, delivery: 'file' };
-    throw new Error('export-otel requires --endpoint <otlp-http-url>, --appinsights-connection-string-env <VAR>, --output <file.json> or --dry-run');
-  }
-  const sent = await postOtlpJson(options.endpoint, request, options);
-  return { ...result, delivery: 'otlp-http', http_status: sent.status, bytes: sent.bytes };
+  const identities = new Set(previous?.span_identities || []);
+  for (const span of pending) identities.add(exportedSpanIdentity(span));
+  const exportedAt = new Date().toISOString();
+  writeExportMarker(markerFile, {
+    schema_version: EXPORT_MARKER_VERSION,
+    session_id: options.sessionId,
+    run_id: options.runId,
+    destination_kind: destination.kind,
+    destination_hash: destination.hash,
+    exported_at: exportedAt,
+    span_identities: [...identities].sort()
+  });
+  return { ...result, ...exportState, sent_spans: pending.length, ...delivered, marker: markerFile };
 }
 
 function renderGenAiExport(value) {
   const ops = Object.entries(value.operations).map(([op, count]) => `${op}=${count}`).join(' ');
+  let resend = '';
+  if (value.delivery === 'skipped-already-exported') {
+    resend = `Already exported: all ${value.already_exported} spans were sent to this destination before${value.previously_exported_at ? ` (${value.previously_exported_at})` : ''}. Nothing sent. Use --force to re-send; the destination will store duplicate rows.`;
+  } else if (value.already_exported) {
+    resend = `Sent ${value.sent_spans} new spans; skipped ${value.already_exported} already exported to this destination.`;
+  } else if (value.forced) {
+    resend = `--force: re-sent all ${value.sent_spans} spans.`;
+  }
   return [
     `GenAI OTLP export (semconv ${value.semconv_version}) · ${value.delivery}`,
+    resend,
     `Session ${value.session_id} · run ${value.run_id} · source ${value.source}`,
     `Spans ${value.spans} (${ops}) · duplicates dropped ${value.duplicates_dropped} · failed tools ${value.failed_tools}`,
     `Tokens invoke_agent ${value.tokens.invoke_agent_input} in / ${value.tokens.invoke_agent_output} out · chat ${value.tokens.chat_input} in / ${value.tokens.chat_output} out`,
@@ -255,6 +342,7 @@ function renderGenAiExport(value) {
 module.exports = {
   azureMonitorConfig,
   connectionStringFromEnv,
+  exportMarkerPath,
   exportSessionGenAi,
   loadSessionSpans,
   postOtlpJson,
