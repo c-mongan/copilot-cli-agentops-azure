@@ -2,9 +2,9 @@
 
 Use E2E validation to prove the loop with real Copilot CLI telemetry.
 
-## Native capture walkthrough (VS Code, 2026-10-06)
+## Native capture walkthrough (VS Code)
 
-These screenshots come from a single run of the
+These screenshots come from a single sample run on 2026-10-06 of the
 [AgentOps Native Capture extension](../extensions/agentops-native/README.md).
 It ran in an isolated, signed-in VS Code Insiders test profile, and computer use
 drove each step through the Command Palette. The account avatar is masked. The
