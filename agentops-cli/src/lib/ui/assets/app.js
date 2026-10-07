@@ -151,7 +151,9 @@
     } else {
       const key = `home:${current.params.toString()}`;
       const wasHome = state.routeKey.startsWith('home:');
+      const leftRun = state.routeKey.startsWith('run:') ? state.routeKey.slice(4) : null;
       state.routeKey = key;
+      state.returnTo = leftRun;
       state.lastHomeHash = location.hash || '#/';
       await renderHome(current.params, wasHome);
     }
@@ -197,6 +199,11 @@
       const el = document.getElementById(focusId);
       if (el) { el.focus(); if (caret !== null && el.setSelectionRange) el.setSelectionRange(caret, caret); }
     }
+    if (state.returnTo) {
+      main.querySelector(`a.run-link[href="#/run/${CSS.escape(encodeURIComponent(state.returnTo))}"]`)?.focus();
+      state.returnTo = null;
+    }
+    markScrollable();
     announce(`${plural(data.runs.length, 'run')} shown`);
   }
 
@@ -208,7 +215,7 @@
     const tokenTotal = k.tokens.input + k.tokens.output;
     return h('section', { class: 'kpis', 'aria-label': 'Summary for the runs shown' },
       tile('Runs', fmtInt(k.runs), `${fmtInt(k.toolCalls)} tool calls`),
-      tile('Failures', fmtInt(k.failures), k.failedRuns ? `in ${plural(k.failedRuns, 'run')}` : 'No failed runs', { bad: k.failures > 0 }),
+      tile('Failed tool calls', fmtInt(k.failures), k.failedRuns ? `in ${fmtInt(k.failedRuns)} of ${plural(k.runs, 'run')}` : 'No failed runs', { bad: k.failures > 0 }),
       tile('p95 tool latency', fmtDuration(k.p95ToolMs), 'across all tool calls'),
       tile('Tokens', fmtTokens(tokenTotal), `${fmtTokens(k.tokens.input)} in · ${fmtTokens(k.tokens.output)} out`, { title: `${fmtInt(tokenTotal)} tokens in ${plural(k.tokens.runsWithTokens, 'run')} with usage data` }),
       tile('Cost', fmtCost(k.costUsd), unpricedNote(k.unpricedModels) || (k.premiumRequests ? `${fmtInt(Math.round(k.premiumRequests * 100) / 100)} premium requests` : 'list-price estimate'), { est: true, title: k.costLabel || null }));
@@ -263,18 +270,19 @@
       const when = fmtWhen(run.startedAt);
       const href = `#/run/${encodeURIComponent(run.id)}`;
       const otherModels = run.models.filter(model => model !== run.model).length;
-      return h('tr', { onclick: event => { if (event.target.closest('a')) return; location.hash = href; } },
+      const idle = !run.model && !run.toolCalls && !run.tokens.known && !run.failures;
+      return h('tr', { class: idle ? 'is-idle' : null, onclick: event => { if (event.target.closest('a')) return; location.hash = href; } },
         h('td', null, pill(run.status)),
         h('td', null, h('a', { class: 'run-link', href, 'data-row': index, title: when.title, onkeydown: rowKeys }, when.text),
           h('span', { class: 'cell-sub mono', text: run.id.slice(0, 8) })),
-        h('td', null, run.repo.name ? h('span', { class: 'repo-name', text: run.repo.name }) : h('span', { class: 'hash', text: run.repo.hash ? `#${run.repo.hash.slice(0, 8)}` : '—', title: 'Repository hash (name not recorded)' })),
-        h('td', null, h('span', { class: 'model', translate: 'no', text: run.model || '—' }), otherModels ? h('span', { class: 'model-more', text: `+${otherModels}`, title: run.models.join(', ') }) : null),
-        h('td', { class: 'num' }, fmtDuration(run.durationMs)),
+        h('td', null, run.repo.name ? h('span', { class: 'repo-name', text: run.repo.name, title: run.repo.name }) : h('span', { class: 'hash', text: run.repo.hash ? `#${run.repo.hash.slice(0, 8)}` : '—', title: 'Repository hash (name not recorded)' })),
+        h('td', null, idle ? h('span', { class: 'zero', text: 'No activity', title: 'Session opened without a model call or tool call' }) : h('span', { class: 'model', translate: 'no', text: run.model || '—' }), otherModels ? h('span', { class: 'model-more', text: `+${otherModels}`, title: run.models.join(', ') }) : null),
+        h('td', { class: 'num', 'data-label': 'Duration' }, fmtDuration(run.durationMs)),
         h('td', { class: 'num tokens-io col-optional' }, run.tokens.known
           ? [fmtTokens(run.tokens.input), h('span', { class: 'sep', text: '/' }), fmtTokens(run.tokens.output)]
           : h('span', { class: 'zero', text: '—', title: 'No usage recorded yet (session still open or ended abruptly)' })),
         h('td', { class: 'num col-optional' }, run.toolCalls ? fmtInt(run.toolCalls) : h('span', { class: 'zero', text: '0' })),
-        h('td', { class: 'num' }, run.failures ? h('span', { class: 'fail-count', text: fmtInt(run.failures), title: run.failureGroups.map(g => `${g.count}× ${g.name} ${g.outcome}`).join(', ') }) : h('span', { class: 'zero', text: '0' })),
+        h('td', { class: 'num', 'data-label': 'Failures' }, run.failures ? h('span', { class: 'fail-count', text: fmtInt(run.failures), title: run.failureGroups.map(g => `${g.count}× ${g.name} ${g.outcome}`).join(', ') }) : h('span', { class: 'zero', text: '0' })),
         h('td', { class: 'num col-optional' }, costCell(run)));
     });
     return h('div', { class: 'card' },
@@ -316,7 +324,7 @@
       h('p', null, 'AgentOps reads the session logs that GitHub Copilot CLI writes to ', h('code', { class: 'nowrap', text: '~/.copilot/session-state' }), '. Nothing is uploaded.'),
       h('ol', { class: 'steps' },
         h('li', null, h('div', null, 'Run any Copilot CLI session in a repo:', cmd('copilot'))),
-        h('li', null, h('div', null, 'Or run it through AgentOps for per-call tokens and a full span trace:', cmd('agentops copilot-session launch --repo . -- -p "summarise this repo"'))),
+        h('li', null, h('div', null, 'Or run it through AgentOps for per-call tokens and a full span trace. In -p mode Copilot cannot ask for permission, so use a repo you trust:', cmd('agentops copilot-session launch --repo . -- -p "summarise this repo" --allow-all-tools'))),
         h('li', null, h('div', null, 'Come back here and press Refresh, or reopen:', cmd('agentops ui'))))));
   }
 
@@ -410,10 +418,29 @@
     main.replaceChildren(view);
     renderRows();
     renderInspector(null);
+    markScrollable();
     main.focus({ preventScroll: true });
     window.scrollTo(0, 0);
     announce(`Run ${run.id.slice(0, 8)}: ${STATUS_LABEL[run.status] || run.status}, ${plural(run.toolCalls, 'tool call')}, ${plural(run.failures, 'failure')}`);
   }
+
+  // Overflowing tables must be reachable by keyboard (axe scrollable-region-focusable).
+  function markScrollable() {
+    for (const wrap of main.querySelectorAll('.table-wrap')) {
+      const label = wrap.querySelector('caption')?.textContent || wrap.closest('section')?.querySelector('h2')?.textContent || 'Table';
+      if (wrap.scrollWidth > wrap.clientWidth + 1) {
+        wrap.tabIndex = 0;
+        wrap.setAttribute('role', 'region');
+        wrap.setAttribute('aria-label', `${label} (scrolls sideways)`);
+      } else {
+        wrap.removeAttribute('tabindex');
+        wrap.removeAttribute('role');
+        wrap.removeAttribute('aria-label');
+      }
+    }
+  }
+  let resizeTimer = null;
+  window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(markScrollable, 150); });
 
   function backHref() {
     return state.lastHomeHash || '#/';
