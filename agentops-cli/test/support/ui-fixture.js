@@ -134,6 +134,7 @@ function createUiFixture(name = 'ui') {
     root,
     copilotHome,
     agentOpsHome,
+    writeSession,
     now: () => T0 + 3600000,
     cleanup: () => fs.rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
   };

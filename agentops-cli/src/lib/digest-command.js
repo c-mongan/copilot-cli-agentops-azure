@@ -3,7 +3,7 @@ const path = require('node:path');
 
 const { hasFlag, optionValue } = require('./args');
 const { buildDigest, parsePeriod } = require('./digest/digest-summary');
-const { loadPriceTable } = require('./digest/pricing');
+const { loadPriceTable } = require('./cost-estimate');
 const { renderDigestHtml } = require('./digest/render-html');
 const { renderDigestMarkdown } = require('./digest/render-markdown');
 const { readLocalSessions } = require('./digest/session-metadata');

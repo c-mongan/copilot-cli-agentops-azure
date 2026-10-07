@@ -3,7 +3,8 @@ const http = require('node:http');
 const path = require('node:path');
 
 const { RunStore } = require('./data');
-const { PRICE_TABLE_DATE, PRICE_TABLE_SOURCES, PRICES } = require('./pricing');
+const { pricingInfo } = require('../cost-estimate');
+const { parsePeriod } = require('../digest/digest-summary');
 
 const ASSET_DIR = path.join(__dirname, 'assets');
 const ASSETS = {
@@ -57,14 +58,6 @@ function allowedHost(hostHeader, port) {
   return [`127.0.0.1:${port}`, `localhost:${port}`, `[::1]:${port}`].includes(hostHeader.toLowerCase());
 }
 
-function pricingInfo() {
-  return {
-    date: PRICE_TABLE_DATE,
-    sources: PRICE_TABLE_SOURCES,
-    models: Object.keys(PRICES).sort()
-  };
-}
-
 function createUiServer(options = {}) {
   const store = options.store || new RunStore(options);
   const assets = options.assets || loadAssets(options.assetDir);
@@ -81,9 +74,17 @@ function createUiServer(options = {}) {
 
     if (route === '/api/runs') {
       const filters = {};
-      for (const key of ['model', 'repo', 'status', 'q']) {
+      for (const key of ['model', 'repo', 'status', 'source', 'q']) {
         const value = url.searchParams.get(key);
         if (value) filters[key] = value.slice(0, 200);
+      }
+      const since = url.searchParams.get('since');
+      if (since) {
+        try {
+          filters.sinceMs = store.now() - parsePeriod(since.slice(0, 20)).periodMs;
+        } catch {
+          return sendJson(res, 400, { error: 'bad-since', hint: 'since must look like 24h, 7d or 2w' });
+        }
       }
       const result = await store.list(filters);
       return sendJson(res, 200, { ...result, pricing: pricingInfo() });

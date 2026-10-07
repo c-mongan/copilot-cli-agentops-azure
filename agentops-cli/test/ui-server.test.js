@@ -63,17 +63,30 @@ test('ui server: smoke test serves the shell, assets and runs API on a free loop
 
 test('ui server: run detail, filters and errors', async t => {
   const { port } = await startFixtureServer(t, { name: 'routes' });
-  const filtered = (await request(port, '/api/runs?status=failed&q=bash')).json();
+  const filtered = (await request(port, '/api/runs?status=attention&q=bash')).json();
   assert.deepEqual(filtered.runs.map(run => run.id), [FAILED_ID]);
 
   const detail = await request(port, `/api/runs/${FAILED_ID}`);
   assert.equal(detail.status, 200);
   const body = detail.json();
-  assert.equal(body.failures[0].message, '1 tool call denied: bash');
+  assert.deepEqual(body.failures, []);
+  assert.equal(body.attention[0].message, '1 tool call denied: bash');
   assert.ok(body.spans.length > 5);
   for (const secret of SECRETS) assert.equal(detail.body.includes(secret), false, secret);
 
   assert.equal((await request(port, '/api/runs/latest')).json().run.id, FAILED_ID);
+  const since = await request(port, '/api/runs?since=365d');
+  assert.equal(since.status, 200);
+  assert.equal(typeof since.json().kpis.costLabel, 'string');
+  const copilotOnly = (await request(port, '/api/runs?source=copilot')).json();
+  assert.ok(copilotOnly.runs.length > 0);
+  assert.ok(copilotOnly.runs.every(run => run.source !== 'ledger'));
+  const ledgerOnly = (await request(port, '/api/runs?source=ledger')).json();
+  assert.ok(ledgerOnly.runs.length > 0);
+  assert.ok(ledgerOnly.runs.every(run => run.source === 'ledger'));
+  const badSince = await request(port, '/api/runs?since=forever');
+  assert.equal(badSince.status, 400);
+  assert.equal(badSince.json().error, 'bad-since');
   assert.equal((await request(port, '/api/runs/missing')).status, 404);
   assert.equal((await request(port, '/api/runs/%E0%A4%A')).status, 400);
   assert.equal((await request(port, '/api/runs/..%2F..%2Fetc')).status, 404);

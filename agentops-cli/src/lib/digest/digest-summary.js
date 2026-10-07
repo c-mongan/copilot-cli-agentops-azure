@@ -1,5 +1,5 @@
 const { clusterFailures } = require('./failure-clusters');
-const { estimateCost } = require('./pricing');
+const { estimateModelCostUsd, estimateUsageCost, formatCostTotal } = require('../cost-estimate');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -89,12 +89,13 @@ function tokenTotals(sessions, priceTable = {}) {
     }
   }
   const models = Object.values(byModel).map(entry => {
-    const cost = estimateCost(entry, priceTable[entry.model]);
+    const cost = estimateModelCostUsd(entry.model, entry, priceTable);
     return { ...entry, totalTokens: entry.inputTokens + entry.outputTokens, estCostUsd: cost };
   }).sort((left, right) => right.totalTokens - left.totalTokens || left.model.localeCompare(right.model));
-  const priced = models.filter(entry => entry.estCostUsd !== null);
-  const unpricedModels = models.filter(entry => entry.estCostUsd === null).map(entry => entry.model);
-  const estCostUsd = priced.length ? priced.reduce((sum, entry) => sum + entry.estCostUsd, 0) : null;
+  // Same estimator and per-model merge as `agentops ui`, so both show one total.
+  const { costUsd: estCostUsd, pricedModels, unpricedModels: unpriced } = estimateUsageCost(byModel, priceTable);
+  const priced = pricedModels;
+  const unpricedModels = models.map(entry => entry.model).filter(model => unpriced.includes(model));
   return {
     models,
     inputTokens: models.reduce((sum, entry) => sum + entry.inputTokens, 0),
@@ -102,6 +103,7 @@ function tokenTotals(sessions, priceTable = {}) {
     totalTokens: models.reduce((sum, entry) => sum + entry.totalTokens, 0),
     estCostUsd,
     costStatus: costStatusOf(models.length, priced.length, unpricedModels.length),
+    costLabel: formatCostTotal({ costUsd: estCostUsd, unpricedModels }),
     unpricedModels,
     premiumRequests: premiumObserved ? Math.round(premiumRequests * 100) / 100 : null,
     sessionsWithoutTokens

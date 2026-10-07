@@ -225,6 +225,7 @@ tbody tr:last-child td { border-bottom: 0; }
 .pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 .pill.ok { color: var(--ok); background: var(--ok-soft); }
 .pill.failed { color: var(--danger); background: var(--danger-soft); }
+.pill.attention { color: var(--warn); background: var(--warn-soft); }
 .pill.live { color: var(--live); background: var(--live-soft); }
 .pill.live::before { animation: pulse 1.6s ease-in-out infinite; }
 .pill.incomplete { color: var(--muted); background: var(--surface-3); }
@@ -302,6 +303,7 @@ tbody tr:last-child td { border-bottom: 0; }
 .span-label { display: flex; align-items: center; gap: 6px; padding-right: 10px; min-width: 0; height: 100%; border-right: 1px solid var(--border); font-size: 13px; }
 .span-label .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .span-row.failed .name { color: var(--danger); font-weight: 600; }
+.span-row.denied .name { color: var(--warn); font-weight: 600; }
 .span-row[data-kind="turn"] .name, .span-row[data-kind="session"] .name { color: var(--text-2); }
 .caret { flex: none; display: inline-grid; place-items: center; width: 18px; height: 18px; border: 0; padding: 0; border-radius: 4px; background: none; color: var(--muted); cursor: pointer; }
 .caret:hover { background: var(--surface-3); color: var(--text); }
@@ -312,8 +314,10 @@ tbody tr:last-child td { border-bottom: 0; }
 .bar { position: absolute; top: 50%; height: 14px; margin-top: -7px; border-radius: 3px; min-width: 2px; }
 .bar.session { height: 6px; margin-top: -3px; }
 .bar.failed { background: var(--danger-strong) !important; box-shadow: 0 0 0 1.5px color-mix(in oklch, var(--danger-strong) 30%, transparent); }
+.bar.denied { background: var(--warn) !important; }
 .bar-text { position: absolute; top: 50%; transform: translateY(-50%); font-size: 11.5px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; pointer-events: none; }
 .span-row.failed .bar-text { color: var(--danger); font-weight: 600; }
+.span-row.denied .bar-text { color: var(--warn); font-weight: 600; }
 .k-session { background: var(--k-session); }
 .k-turn { background: var(--k-turn); }
 .k-chat { background: var(--k-chat); }
@@ -322,6 +326,7 @@ tbody tr:last-child td { border-bottom: 0; }
 .k-agent { background: var(--k-agent); }
 .k-compaction { background: var(--k-compaction); }
 .k-failed { background: var(--danger-strong); }
+.k-denied { background: var(--warn); }
 
 .inspector { position: sticky; top: 68px; padding: 16px; min-height: 220px; }
 .inspector h3 { margin: 0; font-size: 15px; font-weight: 620; display: flex; align-items: center; gap: 8px; word-break: break-word; }

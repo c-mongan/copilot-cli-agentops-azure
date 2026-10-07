@@ -6,7 +6,8 @@ const readline = require('node:readline');
 
 const { safeModelIdentity } = require('../copilot/execution-configuration');
 const { redactContent } = require('../copilot/session-content');
-const { estimateCostUsd, estimateModelCostUsd } = require('./pricing');
+const { estimateModelCostUsd, estimateRunsCost, estimateUsageCost, formatCostTotal } = require('../cost-estimate');
+const { SPAN_COUNT_LABELS, classifyRunStatus, classifyToolCompletionEvent, uniqueNativeSpans } = require('../copilot/run-status');
 
 // Only these event types are parsed. Large content-bearing events (assistant.message,
 // system.message, reasoning) are skipped without JSON parsing, which keeps both the
@@ -18,7 +19,7 @@ const TRACKED_TYPES = new Set([
   'tool.execution_start', 'tool.execution_complete',
   'hook.start', 'hook.end',
   'subagent.started', 'subagent.completed', 'subagent.failed',
-  'user.message'
+  'user.message', 'model.model_call_success'
 ]);
 const SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 const LIVE_WINDOW_MS = 5 * 60 * 1000;
@@ -118,6 +119,7 @@ function minimalEvent(raw) {
     case 'tool.execution_complete': {
       event.toolCallId = safeLabel(data.toolCallId, 128);
       event.success = data.success !== false;
+      event.signal = classifyToolCompletionEvent(data);
       event.outcome = data.success === false
         ? (safeLabel(data.error?.code, 40) || safeLabel(data.toolTelemetry?.properties?.shell_error_category, 40) || 'failed')
         : 'ok';
@@ -131,6 +133,19 @@ function minimalEvent(raw) {
       event.hookType = safeLabel(data.hookType, 60) || 'hook';
       if (raw.type === 'hook.end') event.success = data.success !== false;
       break;
+    case 'model.model_call_success': {
+      // Usage fallback for sessions that never shut down, matching the digest.
+      const tokens = data.responseChunk?.usage;
+      event.callId = safeLabel(data.callId, 128);
+      event.callModel = safeModel(data.modelCall?.model);
+      event.callUsage = tokens && typeof tokens === 'object' ? {
+        input: count(tokens.prompt_tokens),
+        output: count(tokens.completion_tokens),
+        cacheRead: count(tokens.prompt_tokens_details?.cached_tokens),
+        cacheWrite: 0
+      } : null;
+      break;
+    }
     case 'subagent.started':
     case 'subagent.completed':
     case 'subagent.failed':
@@ -196,20 +211,7 @@ function percentile(values, p) {
 // Native span receipts can contain the same span more than once (same TraceId/SpanId),
 // and per-event rows reuse the span ID; keep the first real span row only.
 function dedupeSpans(rows = []) {
-  const seen = new Set();
-  const result = [];
-  for (const row of rows) {
-    if (!row || typeof row !== 'object') continue;
-    if (row.SpanName && row.SpanName !== 'agentops.span') continue;
-    const spanId = row.SpanId || row.spanId;
-    if (spanId) {
-      const key = `${row.TraceId || row.traceId || ''}:${spanId}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-    }
-    result.push(row);
-  }
-  return result;
+  return uniqueNativeSpans(rows);
 }
 
 function normalizeLedgerSpan(row) {
@@ -340,6 +342,18 @@ function usageFromLedger(spans) {
   return usage;
 }
 
+function usageFromCalls(events) {
+  const usage = {};
+  const seen = new Set();
+  for (const event of events) {
+    if (event.type !== 'model.model_call_success' || !event.callUsage || !event.callModel) continue;
+    if (event.callId && seen.has(event.callId)) continue;
+    if (event.callId) seen.add(event.callId);
+    addUsage(usage, event.callModel, event.callUsage);
+  }
+  return usage;
+}
+
 function totals(usageByModel) {
   const result = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
   for (const usage of Object.values(usageByModel)) {
@@ -378,10 +392,17 @@ function failureGroups(items) {
 }
 
 function failureSentence(group) {
+  if (group.outcome === 'nonzero_exit') {
+    return `${group.count} shell command${group.count === 1 ? '' : 's'} exited non-zero: ${group.name}. Copilot reported the tool call as successful, so it is not counted as a failure.`;
+  }
   const noun = group.kind === 'tool' ? 'tool call' : group.kind;
   const plural = group.count === 1 ? noun : `${noun}s`;
   const verb = group.outcome === 'failed' ? 'failed' : group.outcome;
   return `${group.count} ${plural} ${verb}: ${group.name}`;
+}
+
+function nonZeroExitSpans(toolSpans) {
+  return toolSpans.filter(span => span.status === 'ok' && Number.isSafeInteger(span.attrs.exitCode) && span.attrs.exitCode !== 0);
 }
 
 // Builds a deduplicated span tree (session -> subagents/turns -> tools/hooks/chat)
@@ -450,7 +471,8 @@ function buildSpans(events = [], ledgerSpans = [], { lastTime = null, firstTime 
         span = add({ kind: 'tool', name: 'unknown-tool', start: time, end: time, parentId: parentFor(event.agentId), attrs: { toolCallId: event.toolCallId, startObserved: false } });
       }
       span.end = time;
-      span.status = event.success ? 'ok' : 'failed';
+      // A permission denial is its own span status, not a tool failure.
+      span.status = event.signal === 'denied' ? 'denied' : (event.success ? 'ok' : 'failed');
       span.attrs.outcome = event.outcome;
       if (event.exitCode !== undefined) span.attrs.exitCode = event.exitCode;
     } else if (event.type === 'hook.start') {
@@ -546,9 +568,10 @@ function toolStats(spans) {
   const groups = new Map();
   for (const span of spans) {
     if (span.kind !== 'tool') continue;
-    const group = groups.get(span.name) || { tool: span.name, durations: [], failures: 0 };
+    const group = groups.get(span.name) || { tool: span.name, durations: [], failures: 0, denied: 0 };
     group.durations.push(span.durationMs);
     if (span.status === 'failed') group.failures += 1;
+    if (span.status === 'denied') group.denied += 1;
     groups.set(span.name, group);
   }
   return [...groups.values()].map(group => ({
@@ -558,7 +581,8 @@ function toolStats(spans) {
     p95Ms: percentile(group.durations, 95),
     maxMs: Math.max(...group.durations),
     totalMs: group.durations.reduce((sum, value) => sum + value, 0),
-    failures: group.failures
+    failures: group.failures,
+    denied: group.denied
   })).sort((a, b) => b.totalMs - a.totalMs || a.tool.localeCompare(b.tool));
 }
 
@@ -583,7 +607,8 @@ function tokenSeries(spans, sessionUsage, sessionEndMs) {
     // Ledger chat spans omit cache-write tokens, so per-call prices run low. When the
     // session shutdown totals are priced, allocate that authoritative estimate by
     // cumulative token share so the meter ends at the same figure as the run KPI.
-    const sessionCost = Object.keys(sessionUsage || {}).length ? estimateCostUsd(sessionUsage) : null;
+    const sessionEstimate = estimateUsageCost(sessionUsage || {});
+    const sessionCost = sessionEstimate.unpricedModels.length ? null : sessionEstimate.costUsd;
     const finalTokens = input + output;
     if (sessionCost !== null && finalTokens > 0) {
       for (const point of points) point.costUsd = sessionCost * ((point.input + point.output) / finalTokens);
@@ -593,7 +618,7 @@ function tokenSeries(spans, sessionUsage, sessionEndMs) {
   }
   const total = totals(sessionUsage);
   if (total.input || total.output) {
-    return { granularity: 'session', points: [{ tMs: sessionEndMs, input: total.input, output: total.output, costUsd: estimateCostUsd(sessionUsage) }] };
+    return { granularity: 'session', points: [{ tMs: sessionEndMs, input: total.input, output: total.output, costUsd: estimateUsageCost(sessionUsage).costUsd }] };
   }
   return { granularity: 'none', points: [] };
 }
@@ -607,9 +632,14 @@ function summarize(entry, parsed, ledgerSpans, now = Date.now()) {
   for (const event of events) if (event.model) models.add(event.model);
   for (const span of ledgerSpans) if (span.model) models.add(span.model);
   let usage = lastShutdown && Object.keys(lastShutdown.usage).length ? lastShutdown.usage : usageFromLedger(ledgerSpans);
+  if (!Object.keys(usage).length) {
+    usage = usageFromCalls(events);
+    for (const name of Object.keys(usage)) models.add(name);
+  }
   usage = Object.fromEntries(Object.entries(usage).filter(([model]) => model));
   const tokenTotals = totals(usage);
   const tokensKnown = Object.keys(usage).length > 0;
+  const cost = tokensKnown ? estimateUsageCost(usage) : { costUsd: null, unpricedModels: [] };
   const lastModelEvent = [...events].reverse().find(event => event.model && event.type !== 'subagent.started');
   const model = lastShutdown?.model || lastModelEvent?.model || start?.model || [...models][0] || '';
 
@@ -618,13 +648,17 @@ function summarize(entry, parsed, ledgerSpans, now = Date.now()) {
   const failedItems = spans.filter(span => span.status === 'failed' && span.kind !== 'session')
     .map(span => ({ kind: span.kind, name: span.name, outcome: span.attrs.outcome || 'failed' }));
   const toolFailures = toolSpans.filter(span => span.status === 'failed').length;
+  const deniedItems = spans.filter(span => span.status === 'denied')
+    .map(span => ({ kind: span.kind, name: span.name, outcome: 'denied' }));
+  const nonZeroItems = nonZeroExitSpans(toolSpans)
+    .map(span => ({ kind: span.kind, name: span.name, outcome: 'nonzero_exit' }));
   const startedAt = start?.time ?? firstTime ?? (ledgerSpans.length ? Math.min(...ledgerSpans.map(span => span.start)) : null);
   const endedAt = lastTime ?? (ledgerSpans.length ? Math.max(...ledgerSpans.map(span => span.end)) : startedAt);
   const durationMs = events.length ? activeDuration(events, firstTime, lastTime) : Math.max(0, (endedAt || 0) - (startedAt || 0));
   const ended = Boolean(lastShutdown) || (!events.length && ledgerSpans.length > 0);
   const live = !ended && entry.mtimeMs && now - entry.mtimeMs < LIVE_WINDOW_MS;
   // A running session is shown as live even if a tool already failed; the failure count still shows.
-  const status = live ? 'live' : (failedItems.length ? 'failed' : (ended ? 'ok' : 'incomplete'));
+  const { status, statusLabel, statusReasons } = classifyRunStatus({ failures: failedItems.length, denials: deniedItems.length, nonZeroExits: nonZeroItems.length, live: Boolean(live), ended });
   const repo = start?.repo?.name ? start.repo : { name: '', hash: entry.ledgerRuns[0]?.repoHash || '' };
 
   return {
@@ -641,16 +675,26 @@ function summarize(entry, parsed, ledgerSpans, now = Date.now()) {
     tokens: { ...tokenTotals, known: tokensKnown },
     usageByModel: usage,
     premiumRequests: lastShutdown?.premiumRequests ?? null,
-    costUsd: tokensKnown ? estimateCostUsd(usage) : null,
+    costUsd: cost.costUsd,
+    unpricedModels: cost.unpricedModels,
+    costLabel: formatCostTotal(cost),
     turns: spans.filter(span => span.kind === 'turn').length,
     subagents: spans.filter(span => span.kind === 'agent').length,
     toolCalls: toolSpans.length,
     toolFailures,
     failures: failedItems.length,
     failureGroups: failureGroups(failedItems),
+    denials: deniedItems.length,
+    nonZeroExits: nonZeroItems.length,
+    attentionGroups: failureGroups([...deniedItems, ...nonZeroItems]),
+    traceSpans: spans.length,
+    nativeSpans: ledgerSpans.length,
+    spanCountLabels: { traceSpans: SPAN_COUNT_LABELS.traceSpans, nativeSpans: SPAN_COUNT_LABELS.nativeSpans },
     p95ToolMs: percentile(toolSpans.map(span => span.durationMs), 95),
     toolNames: [...new Set(toolSpans.map(span => span.name))].sort(),
     status,
+    statusLabel,
+    statusReasons,
     _toolDurations: toolSpans.map(span => span.durationMs)
   };
 }
@@ -664,6 +708,9 @@ function matchesFilters(row, filters = {}) {
   if (filters.model && !row.models.includes(filters.model) && row.model !== filters.model) return false;
   if (filters.repo && row.repo.name !== filters.repo && row.repo.hash !== filters.repo) return false;
   if (filters.status && row.status !== filters.status) return false;
+  // `copilot` keeps runs backed by a Copilot session (the set `agentops digest` reads).
+  if (filters.source && !(filters.source === 'copilot' ? row.source !== 'ledger' : row.source === filters.source)) return false;
+  if (Number.isFinite(filters.sinceMs) && !(Date.parse(row.startedAt || '') >= filters.sinceMs)) return false;
   const query = String(filters.q || '').trim().toLowerCase();
   if (query) {
     const haystack = [row.id, row.runId, row.repo.name, row.model, ...row.models, ...row.toolNames, row.status].join(' ').toLowerCase();
@@ -674,11 +721,13 @@ function matchesFilters(row, filters = {}) {
 
 function aggregateKpis(rows) {
   const durations = rows.flatMap(row => row._toolDurations || []);
-  const known = rows.filter(row => row.costUsd !== null);
   const tokenRows = rows.filter(row => row.tokens.known);
+  // Priced per model across the whole run set with the estimator `agentops digest` uses.
+  const cost = estimateRunsCost(tokenRows.map(row => row.usageByModel));
   return {
     runs: rows.length,
     failedRuns: rows.filter(row => row.status === 'failed').length,
+    attentionRuns: rows.filter(row => row.status === 'attention').length,
     failures: rows.reduce((sum, row) => sum + row.failures, 0),
     toolCalls: rows.reduce((sum, row) => sum + row.toolCalls, 0),
     p95ToolMs: percentile(durations, 95),
@@ -688,9 +737,11 @@ function aggregateKpis(rows) {
       runsWithTokens: tokenRows.length
     },
     premiumRequests: rows.reduce((sum, row) => sum + (row.premiumRequests || 0), 0),
-    costUsd: known.length ? known.reduce((sum, row) => sum + row.costUsd, 0) : null,
-    costRuns: known.length,
-    unpricedRuns: tokenRows.length - known.length
+    costUsd: cost.costUsd,
+    costLabel: formatCostTotal(cost),
+    unpricedModels: cost.unpricedModels,
+    costRuns: tokenRows.filter(row => row.costUsd !== null && !row.unpricedModels.length).length,
+    unpricedRuns: tokenRows.filter(row => row.unpricedModels.length).length
   };
 }
 
@@ -806,24 +857,44 @@ class RunStore {
   }
 
   findEntry(id) {
-    if (typeof id !== 'string' || !SESSION_ID.test(id)) return null;
+    if (typeof id !== 'string' || !SESSION_ID.test(id) || id === 'latest') return null;
     const { sessions } = this.discover();
-    if (id === 'latest') return sessions[0] || null;
     return sessions.find(entry => entry.id === id || entry.ledgerRuns.some(run => run.runId === id)) || null;
   }
 
+  // "latest" = the most recently active run that is either an AgentOps ledger run
+  // (from `agentops copilot-session launch`) or a finished Copilot session. A live
+  // session that was not launched through AgentOps is only chosen when nothing else exists.
+  async latestEntry() {
+    const { sessions } = this.discover();
+    const activity = entry => Math.max(entry.mtimeMs || 0, entry.ledgerRuns[0]?.createdAt || 0);
+    const ordered = [...sessions].sort((a, b) => activity(b) - activity(a) || a.id.localeCompare(b.id));
+    for (const entry of ordered) {
+      if (entry.ledgerRuns.length) return entry;
+      if (this.now() - entry.mtimeMs >= LIVE_WINDOW_MS) return entry;
+      const { row } = await this.load(entry);
+      if (row.status !== 'live') return entry;
+    }
+    return ordered[0] || null;
+  }
+
+  async resolveEntry(id) {
+    if (id === 'latest') return this.latestEntry();
+    return this.findEntry(id);
+  }
+
   async detail(id) {
-    const entry = this.findEntry(id);
+    const entry = await this.resolveEntry(id);
     if (!entry) return null;
     const { parsed, ledgerSpans, row } = await this.load(entry);
     const { spans } = buildSpans(parsed.events, ledgerSpans, parsed);
-    const exitWarnings = spans.filter(span => span.kind === 'tool' && span.status === 'ok' && Number.isSafeInteger(span.attrs.exitCode) && span.attrs.exitCode !== 0).length;
     const root = spans[0];
     return {
       run: publicRow(row),
       allowContent: this.allowContent && Boolean(entry.eventsFile),
       failures: row.failureGroups.map(group => ({ ...group, message: failureSentence(group) })),
-      warnings: exitWarnings ? [`${exitWarnings} shell command${exitWarnings === 1 ? '' : 's'} exited non-zero; Copilot reported the tool call as successful, so it is not counted as a failure.`] : [],
+      attention: row.attentionGroups.map(group => ({ ...group, message: failureSentence(group) })),
+      warnings: row.attentionGroups.map(failureSentence),
       spans,
       tokenSeries: tokenSeries(spans, row.usageByModel, root ? root.durationMs : 0),
       toolStats: toolStats(spans),
@@ -833,7 +904,7 @@ class RunStore {
 
   async content(id) {
     if (!this.allowContent) return null;
-    const entry = this.findEntry(id);
+    const entry = await this.resolveEntry(id);
     if (!entry || !entry.eventsFile) return null;
     return readSessionContent(entry.eventsFile);
   }

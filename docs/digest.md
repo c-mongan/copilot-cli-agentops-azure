@@ -133,7 +133,7 @@ For a priced model, the estimate is:
 + output × output price
 ```
 
-Prices are in USD per 1 million tokens. Models without a known price show **unavailable**. When some models are priced and some are not, the total is marked **partial** and lists the unpriced models.
+Prices are in USD per 1 million tokens. The digest uses the same dated price table and estimator as `agentops ui` ([`agentops-cli/src/lib/cost-estimate.js`](../agentops-cli/src/lib/cost-estimate.js)), so both show the same total for the same runs. Models without a known price show **n/a**, never $0. When some models are not priced, the total adds up the priced models and says how many are unpriced, for example `$12.34 est. (2 models unpriced)`.
 
 To add or correct prices, pass a JSON file:
 
@@ -153,7 +153,7 @@ To add or correct prices, pass a JSON file:
 - Non-zero shell exits are counted as failures. Some are expected, for example a failing test that the agent then fixes. Treat the `nonzero_exit` clusters as a signal to investigate, not proof of a fault.
 - The fingerprint includes the model. The same denial from two models appears as two clusters.
 - Sessions that never wrote a shutdown event and made no model calls have no token data. The report counts them as "reported no usage".
-- The built-in price table is small, so newer models show "unavailable" until you pass `--prices`.
+- Models missing from the built-in price table show "n/a" until you pass `--prices`.
 - Large `session-state` folders take a few seconds to read. Every session modified inside both periods is parsed.
 
 ## Run it weekly

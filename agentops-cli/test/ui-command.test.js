@@ -4,7 +4,7 @@ const test = require('node:test');
 
 const { openBrowser, parseUiArgs, shouldOpen, startUi, uiCommand, uiUsage } = require('../src/lib/ui-command');
 const { openCommand } = require('../src/lib/open-command');
-const { FAILED_ID, RUN_ID, createUiFixture } = require('./support/ui-fixture');
+const { FAILED_ID, RUN_ID, createUiFixture, line } = require('./support/ui-fixture');
 
 function capture() {
   let text = '';
@@ -81,6 +81,21 @@ test('ui command: starts on a free port, deep-links a target and prints the URL'
   assert.match(out.text(), /AgentOps UI running at http:\/\/127\.0\.0\.1:\d+\//);
   assert.match(out.text(), /Metadata only/);
   assert.equal(await get(ui.url.replace(/#.*$/, '')), 200);
+});
+
+test('ui command: ui latest and open latest --ui skip a live session for the launched ledger run', async t => {
+  const fixture = createUiFixture('latest-command');
+  t.after(fixture.cleanup);
+  const LIVE_ID = 'e0000000-0000-4000-8000-000000000007';
+  fixture.writeSession(LIVE_ID, [line('session.start', 0, { sessionId: LIVE_ID })], Date.now());
+  for (const args of [['ui', 'latest'], ['open', 'latest', '--ui']]) {
+    const out = capture();
+    const homes = ['--no-open', '--copilot-home', fixture.copilotHome, '--agentops-home', fixture.agentOpsHome];
+    const io = { stdout: out.stream, keepAlive: false };
+    const ui = args[0] === 'ui' ? await uiCommand([...args.slice(1), ...homes], io) : await openCommand([...args.slice(1), ...homes], io);
+    t.after(() => ui.close());
+    assert.match(ui.url, new RegExp(`#/run/${FAILED_ID}$`), args.join(' '));
+  }
 });
 
 test('ui command: unknown targets fall back to the runs list and failed opens are reported', async t => {
