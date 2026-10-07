@@ -56,3 +56,22 @@ test('strict collector resource allowlists retain run and session correlation ID
 test('strict collector attribute synchronization is idempotent', () => {
   assert.deepEqual(syncStrictCollectorFiles({ write: false }).changed, []);
 });
+
+test('strict collector span allowlists keep gen_ai.agent.name only behind the agent label guard', () => {
+  const label = 'attributes["gen_ai.agent.name"]';
+  const removeInvalid = `- delete_key(attributes, "gen_ai.agent.name") where ${label} != nil and (not IsString(${label}) or ${label} == "")`;
+  const hashCustom = `- set(${label}, SHA256(${label})) where ${label} != nil and ${label} != "copilot" and ${label} != "copilotcli" and ${label} != "claude" and not IsMatch(${label}, "^[0-9a-f]{64}$")`;
+  for (const file of strictCollectorFiles()) {
+    const text = fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n');
+    const span = text.match(/- context: span\n[\s\S]*?- keep_keys\(attributes, \[[^\n]+\]\)/);
+    assert.ok(span, `${path.basename(file)} has a span allowlist`);
+    const block = span[0];
+    const keep = block.lastIndexOf('- keep_keys(attributes, ');
+    assert.ok(attributesForContext(text, 'span').includes('gen_ai.agent.name'), `${path.basename(file)} span keeps gen_ai.agent.name`);
+    assert.ok(block.indexOf(removeInvalid) >= 0 && block.indexOf(removeInvalid) < keep, `${path.basename(file)} removes empty and non-string agent labels before keep_keys`);
+    assert.ok(block.indexOf(hashCustom) > block.indexOf(removeInvalid) && block.indexOf(hashCustom) < keep, `${path.basename(file)} hashes custom agent labels before keep_keys`);
+    for (const forbidden of forbiddenContentAttributes) {
+      assert.equal(attributesForContext(text, 'span').includes(forbidden), false, `${path.basename(file)} span allows ${forbidden}`);
+    }
+  }
+});

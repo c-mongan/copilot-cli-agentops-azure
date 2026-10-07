@@ -7,7 +7,10 @@ const path = require('node:path');
 const net = require('node:net');
 const assert = require('node:assert/strict');
 const { spawn, execFileSync } = require('node:child_process');
+const crypto = require('node:crypto');
 const CANARY = 'secret-metrics-canary-do-not-export';
+// Built-in agent labels stay readable; any other string label is exported only as a SHA-256 digest.
+const AGENT_LABELS = [['a000000000000001', { stringValue: 'copilot' }, 'copilot'], ['a000000000000002', { stringValue: 'copilotcli' }, 'copilotcli'], ['a000000000000003', { stringValue: 'claude' }, 'claude'], ['a000000000000004', { stringValue: CANARY }, crypto.createHash('sha256').update(CANARY).digest('hex')], ['a000000000000005', { stringValue: '' }, undefined], ['a000000000000006', { intValue: '7' }, undefined]];
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function port() {
   const server = net.createServer();
@@ -49,6 +52,7 @@ function traceFixture() {
     span('2222222222222222', { 'db.system.name': 'postgresql', 'agentops.operation.kind': CANARY }),
     linked,
     span('3333333333333333', { 'http.request.method': CANARY, 'db.system.name': CANARY, 'agentops.operation.kind': CANARY }),
+    ...AGENT_LABELS.map(([id, value]) => { const labelled = span(id, {}); labelled.attributes.push({ key: 'gen_ai.agent.name', value }); return labelled; }),
   ] }] }] }, 'Spans');
 }
 function logFixture() {
@@ -65,12 +69,17 @@ function verifyLogs(receipt) {
 }
 function verifyTraces(receipt) {
   const spans = fs.readFileSync(receipt, 'utf8').trim().split('\n').filter(Boolean).flatMap(line => JSON.parse(line).resourceSpans || []).flatMap(r => r.scopeSpans || []).flatMap(s => s.spans || []);
-  assert.equal(spans.length, 3);
+  assert.equal(spans.length, 3 + AGENT_LABELS.length);
   for (const span of spans) { assert.equal(span.name, 'agentops.span'); assert.equal(span.status.message, 'redacted by AgentOps strict privacy mode'); assert.ok(!span.traceState); assert.ok(!(span.links || []).length); }
   const values = span => Object.fromEntries((span.attributes || []).map(a => [a.key, a.value.stringValue ?? a.value.boolValue]));
   assert.deepEqual(values(spans[0]), { 'http.request.method': 'GET', 'agentops.operation.kind': 'http', 'agentops.content_capture.signal': true });
   assert.deepEqual(values(spans[1]), { 'db.system.name': 'postgresql', 'agentops.operation.kind': 'database', 'agentops.content_capture.signal': true });
   assert.deepEqual(values(spans[2]), { 'agentops.content_capture.signal': true });
+  for (const [id, , expected] of AGENT_LABELS) {
+    const labelled = spans.find(span => span.spanId === id);
+    assert.ok(labelled, `span ${id} exported`);
+    assert.deepEqual(values(labelled), { 'agentops.content_capture.signal': true, ...(expected === undefined ? {} : { 'gen_ai.agent.name': expected }) });
+  }
   return spans.length;
 }
 function readMetrics(receipt) {
