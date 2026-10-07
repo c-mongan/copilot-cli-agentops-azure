@@ -88,8 +88,9 @@ function quoteShell(value) {
 }
 
 function suggestNextStep(cluster) {
-  const { tool, errorType, representativeRunId } = cluster;
-  const view = representativeRunId ? ` Inspect it with \`agentops copilot-session view ${representativeRunId} --output digest-run.html\`.` : '';
+  const { tool, errorType, representativeRunId, representativeSessionId } = cluster;
+  const runFlag = representativeRunId && representativeRunId !== representativeSessionId ? ` --run-id ${representativeRunId}` : '';
+  const view = representativeSessionId ? ` Inspect it with \`agentops copilot-session view ${representativeSessionId}${runFlag} --output digest-run.html\`.` : '';
   switch (true) {
     case errorType === 'denied':
       return `Add --allow-tool ${quoteShell(SHELL_TOOLS.has(tool) ? 'shell' : tool)} if the agent needs it, or keep it denied deliberately and tell the agent not to try it.`;
@@ -143,7 +144,8 @@ function clusterFailures(failures = []) {
       runCount: runs.length,
       runs,
       repos,
-      representativeRunId: latest.runId || latest.sessionId || ''
+      representativeRunId: latest.runId || latest.sessionId || '',
+      representativeSessionId: latest.sessionId || ''
     };
     cluster.suggestedNextStep = suggestNextStep(cluster);
     return cluster;

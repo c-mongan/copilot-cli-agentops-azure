@@ -314,3 +314,11 @@ test('digest command writes files, infers format and is registered in the CLI', 
     assert.match(help.text(), /Metadata only/);
   });
 });
+
+test('inspect suggestion uses the session id with --run-id for ledger-linked runs', () => {
+  const linked = clusterFailures([{ tool: 'bash', errorType: 'nonzero_exit', model: 'm', at: '2026-10-06T10:00:00.000Z', runId: 'native_run_1_abc', sessionId: '4b9daf26-aadc-470c-8649-fe55d1725747' }]);
+  assert.match(linked.clusters[0].suggestedNextStep, /copilot-session view 4b9daf26-aadc-470c-8649-fe55d1725747 --run-id native_run_1_abc --output/);
+  const sessionOnly = clusterFailures([{ tool: 'bash', errorType: 'nonzero_exit', model: 'm', at: '2026-10-06T10:00:00.000Z', runId: 's-1', sessionId: 's-1' }]);
+  assert.match(sessionOnly.clusters[0].suggestedNextStep, /copilot-session view s-1 --output/);
+  assert.doesNotMatch(sessionOnly.clusters[0].suggestedNextStep, /--run-id/);
+});
