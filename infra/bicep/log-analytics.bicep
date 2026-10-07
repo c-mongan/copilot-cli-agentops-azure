@@ -12,6 +12,9 @@ param retentionInDays int = 30
 @maxValue(100)
 param dailyQuotaGb int = 1
 
+@description('Allow public ingestion and query access. Existing developer entry points retain their network behavior; the button passes false unless explicitly enabled.')
+param allowPublicNetworkAccess bool = true
+
 resource workspace 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
   name: name
   location: location
@@ -20,6 +23,8 @@ resource workspace 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
     sku: {
       name: 'PerGB2018'
     }
+    publicNetworkAccessForIngestion: allowPublicNetworkAccess ? 'Enabled' : 'Disabled'
+    publicNetworkAccessForQuery: allowPublicNetworkAccess ? 'Enabled' : 'Disabled'
     retentionInDays: retentionInDays
     workspaceCapping: {
       dailyQuotaGb: dailyQuotaGb

@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.38.33.27573",
-      "templateHash": "13856076332277641542"
+      "templateHash": "4247769185358350156"
     }
   },
   "parameters": {
@@ -49,7 +49,7 @@
       "minValue": 1,
       "maxValue": 100,
       "metadata": {
-        "description": "Log Analytics daily ingestion cap in GB. Keeps an accidental flood cheap."
+        "description": "Log Analytics daily ingestion cap in GB. Cost safeguard, not a precise spending limit; excess ingestion can still be billed."
       }
     },
     "deployWorkbook": {
@@ -61,9 +61,16 @@
     },
     "grantDeployerUpload": {
       "type": "bool",
-      "defaultValue": true,
+      "defaultValue": false,
       "metadata": {
         "description": "Give the identity running this deployment permission to upload AgentOps metadata (Monitoring Metrics Publisher on the DCR). Needs Owner or User Access Administrator on the resource group."
+      }
+    },
+    "allowPublicNetworkAccess": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Allow public ingestion and workspace query access. Disabled by default; private access requires separately configured Azure Monitor Private Link."
       }
     },
     "uploaderPrincipalId": {
@@ -104,7 +111,7 @@
       "type": "string",
       "defaultValue": "",
       "metadata": {
-        "description": "Email for budget alerts at 80% and 100% of actual spend. Leave blank to notify the subscription Owner role instead. No action group is created."
+        "description": "Email for budget alerts at 80% and 100% of actual spend. Leave blank to notify effective Owners at this resource-group scope instead. No action group is created."
       }
     },
     "budgetStartDate": {
@@ -165,6 +172,9 @@
           },
           "dailyQuotaGb": {
             "value": "[parameters('dailyIngestionCapGb')]"
+          },
+          "allowPublicNetworkAccess": {
+            "value": "[parameters('allowPublicNetworkAccess')]"
           }
         },
         "template": {
@@ -174,7 +184,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.38.33.27573",
-              "templateHash": "10047422253015815435"
+              "templateHash": "8808450675333400789"
             }
           },
           "parameters": {
@@ -204,6 +214,13 @@
               "metadata": {
                 "description": "Daily ingestion cap in GB. Use -1 to disable the cap, but keep the default capped for cost safety."
               }
+            },
+            "allowPublicNetworkAccess": {
+              "type": "bool",
+              "defaultValue": true,
+              "metadata": {
+                "description": "Allow public ingestion and query access. Existing developer entry points retain their network behavior; the button passes false unless explicitly enabled."
+              }
             }
           },
           "resources": [
@@ -217,6 +234,8 @@
                 "sku": {
                   "name": "PerGB2018"
                 },
+                "publicNetworkAccessForIngestion": "[if(parameters('allowPublicNetworkAccess'), 'Enabled', 'Disabled')]",
+                "publicNetworkAccessForQuery": "[if(parameters('allowPublicNetworkAccess'), 'Enabled', 'Disabled')]",
                 "retentionInDays": "[parameters('retentionInDays')]",
                 "workspaceCapping": {
                   "dailyQuotaGb": "[parameters('dailyQuotaGb')]"
@@ -280,6 +299,12 @@
           "tags": {
             "value": "[variables('tags')]"
           },
+          "metadataOnly": {
+            "value": true
+          },
+          "allowPublicNetworkAccess": {
+            "value": "[parameters('allowPublicNetworkAccess')]"
+          },
           "ingestionPrincipalId": {
             "value": "[parameters('uploaderPrincipalId')]"
           },
@@ -294,7 +319,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.38.33.27573",
-              "templateHash": "14158788040408831366"
+              "templateHash": "9051040121291816400"
             }
           },
           "parameters": {
@@ -358,9 +383,300 @@
               "metadata": {
                 "description": "Microsoft Entra principal type for the telemetry sender."
               }
+            },
+            "metadataOnly": {
+              "type": "bool",
+              "defaultValue": false,
+              "metadata": {
+                "description": "Restrict the schema and DCR projection to the reviewed metadata column allowlist. The button entry point always enables this."
+              }
+            },
+            "allowPublicNetworkAccess": {
+              "type": "bool",
+              "defaultValue": true,
+              "metadata": {
+                "description": "Allow public ingestion traffic. Existing developer entry points retain their network behavior; the button requires explicit opt-in."
+              }
             }
           },
           "variables": {
+            "$fxv#0": {
+              "AgentOpsRunSummary_CL": [
+                "TimeGenerated",
+                "RunId",
+                "SessionId",
+                "TraceId",
+                "OutcomeStatus",
+                "AgentName",
+                "SkillName",
+                "SubAgentName",
+                "ParentAgentName",
+                "ModelRequested",
+                "ModelActual",
+                "InputTokens",
+                "OutputTokens",
+                "ReasoningTokens",
+                "CacheReadTokens",
+                "CacheCreationTokens",
+                "EstimatedCostUsd",
+                "EstimatedCostUsdReal",
+                "DurationMs",
+                "ToolCount",
+                "ToolFailureCount",
+                "ToolDeniedCount",
+                "TestsRan",
+                "TestsPassed",
+                "PrOpened",
+                "CiStatus",
+                "ContentCaptureSignal",
+                "ContentCaptureMode",
+                "PrivacyMode",
+                "RepoHash",
+                "BranchHash",
+                "PrNumberHash",
+                "Surface",
+                "TaskType",
+                "ScenarioName",
+                "SchemaVersion"
+              ],
+              "AgentOpsEvents_CL": [
+                "TimeGenerated",
+                "Sequence",
+                "EventId",
+                "ParentEventId",
+                "AgentId",
+                "ParentAgentId",
+                "ParentToolCallId",
+                "ExitCode",
+                "RunId",
+                "SessionId",
+                "TraceId",
+                "EventName",
+                "SpanName",
+                "Status",
+                "ToolName",
+                "ToolCallId",
+                "McpServerName",
+                "McpToolName",
+                "ScriptName",
+                "ScriptRuntimeName",
+                "ScriptRuntimeVersion",
+                "ScriptRuntimeImplementation",
+                "ScriptLoaderName",
+                "AgentName",
+                "SkillName",
+                "SubAgentName",
+                "ParentAgentName",
+                "ModelRequested",
+                "ModelActual",
+                "Provider",
+                "InputTokens",
+                "OutputTokens",
+                "ReasoningTokens",
+                "CacheReadTokens",
+                "CacheWriteTokens",
+                "TotalTokens",
+                "TotalToolCalls",
+                "DurationMs",
+                "CopilotCost",
+                "EstimatedCostUsd",
+                "EstimatedCostUsdReal",
+                "PermissionKind",
+                "PermissionDecision",
+                "ErrorType",
+                "PremiumRequests",
+                "TotalNanoAiu",
+                "ApiDurationMs",
+                "LinesAdded",
+                "LinesRemoved",
+                "FilesModified",
+                "ContentCaptureSignal",
+                "ContentDroppedBytes",
+                "ContentAction",
+                "SecretLike",
+                "ContentCaptureMode",
+                "PrivacyMode",
+                "RepoHash",
+                "BranchHash",
+                "WorkingDirectoryHash",
+                "Surface",
+                "SchemaVersion"
+              ],
+              "AgentOpsSpans_CL": [
+                "TimeGenerated",
+                "RunId",
+                "SessionId",
+                "TraceId",
+                "SpanId",
+                "ParentSpanId",
+                "SpanName",
+                "OperationName",
+                "AgentName",
+                "ToolName",
+                "ToolCallId",
+                "ScriptName",
+                "ScriptRuntimeName",
+                "ScriptRuntimeVersion",
+                "ScriptRuntimeImplementation",
+                "ScriptLoaderName",
+                "StepName",
+                "EventName",
+                "SkillName",
+                "LinkType",
+                "Outcome",
+                "ErrorType",
+                "DurationMs",
+                "DurationNs",
+                "Model",
+                "ModelRequested",
+                "ModelActual",
+                "Provider",
+                "InputTokens",
+                "OutputTokens",
+                "CacheReadTokens",
+                "CacheWriteTokens",
+                "SchemaVersion",
+                "ParentToolCallId",
+                "McpServerName",
+                "McpToolName"
+              ],
+              "AgentOpsToolCalls_CL": [
+                "TimeGenerated",
+                "RunId",
+                "TraceId",
+                "SpanId",
+                "ToolName",
+                "ToolType",
+                "ToolRisk",
+                "Status",
+                "Allowed",
+                "DurationMs",
+                "OutputSizeBytes",
+                "ArgsSchemaHash",
+                "AgentName",
+                "Surface",
+                "SchemaVersion"
+              ],
+              "AgentOpsMcpCalls_CL": [
+                "TimeGenerated",
+                "RunId",
+                "TraceId",
+                "SpanId",
+                "McpServerName",
+                "McpServerHash",
+                "McpClientName",
+                "McpSessionId",
+                "McpTransport",
+                "ToolName",
+                "ToolRisk",
+                "Status",
+                "Allowed",
+                "Sandboxed",
+                "DurationMs",
+                "ResultSizeBytes",
+                "ArgsSchemaHash",
+                "AgentName",
+                "Surface",
+                "SchemaVersion"
+              ],
+              "AgentOpsPrivacy_CL": [
+                "TimeGenerated",
+                "RunId",
+                "TraceId",
+                "ContentKind",
+                "Action",
+                "Observed",
+                "LeakDetected",
+                "DroppedCount",
+                "RedactedCount",
+                "PrivacyMode",
+                "SchemaVersion"
+              ],
+              "AgentOpsEval_CL": [
+                "TimeGenerated",
+                "RunId",
+                "TraceId",
+                "RepoHash",
+                "TaskType",
+                "ModelActual",
+                "EvalOverall",
+                "EvalBucket",
+                "Reliability",
+                "Security",
+                "TestDiscipline",
+                "ToolEfficiency",
+                "ContextEfficiency",
+                "CodeOutcome",
+                "SchemaVersion"
+              ],
+              "AgentOpsGithubOutcomes_CL": [
+                "TimeGenerated",
+                "RunId",
+                "RepoHash",
+                "BranchHash",
+                "PrNumberHash",
+                "PrOpened",
+                "PrClosed",
+                "PrMerged",
+                "PrReverted",
+                "CiStatus",
+                "CommitCount",
+                "FilesChangedCount",
+                "ReviewCommentCount",
+                "RunStartedAt",
+                "PrCreatedAt",
+                "PrMergedAt",
+                "TimeToPrMinutes",
+                "TimeToMergeMinutes",
+                "SchemaVersion"
+              ],
+              "AgentOpsInsights_CL": [
+                "TimeGenerated",
+                "InsightId",
+                "InsightType",
+                "Severity",
+                "RunId",
+                "TraceId",
+                "Rule",
+                "ArchitectureVersion",
+                "Numerator",
+                "Denominator",
+                "CoverageRuns",
+                "Status",
+                "SchemaVersion"
+              ],
+              "AgentOpsRecommendations_CL": [
+                "TimeGenerated",
+                "RecommendationId",
+                "Action",
+                "Severity",
+                "RunId",
+                "SessionId",
+                "TraceId",
+                "EvalOverall",
+                "EvalBucket",
+                "DashboardCount",
+                "SchemaVersion"
+              ],
+              "AgentOpsCollectorHealth_CL": [
+                "TimeGenerated",
+                "Component",
+                "Status",
+                "CheckName",
+                "CollectorMode",
+                "PrivacyMode",
+                "AzureConfigured",
+                "GrafanaConfigured",
+                "PrivacyPoisonOk",
+                "DroppedContentCount",
+                "ExportErrors",
+                "LastExportSuccess",
+                "LastSpanReceived",
+                "DashboardVersion",
+                "SchemaVersion"
+              ]
+            },
+            "metadataColumns": "[variables('$fxv#0')]",
             "destinationName": "agentops-log-analytics",
             "tablePlan": "Analytics",
             "effectiveRetentionInDays": "[if(less(parameters('retentionInDays'), 4), 4, parameters('retentionInDays'))]",
@@ -1553,24 +1869,25 @@
                 ]
               }
             ],
+            "effectiveTables": "[if(parameters('metadataOnly'), map(variables('v2Tables'), lambda('table', union(lambdaVariables('table'), createObject('columns', filter(lambdaVariables('table').columns, lambda('column', contains(variables('metadataColumns')[lambdaVariables('table').name], lambdaVariables('column').name))))))), variables('v2Tables'))]",
             "metricsPublisherRoleDefinitionId": "3913510d-42f4-4e42-8a64-420c390055eb"
           },
           "resources": [
             {
               "copy": {
                 "name": "tables",
-                "count": "[length(variables('v2Tables'))]"
+                "count": "[length(variables('effectiveTables'))]"
               },
               "type": "Microsoft.OperationalInsights/workspaces/tables",
               "apiVersion": "2022-10-01",
-              "name": "[format('{0}/{1}', parameters('workspaceName'), variables('v2Tables')[copyIndex()].name)]",
+              "name": "[format('{0}/{1}', parameters('workspaceName'), variables('effectiveTables')[copyIndex()].name)]",
               "properties": {
                 "plan": "[variables('tablePlan')]",
                 "retentionInDays": "[variables('effectiveRetentionInDays')]",
                 "totalRetentionInDays": "[variables('effectiveRetentionInDays')]",
                 "schema": {
-                  "name": "[variables('v2Tables')[copyIndex()].name]",
-                  "columns": "[variables('v2Tables')[copyIndex()].columns]",
+                  "name": "[variables('effectiveTables')[copyIndex()].name]",
+                  "columns": "[variables('effectiveTables')[copyIndex()].columns]",
                   "isTroubleshootingAllowed": true
                 }
               }
@@ -1583,7 +1900,7 @@
               "tags": "[parameters('tags')]",
               "properties": {
                 "networkAcls": {
-                  "publicNetworkAccess": "Enabled"
+                  "publicNetworkAccess": "[if(parameters('allowPublicNetworkAccess'), 'Enabled', 'Disabled')]"
                 }
               }
             },
@@ -1597,21 +1914,21 @@
                 "copy": [
                   {
                     "name": "dataFlows",
-                    "count": "[length(variables('v2Tables'))]",
+                    "count": "[length(variables('effectiveTables'))]",
                     "input": {
                       "streams": [
-                        "[variables('v2Tables')[copyIndex('dataFlows')].stream]"
+                        "[variables('effectiveTables')[copyIndex('dataFlows')].stream]"
                       ],
                       "destinations": [
                         "[variables('destinationName')]"
                       ],
-                      "transformKql": "[if(equals(variables('v2Tables')[copyIndex('dataFlows')].stream, 'Custom-AgentOpsSpans_CL'), variables('spansTransformKql'), 'source')]",
-                      "outputStream": "[variables('v2Tables')[copyIndex('dataFlows')].stream]"
+                      "transformKql": "[if(parameters('metadataOnly'), format('source | project {0}', join(map(variables('effectiveTables')[copyIndex('dataFlows')].columns, lambda('column', lambdaVariables('column').name)), ', ')), if(equals(variables('effectiveTables')[copyIndex('dataFlows')].stream, 'Custom-AgentOpsSpans_CL'), variables('spansTransformKql'), 'source'))]",
+                      "outputStream": "[variables('effectiveTables')[copyIndex('dataFlows')].stream]"
                     }
                   }
                 ],
                 "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', format('dce-{0}-{1}', parameters('baseName'), parameters('environmentName')))]",
-                "streamDeclarations": "[toObject(variables('v2Tables'), lambda('table', lambdaVariables('table').stream), lambda('table', createObject('columns', lambdaVariables('table').columns)))]",
+                "streamDeclarations": "[toObject(variables('effectiveTables'), lambda('table', lambdaVariables('table').stream), lambda('table', createObject('columns', lambdaVariables('table').columns)))]",
                 "destinations": {
                   "logAnalytics": [
                     {
@@ -1674,8 +1991,8 @@
             "streams": {
               "type": "array",
               "copy": {
-                "count": "[length(variables('v2Tables'))]",
-                "input": "[variables('v2Tables')[copyIndex()].stream]"
+                "count": "[length(variables('effectiveTables'))]",
+                "input": "[variables('effectiveTables')[copyIndex()].stream]"
               }
             }
           }
@@ -3651,7 +3968,11 @@
     },
     "UPLOAD_COMMAND": {
       "type": "string",
-      "value": "[format('agentops azure-ingest logs-upload --dir <AgentOps table dir> --endpoint {0} --dcr-immutable-id {1} --max-publish-bytes-per-day 5000000 --yes', reference(resourceId('Microsoft.Resources/deployments', 'agentops-v2-ingestion'), '2025-04-01').outputs.logsIngestionEndpoint.value, reference(resourceId('Microsoft.Resources/deployments', 'agentops-v2-ingestion'), '2025-04-01').outputs.dataCollectionRuleImmutableId.value)]"
+      "value": "[format('agentops azure-ingest logs-upload --dir <run-directory> --events-only --endpoint {0} --dcr-immutable-id {1} --max-publish-bytes-per-day 5000000 --yes', reference(resourceId('Microsoft.Resources/deployments', 'agentops-v2-ingestion'), '2025-04-01').outputs.logsIngestionEndpoint.value, reference(resourceId('Microsoft.Resources/deployments', 'agentops-v2-ingestion'), '2025-04-01').outputs.dataCollectionRuleImmutableId.value)]"
+    },
+    "UPLOAD_SPANS_COMMAND": {
+      "type": "string",
+      "value": "[format('agentops azure-ingest logs-upload --dir <run-directory> --spans-only --endpoint {0} --dcr-immutable-id {1} --max-publish-bytes-per-day 5000000 --yes', reference(resourceId('Microsoft.Resources/deployments', 'agentops-v2-ingestion'), '2025-04-01').outputs.logsIngestionEndpoint.value, reference(resourceId('Microsoft.Resources/deployments', 'agentops-v2-ingestion'), '2025-04-01').outputs.dataCollectionRuleImmutableId.value)]"
     }
   }
 }

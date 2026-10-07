@@ -28,6 +28,14 @@ param ingestionPrincipalId string = ''
 ])
 param ingestionPrincipalType string = 'User'
 
+@description('Restrict the schema and DCR projection to the reviewed metadata column allowlist. The button entry point always enables this.')
+param metadataOnly bool = false
+
+@description('Allow public ingestion traffic. Existing developer entry points retain their network behavior; the button requires explicit opt-in.')
+param allowPublicNetworkAccess bool = true
+
+var metadataColumns = loadJsonContent('metadata-ingestion-columns.json')
+
 var destinationName = 'agentops-log-analytics'
 var tablePlan = 'Analytics'
 var effectiveRetentionInDays = retentionInDays < 4 ? 4 : retentionInDays
@@ -386,11 +394,17 @@ var v2Tables = [
   }
 ]
 
+// Preserve the legacy schema for other entry points; the button creates a new, narrower schema.
+// Both stream declarations and destination tables use the same positive column policy.
+var effectiveTables = metadataOnly ? map(v2Tables, table => union(table, {
+  columns: filter(table.columns, column => contains(metadataColumns[table.name], column.name))
+})) : v2Tables
+
 resource workspace 'Microsoft.OperationalInsights/workspaces@2023-09-01' existing = {
   name: workspaceName
 }
 
-resource tables 'Microsoft.OperationalInsights/workspaces/tables@2022-10-01' = [for table in v2Tables: {
+resource tables 'Microsoft.OperationalInsights/workspaces/tables@2022-10-01' = [for table in effectiveTables: {
   parent: workspace
   name: table.name
   properties: {
@@ -413,7 +427,7 @@ resource endpoint 'Microsoft.Insights/dataCollectionEndpoints@2022-06-01' = {
   tags: tags
   properties: {
     networkAcls: {
-      publicNetworkAccess: 'Enabled'
+      publicNetworkAccess: allowPublicNetworkAccess ? 'Enabled' : 'Disabled'
     }
   }
 }
@@ -424,7 +438,7 @@ resource rule 'Microsoft.Insights/dataCollectionRules@2022-06-01' = {
   tags: tags
   properties: {
     dataCollectionEndpointId: endpoint.id
-    streamDeclarations: toObject(v2Tables, table => table.stream, table => {
+    streamDeclarations: toObject(effectiveTables, table => table.stream, table => {
       columns: table.columns
     })
     destinations: {
@@ -435,14 +449,14 @@ resource rule 'Microsoft.Insights/dataCollectionRules@2022-06-01' = {
         }
       ]
     }
-    dataFlows: [for table in v2Tables: {
+    dataFlows: [for table in effectiveTables: {
       streams: [
         table.stream
       ]
       destinations: [
         destinationName
       ]
-      transformKql: table.stream == 'Custom-AgentOpsSpans_CL' ? spansTransformKql : 'source'
+      transformKql: metadataOnly ? 'source | project ${join(map(table.columns, column => column.name), ', ')}' : table.stream == 'Custom-AgentOpsSpans_CL' ? spansTransformKql : 'source'
       outputStream: table.stream
     }]
   }
@@ -470,4 +484,4 @@ output dataCollectionRuleName string = rule.name
 output dataCollectionRuleResourceId string = rule.id
 output dataCollectionRuleImmutableId string = rule.properties.immutableId
 output tableCount int = length(v2Tables)
-output streams array = [for table in v2Tables: table.stream]
+output streams array = [for table in effectiveTables: table.stream]
