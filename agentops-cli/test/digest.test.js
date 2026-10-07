@@ -91,7 +91,7 @@ function withFixture(fn) {
   try {
     return fn(writeFixtureHomes(root), root);
   } finally {
-    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }
 }
 
