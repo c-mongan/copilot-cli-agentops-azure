@@ -12,7 +12,10 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const STUBBED_COMMANDS = Object.freeze(['az', 'azd', 'copilot']);
+const STUBBED_COMMANDS = Object.freeze(['az', 'azd', 'copilot', 'gh']);
+// Inherited location and exporter overrides take precedence over HOME in the
+// code under test, so a developer's real settings would bypass the sandbox.
+const STRIPPED_ENV_PATTERN = /^(AGENTOPS_|COPILOT_|OTEL_)/i;
 const STUB_LOG_ENV = 'CLI_TEST_STUB_LOG';
 const GUARDED_HOME_PATHS = Object.freeze([
   '.agentops',
@@ -44,7 +47,8 @@ function writeCliStubs(dir, options = {}) {
     const message = `${name} is stubbed for hermetic tests; inject a runner instead.`;
     if (platform === 'win32') {
       const lines = ['@echo off'];
-      if (log) lines.push(`if defined ${STUB_LOG_ENV} echo ${name} %*>>"%${STUB_LOG_ENV}%"`);
+      // Redirect first so a trailing digit argument is not read as a handle.
+      if (log) lines.push(`if defined ${STUB_LOG_ENV} >>"%${STUB_LOG_ENV}%" echo ${name} %*`);
       lines.push(`echo ${message} 1>&2`, 'exit /b 1', '');
       fs.writeFileSync(path.join(dir, `${name}.cmd`), lines.join('\r\n'));
     } else {
@@ -70,8 +74,7 @@ function createSandbox(options = {}) {
 }
 
 function hermeticEnv(sandbox, baseEnv = process.env, platform = process.platform) {
-  const env = { ...baseEnv };
-  delete env.COPILOT_CLI_BIN;
+  const env = Object.fromEntries(Object.entries(baseEnv).filter(([key]) => !STRIPPED_ENV_PATTERN.test(key)));
   Object.assign(env, {
     HOME: sandbox.home,
     USERPROFILE: sandbox.home,
@@ -133,6 +136,7 @@ if (require.main === module) {
 
 module.exports = {
   GUARDED_HOME_PATHS,
+  STRIPPED_ENV_PATTERN,
   STUBBED_COMMANDS,
   STUB_LOG_ENV,
   createSandbox,

@@ -8,6 +8,7 @@ const {
   STUB_LOG_ENV,
   createSandbox,
   hermeticEnv,
+  writeCliStubs,
   prependPath,
   sideEffects
 } = require('../../scripts/run-cli-tests');
@@ -17,15 +18,35 @@ const { commandCandidates } = require('../src/lib/shell');
 test('hermetic runner points HOME, caches and PATH at a throwaway sandbox', t => {
   const sandbox = createSandbox();
   t.after(() => fs.rmSync(sandbox.root, { recursive: true, force: true }));
-  const env = hermeticEnv(sandbox, { PATH: '/usr/bin', COPILOT_CLI_BIN: '/real/copilot', HOME: '/real/home' }, 'linux');
+  const env = hermeticEnv(sandbox, {
+    PATH: '/usr/bin',
+    COPILOT_CLI_BIN: '/real/copilot',
+    COPILOT_HOME: '/real/copilot-home',
+    AGENTOPS_HOME: '/real/agentops',
+    AGENTOPS_CONFIG_PATH: '/real/config.json',
+    OTEL_EXPORTER_OTLP_ENDPOINT: 'https://real.example',
+    HOME: '/real/home'
+  }, 'linux');
 
   assert.equal(env.HOME, sandbox.home);
   assert.equal(env.USERPROFILE, sandbox.home);
-  assert.equal(env.COPILOT_CLI_BIN, undefined);
+  for (const name of ['COPILOT_CLI_BIN', 'COPILOT_HOME', 'AGENTOPS_HOME', 'AGENTOPS_CONFIG_PATH', 'OTEL_EXPORTER_OTLP_ENDPOINT']) {
+    assert.equal(env[name], undefined, `${name} must not leak real locations into the sandbox`);
+  }
   assert.equal(env[STUB_LOG_ENV], sandbox.log);
   assert.ok(env.npm_config_cache.startsWith(sandbox.root));
   assert.ok(env.AZURE_CONFIG_DIR.startsWith(sandbox.root));
   assert.equal(env.PATH.split(path.delimiter)[0], sandbox.bin);
+});
+
+test('Windows stubs redirect before echo so a trailing digit argument still logs', t => {
+  const sandbox = createSandbox();
+  t.after(() => fs.rmSync(sandbox.root, { recursive: true, force: true }));
+  const dir = path.join(sandbox.root, 'win-bin');
+  writeCliStubs(dir, { platform: 'win32' });
+  const stub = fs.readFileSync(path.join(dir, 'az.cmd'), 'utf8');
+  assert.match(stub, new RegExp(`>>"%${STUB_LOG_ENV}%" echo az %\\*`));
+  assert.doesNotMatch(stub, /%\*>>/);
 });
 
 test('hermetic runner keeps the Windows Path key casing when prepending stubs', () => {
@@ -37,7 +58,7 @@ test('hermetic runner keeps the Windows Path key casing when prepending stubs', 
 test('hermetic runner stubs win PATH lookup and are not mistaken for product shims', t => {
   const sandbox = createSandbox();
   t.after(() => fs.rmSync(sandbox.root, { recursive: true, force: true }));
-  for (const name of ['az', 'azd', 'copilot']) {
+  for (const name of ['az', 'azd', 'copilot', 'gh']) {
     const [first] = commandCandidates(name, { pathValue: `${sandbox.bin}${path.delimiter}${process.env.PATH || ''}` });
     assert.equal(path.dirname(first), sandbox.bin);
   }
