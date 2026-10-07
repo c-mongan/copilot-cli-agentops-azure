@@ -46,9 +46,21 @@ alias agentops='npx --yes -p https://github.com/c-mongan/copilot-cli-agentops-az
 agentops copilot-session launch --repo /path/to/repo --json \
   -- -p "Run the tests and explain any failure" --allow-all-tools > run.json
 
-# 3. Open that run in the local web UI (or write a static page with `view`)
+```
+
+Choose one way to view the run:
+
+```bash
+# 3a. Interactive local web UI (foreground server; press Ctrl+C to stop)
 agentops ui latest
-agentops copilot-session view "$(jq -r .sessionId run.json)" --run-id "$(jq -r .runId run.json)" --output run.html
+```
+
+Or write a static HTML page and open `run.html` in your browser:
+
+```bash
+# 3b. Static output (returns to the shell; reads step 2's run.json with Node.js)
+agentops copilot-session view "$(node -p 'require("./run.json").sessionId')" \
+  --run-id "$(node -p 'require("./run.json").runId')" --output run.html
 ```
 
 With `--json`, stdout is only the run JSON; Copilot's transcript goes to stderr. `ui latest` opens the run from your most recent `launch`. See the [local web UI](docs/local-ui.md).
