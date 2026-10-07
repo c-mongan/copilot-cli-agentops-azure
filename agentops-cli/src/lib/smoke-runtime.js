@@ -3,7 +3,12 @@ const http = require('node:http');
 const https = require('node:https');
 
 const { otlpHttpEndpoint } = require('./collector-endpoints');
-const { durationToMs, realCopilotSmokeArgs, realCopilotSmokeCommand } = require('./smoke-cli');
+const {
+  DEFAULT_CLOUD_SMOKE_WAIT_MS,
+  durationToMs,
+  realCopilotSmokeArgs,
+  realCopilotSmokeCommand
+} = require('./smoke-cli');
 const { validateKqlDuration } = require('./kql');
 const { smokeAzureQuery } = require('./smoke-payloads');
 const { sleep } = require('./timing');
@@ -99,7 +104,7 @@ function openUrlInBrowser(url, options = {}) {
 
 async function waitForLatestRunSummary(options = {}) {
   const last = validateKqlDuration(options.last || '2h');
-  const waitMs = durationToMs(options.waitMs ?? options.wait, 60000);
+  const waitMs = durationToMs(options.waitMs ?? options.wait, DEFAULT_CLOUD_SMOKE_WAIT_MS);
   const pollMs = Math.max(1, durationToMs(options.pollMs ?? options.poll, 10000));
   const latestFn = options.latestSummary || options.latestSummaryFromArgs;
   if (!latestFn) throw new Error('latestSummaryFromArgs is required');
@@ -149,7 +154,7 @@ async function verifySmokeInAzure(id, options = {}) {
   const last = validateKqlDuration(options.last || '2h');
   const query = smokeAzureQuery(id, last);
   const workspace = options.workspaceId || options.defaultWorkspaceId;
-  const waitMs = durationToMs(options.waitMs ?? options.wait, 60000);
+  const waitMs = durationToMs(options.waitMs ?? options.wait, DEFAULT_CLOUD_SMOKE_WAIT_MS);
   const pollMs = Math.max(1, durationToMs(options.pollMs ?? options.poll, 10000));
   const sleepFn = options.sleep || sleep;
   const queryFn = options.runQuery || options.runAzureLogAnalyticsQuery;

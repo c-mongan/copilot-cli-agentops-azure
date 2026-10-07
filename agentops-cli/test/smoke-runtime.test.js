@@ -123,3 +123,18 @@ test('smoke runtime verifies smoke rows through injected Azure query', async () 
   assert.match(result.query, /agentops-smoke-test/);
   assert.match(result.query, /ago\(15m\)/);
 });
+
+test('smoke runtime defaults to a five minute cloud wait when no wait is given', async () => {
+  const sleeps = [];
+  let calls = 0;
+  const result = await verifySmokeInAzure('agentops-smoke-default-wait', {
+    pollMs: 3_600_000,
+    workspaceId: 'workspace-123',
+    sleep: async ms => { sleeps.push(ms); },
+    runAzureLogAnalyticsQuery: () => ({ ok: true, rows: calls++ ? [{ Rows: 1 }] : [] })
+  });
+
+  assert.equal(result.status, 'found');
+  assert.equal(sleeps.length, 1);
+  assert.ok(sleeps[0] > 60_000 && sleeps[0] <= 300_000, `first sleep ${sleeps[0]}`);
+});

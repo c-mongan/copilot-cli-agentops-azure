@@ -1,5 +1,12 @@
 const { durationToMs, optionValue, parseLastArg } = require('./cli-options');
 
+const DEFAULT_LOCAL_SMOKE_WAIT_MS = 60_000;
+const DEFAULT_CLOUD_SMOKE_WAIT_MS = 300_000;
+
+function defaultSmokeWaitMs({ local = false, verify = true } = {}) {
+  return local || !verify ? DEFAULT_LOCAL_SMOKE_WAIT_MS : DEFAULT_CLOUD_SMOKE_WAIT_MS;
+}
+
 function parseSmokeArgs(args) {
   const parsed = {
     dryRun: args.includes('--dry-run'),
@@ -13,7 +20,10 @@ function parseSmokeArgs(args) {
     // Azure Monitor native OTLP is eventually consistent. Give the default
     // verification window enough time for the first row to reach Log Analytics;
     // local receipt checks remain quick and explicit --no-verify by default.
-    waitMs: durationToMs(optionValue(args, ['--wait']), args.includes('--local') || args.includes('--no-verify') ? 60000 : 300000),
+    waitMs: durationToMs(optionValue(args, ['--wait']), defaultSmokeWaitMs({
+      local: args.includes('--local'),
+      verify: !args.includes('--no-verify')
+    })),
     pollMs: durationToMs(optionValue(args, ['--poll']), 10000),
     json: args.includes('--json')
   };
@@ -47,6 +57,9 @@ function realCopilotSmokeCommand() {
 
 module.exports = {
   commandShellQuote,
+  DEFAULT_CLOUD_SMOKE_WAIT_MS,
+  DEFAULT_LOCAL_SMOKE_WAIT_MS,
+  defaultSmokeWaitMs,
   durationToMs,
   optionValue,
   parseLastArg,
