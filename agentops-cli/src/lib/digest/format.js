@@ -1,3 +1,5 @@
+const { formatCostTotal, formatUsd } = require('../cost-estimate');
+
 function compactNumber(value) {
   const number = Number(value || 0);
   const abs = Math.abs(number);
@@ -20,15 +22,12 @@ function duration(ms) {
 }
 
 function usd(value) {
-  if (value === null || value === undefined) return 'unavailable';
-  if (value > 0 && value < 0.01) return '<$0.01 est.';
-  return `$${value.toFixed(2)} est.`;
+  const amount = formatUsd(value);
+  return amount === 'n/a' ? amount : `${amount} est.`;
 }
 
 function costLabel(tokens) {
-  if (tokens.costStatus === 'unavailable') return 'unavailable';
-  const base = usd(tokens.estCostUsd);
-  return tokens.costStatus === 'partial' ? `${base} (partial: ${tokens.unpricedModels.length} model(s) unpriced)` : base;
+  return formatCostTotal({ costUsd: tokens.estCostUsd, unpricedModels: tokens.unpricedModels || [] });
 }
 
 function day(iso) {
@@ -94,11 +93,10 @@ function glanceRows(digest) {
     },
     {
       metric: 'Cost',
-      now: current.tokens.costStatus === 'unavailable' ? 'unavailable' : usd(current.tokens.estCostUsd),
+      now: costLabel(current.tokens),
       before: costLabel(previous.tokens),
       change: withTone(trendText(trend.estCostUsd, 'usd'), false),
       hint: [
-        current.tokens.costStatus === 'partial' ? `partial: ${current.tokens.unpricedModels.length} model(s) unpriced` : '',
         current.tokens.premiumRequests === null ? '' : `${compactNumber(current.tokens.premiumRequests)} premium requests reported by Copilot`
       ].filter(Boolean).join('; ')
     }

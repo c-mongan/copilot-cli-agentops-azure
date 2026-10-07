@@ -98,7 +98,7 @@ async function startUi(options = {}, io = {}) {
   const { url } = await ui.listen(options.port || 0);
   let target = '';
   if (options.target) {
-    const entry = ui.store.findEntry(options.target);
+    const entry = await ui.store.resolveEntry(options.target);
     if (entry) target = `#/run/${encodeURIComponent(entry.id)}`;
     else stdout.write(`No local session or run matches "${options.target}"; opening the runs list.\n`);
   }

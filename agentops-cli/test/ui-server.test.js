@@ -74,6 +74,18 @@ test('ui server: run detail, filters and errors', async t => {
   for (const secret of SECRETS) assert.equal(detail.body.includes(secret), false, secret);
 
   assert.equal((await request(port, '/api/runs/latest')).json().run.id, FAILED_ID);
+  const since = await request(port, '/api/runs?since=365d');
+  assert.equal(since.status, 200);
+  assert.equal(typeof since.json().kpis.costLabel, 'string');
+  const copilotOnly = (await request(port, '/api/runs?source=copilot')).json();
+  assert.ok(copilotOnly.runs.length > 0);
+  assert.ok(copilotOnly.runs.every(run => run.source !== 'ledger'));
+  const ledgerOnly = (await request(port, '/api/runs?source=ledger')).json();
+  assert.ok(ledgerOnly.runs.length > 0);
+  assert.ok(ledgerOnly.runs.every(run => run.source === 'ledger'));
+  const badSince = await request(port, '/api/runs?since=forever');
+  assert.equal(badSince.status, 400);
+  assert.equal(badSince.json().error, 'bad-since');
   assert.equal((await request(port, '/api/runs/missing')).status, 404);
   assert.equal((await request(port, '/api/runs/%E0%A4%A')).status, 400);
   assert.equal((await request(port, '/api/runs/..%2F..%2Fetc')).status, 404);

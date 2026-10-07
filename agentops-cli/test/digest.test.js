@@ -20,7 +20,7 @@ const {
   slowestTools,
   trendValue
 } = require('../src/lib/digest/digest-summary');
-const { estimateCost, loadPriceTable } = require('../src/lib/digest/pricing');
+const { estimateModelCostUsd, loadPriceTable } = require('../src/lib/cost-estimate');
 const { readLocalSessions, summarizeSessionEvents } = require('../src/lib/digest/session-metadata');
 const { digestCommand, digestFormat } = require('../src/lib/digest-command');
 const { renderDigestHtml } = require('../src/lib/digest/render-html');
@@ -231,10 +231,10 @@ test('model call usage is a deduplicated fallback when no shutdown exists', () =
 });
 
 test('cost estimate is labelled and unavailable without a price', () => {
-  const price = { input: 1, output: 5, cacheRead: 0.1, cacheWrite: 1.25 };
-  const cost = estimateCost({ inputTokens: 1_000_000, outputTokens: 100_000, cacheReadTokens: 600_000, cacheWriteTokens: 0 }, price);
+  const table = { m: { input: 1, output: 5, cacheRead: 0.1, cacheWrite: 1.25 } };
+  const cost = estimateModelCostUsd('m', { inputTokens: 1_000_000, outputTokens: 100_000, cacheReadTokens: 600_000, cacheWriteTokens: 0 }, table);
   assert.ok(Math.abs(cost - (0.4 + 0.5 + 0.06)) < 1e-9);
-  assert.equal(estimateCost({ inputTokens: 10 }, undefined), null);
+  assert.equal(estimateModelCostUsd('other', { inputTokens: 10 }, table), null);
   const prices = loadPriceTable();
   assert.match(prices.label, /estimate/i);
   withFixture((homes, root) => {
