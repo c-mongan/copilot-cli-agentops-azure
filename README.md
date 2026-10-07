@@ -29,9 +29,8 @@ Copilot CLI emits native OpenTelemetry. A loopback-only, strict-privacy Collecto
 You need Node.js 20+ and the GitHub Copilot CLI, signed in. Azure is optional.
 
 ```bash
-# 1. Get the CLI
-git clone https://github.com/c-mongan/copilot-cli-agentops-azure && cd copilot-cli-agentops-azure
-alias agentops="node $PWD/agentops-cli/src/index.js"
+# 1. Get the CLI (one command, no global install; npx fetches the release tarball)
+alias agentops='npx --yes -p https://github.com/c-mongan/copilot-cli-agentops-azure/releases/download/v0.2.1-preview/copilot-agentops-cli-0.1.0.tgz agentops'
 
 # 2. Run an observed Copilot session (local only, no upload)
 agentops copilot-session launch --repo /path/to/repo --json -- -p "Run the tests and explain any failure"
@@ -39,6 +38,8 @@ agentops copilot-session launch --repo /path/to/repo --json -- -p "Run the tests
 # 3. Open the metadata-only run view (sessionId and runId come from step 2's JSON)
 agentops copilot-session view <session-id> --run-id <run-id> --output run.html
 ```
+
+Prefer a source checkout? `git clone` the repository and use `alias agentops="node $PWD/agentops-cli/src/index.js"`. Each release lists its tarball's SHA256 in `SHA256SUMS`. The package is not on the npm registry yet.
 
 To publish to your own Azure workspace, provision it with the [diagnostic pilot quickstart](docs/diagnostic-pilot-quickstart.md). Then add `--upload --yes` with an explicit daily byte cap (`AGENTOPS_MAX_PUBLISH_BYTES_PER_DAY`), and check storage with the [KQL query library](docs/kql-query-library.md).
 

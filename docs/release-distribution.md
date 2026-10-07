@@ -106,3 +106,19 @@ Before publishing or updating a formula:
 Release artifacts must not contain prompts, model responses, source-code contents, local workspace paths, Azure connection strings, Grafana URLs with tenant-specific IDs, or generated `.agentops` data.
 
 The package checks are not a full secret scanner. Keep `node agentops-cli/src/index.js security audit --json` in the release gate.
+
+## One-command install from a GitHub release (npx)
+
+Preview releases attach the packed CLI tarball, so users can run the CLI
+without cloning, with no global install and no npm registry package:
+
+```bash
+npx --yes -p https://github.com/c-mongan/copilot-cli-agentops-azure/releases/download/v0.2.1-preview/copilot-agentops-cli-0.1.0.tgz agentops doctor --local-only
+```
+
+How to attach the assets for a release: run `node scripts/check-release-distribution.js`
+from a clean checkout of the exact tagged commit (set `TMPDIR` to choose where
+the output directory goes). Then upload the `.tgz` files, `.cdx.json` SBOMs,
+`release-manifest.json` and a `SHA256SUMS` file with `gh release upload`.
+Publishing to the npm registry is a separate, explicit step that needs an
+authenticated npm account.
