@@ -1,0 +1,91 @@
+{
+  "date": "2026-10-07",
+  "repository": "c-mongan/copilot-cli-agentops-azure",
+  "baseline": "4e1d3fbccd96a96e96aa027c89c02adcfd9f70c6",
+  "shallow": false,
+  "interpretation": "Commit divergence is not a feature gap: squash merges and unrelated histories require tree comparison.",
+  "branches": [
+    {
+      "ref": "origin/cmongan/agentops-v2-control-room",
+      "head": "abe088a3d31707fc96a5599270fcb8c57248b4d6",
+      "mergeBase": null,
+      "mainOnlyCommits": 211,
+      "branchOnlyCommits": 33,
+      "identicalBlobs": 131,
+      "differentCommonPaths": 155,
+      "branchOnlyPaths": [
+        "collector/tests/privacy-poison-fixtures/content-poison.json",
+        "collector/tests/privacy-poison-fixtures/mcp-poison.json",
+        "docs/screenshots/agentops-alert-tuning-live.png",
+        "docs/screenshots/agentops-attribution-live.png",
+        "docs/screenshots/agentops-custom-eval-widget-live.png",
+        "docs/screenshots/agentops-data-quality-live.png",
+        "docs/screenshots/agentops-experiments-live.png",
+        "docs/screenshots/agentops-live-replay-live.jpg",
+        "docs/screenshots/agentops-overview-live.png",
+        "docs/screenshots/agentops-permission-friction-live.png",
+        "docs/screenshots/agentops-quality-live.png",
+        "docs/screenshots/agentops-runtime-live.png",
+        "docs/screenshots/agentops-safety-policy-live.png",
+        "docs/screenshots/agentops-session-detail-live.png",
+        "docs/screenshots/agentops-sessions-live.png",
+        "docs/screenshots/agentops-tools-live.png",
+        "docs/screenshots/agentops-traces-live.png",
+        "docs/testing-and-next-steps.md",
+        "tests/sample-otel/simple-success.jsonl",
+        "tests/sample-otel/tool-failure.jsonl"
+      ]
+    },
+    {
+      "ref": "origin/docs/pr170-walkthrough-wording",
+      "head": "35dd7756d5ac41aeef7f0e4a6d78d326c2b29838",
+      "mergeBase": "4e1d3fbccd96a96e96aa027c89c02adcfd9f70c6",
+      "mainOnlyCommits": 0,
+      "branchOnlyCommits": 1,
+      "identicalBlobs": 1125,
+      "differentCommonPaths": 2,
+      "branchOnlyPaths": []
+    },
+    {
+      "ref": "origin/feat/native-azure-publish-proof",
+      "head": "0a802c449d129b316165a6af9bc0b527801eb416",
+      "mergeBase": "d74fea5d453a92715ba276b03cd42962860025b1",
+      "mainOnlyCommits": 4,
+      "branchOnlyCommits": 4,
+      "identicalBlobs": 1112,
+      "differentCommonPaths": 7,
+      "branchOnlyPaths": []
+    },
+    {
+      "ref": "origin/fix/pin-azure-mcp-2.0.5",
+      "head": "13cdd6ff2d702eb6462aea07a8de37f0c04fe7cb",
+      "mergeBase": "d74fea5d453a92715ba276b03cd42962860025b1",
+      "mainOnlyCommits": 4,
+      "branchOnlyCommits": 1,
+      "identicalBlobs": 1110,
+      "differentCommonPaths": 9,
+      "branchOnlyPaths": []
+    },
+    {
+      "ref": "origin/qualification/native-windows-20261003",
+      "head": "bceeb76e09fb9dce24b36d4fd0b690823d2db48e",
+      "mergeBase": "090d337d4226d7f8a3ebadc2228e9cb4c8e326b5",
+      "mainOnlyCommits": 5,
+      "branchOnlyCommits": 68,
+      "identicalBlobs": 774,
+      "differentCommonPaths": 102,
+      "branchOnlyPaths": []
+    }
+  ],
+  "checks": {
+    "nativePublishTreeMatchesMerged168": true,
+    "mcpPinPatchEquivalent": true,
+    "windowsCoreFilesMatchMain": {
+      "agentops-cli/src/lib/copilot/scoped-collector.js": true,
+      "agentops-cli/src/lib/copilot/delivery-limits.js": true,
+      "scripts/qualify-native-windows.js": true,
+      "scripts/test/qualify-native-windows.test.js": true,
+      "agentops-cli/test/scoped-collector.test.js": true
+    }
+  }
+}
