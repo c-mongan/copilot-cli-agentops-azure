@@ -13,9 +13,10 @@ const os = require('node:os');
 const path = require('node:path');
 
 const STUBBED_COMMANDS = Object.freeze(['az', 'azd', 'copilot', 'gh']);
-// Inherited location and exporter overrides take precedence over HOME in the
-// code under test, so a developer's real settings would bypass the sandbox.
-const STRIPPED_ENV_PATTERN = /^(AGENTOPS_|COPILOT_|OTEL_)/i;
+// Inherited location, exporter, cloud-target and integration credentials take
+// precedence over HOME in the code under test, so a developer's real settings
+// would bypass the sandbox or reach real services.
+const STRIPPED_ENV_PATTERN = /^(AGENTOPS_|COPILOT_|OTEL_|JIRA_|APPLICATIONINSIGHTS_|AZURE_|GRAFANA_|LOG_ANALYTICS_)/i;
 const STUB_LOG_ENV = 'CLI_TEST_STUB_LOG';
 const GUARDED_HOME_PATHS = Object.freeze([
   '.agentops',

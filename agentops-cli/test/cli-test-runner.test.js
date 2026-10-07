@@ -25,12 +25,16 @@ test('hermetic runner points HOME, caches and PATH at a throwaway sandbox', t =>
     AGENTOPS_HOME: '/real/agentops',
     AGENTOPS_CONFIG_PATH: '/real/config.json',
     OTEL_EXPORTER_OTLP_ENDPOINT: 'https://real.example',
+    JIRA_BASE_URL: 'https://jira.example',
+    JIRA_API_TOKEN: 'not-a-real-token',
+    APPLICATIONINSIGHTS_CONNECTION_STRING: 'InstrumentationKey=fake',
+    AZURE_SUBSCRIPTION_ID: 'fake-subscription',
     HOME: '/real/home'
   }, 'linux');
 
   assert.equal(env.HOME, sandbox.home);
   assert.equal(env.USERPROFILE, sandbox.home);
-  for (const name of ['COPILOT_CLI_BIN', 'COPILOT_HOME', 'AGENTOPS_HOME', 'AGENTOPS_CONFIG_PATH', 'OTEL_EXPORTER_OTLP_ENDPOINT']) {
+  for (const name of ['COPILOT_CLI_BIN', 'COPILOT_HOME', 'AGENTOPS_HOME', 'AGENTOPS_CONFIG_PATH', 'OTEL_EXPORTER_OTLP_ENDPOINT', 'JIRA_BASE_URL', 'JIRA_API_TOKEN', 'APPLICATIONINSIGHTS_CONNECTION_STRING', 'AZURE_SUBSCRIPTION_ID']) {
     assert.equal(env[name], undefined, `${name} must not leak real locations into the sandbox`);
   }
   assert.equal(env[STUB_LOG_ENV], sandbox.log);
