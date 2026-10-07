@@ -305,17 +305,22 @@ async function exportSessionGenAi(options = {}) {
   }
   const identities = new Set(previous?.span_identities || []);
   for (const span of pending) identities.add(exportedSpanIdentity(span));
-  const exportedAt = new Date().toISOString();
-  writeExportMarker(markerFile, {
-    schema_version: EXPORT_MARKER_VERSION,
-    session_id: options.sessionId,
-    run_id: options.runId,
-    destination_kind: destination.kind,
-    destination_hash: destination.hash,
-    exported_at: exportedAt,
-    span_identities: [...identities].sort()
-  });
-  return { ...result, ...exportState, sent_spans: pending.length, ...delivered, marker: markerFile };
+  // The spans are already delivered here, so a marker write failure is a warning, not an export failure.
+  let marker = { marker: markerFile };
+  try {
+    writeExportMarker(markerFile, {
+      schema_version: EXPORT_MARKER_VERSION,
+      session_id: options.sessionId,
+      run_id: options.runId,
+      destination_kind: destination.kind,
+      destination_hash: destination.hash,
+      exported_at: new Date().toISOString(),
+      span_identities: [...identities].sort()
+    });
+  } catch (error) {
+    marker = { marker: null, marker_warning: `export marker not written (${error.code || 'error'}); a rerun will send these spans again` };
+  }
+  return { ...result, ...exportState, sent_spans: pending.length, ...delivered, ...marker };
 }
 
 function renderGenAiExport(value) {
@@ -325,7 +330,7 @@ function renderGenAiExport(value) {
     resend = `Already exported: all ${value.already_exported} spans were sent to this destination before${value.previously_exported_at ? ` (${value.previously_exported_at})` : ''}. Nothing sent. Use --force to re-send; the destination will store duplicate rows.`;
   } else if (value.already_exported) {
     resend = `Sent ${value.sent_spans} new spans; skipped ${value.already_exported} already exported to this destination.`;
-  } else if (value.forced) {
+  } else if (value.forced && value.previously_exported_at) {
     resend = `--force: re-sent all ${value.sent_spans} spans.`;
   }
   return [
@@ -335,6 +340,7 @@ function renderGenAiExport(value) {
     `Spans ${value.spans} (${ops}) · duplicates dropped ${value.duplicates_dropped} · failed tools ${value.failed_tools}`,
     `Tokens invoke_agent ${value.tokens.invoke_agent_input} in / ${value.tokens.invoke_agent_output} out · chat ${value.tokens.chat_input} in / ${value.tokens.chat_output} out`,
     value.output ? `OTLP JSON: ${value.output}` : '',
+    value.marker_warning ? `Warning: ${value.marker_warning}` : '',
     'Metadata only: prompts, responses, tool arguments and results are never exported.'
   ].filter(Boolean).join('\n') + '\n';
 }
