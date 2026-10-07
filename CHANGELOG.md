@@ -5,6 +5,10 @@ project. Package versions stay at `0.1.0` until a package is published to npm.
 
 ## Unreleased
 
+## v0.3.1-preview: 2026-10-07
+
+Fixes from an independent hiring-manager QA pass.
+
 ### Fixed
 
 - **One cost estimate for the UI and digest.** `agentops ui` and `agentops
@@ -21,11 +25,19 @@ project. Package versions stay at `0.1.0` until a package is published to npm.
   uses the same rule.
 - `copilot-session launch --json` now writes only the JSON document to stdout. The Copilot transcript goes to stderr, so `launch --json | jq .` works.
 - A permission-denied tool call no longer marks a run `failed`. Launch, `copilot-session view` and the local UI share one status classifier: failures (tool calls Copilot reports as failed, failed hooks and sub-agents, or a Copilot run error) give `failed`; denials and non-zero shell exits give the new `attention` status ("Needs attention"). See [How run status is decided](docs/local-ui.md#how-run-status-is-decided).
+- Durations no longer render as "17 m 60 s": the UI and session summaries carry rounding into the next unit.
 - Span counts are reconciled and labelled. Launch, view and the UI report the same deduplicated native OTel span count. Launch also reports span-table rows, and the UI also reports trace spans, each with its own label.
 
 ### Added
 
 - `launch --json` adds `status`, `statusLabel`, `statusReasons`, `signals` and `spanCounts`. `view --json` adds `status`, `status_label`, `status_reasons`, `signals` and `native_spans_label`. UI run rows add `denials`, `nonZeroExits`, `nativeSpans`, `traceSpans` and `statusLabel`. Existing fields are unchanged.
+
+### Documentation
+
+- README quickstart passes `--allow-all-tools` (with a trust caveat) so `-p` runs can execute the tests, and saves the `launch --json` output for `view`.
+- Cost is described as an estimate from public list prices; unpriced models show "n/a".
+- Privacy wording now says identifiers are hashed in the ledger and Azure, while the local UI shows local folder names.
+- `HANDOFF.md`, `OPEN_SOURCE_REVIEW.md` and `CONTEXT.md` moved into `docs/`.
 
 ## v0.3.0-preview: 2026-10-07
 

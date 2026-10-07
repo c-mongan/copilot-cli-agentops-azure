@@ -113,7 +113,7 @@ Preview releases attach the packed CLI tarball, so users can run the CLI
 without cloning, with no global install and no npm registry package:
 
 ```bash
-npx --yes -p https://github.com/c-mongan/copilot-cli-agentops-azure/releases/download/v0.3.0-preview/copilot-agentops-cli-0.1.0.tgz agentops doctor --local-only
+npx --yes -p https://github.com/c-mongan/copilot-cli-agentops-azure/releases/download/v0.3.1-preview/copilot-agentops-cli-0.1.0.tgz agentops doctor --local-only
 ```
 
 How to attach the assets for a release: run `node scripts/check-release-distribution.js`

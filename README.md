@@ -39,7 +39,7 @@ You need Node.js 20+ and the GitHub Copilot CLI, signed in. Azure is optional.
 
 ```bash
 # 1. Get the CLI (one command, no global install; npx fetches the release tarball)
-alias agentops='npx --yes -p https://github.com/c-mongan/copilot-cli-agentops-azure/releases/download/v0.3.0-preview/copilot-agentops-cli-0.1.0.tgz agentops'
+alias agentops='npx --yes -p https://github.com/c-mongan/copilot-cli-agentops-azure/releases/download/v0.3.1-preview/copilot-agentops-cli-0.1.0.tgz agentops'
 
 # 2. Run an observed Copilot session (local only, no upload). In -p mode Copilot
 #    cannot ask for permission, so allow tools explicitly; use a repo you trust.
