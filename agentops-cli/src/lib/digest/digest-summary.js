@@ -61,6 +61,11 @@ function slowestTools(sessions, { limit = 5, minCalls = 3 } = {}) {
   return rows.sort((left, right) => right.p95Ms - left.p95Ms || left.tool.localeCompare(right.tool)).slice(0, limit);
 }
 
+function costStatusOf(modelCount, pricedCount, unpricedCount) {
+  if (!modelCount || !pricedCount) return 'unavailable';
+  return unpricedCount ? 'partial' : 'estimated';
+}
+
 function tokenTotals(sessions, priceTable = {}) {
   const byModel = {};
   let premiumRequests = 0;
@@ -96,7 +101,7 @@ function tokenTotals(sessions, priceTable = {}) {
     outputTokens: models.reduce((sum, entry) => sum + entry.outputTokens, 0),
     totalTokens: models.reduce((sum, entry) => sum + entry.totalTokens, 0),
     estCostUsd,
-    costStatus: !models.length || !priced.length ? 'unavailable' : unpricedModels.length ? 'partial' : 'estimated',
+    costStatus: costStatusOf(models.length, priced.length, unpricedModels.length),
     unpricedModels,
     premiumRequests: premiumObserved ? Math.round(premiumRequests * 100) / 100 : null,
     sessionsWithoutTokens
@@ -126,7 +131,9 @@ function trendValue(current, previous, kind = 'count') {
   const known = current !== null && current !== undefined && previous !== null && previous !== undefined;
   const delta = known ? current - previous : null;
   let pctChange = null;
-  if (known && kind === 'count') pctChange = previous === 0 ? (current === 0 ? 0 : null) : delta / previous;
+  // A rise from zero has no meaningful percentage; it is reported as new.
+  if (known && kind === 'count' && previous !== 0) pctChange = delta / previous;
+  else if (known && kind === 'count' && current === 0) pctChange = 0;
   return { current: current ?? null, previous: previous ?? null, delta, pctChange, kind };
 }
 
@@ -205,7 +212,11 @@ function recommendations({ current, trend, clusters, tools, sessions }) {
   return candidates
     .sort((left, right) => right.score - left.score || left.text.localeCompare(right.text))
     .slice(0, 3)
-    .map(({ score, ...rest }) => rest);
+    .map(candidate => {
+      const action = { ...candidate };
+      delete action.score;
+      return action;
+    });
 }
 
 function buildDigest({ sessions = [], nowMs = Date.now(), period = parsePeriod('7d'), prices = { table: {}, label: '' }, sources = {} } = {}) {

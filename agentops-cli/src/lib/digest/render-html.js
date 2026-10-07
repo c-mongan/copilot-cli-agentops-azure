@@ -161,10 +161,10 @@ footer{color:var(--muted);font-size:12px;margin-top:8px}footer p{margin:4px 0}
 `;
 
 const SCRIPT = `
-(function(){var root=document.documentElement;var param=new URLSearchParams(location.search).get('theme');
+(function(){const root=document.documentElement;const param=new URLSearchParams(location.search).get('theme');
 if(param==='dark'||param==='light')root.setAttribute('data-theme',param);
-var button=document.getElementById('theme');if(!button)return;
-button.addEventListener('click',function(){var dark=root.getAttribute('data-theme')==='dark'||(!root.getAttribute('data-theme')&&matchMedia('(prefers-color-scheme: dark)').matches);root.setAttribute('data-theme',dark?'light':'dark');});})();
+const button=document.getElementById('theme');if(!button)return;
+button.addEventListener('click',function(){const dark=root.getAttribute('data-theme')==='dark'||(!root.getAttribute('data-theme')&&matchMedia('(prefers-color-scheme: dark)').matches);root.setAttribute('data-theme',dark?'light':'dark');});})();
 `;
 
 function renderDigestHtml(digest) {
