@@ -44,19 +44,16 @@ function toolCallIdentity(span) {
   return `${callId}\u0000${window[0]}\u0000${window[1]}`;
 }
 
-// Keeps the first occurrence of each native span. Span-event rows are dropped
-// unless `keepSpanEvents` is set; spans without a trace/span ID are dropped
-// unless `keepUnidentified` is set (they cannot be deduplicated by identity).
-function dedupeNativeSpans(spans = [], { keepSpanEvents = false, keepUnidentified = false } = {}) {
+// Keeps the first occurrence of each native span. Span-event rows are always
+// dropped; spans without a trace/span ID are dropped unless `keepUnidentified`
+// is set (they cannot be deduplicated by identity).
+function dedupeNativeSpans(spans = [], { keepUnidentified = false } = {}) {
   const seenSpans = new Set();
   const seenToolCalls = new Set();
   const result = [];
   for (const span of spans) {
     if (!span || typeof span !== 'object') continue;
-    if (isSpanEventRow(span)) {
-      if (keepSpanEvents) result.push(span);
-      continue;
-    }
+    if (isSpanEventRow(span)) continue;
     const traceId = field(span, 'traceId', 'TraceId');
     const spanId = field(span, 'spanId', 'SpanId');
     if (!traceId || !spanId) {
@@ -74,4 +71,4 @@ function dedupeNativeSpans(spans = [], { keepSpanEvents = false, keepUnidentifie
   return result;
 }
 
-module.exports = { dedupeNativeSpans, isToolSpan, toolCallIdentity };
+module.exports = { dedupeNativeSpans };
