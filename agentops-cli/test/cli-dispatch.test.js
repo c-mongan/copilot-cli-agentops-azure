@@ -199,3 +199,18 @@ test('createCliMain answers direct-command --help from usage without running the
     ['mcp-proxy', ['--server-name', 'x', '--', 'server', '--help']]
   ]);
 });
+
+test('createCliMain answers collector, start, stop and recommend --help without running them', async () => {
+  for (const [argv, topic] of [
+    [['collector', '--help'], 'collector'],
+    [['collector', 'start', '-h'], 'collector'],
+    [['start', '--help'], 'collector'],
+    [['stop', '--help'], 'collector'],
+    [['recommend', '--help'], 'recommend']
+  ]) {
+    const harness = createHarness({ usage: name => `help ${name}\n` });
+    await harness.main(argv);
+    assert.deepEqual(harness.calls, [], argv.join(' '));
+    assert.equal(harness.stdout(), `help ${topic}\n`);
+  }
+});

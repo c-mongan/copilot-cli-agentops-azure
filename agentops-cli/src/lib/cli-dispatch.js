@@ -117,6 +117,12 @@ function createCliMain(dependencies = {}) {
       return legacy.main([experimentalCommand, ...experimentalArgs]);
     }
 
+    const specialHelpTopic = { collector: 'collector', recommend: 'recommend', start: 'collector', stop: 'collector' }[command];
+    if (specialHelpTopic && wantsHelp(args)) {
+      stdout.write(usage(specialHelpTopic));
+      return undefined;
+    }
+
     if (command === 'collector' || command === 'start' || command === 'stop') {
       const collectorArgs = command === 'start' || command === 'stop' ? [command, ...args] : args;
       return commands.collectorCommand(collectorArgs);
