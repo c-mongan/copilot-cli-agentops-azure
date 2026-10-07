@@ -30,6 +30,7 @@ const { enrichSpansWithSessionToolContext, readSessionSpanRows, writeSessionSpan
 const { deleteSessionContent, writeSessionContent } = require('./session-content');
 const { writeSessionEvents } = require('./session-event-export');
 const { readSessionOutbox } = require('./session-delivery-outbox');
+const { exportSessionGenAi, renderGenAiExport } = require('./session-genai-export');
 
 function parseCopilotSessionArgs(args = []) {
   const [subcommand, positional] = args;
@@ -55,6 +56,9 @@ function parseCopilotSessionArgs(args = []) {
     yes: optionArgs.includes('--yes'),
     help: optionArgs.includes('--help') || optionArgs.includes('-h'),
     endpoint: optionValue(optionArgs, '--endpoint', otlpHttpEndpoint),
+    explicitEndpoint: optionArgs.includes('--endpoint'),
+    connectionStringEnv: optionValue(optionArgs, '--appinsights-connection-string-env'),
+    agentName: optionValue(optionArgs, '--agent-name'),
     id: optionValue(optionArgs, '--id') || legacy.customEventId(),
     dryRun: optionArgs.includes('--dry-run'),
     json: parseJsonFlag(optionArgs),
@@ -395,6 +399,25 @@ async function copilotSessionCommand(args = [], dependencies = {}) {
     const spans = enrichSpansWithSessionToolContext(native.spans, sessionEvents);
     const result = writeSessionSpans(spans, sessionId, options.runId, options.output);
     writeJsonOrRender({ ok: true, session_id: sessionId, run_id: options.runId, native_spans: native.spans.filter(span => span.match === 'exact-session').length, run_linked_script_spans: native.spans.filter(span => span.match === 'run-linked-script').length, ...result }, options.json, value => `Synthetic run spans: ${value.rows} rows in ${value.output}\n`);
+    return;
+  }
+  if (options.subcommand === 'export-otel') {
+    if (!options.sessionId) throw new Error('copilot-session export-otel requires <session-id>');
+    if (!options.runId) throw new Error('copilot-session export-otel requires --run-id <observed-run-id>');
+    if (options.allowContent) throw new Error('copilot-session export-otel is metadata-only; --allow-content is not supported');
+    if (options.explicitEndpoint && options.connectionStringEnv) throw new Error('choose one of --endpoint or --appinsights-connection-string-env');
+    const result = await exportSessionGenAi({
+      sessionId: options.sessionId,
+      runId: options.runId,
+      eventsFile: options.file,
+      otelFiles: options.otelFiles,
+      agentName: options.agentName,
+      output: options.output,
+      dryRun: options.dryRun,
+      endpoint: options.explicitEndpoint ? options.endpoint : undefined,
+      connectionStringEnv: options.connectionStringEnv
+    });
+    writeJsonOrRender({ ok: true, ...result }, options.json, renderGenAiExport);
     return;
   }
   if (options.subcommand === 'export-events') {

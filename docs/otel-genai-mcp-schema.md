@@ -2,6 +2,8 @@
 
 Use OpenTelemetry semantic conventions first, then add `agentops.*` fields only for Copilot-specific metadata.
 
+The pinned semconv version and the exact span mapping used for App Insights export are in [otel-genai.md](otel-genai.md).
+
 ## GenAI
 
 Required or strongly recommended fields:
