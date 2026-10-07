@@ -251,6 +251,9 @@ function suppliedExecutionConfiguration(input = {}) {
 
 function normalizeExecutionConfiguration(input) {
   if (!input) return unknownExecutionConfiguration();
+  if (input.source === 'unknown' && !input.configurationVersion && !input.executionConfigurationHash) {
+    return unknownExecutionConfiguration();
+  }
   if (input.source === 'observed_launch_arguments') {
     const expected = Array.isArray(input.commandArgs)
       ? observedLaunchExecutionConfiguration(input.commandArgs)
