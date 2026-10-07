@@ -36,7 +36,7 @@ A failed tool span gets status `ERROR` and `error.type` (for example `denied`), 
 | `gen_ai.operation.name` | all | native operation | Required. |
 | `gen_ai.provider.name` | all | native provider (`github`) | Required on agent and inference spans. `github` is a custom value, which the spec allows. |
 | `gen_ai.system` | all | same as provider | Deprecated alias. Kept because existing Azure Monitor queries still use it. |
-| `gen_ai.agent.name` | all | `--agent-name`, else the native agent name, else `GitHub Copilot CLI` | The Agents view groups by this. |
+| `gen_ai.agent.name` | all | `--agent-name`, else the native agent name, else `GitHub Copilot CLI` | The Agents view groups by this. Strict collector configs keep `copilot`, `copilotcli` and `claude` readable and replace any other label with its SHA-256 digest. |
 | `gen_ai.conversation.id` | all | Copilot session ID | |
 | `gen_ai.request.model` / `gen_ai.response.model` | `chat` | native model requested / actual | |
 | `gen_ai.usage.input_tokens` / `output_tokens` | `invoke_agent`, `chat` | native usage | `invoke_agent` holds the session total (see the limits section). |
