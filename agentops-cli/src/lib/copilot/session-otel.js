@@ -2,6 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const { collectorHome } = require('../paths');
+const { dedupeNativeSpans } = require('./native-span-identity');
 
 const MAX_RECEIPT_BYTES = 20 * 1024 * 1024;
 
@@ -208,7 +209,7 @@ function readSessionOtelSpans(sessionId, files = defaultReceiptFiles(), options 
       if (!seen.has(key)) { seen.add(key); spans.push(span); }
     }
   }
-  return { spans, files, invalid, unsupported };
+  return { spans: dedupeNativeSpans(spans), files, invalid, unsupported };
 }
 
 function readOtelSpansFromText(text, options = {}) {
@@ -321,7 +322,7 @@ function readOtelSpansFromText(text, options = {}) {
         });
       }
   }
-  return { spans, invalid, unsupported };
+  return { spans: dedupeNativeSpans(spans), invalid, unsupported };
 }
 
 module.exports = { decodeOtlpProtobuf, defaultReceiptFiles, readSessionOtelSpans, readOtelSpansFromText };

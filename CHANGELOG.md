@@ -9,6 +9,7 @@ project. Package versions stay at `0.1.0` until a package is published to npm.
 
 - Run status, native span counts and duration labels: a launch without `session.shutdown` stays `incomplete`; failed hooks and sub-agents count as failures while failed ledger chat spans do not; native spans are counted by trace/span ID excluding span-event rows; hour-scale durations round from milliseconds. (#191)
 - Strict collector traces keep `gen_ai.agent.name` so Application Insights Agents (Preview) can group runs. The built-in labels `copilot`, `copilotcli` and `claude` stay readable; other string labels become SHA-256 digests, and empty or non-string labels are removed. The digests let runs be grouped, but they are not anonymous IDs. No content attributes are added.
+- Duplicate native tool spans: when Copilot CLI's native OTel file export re-emits a span (same trace/span ID) or the same tool call under a second span ID with an identical start and end, the launch summary, `copilot-session view`, `export-spans`, `export-otel`, run delivery and the UI waterfall now show it once. Repeated span-event rows in a span ledger also attach once. One shared helper (`agentops-cli/src/lib/copilot/native-span-identity.js`) applies the rule.
 
 ## v0.3.1-preview: 2026-10-07
 

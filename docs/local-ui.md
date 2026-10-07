@@ -113,7 +113,7 @@ JSON output keeps every existing field and adds `status`, `statusLabel` / `statu
 
 | Name | Where | Counts |
 |---|---|---|
-| Native OTel spans | launch `spanCounts.nativeSpans`, view `native_spans`, UI toolbar | Unique native spans, deduplicated by trace ID and span ID. Span-event rows are excluded. |
+| Native OTel spans | launch `spanCounts.nativeSpans`, view `native_spans`, UI toolbar | Unique native spans, deduplicated by trace ID and span ID. A re-emitted `execute_tool` span with the same tool call ID and identical start and end counts once. Span-event rows are excluded. |
 | Span-table rows | launch `spanCounts.spanRows` and the legacy `evidence.spans` | Rows written to `AgentOpsSpans_CL.jsonl`: each span plus one row per span event. Always at least the native span count. |
 | Trace spans | UI toolbar | Rows in the UI waterfall: session, turns, hooks, model calls and tool calls, built from session events and spans. |
 

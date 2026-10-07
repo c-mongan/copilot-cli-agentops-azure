@@ -1,6 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { AGENTOPS_SCHEMA_VERSION } = require('../schema/agentops-attributes');
+const { dedupeNativeSpans } = require('./native-span-identity');
 
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const SESSION_SPAN_MAX_BYTES = 20 * 1024 * 1024;
@@ -290,19 +291,23 @@ function readSessionSpanRows(runDirectory, runId, sessionId) {
       events: []
     });
   }
+  const seenEvents = new Set();
   for (const row of spanEvents) {
     const identity = `${row.TraceId || ''}:${row.ParentSpanId || row.SpanId || ''}`;
     const parent = canonical.get(identity);
     const time = Date.parse(row.TimeGenerated || '');
     const name = String(row.EventName || row.SpanName || row.OperationName || '');
     if (!parent || !Number.isFinite(time) || !name) continue;
+    const eventIdentity = `${identity}\u0000${time}\u0000${name}\u0000${row.SkillName || ''}`;
+    if (seenEvents.has(eventIdentity)) continue;
+    seenEvents.add(eventIdentity);
     parent.events.push({
       time,
       name,
       attributes: row.SkillName ? { 'github.copilot.skill.name': String(row.SkillName) } : {}
     });
   }
-  return { spans: [...canonical.values()], invalid };
+  return { spans: dedupeNativeSpans([...canonical.values()]), invalid };
 }
 
 module.exports = { enrichSpansWithSessionToolContext, readSessionSpanRows, sessionToolContext, spanRowsFromOtelSpans, writeSessionSpans };
