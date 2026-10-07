@@ -367,7 +367,9 @@ test('copilot-session view joins payload-free per-stream delivery state by run a
     assert.equal(summary.status, 'incomplete', 'no session.shutdown was observed');
     assert.equal(summary.status_label, 'Incomplete');
     assert.equal(summary.signals.failures, 0);
-    assert.match(fs.readFileSync(output, 'utf8'), /data-run-status="incomplete"/);
+    const statusHtml = fs.readFileSync(output, 'utf8');
+    assert.match(statusHtml, /data-run-status="incomplete"/);
+    assert.match(statusHtml, /Run status: Incomplete \(0 failed, 0 denied, 0 shell non-zero exits\)/);
     const html = fs.readFileSync(output, 'utf8');
     assert.match(html, /execute_tool: bash/);
     assert.match(html, /script: scripts\/probe\.py/);

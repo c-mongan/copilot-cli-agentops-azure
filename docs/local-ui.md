@@ -105,6 +105,8 @@ The run status is the first rule that matches:
 | `attention` | Needs attention | At least one denial or non-zero shell exit, and no failures. |
 | `ok` | Completed | None of the above. |
 
+The `copilot-session view` HTML still shows a detail card for every denial and non-zero shell exit, so you can inspect them. Its summary states the run status and the breakdown, so the card count does not imply a failed run.
+
 JSON output keeps every existing field and adds `status`, `statusLabel` / `status_label`, `statusReasons` / `status_reasons` (`run_errored`, `failures`, `denials`, `nonzero_exits`) and the signal counts. `ok` in `launch --json` still means "Copilot exited 0 and evidence was collected"; it is not the run status.
 
 ### What each span count means
