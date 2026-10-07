@@ -13,11 +13,18 @@ git clone https://github.com/c-mongan/copilot-cli-agentops-azure && cd copilot-c
 alias agentops="node $PWD/agentops-cli/src/index.js"
 
 agentops ui                 # runs list; opens your browser when run in a terminal
-agentops ui latest          # jump straight to the newest run's waterfall
+agentops ui latest          # jump straight to the latest run's waterfall
 agentops open latest --ui   # same thing, from the run receipt command
 ```
 
 The command prints `AgentOps UI running at http://127.0.0.1:<port>/`. Press `Ctrl+C` to stop it.
+
+`latest` (in `agentops ui latest`, `agentops open latest --ui` and `/api/runs/latest`) picks, in order of most recent activity:
+
+1. a run recorded by AgentOps (`agentops copilot-session launch`, from its `~/.agentops/runs/*/run-context.json`) or a finished Copilot CLI session, whichever is newest;
+2. a still-running (live) Copilot CLI session only when there is nothing else.
+
+So a Copilot session you have open in another terminal never hides the run you just launched.
 
 | Option | Effect |
 |---|---|
@@ -85,9 +92,10 @@ The theme follows `prefers-color-scheme` until you pick one. Motion is reduced w
 
 Copilot CLI bills by premium requests, not tokens, and emits no cost metadata. The UI multiplies observed tokens by public API list prices to give an order-of-magnitude estimate. It is always labelled "est." and is never billed cost.
 
-- The price table lives in one file, [`agentops-cli/src/lib/ui/pricing.js`](../agentops-cli/src/lib/ui/pricing.js), with its date and source links ([Anthropic](https://platform.claude.com/docs/en/about-claude/pricing), [OpenAI](https://developers.openai.com/api/docs/pricing)).
+- The UI and `agentops digest` share one estimator and price table, [`agentops-cli/src/lib/cost-estimate.js`](../agentops-cli/src/lib/cost-estimate.js), with its date and source links ([Anthropic](https://platform.claude.com/docs/en/about-claude/pricing), [OpenAI](https://developers.openai.com/api/docs/pricing)). For the same runs both show the same total.
 - Cache reads and writes are priced at their own rates and the rest of the input at the input rate.
-- If any model in a run is not in the table, the run's cost shows "—" instead of a partial sum. The KPI strip shows how many runs are unpriced.
+- A model that is not in the table is **unpriced**: its cost shows "n/a", never $0 or a guess. Totals add up the priced models and say how many are unpriced, for example `$12.34 est. (2 models unpriced)`. The runs table footer shows that total; a run with some unpriced models shows `+n/a` next to its cost.
+- `GET /api/runs?since=7d` limits the list and KPIs to runs that started in the window. Add `&source=copilot` to drop AgentOps ledger runs that have no Copilot session file, which the digest does not read. That request covers the same runs as `agentops digest --since 7d`, so the totals match when `--limit` is large enough to include the whole window.
 
 ## Known limits
 

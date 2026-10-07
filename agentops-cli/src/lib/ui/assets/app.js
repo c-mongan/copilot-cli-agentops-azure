@@ -71,7 +71,7 @@
     return `${hrs} h ${String(m % 60).padStart(2, '0')} m`;
   }
   function fmtCost(value) {
-    if (value === null || value === undefined) return '—';
+    if (value === null || value === undefined) return 'n/a';
     if (value === 0) return '$0.00';
     if (value < 0.01) return '<$0.01';
     if (value < 100) return `$${value.toFixed(2)}`;
@@ -211,7 +211,19 @@
       tile('Failures', fmtInt(k.failures), k.failedRuns ? `in ${plural(k.failedRuns, 'run')}` : 'No failed runs', { bad: k.failures > 0 }),
       tile('p95 tool latency', fmtDuration(k.p95ToolMs), 'across all tool calls'),
       tile('Tokens', fmtTokens(tokenTotal), `${fmtTokens(k.tokens.input)} in · ${fmtTokens(k.tokens.output)} out`, { title: `${fmtInt(tokenTotal)} tokens in ${plural(k.tokens.runsWithTokens, 'run')} with usage data` }),
-      tile('Cost', fmtCost(k.costUsd), k.premiumRequests ? `${fmtInt(Math.round(k.premiumRequests * 100) / 100)} premium requests` : (k.unpricedRuns ? `${plural(k.unpricedRuns, 'run')} unpriced` : 'list-price estimate'), { est: true, title: k.unpricedRuns ? `${plural(k.unpricedRuns, 'run')} use models without a published price and are excluded` : null }));
+      tile('Cost', fmtCost(k.costUsd), unpricedNote(k.unpricedModels) || (k.premiumRequests ? `${fmtInt(Math.round(k.premiumRequests * 100) / 100)} premium requests` : 'list-price estimate'), { est: true, title: k.costLabel || null }));
+  }
+
+  function unpricedNote(models) {
+    return models && models.length ? `${plural(models.length, 'model')} unpriced` : '';
+  }
+
+  function costCell(run) {
+    if (!run.tokens.known) return h('span', { class: 'zero', text: '—', title: 'No usage recorded yet' });
+    const partial = run.unpricedModels && run.unpricedModels.length;
+    if (!partial) return fmtCost(run.costUsd);
+    return h('span', { title: `${run.costLabel}: no published price for ${run.unpricedModels.join(', ')}` },
+      fmtCost(run.costUsd), run.costUsd === null ? null : h('span', { class: 'model-more', text: '+n/a' }));
   }
 
   function filterBar(data, filters) {
@@ -263,7 +275,7 @@
           : h('span', { class: 'zero', text: '—', title: 'No usage recorded yet (session still open or ended abruptly)' })),
         h('td', { class: 'num col-optional' }, run.toolCalls ? fmtInt(run.toolCalls) : h('span', { class: 'zero', text: '0' })),
         h('td', { class: 'num' }, run.failures ? h('span', { class: 'fail-count', text: fmtInt(run.failures), title: run.failureGroups.map(g => `${g.count}× ${g.name} ${g.outcome}`).join(', ') }) : h('span', { class: 'zero', text: '0' })),
-        h('td', { class: 'num col-optional' }, fmtCost(run.costUsd)));
+        h('td', { class: 'num col-optional' }, costCell(run)));
     });
     return h('div', { class: 'card' },
       h('div', { class: 'table-wrap' },
@@ -284,6 +296,7 @@
         h('span', { text: data.totalSessions > data.scanned
           ? `Showing the newest ${fmtInt(data.scanned)} of ${plural(data.totalSessions, 'session')}. Start with --limit <n> to analyse more.`
           : `All ${plural(data.totalSessions, 'session')} analysed.` }),
+        h('span', { class: 'cost-total', text: `Cost total: ${data.kpis.costLabel || fmtCost(data.kpis.costUsd)}` }),
         h('span', { text: anyFilter ? 'KPIs reflect the filtered runs.' : 'Newest first.' })));
   }
 
@@ -313,7 +326,7 @@
       h('p', null,
         'Cost is an estimate from public per-token list prices (table dated ', pricing ? pricing.date : '—', '; ',
         sources.map((source, index) => [index ? ', ' : '', h('a', { href: source, target: '_blank', rel: 'noreferrer noopener', text: sourceName(source) })]),
-        '). Copilot bills premium requests, not tokens. Models without a published price show —.'),
+        '). Copilot bills premium requests, not tokens. Models without a published price show n/a and are counted as unpriced, never as $0.'),
       h('span', { class: 'shortcuts' }, home
         ? [h('kbd', { text: '/' }), 'search', h('kbd', { text: '↑↓' }), 'move', h('kbd', { text: 'Enter' }), 'open', h('kbd', { text: 't' }), 'theme']
         : [h('kbd', { text: '↑↓' }), 'spans', h('kbd', { text: '←→' }), 'fold', h('kbd', { text: 'Esc' }), 'back', h('kbd', { text: 't' }), 'theme']));
@@ -426,7 +439,7 @@
       tile('Tool calls', fmtInt(run.toolCalls), run.p95ToolMs !== null ? `p95 ${fmtDuration(run.p95ToolMs)}` : 'no tool calls'),
       tile('Failures', fmtInt(run.failures), run.failures ? `${plural(run.toolFailures, 'tool call')} failed` : 'Nothing failed', { bad: run.failures > 0 }),
       tile('Tokens', run.tokens.known ? fmtTokens(run.tokens.input + run.tokens.output) : '—', run.tokens.known ? `${fmtTokens(run.tokens.input)} in · ${fmtTokens(run.tokens.output)} out` : 'not recorded yet'),
-      tile('Cost', fmtCost(run.costUsd), run.premiumRequests !== null ? `${fmtInt(run.premiumRequests)} premium requests` : 'list-price estimate', { est: true }));
+      tile('Cost', fmtCost(run.costUsd), unpricedNote(run.unpricedModels) || (run.premiumRequests !== null ? `${fmtInt(run.premiumRequests)} premium requests` : 'list-price estimate'), { est: true, title: run.costLabel || null }));
   }
 
   function legend(spans) {
@@ -483,7 +496,7 @@
     const last = series.points[series.points.length - 1];
     const label = h('div', { class: 'meter-label' },
       h('span', { class: 'meter-title', text: series.granularity === 'call' ? 'Tokens · cost, cumulative' : 'Tokens · cost' }),
-      h('span', { class: 'meter-value' }, last ? fmtTokens(last.input + last.output) : '—', ' ', h('small', { text: last ? `· ${fmtCost(last.costUsd)} est.` : '' })));
+      h('span', { class: 'meter-value' }, last ? fmtTokens(last.input + last.output) : '—', ' ', h('small', { text: last ? (last.costUsd === null ? '· cost n/a' : `· ${fmtCost(last.costUsd)} est.`) : '' })));
     const track = h('div', { class: 'track' });
     if (!series.points.length) {
       track.append(h('span', { class: 'meter-empty', text: 'No token usage recorded for this run yet.' }));
@@ -507,7 +520,7 @@
         track.append(h('span', {
           class: 'meter-dot',
           style: { left: pct(point.tMs), top: `calc(8px + (100% - 16px) * ${y / 100})` },
-          title: `${fmtDuration(point.tMs)}: ${fmtInt(point.input)} in · ${fmtInt(point.output)} out · ${fmtCost(point.costUsd)} est.`
+          title: `${fmtDuration(point.tMs)}: ${fmtInt(point.input)} in · ${fmtInt(point.output)} out · ${point.costUsd === null ? 'cost n/a' : `${fmtCost(point.costUsd)} est.`}`
         }));
       }
       if (series.granularity === 'session') {

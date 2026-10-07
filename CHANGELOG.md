@@ -5,6 +5,21 @@ project. Package versions stay at `0.1.0` until a package is published to npm.
 
 ## Unreleased
 
+### Fixed
+
+- **One cost estimate for the UI and digest.** `agentops ui` and `agentops
+  digest` used two different price tables: the digest's 2025 table had 8 models,
+  so current models were unpriced and a week of runs showed $0.30, while the UI
+  priced the same models and showed $217. Both now use one dated table and
+  estimator (`agentops-cli/src/lib/cost-estimate.js`) and compute the same total
+  for the same runs. Unpriced models show "n/a", never $0 or a guess, and totals
+  read `$X est. (N models unpriced)` in both. `GET /api/runs?since=7d` matches the
+  digest window.
+- **`agentops ui latest` opens the run you just launched.** `latest` now prefers
+  the newest AgentOps ledger run or finished session, and picks a still-running
+  Copilot session only when nothing else exists. `agentops open latest --ui`
+  uses the same rule.
+
 ## v0.3.0-preview: 2026-10-07
 
 ### Added

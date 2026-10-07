@@ -1,5 +1,6 @@
 const {
   compactNumber,
+  costLabel,
   day,
   duration,
   glanceRows,
@@ -105,7 +106,7 @@ function tokenTable(digest) {
         <table>
           <thead><tr><th>Model</th><th class="num">Sessions</th><th class="num">Input</th><th class="num">Output</th><th class="num">Cache read</th><th class="num">Cost</th></tr></thead>
           <tbody>${rows}</tbody>
-          <tfoot><tr><td>Total</td><td></td><td class="num">${compactNumber(tokens.inputTokens)}</td><td class="num">${compactNumber(tokens.outputTokens)}</td><td class="num">${compactNumber(tokens.models.reduce((sum, model) => sum + model.cacheReadTokens, 0))}</td><td class="num">${escapeHtml(tokens.costStatus === 'unavailable' ? 'unavailable' : usd(tokens.estCostUsd))}</td></tr></tfoot>
+          <tfoot><tr><td>Total</td><td></td><td class="num">${compactNumber(tokens.inputTokens)}</td><td class="num">${compactNumber(tokens.outputTokens)}</td><td class="num">${compactNumber(tokens.models.reduce((sum, model) => sum + model.cacheReadTokens, 0))}</td><td class="num">${escapeHtml(costLabel(tokens))}</td></tr></tfoot>
         </table>${tokens.costStatus === 'partial' ? `
         <p class="muted note">Partial estimate: no price is known for ${escapeHtml(tokens.unpricedModels.join(', '))}. Pass <code>--prices &lt;file.json&gt;</code> to price them.</p>` : ''}`;
 }
@@ -216,7 +217,7 @@ function renderDigestHtml(digest) {
   </section>
   <footer>
     <p>Sources: ${Number(sources.sessionsScanned || 0)} local Copilot CLI session file(s) scanned, ${Number(sources.linkedRuns || 0)} linked to AgentOps runs. Generated ${escapeHtml(stamp(digest.generatedAt))} UTC by <code>agentops digest</code>.</p>
-    <p>Cost: ${escapeHtml(digest.priceTable || 'no price table')}. "unavailable" means no price is known for that model.</p>
+    <p>Cost: ${escapeHtml(digest.priceTable || 'no price table')}. "n/a" means no price is known for that model; totals count those models as unpriced instead of guessing.</p>
   </footer>
 </main>
 <script>${SCRIPT}</script>

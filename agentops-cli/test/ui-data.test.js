@@ -12,7 +12,8 @@ const {
   RUN_ID,
   SECRETS,
   T0,
-  createUiFixture
+  createUiFixture,
+  line
 } = require('./support/ui-fixture');
 
 function storeFor(fixture, options = {}) {
@@ -219,7 +220,7 @@ test('ui data: KPIs, facets and filters aggregate the visible runs', async t => 
   assert.deepEqual(all.kpis, {
     runs: 3, failedRuns: 2, failures: 2, toolCalls: 5, p95ToolMs: 12000,
     tokens: { input: 61000, output: 510, runsWithTokens: 2 },
-    premiumRequests: 0.33, costUsd: 0.0195, costRuns: 1, unpricedRuns: 1
+    premiumRequests: 0.33, costUsd: 0.0195, costLabel: '$0.02 est. (1 model unpriced)', unpricedModels: ['unknown'], costRuns: 1, unpricedRuns: 1
   });
   assert.deepEqual(all.facets.statuses, [{ value: 'failed', count: 2 }, { value: 'incomplete', count: 1 }]);
 
@@ -242,13 +243,57 @@ test('ui data: findEntry resolves latest, run IDs and rejects unsafe IDs', async
   const fixture = createUiFixture('find');
   t.after(fixture.cleanup);
   const store = storeFor(fixture);
-  assert.equal(store.findEntry('latest').id, FAILED_ID);
+  assert.equal((await store.resolveEntry('latest')).id, FAILED_ID);
+  assert.equal(store.findEntry('latest'), null, 'latest needs the async resolver');
   assert.equal(store.findEntry(RUN_ID).id, FAILED_ID);
   assert.equal(store.findEntry(LEDGER_ONLY_RUN_ID).id, LEDGER_ONLY_ID);
   assert.equal(store.findEntry('../etc/passwd'), null);
   assert.equal(store.findEntry(42), null);
   assert.equal(await store.detail('missing-session'), null);
   assert.equal((await store.detail(LEDGER_ONLY_RUN_ID)).allowContent, false, 'ledger-only runs have no local content');
+});
+
+test('ui data: latest prefers the newest AgentOps ledger run over a live Copilot session', async t => {
+  const fixture = createUiFixture('latest-live');
+  t.after(fixture.cleanup);
+  const LIVE_ID = 'e0000000-0000-4000-8000-000000000004';
+  fixture.writeSession(LIVE_ID, [line('session.start', 3500000, { sessionId: LIVE_ID, selectedModel: 'gpt-6.1-sol' })], fixture.now() - 60000);
+  const store = storeFor(fixture);
+  assert.equal((await store.list()).runs.find(run => run.id === LIVE_ID).status, 'live');
+  assert.equal((await store.resolveEntry('latest')).id, FAILED_ID, 'the launched ledger run wins over a newer live session');
+  assert.equal((await store.detail('latest')).run.id, FAILED_ID);
+});
+
+test('ui data: latest picks a newer completed session, and a live one only when nothing else exists', async t => {
+  const fixture = createUiFixture('latest-done');
+  t.after(fixture.cleanup);
+  const DONE_ID = 'e0000000-0000-4000-8000-000000000005';
+  fixture.writeSession(DONE_ID, [
+    line('session.start', 3000000, { sessionId: DONE_ID, selectedModel: 'claude-haiku-4.5' }),
+    line('session.shutdown', 3100000, { shutdownType: 'routine', modelMetrics: {} })
+  ], fixture.now() - 30000);
+  assert.equal((await storeFor(fixture).resolveEntry('latest')).id, DONE_ID, 'a completed session newer than the ledger run is latest');
+
+  const lonely = createUiFixture('latest-only-live');
+  t.after(lonely.cleanup);
+  fs.rmSync(lonely.agentOpsHome, { recursive: true, force: true });
+  fs.rmSync(path.join(lonely.copilotHome, 'session-state', FAILED_ID), { recursive: true, force: true });
+  fs.rmSync(path.join(lonely.copilotHome, 'session-state', OPEN_ID), { recursive: true, force: true });
+  const LIVE_ID = 'e0000000-0000-4000-8000-000000000006';
+  lonely.writeSession(LIVE_ID, [line('session.start', 3500000, { sessionId: LIVE_ID })], lonely.now() - 1000);
+  assert.equal((await storeFor(lonely).resolveEntry('latest')).id, LIVE_ID);
+
+  const empty = storeFor({ copilotHome: path.join(lonely.root, 'none'), agentOpsHome: path.join(lonely.root, 'none'), now: lonely.now });
+  assert.equal(await empty.resolveEntry('latest'), null);
+});
+
+test('ui data: since filter keeps runs that started inside the window', async t => {
+  const fixture = createUiFixture('since');
+  t.after(fixture.cleanup);
+  const store = storeFor(fixture);
+  const recent = await store.list({ sinceMs: T0 - 1000 });
+  assert.deepEqual(recent.runs.map(run => run.id).sort(), [FAILED_ID, OPEN_ID].sort(), 'the ledger-only run started an hour earlier');
+  assert.equal(recent.kpis.costLabel, '$0.02 est.');
 });
 
 test('ui data: cached rows refresh when the session file changes', async t => {
