@@ -52,7 +52,9 @@ From a source checkout, `agentops ui latest` opens the same run in the [local we
 
 Prefer a source checkout? `git clone` the repository and use `alias agentops="node $PWD/agentops-cli/src/index.js"`. Each release lists its tarball's SHA256 in `SHA256SUMS`. The package is not on the npm registry yet.
 
-To publish to your own Azure workspace, provision it with the [diagnostic pilot quickstart](docs/diagnostic-pilot-quickstart.md). Then add `--upload --yes` with an explicit daily byte cap (`AGENTOPS_MAX_PUBLISH_BYTES_PER_DAY`), and check storage with the [KQL query library](docs/kql-query-library.md).
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fc-mongan%2Fcopilot-cli-agentops-azure%2Fmain%2Finfra%2Fazuredeploy.json)
+
+To publish to your own Azure workspace, click **Deploy to Azure** (metadata-only Log Analytics, ingestion endpoint and rule, Workbook and a monthly budget alert of 5 in your billing currency; see [Deploy to Azure](docs/deploy-to-azure.md)) or follow the [diagnostic pilot quickstart](docs/diagnostic-pilot-quickstart.md). Then add `--upload --yes` with an explicit daily byte cap (`AGENTOPS_MAX_PUBLISH_BYTES_PER_DAY`), and check storage with the [KQL query library](docs/kql-query-library.md).
 
 ## Privacy by default
 
@@ -79,6 +81,7 @@ See [privacy modes](docs/privacy-modes.md), [secure by default](docs/secure-by-d
 - [E2E validation](docs/e2e-validation.md): CLI and VS Code walkthroughs with screenshots
 - [Weekly digest](docs/digest.md): `agentops digest` failure clusters, slow tools, tokens and trends
 - [VS Code native capture extension](extensions/agentops-native/README.md)
+- [Deploy to Azure](docs/deploy-to-azure.md): one-click, metadata-only workspace with a budget alert
 - [Portable Grafana dashboard](docs/grafana.md) for the Azure portal, Azure Managed Grafana or self-hosted Grafana
 - [Azure Workbook](docs/enterprise-workbook.md), [Grafana tour](docs/grafana-dashboard-tour-v2.md) and [KQL query library](docs/kql-query-library.md)
 - [OpenTelemetry GenAI export](docs/otel-genai.md): send sessions to the App Insights Agents (preview) view
