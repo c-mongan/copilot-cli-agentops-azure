@@ -1,0 +1,3657 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.38.33.27573",
+      "templateHash": "13856076332277641542"
+    }
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Azure region. Defaults to the resource group region."
+      }
+    },
+    "baseName": {
+      "type": "string",
+      "defaultValue": "copilot-agentops",
+      "minLength": 3,
+      "maxLength": 30,
+      "metadata": {
+        "description": "Base name used for generated resource names."
+      }
+    },
+    "environmentName": {
+      "type": "string",
+      "defaultValue": "dev",
+      "minLength": 1,
+      "maxLength": 10,
+      "metadata": {
+        "description": "Short environment name appended to resource names."
+      }
+    },
+    "retentionInDays": {
+      "type": "int",
+      "defaultValue": 30,
+      "minValue": 30,
+      "maxValue": 730,
+      "metadata": {
+        "description": "Log Analytics and custom-table retention in days."
+      }
+    },
+    "dailyIngestionCapGb": {
+      "type": "int",
+      "defaultValue": 1,
+      "minValue": 1,
+      "maxValue": 100,
+      "metadata": {
+        "description": "Log Analytics daily ingestion cap in GB. Keeps an accidental flood cheap."
+      }
+    },
+    "deployWorkbook": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Deploy the AgentOps Azure Workbook bound to the new workspace."
+      }
+    },
+    "grantDeployerUpload": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Give the identity running this deployment permission to upload AgentOps metadata (Monitoring Metrics Publisher on the DCR). Needs Owner or User Access Administrator on the resource group."
+      }
+    },
+    "uploaderPrincipalId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional extra Microsoft Entra object ID (user, group or service principal) allowed to upload AgentOps metadata."
+      }
+    },
+    "uploaderPrincipalType": {
+      "type": "string",
+      "defaultValue": "User",
+      "allowedValues": [
+        "User",
+        "Group",
+        "ServicePrincipal"
+      ],
+      "metadata": {
+        "description": "Principal type of uploaderPrincipalId."
+      }
+    },
+    "deployBudget": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Deploy a monthly Azure Consumption budget scoped to this resource group."
+      }
+    },
+    "monthlyBudgetAmount": {
+      "type": "int",
+      "defaultValue": 5,
+      "minValue": 1,
+      "metadata": {
+        "description": "Monthly budget amount, in the billing currency of the subscription (for example EUR or USD)."
+      }
+    },
+    "budgetAlertEmail": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Email for budget alerts at 80% and 100% of actual spend. Leave blank to notify the subscription Owner role instead. No action group is created."
+      }
+    },
+    "budgetStartDate": {
+      "type": "string",
+      "defaultValue": "[utcNow('yyyy-MM-01')]",
+      "metadata": {
+        "description": "Budget start date, which must be the first day of a month (yyyy-MM-dd). Defaults to the current month. When redeploying in a later month, pass the original value: Azure does not allow changing a budget start date."
+      }
+    }
+  },
+  "variables": {
+    "tags": {
+      "app": "copilot-cli-agentops-azure",
+      "environment": "[parameters('environmentName')]",
+      "managedBy": "deploy-to-azure",
+      "telemetryContent": "metadata-only",
+      "costControl": "[format('daily-cap-{0}gb', parameters('dailyIngestionCapGb'))]"
+    },
+    "deployerObjectId": "[deployer().objectId]",
+    "metricsPublisherRoleDefinitionId": "3913510d-42f4-4e42-8a64-420c390055eb"
+  },
+  "resources": [
+    {
+      "condition": "[and(parameters('grantDeployerUpload'), not(equals(variables('deployerObjectId'), parameters('uploaderPrincipalId'))))]",
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[format('Microsoft.Insights/dataCollectionRules/{0}', format('dcr-{0}-{1}-v2', parameters('baseName'), parameters('environmentName')))]",
+      "name": "[guid(resourceGroup().id, format('dcr-{0}-{1}-v2', parameters('baseName'), parameters('environmentName')), variables('deployerObjectId'), variables('metricsPublisherRoleDefinitionId'))]",
+      "properties": {
+        "principalId": "[variables('deployerObjectId')]",
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('metricsPublisherRoleDefinitionId'))]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'agentops-v2-ingestion')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "agentops-log-analytics",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "name": {
+            "value": "[format('law-{0}-{1}', parameters('baseName'), parameters('environmentName'))]"
+          },
+          "tags": {
+            "value": "[variables('tags')]"
+          },
+          "retentionInDays": {
+            "value": "[parameters('retentionInDays')]"
+          },
+          "dailyQuotaGb": {
+            "value": "[parameters('dailyIngestionCapGb')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.38.33.27573",
+              "templateHash": "10047422253015815435"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "tags": {
+              "type": "object"
+            },
+            "retentionInDays": {
+              "type": "int",
+              "defaultValue": 30,
+              "minValue": 0,
+              "maxValue": 730,
+              "metadata": {
+                "description": "Retention in days. main.bicep resolves profile defaults before passing this value."
+              }
+            },
+            "dailyQuotaGb": {
+              "type": "int",
+              "defaultValue": 1,
+              "minValue": -1,
+              "maxValue": 100,
+              "metadata": {
+                "description": "Daily ingestion cap in GB. Use -1 to disable the cap, but keep the default capped for cost safety."
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.OperationalInsights/workspaces",
+              "apiVersion": "2023-09-01",
+              "name": "[parameters('name')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "sku": {
+                  "name": "PerGB2018"
+                },
+                "retentionInDays": "[parameters('retentionInDays')]",
+                "workspaceCapping": {
+                  "dailyQuotaGb": "[parameters('dailyQuotaGb')]"
+                },
+                "features": {
+                  "enableLogAccessUsingOnlyResourcePermissions": true
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "name": {
+              "type": "string",
+              "value": "[parameters('name')]"
+            },
+            "resourceId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('name'))]"
+            },
+            "customerId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.OperationalInsights/workspaces', parameters('name')), '2023-09-01').customerId]"
+            },
+            "retentionInDays": {
+              "type": "int",
+              "value": "[parameters('retentionInDays')]"
+            },
+            "dailyQuotaGb": {
+              "type": "int",
+              "value": "[parameters('dailyQuotaGb')]"
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "agentops-v2-ingestion",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "workspaceName": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'agentops-log-analytics'), '2025-04-01').outputs.name.value]"
+          },
+          "baseName": {
+            "value": "[parameters('baseName')]"
+          },
+          "environmentName": {
+            "value": "[parameters('environmentName')]"
+          },
+          "retentionInDays": {
+            "value": "[parameters('retentionInDays')]"
+          },
+          "tags": {
+            "value": "[variables('tags')]"
+          },
+          "ingestionPrincipalId": {
+            "value": "[parameters('uploaderPrincipalId')]"
+          },
+          "ingestionPrincipalType": {
+            "value": "[parameters('uploaderPrincipalType')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.38.33.27573",
+              "templateHash": "14158788040408831366"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]",
+              "metadata": {
+                "description": "Azure region for V2 ingestion resources."
+              }
+            },
+            "workspaceName": {
+              "type": "string",
+              "metadata": {
+                "description": "Log Analytics workspace name that receives AgentOps V2 custom-table rows."
+              }
+            },
+            "baseName": {
+              "type": "string",
+              "defaultValue": "copilot-agentops",
+              "metadata": {
+                "description": "Base resource name used for the DCE and DCR."
+              }
+            },
+            "environmentName": {
+              "type": "string",
+              "defaultValue": "dev",
+              "metadata": {
+                "description": "Deployment environment name."
+              }
+            },
+            "retentionInDays": {
+              "type": "int",
+              "defaultValue": 30,
+              "maxValue": 730,
+              "metadata": {
+                "description": "Retention in days for AgentOps V2 custom tables."
+              }
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {},
+              "metadata": {
+                "description": "Tags applied to V2 ingestion resources."
+              }
+            },
+            "ingestionPrincipalId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Microsoft Entra object ID allowed to send metadata to the V2 DCR."
+              }
+            },
+            "ingestionPrincipalType": {
+              "type": "string",
+              "defaultValue": "User",
+              "allowedValues": [
+                "User",
+                "ServicePrincipal",
+                "Group"
+              ],
+              "metadata": {
+                "description": "Microsoft Entra principal type for the telemetry sender."
+              }
+            }
+          },
+          "variables": {
+            "destinationName": "agentops-log-analytics",
+            "tablePlan": "Analytics",
+            "effectiveRetentionInDays": "[if(less(parameters('retentionInDays'), 4), 4, parameters('retentionInDays'))]",
+            "spansTransformKql": "source | project TimeGenerated, RunId, SessionId, TraceId, SpanId, ParentSpanId, SpanName, OperationName, AgentName, ToolName, ToolCallId, ToolCallEvidence, ScriptName, ScriptRuntimeName=tostring(ScriptRuntimeName), ScriptRuntimeVersion=tostring(ScriptRuntimeVersion), ScriptRuntimeImplementation=tostring(ScriptRuntimeImplementation), ScriptLoaderName=tostring(ScriptLoaderName), StepName, EventName, SkillName, LinkType, Outcome, ErrorType, DurationMs, DurationNs, Model, ModelRequested, ModelActual, Provider, InputTokens, OutputTokens, CacheReadTokens, CacheWriteTokens, SchemaVersion, ParentToolCallId, McpServerName, McpToolName",
+            "v2Tables": [
+              {
+                "name": "AgentOpsRunSummary_CL",
+                "stream": "Custom-AgentOpsRunSummary_CL",
+                "columns": [
+                  {
+                    "name": "TimeGenerated",
+                    "type": "datetime"
+                  },
+                  {
+                    "name": "RunId",
+                    "type": "string"
+                  },
+                  {
+                    "name": "SessionId",
+                    "type": "string"
+                  },
+                  {
+                    "name": "TraceId",
+                    "type": "string"
+                  },
+                  {
+                    "name": "OutcomeStatus",
+                    "type": "string"
+                  },
+                  {
+                    "name": "OutcomeReason",
+                    "type": "string"
+                  },
+                  {
+                    "name": "AgentName",
+                    "type": "string"
+                  },
+                  {
+                    "name": "SkillName",
+                    "type": "string"
+                  },
+                  {
+                    "name": "SubAgentName",
+                    "type": "string"
+                  },
+                  {
+                    "name": "ParentAgentName",
+                    "type": "string"
+                  },
+                  {
+                    "name": "ModelRequested",
+                    "type": "string"
+                  },
+                  {
+                    "name": "ModelActual",
+                    "type": "string"
+                  },
+                  {
+                    "name": "InputTokens",
+                    "type": "long"
+                  },
+                  {
+                    "name": "OutputTokens",
+                    "type": "long"
+                  },
+                  {
+                    "name": "ReasoningTokens",
+                    "type": "long"
+                  },
+                  {
+                    "name": "CacheReadTokens",
+                    "type": "long"
+                  },
+                  {
+                    "name": "CacheCreationTokens",
+                    "type": "long"
+                  },
+                  {
+                    "name": "EstimatedCostUsd",
+                    "type": "long"
+                  },
+                  {
+                    "name": "EstimatedCostUsdReal",
+                    "type": "real"
+                  },
+                  {
+                    "name": "DurationMs",
+                    "type": "long"
+                  },
+                  {
+                    "name": "ToolCount",
+                    "type": "long"
+                  },
+                  {
+                    "name": "ToolFailureCount",
+                    "type": "long"
+                  },
+                  {
+                    "name": "ToolDeniedCount",
+                    "type": "long"
+                  },
+                  {
+                    "name": "TestsRan",
+                    "type": "boolean"
+                  },
+                  {
+                    "name": "TestsPassed",
+                    "type": "boolean"
+                  },
+                  {
+                    "name": "PrOpened",
+                    "type": "boolean"
+                  },
+                  {
+                    "name": "CiStatus",
+                    "type": "string"
+                  },
+                  {
+                    "name": "ContentCaptureSignal",
+                    "type": "boolean"
+                  },
+                  {
+                    "name": "ContentCaptureMode",
+                    "type": "string"
+                  },
+                  {
+                    "name": "PrivacyMode",
+                    "type": "string"
+                  },
+                  {
+                    "name": "RepoHash",
+                    "type": "string"
+                  },
+                  {
+                    "name": "BranchHash",
+                    "type": "string"
+                  },
+                  {
+                    "name": "PrNumberHash",
+                    "type": "string"
+                  },
+                  {
+                    "name": "Surface",
+                    "type": "string"
+                  },
+                  {
+                    "name": "TaskType",
+                    "type": "string"
+                  },
+                  {
+                    "name": "ScenarioName",
+                    "type": "string"
+                  },
+                  {
+                    "name": "SchemaVersion",
+                    "type": "string"
+                  }
+                ]
+              },
+              {
+                "name": "AgentOpsEvents_CL",
+                "stream": "Custom-AgentOpsEvents_CL",
+                "columns": [
+                  {
+                    "name": "TimeGenerated",
+                    "type": "datetime"
+                  },
+                  {
+                    "name": "Sequence",
+                    "type": "long"
+                  },
+                  {
+                    "name": "EventId",
+                    "type": "string"
+                  },
+                  {
+                    "name": "ParentEventId",
+                    "type": "string"
+                  },
+                  {
+                    "name": "AgentId",
+                    "type": "string"
+                  },
+                  {
+                    "name": "ParentAgentId",
+                    "type": "string"
+                  },
+                  {
+                    "name": "ParentToolCallId",
+                    "type": "string"
+                  },
+                  {
+                    "name": "ExitCode",
+                    "type": "long"
+                  },
+                  {
+                    "name": "RunId",
+                    "type": "string"
+                  },
+                  {
+                    "name": "SessionId",
+                    "type": "string"
+                  },
+                  {
+                    "name": "TraceId",
+                    "type": "string"
+                  },
+                  {
+                    "name": "EventName",
+                    "type": "string"
+                  },
+                  {
+                    "name": "SpanName",
+                    "type": "string"
+                  },
+                  {
+                    "name": "Status",
+                    "type": "string"
+                  },
+                  {
+                    "name": "ToolName",
+                    "type": "string"
+                  },
+                  {
+                    "name": "ToolCallId",
+                    "type": "string"
+                  },
+                  {
+                    "name": "McpServerName",
+                    "type": "string"
+                  },
+                  {
+                    "name": "McpToolName",
+                    "type": "string"
+                  },
+                  {
+                    "name": "CommandName",
+                    "type": "string"
+                  },
+                  {
+                    "name": "ReferenceName",
+                    "type": "string"
+                  },
+                  {
+                    "name": "ScriptName",
+                    "type": "string"
+                  },
+                  {
+                    "name": "ScriptRuntimeName",
+                    "type": "string"
+                  },
+                  {
+                    "name": "ScriptRuntimeVersion",
+                    "type": "string"
+                  },
+                  {
+                    "name": "ScriptRuntimeImplementation",
+                    "type": "string"
+                  },
+                  {
+                    "name": "ScriptLoaderName",
+                    "type": "string"
+                  },
+                  {
+                    "name": "AgentName",
+                    "type": "string"
+                  },
+                  {
+                    "name": "SkillName",
+                    "type": "string"
+                  },
+                  {
+                    "name": "SubAgentName",
+                    "type": "string"
+                  },
+                  {
+                    "name": "ParentAgentName",
+                    "type": "string"
+                  },
+                  {
+                    "name": "ModelRequested",
+                    "type": "string"
+                  },
+                  {
+                    "name": "ModelActual",
+                    "type": "string"
+                  },
+                  {
+                    "name": "Provider",
+                    "type": "string"
+                  },
+                  {
+                    "name": "InputTokens",
+                    "type": "long"
+                  },
+                  {
+                    "name": "OutputTokens",
+                    "type": "long"
+                  },
+                  {
+                    "name": "ReasoningTokens",
+                    "type": "long"
+                  },
+                  {
+                    "name": "CacheReadTokens",
+                    "type": "long"
+                  },
+                  {
+                    "name": "CacheWriteTokens",
+                    "type": "long"
+                  },
+                  {
+                    "name": "TotalTokens",
+                    "type": "long"
+                  },
+                  {
+                    "name": "TotalToolCalls",
+                    "type": "long"
+                  },
+                  {
+                    "name": "DurationMs",
+                    "type": "long"
+                  },
+                  {
+                    "name": "CopilotCost",
+                    "type": "real"
+                  },
+                  {
+                    "name": "EstimatedCostUsd",
+                    "type": "long"
+                  },
+                  {
+                    "name": "EstimatedCostUsdReal",
+                    "type": "real"
+                  },
+                  {
+                    "name": "PermissionKind",
+                    "type": "string"
+                  },
+                  {
+                    "name": "PermissionDecision",
+                    "type": "string"
+                  },
+                  {
+                    "name": "ErrorType",
+                    "type": "string"
+                  },
+                  {
+                    "name": "PremiumRequests",
+                    "type": "long"
+                  },
+                  {
+                    "name": "TotalNanoAiu",
+                    "type": "long"
+                  },
+                  {
+                    "name": "ApiDurationMs",
+                    "type": "long"
+                  },
+                  {
+                    "name": "LinesAdded",
+                    "type": "long"
+                  },
+                  {
+                    "name": "LinesRemoved",
+                    "type": "long"
+                  },
+                  {
+                    "name": "FilesModified",
+                    "type": "long"
+                  },
+                  {
+                    "name": "ContentCaptureSignal",
+                    "type": "boolean"
+                  },
+                  {
+                    "name": "ContentDroppedBytes",
+                    "type": "long"
+                  },
+                  {
+                    "name": "ContentAction",
+                    "type": "string"
+                  },
+                  {
+                    "name": "SecretLike",
+                    "type": "boolean"
+                  },
+                  {
+                    "name": "ContentCaptureMode",
+                    "type": "string"
+                  },
+                  {
+                    "name": "PrivacyMode",
+                    "type": "string"
+                  },
+                  {
+                    "name": "RepoHash",
+                    "type": "string"
+                  },
+                  {
+                    "name": "BranchHash",
+                    "type": "string"
+                  },
+                  {
+                    "name": "WorkingDirectoryHash",
+                    "type": "string"
+                  },
+                  {
+                    "name": "Surface",
+                    "type": "string"
+                  },
+                  {
+                    "name": "SchemaVersion",
+                    "type": "string"
+                  }
+                ]
+              },
+              {
+                "name": "AgentOpsSpans_CL",
+                "stream": "Custom-AgentOpsSpans_CL",
+                "columns": [
+                  {
+                    "name": "TimeGenerated",
+                    "type": "datetime"
+                  },
+                  {
+                    "name": "RunId",
+                    "type": "string"
+                  },
+                  {
+                    "name": "SessionId",
+                    "type": "string"
+                  },
+                  {
+                    "name": "TraceId",
+                    "type": "string"
+                  },
+                  {
+                    "name": "SpanId",
+                    "type": "string"
+                  },
+                  {
+                    "name": "ParentSpanId",
+                    "type": "string"
+                  },
+                  {
+                    "name": "SpanName",
+                    "type": "string"
+                  },
+                  {
+                    "name": "OperationName",
+                    "type": "string"
+                  },
+                  {
+                    "name": "AgentName",
+                    "type": "string"
+                  },
+                  {
+                    "name": "ToolName",
+                    "type": "string"
+                  },
+                  {
+                    "name": "ToolCallId",
+                    "type": "string"
+                  },
+                  {
+                    "name": "ToolCallEvidence",
+                    "type": "string"
+                  },
+                  {
+                    "name": "ScriptName",
+                    "type": "string"
+                  },
+                  {
+                    "name": "ScriptRuntimeName",
+                    "type": "string"
+                  },
+                  {
+                    "name": "ScriptRuntimeVersion",
+                    "type": "string"
+                  },
+                  {
+                    "name": "ScriptRuntimeImplementation",
+                    "type": "string"
+                  },
+                  {
+                    "name": "ScriptLoaderName",
+                    "type": "string"
+                  },
+                  {
+                    "name": "StepName",
+                    "type": "string"
+                  },
+                  {
+                    "name": "EventName",
+                    "type": "string"
+                  },
+                  {
+                    "name": "SkillName",
+                    "type": "string"
+                  },
+                  {
+                    "name": "LinkType",
+                    "type": "string"
+                  },
+                  {
+                    "name": "Outcome",
+                    "type": "string"
+                  },
+                  {
+                    "name": "ErrorType",
+                    "type": "string"
+                  },
+                  {
+                    "name": "DurationMs",
+                    "type": "long"
+                  },
+                  {
+                    "name": "DurationNs",
+                    "type": "long"
+                  },
+                  {
+                    "name": "Model",
+                    "type": "string"
+                  },
+                  {
+                    "name": "ModelRequested",
+                    "type": "string"
+                  },
+                  {
+                    "name": "ModelActual",
+                    "type": "string"
+                  },
+                  {
+                    "name": "Provider",
+                    "type": "string"
+                  },
+                  {
+                    "name": "InputTokens",
+                    "type": "long"
+                  },
+                  {
+                    "name": "OutputTokens",
+                    "type": "long"
+                  },
+                  {
+                    "name": "CacheReadTokens",
+                    "type": "long"
+                  },
+                  {
+                    "name": "CacheWriteTokens",
+                    "type": "long"
+                  },
+                  {
+                    "name": "SchemaVersion",
+                    "type": "string"
+                  },
+                  {
+                    "name": "ParentToolCallId",
+                    "type": "string"
+                  },
+                  {
+                    "name": "McpServerName",
+                    "type": "string"
+                  },
+                  {
+                    "name": "McpToolName",
+                    "type": "string"
+                  }
+                ]
+              },
+              {
+                "name": "AgentOpsToolCalls_CL",
+                "stream": "Custom-AgentOpsToolCalls_CL",
+                "columns": [
+                  {
+                    "name": "TimeGenerated",
+                    "type": "datetime"
+                  },
+                  {
+                    "name": "RunId",
+                    "type": "string"
+                  },
+                  {
+                    "name": "TraceId",
+                    "type": "string"
+                  },
+                  {
+                    "name": "SpanId",
+                    "type": "string"
+                  },
+                  {
+                    "name": "ToolName",
+                    "type": "string"
+                  },
+                  {
+                    "name": "ToolType",
+                    "type": "string"
+                  },
+                  {
+                    "name": "ToolRisk",
+                    "type": "string"
+                  },
+                  {
+                    "name": "Status",
+                    "type": "string"
+                  },
+                  {
+                    "name": "Allowed",
+                    "type": "boolean"
+                  },
+                  {
+                    "name": "DeniedReason",
+                    "type": "string"
+                  },
+                  {
+                    "name": "DurationMs",
+                    "type": "long"
+                  },
+                  {
+                    "name": "OutputSizeBytes",
+                    "type": "long"
+                  },
+                  {
+                    "name": "ArgsSchemaHash",
+                    "type": "string"
+                  },
+                  {
+                    "name": "AgentName",
+                    "type": "string"
+                  },
+                  {
+                    "name": "Surface",
+                    "type": "string"
+                  },
+                  {
+                    "name": "SchemaVersion",
+                    "type": "string"
+                  }
+                ]
+              },
+              {
+                "name": "AgentOpsMcpCalls_CL",
+                "stream": "Custom-AgentOpsMcpCalls_CL",
+                "columns": [
+                  {
+                    "name": "TimeGenerated",
+                    "type": "datetime"
+                  },
+                  {
+                    "name": "RunId",
+                    "type": "string"
+                  },
+                  {
+                    "name": "TraceId",
+                    "type": "string"
+                  },
+                  {
+                    "name": "SpanId",
+                    "type": "string"
+                  },
+                  {
+                    "name": "McpServerName",
+                    "type": "string"
+                  },
+                  {
+                    "name": "McpServerHash",
+                    "type": "string"
+                  },
+                  {
+                    "name": "McpClientName",
+                    "type": "string"
+                  },
+                  {
+                    "name": "McpSessionId",
+                    "type": "string"
+                  },
+                  {
+                    "name": "McpTransport",
+                    "type": "string"
+                  },
+                  {
+                    "name": "ToolName",
+                    "type": "string"
+                  },
+                  {
+                    "name": "ToolRisk",
+                    "type": "string"
+                  },
+                  {
+                    "name": "Status",
+                    "type": "string"
+                  },
+                  {
+                    "name": "Allowed",
+                    "type": "boolean"
+                  },
+                  {
+                    "name": "Sandboxed",
+                    "type": "boolean"
+                  },
+                  {
+                    "name": "DurationMs",
+                    "type": "long"
+                  },
+                  {
+                    "name": "ResultSizeBytes",
+                    "type": "long"
+                  },
+                  {
+                    "name": "ArgsSchemaHash",
+                    "type": "string"
+                  },
+                  {
+                    "name": "AgentName",
+                    "type": "string"
+                  },
+                  {
+                    "name": "Surface",
+                    "type": "string"
+                  },
+                  {
+                    "name": "SchemaVersion",
+                    "type": "string"
+                  }
+                ]
+              },
+              {
+                "name": "AgentOpsPrivacy_CL",
+                "stream": "Custom-AgentOpsPrivacy_CL",
+                "columns": [
+                  {
+                    "name": "TimeGenerated",
+                    "type": "datetime"
+                  },
+                  {
+                    "name": "RunId",
+                    "type": "string"
+                  },
+                  {
+                    "name": "TraceId",
+                    "type": "string"
+                  },
+                  {
+                    "name": "ContentKind",
+                    "type": "string"
+                  },
+                  {
+                    "name": "Action",
+                    "type": "string"
+                  },
+                  {
+                    "name": "Observed",
+                    "type": "boolean"
+                  },
+                  {
+                    "name": "LeakDetected",
+                    "type": "boolean"
+                  },
+                  {
+                    "name": "DroppedCount",
+                    "type": "long"
+                  },
+                  {
+                    "name": "RedactedCount",
+                    "type": "long"
+                  },
+                  {
+                    "name": "PrivacyMode",
+                    "type": "string"
+                  },
+                  {
+                    "name": "SchemaVersion",
+                    "type": "string"
+                  }
+                ]
+              },
+              {
+                "name": "AgentOpsEval_CL",
+                "stream": "Custom-AgentOpsEval_CL",
+                "columns": [
+                  {
+                    "name": "TimeGenerated",
+                    "type": "datetime"
+                  },
+                  {
+                    "name": "RunId",
+                    "type": "string"
+                  },
+                  {
+                    "name": "TraceId",
+                    "type": "string"
+                  },
+                  {
+                    "name": "RepoHash",
+                    "type": "string"
+                  },
+                  {
+                    "name": "TaskType",
+                    "type": "string"
+                  },
+                  {
+                    "name": "ModelActual",
+                    "type": "string"
+                  },
+                  {
+                    "name": "EvalOverall",
+                    "type": "long"
+                  },
+                  {
+                    "name": "EvalBucket",
+                    "type": "string"
+                  },
+                  {
+                    "name": "Reliability",
+                    "type": "long"
+                  },
+                  {
+                    "name": "Security",
+                    "type": "long"
+                  },
+                  {
+                    "name": "TestDiscipline",
+                    "type": "long"
+                  },
+                  {
+                    "name": "ToolEfficiency",
+                    "type": "long"
+                  },
+                  {
+                    "name": "ContextEfficiency",
+                    "type": "long"
+                  },
+                  {
+                    "name": "CodeOutcome",
+                    "type": "long"
+                  },
+                  {
+                    "name": "SchemaVersion",
+                    "type": "string"
+                  }
+                ]
+              },
+              {
+                "name": "AgentOpsGithubOutcomes_CL",
+                "stream": "Custom-AgentOpsGithubOutcomes_CL",
+                "columns": [
+                  {
+                    "name": "TimeGenerated",
+                    "type": "datetime"
+                  },
+                  {
+                    "name": "RunId",
+                    "type": "string"
+                  },
+                  {
+                    "name": "RepoHash",
+                    "type": "string"
+                  },
+                  {
+                    "name": "BranchHash",
+                    "type": "string"
+                  },
+                  {
+                    "name": "PrNumberHash",
+                    "type": "string"
+                  },
+                  {
+                    "name": "PrOpened",
+                    "type": "boolean"
+                  },
+                  {
+                    "name": "PrClosed",
+                    "type": "boolean"
+                  },
+                  {
+                    "name": "PrMerged",
+                    "type": "boolean"
+                  },
+                  {
+                    "name": "PrReverted",
+                    "type": "boolean"
+                  },
+                  {
+                    "name": "CiStatus",
+                    "type": "string"
+                  },
+                  {
+                    "name": "CommitCount",
+                    "type": "long"
+                  },
+                  {
+                    "name": "FilesChangedCount",
+                    "type": "long"
+                  },
+                  {
+                    "name": "ReviewCommentCount",
+                    "type": "long"
+                  },
+                  {
+                    "name": "RunStartedAt",
+                    "type": "datetime"
+                  },
+                  {
+                    "name": "PrCreatedAt",
+                    "type": "datetime"
+                  },
+                  {
+                    "name": "PrMergedAt",
+                    "type": "datetime"
+                  },
+                  {
+                    "name": "TimeToPrMinutes",
+                    "type": "long"
+                  },
+                  {
+                    "name": "TimeToMergeMinutes",
+                    "type": "long"
+                  },
+                  {
+                    "name": "SchemaVersion",
+                    "type": "string"
+                  }
+                ]
+              },
+              {
+                "name": "AgentOpsInsights_CL",
+                "stream": "Custom-AgentOpsInsights_CL",
+                "columns": [
+                  {
+                    "name": "TimeGenerated",
+                    "type": "datetime"
+                  },
+                  {
+                    "name": "InsightId",
+                    "type": "string"
+                  },
+                  {
+                    "name": "InsightType",
+                    "type": "string"
+                  },
+                  {
+                    "name": "Severity",
+                    "type": "string"
+                  },
+                  {
+                    "name": "RunId",
+                    "type": "string"
+                  },
+                  {
+                    "name": "TraceId",
+                    "type": "string"
+                  },
+                  {
+                    "name": "Title",
+                    "type": "string"
+                  },
+                  {
+                    "name": "Summary",
+                    "type": "string"
+                  },
+                  {
+                    "name": "SuggestedNextStep",
+                    "type": "string"
+                  },
+                  {
+                    "name": "Rule",
+                    "type": "string"
+                  },
+                  {
+                    "name": "ArchitectureVersion",
+                    "type": "string"
+                  },
+                  {
+                    "name": "Numerator",
+                    "type": "long"
+                  },
+                  {
+                    "name": "Denominator",
+                    "type": "long"
+                  },
+                  {
+                    "name": "CoverageRuns",
+                    "type": "long"
+                  },
+                  {
+                    "name": "Status",
+                    "type": "string"
+                  },
+                  {
+                    "name": "ComponentRefs",
+                    "type": "dynamic"
+                  },
+                  {
+                    "name": "Evidence",
+                    "type": "dynamic"
+                  },
+                  {
+                    "name": "SchemaVersion",
+                    "type": "string"
+                  }
+                ]
+              },
+              {
+                "name": "AgentOpsRecommendations_CL",
+                "stream": "Custom-AgentOpsRecommendations_CL",
+                "columns": [
+                  {
+                    "name": "TimeGenerated",
+                    "type": "datetime"
+                  },
+                  {
+                    "name": "RecommendationId",
+                    "type": "string"
+                  },
+                  {
+                    "name": "Action",
+                    "type": "string"
+                  },
+                  {
+                    "name": "Severity",
+                    "type": "string"
+                  },
+                  {
+                    "name": "ObservedPattern",
+                    "type": "string"
+                  },
+                  {
+                    "name": "NextAction",
+                    "type": "string"
+                  },
+                  {
+                    "name": "RunId",
+                    "type": "string"
+                  },
+                  {
+                    "name": "SessionId",
+                    "type": "string"
+                  },
+                  {
+                    "name": "TraceId",
+                    "type": "string"
+                  },
+                  {
+                    "name": "EvalOverall",
+                    "type": "long"
+                  },
+                  {
+                    "name": "EvalBucket",
+                    "type": "string"
+                  },
+                  {
+                    "name": "DashboardCount",
+                    "type": "long"
+                  },
+                  {
+                    "name": "DashboardTitles",
+                    "type": "dynamic"
+                  },
+                  {
+                    "name": "ChangeTargetRefs",
+                    "type": "dynamic"
+                  },
+                  {
+                    "name": "Validation",
+                    "type": "dynamic"
+                  },
+                  {
+                    "name": "ExpectedMetricMovement",
+                    "type": "dynamic"
+                  },
+                  {
+                    "name": "BeforeTelemetry",
+                    "type": "dynamic"
+                  },
+                  {
+                    "name": "AfterTelemetry",
+                    "type": "dynamic"
+                  },
+                  {
+                    "name": "ObservedMetricMovement",
+                    "type": "dynamic"
+                  },
+                  {
+                    "name": "BenchmarkArtifactFiles",
+                    "type": "dynamic"
+                  },
+                  {
+                    "name": "BenchmarkArtifactContentDiffs",
+                    "type": "dynamic"
+                  },
+                  {
+                    "name": "BenchmarkSemanticChecks",
+                    "type": "dynamic"
+                  },
+                  {
+                    "name": "BenchmarkHiddenCheckPacks",
+                    "type": "dynamic"
+                  },
+                  {
+                    "name": "BenchmarkPermissionProfiles",
+                    "type": "dynamic"
+                  },
+                  {
+                    "name": "SchemaVersion",
+                    "type": "string"
+                  }
+                ]
+              },
+              {
+                "name": "AgentOpsCollectorHealth_CL",
+                "stream": "Custom-AgentOpsCollectorHealth_CL",
+                "columns": [
+                  {
+                    "name": "TimeGenerated",
+                    "type": "datetime"
+                  },
+                  {
+                    "name": "Component",
+                    "type": "string"
+                  },
+                  {
+                    "name": "Status",
+                    "type": "string"
+                  },
+                  {
+                    "name": "CheckName",
+                    "type": "string"
+                  },
+                  {
+                    "name": "Detail",
+                    "type": "string"
+                  },
+                  {
+                    "name": "CollectorMode",
+                    "type": "string"
+                  },
+                  {
+                    "name": "PrivacyMode",
+                    "type": "string"
+                  },
+                  {
+                    "name": "OtlpEndpoint",
+                    "type": "string"
+                  },
+                  {
+                    "name": "AzureConfigured",
+                    "type": "boolean"
+                  },
+                  {
+                    "name": "GrafanaConfigured",
+                    "type": "boolean"
+                  },
+                  {
+                    "name": "PrivacyPoisonOk",
+                    "type": "boolean"
+                  },
+                  {
+                    "name": "DroppedContentCount",
+                    "type": "long"
+                  },
+                  {
+                    "name": "ExportErrors",
+                    "type": "long"
+                  },
+                  {
+                    "name": "ExportFailureReason",
+                    "type": "string"
+                  },
+                  {
+                    "name": "ExportFailureAction",
+                    "type": "string"
+                  },
+                  {
+                    "name": "LastExportSuccess",
+                    "type": "datetime"
+                  },
+                  {
+                    "name": "LastSpanReceived",
+                    "type": "datetime"
+                  },
+                  {
+                    "name": "DashboardVersion",
+                    "type": "string"
+                  },
+                  {
+                    "name": "SchemaVersion",
+                    "type": "string"
+                  }
+                ]
+              }
+            ],
+            "metricsPublisherRoleDefinitionId": "3913510d-42f4-4e42-8a64-420c390055eb"
+          },
+          "resources": [
+            {
+              "copy": {
+                "name": "tables",
+                "count": "[length(variables('v2Tables'))]"
+              },
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "apiVersion": "2022-10-01",
+              "name": "[format('{0}/{1}', parameters('workspaceName'), variables('v2Tables')[copyIndex()].name)]",
+              "properties": {
+                "plan": "[variables('tablePlan')]",
+                "retentionInDays": "[variables('effectiveRetentionInDays')]",
+                "totalRetentionInDays": "[variables('effectiveRetentionInDays')]",
+                "schema": {
+                  "name": "[variables('v2Tables')[copyIndex()].name]",
+                  "columns": "[variables('v2Tables')[copyIndex()].columns]",
+                  "isTroubleshootingAllowed": true
+                }
+              }
+            },
+            {
+              "type": "Microsoft.Insights/dataCollectionEndpoints",
+              "apiVersion": "2022-06-01",
+              "name": "[format('dce-{0}-{1}', parameters('baseName'), parameters('environmentName'))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "networkAcls": {
+                  "publicNetworkAccess": "Enabled"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "apiVersion": "2022-06-01",
+              "name": "[format('dcr-{0}-{1}-v2', parameters('baseName'), parameters('environmentName'))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "copy": [
+                  {
+                    "name": "dataFlows",
+                    "count": "[length(variables('v2Tables'))]",
+                    "input": {
+                      "streams": [
+                        "[variables('v2Tables')[copyIndex('dataFlows')].stream]"
+                      ],
+                      "destinations": [
+                        "[variables('destinationName')]"
+                      ],
+                      "transformKql": "[if(equals(variables('v2Tables')[copyIndex('dataFlows')].stream, 'Custom-AgentOpsSpans_CL'), variables('spansTransformKql'), 'source')]",
+                      "outputStream": "[variables('v2Tables')[copyIndex('dataFlows')].stream]"
+                    }
+                  }
+                ],
+                "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', format('dce-{0}-{1}', parameters('baseName'), parameters('environmentName')))]",
+                "streamDeclarations": "[toObject(variables('v2Tables'), lambda('table', lambdaVariables('table').stream), lambda('table', createObject('columns', lambdaVariables('table').columns)))]",
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "name": "[variables('destinationName')]",
+                      "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName'))]"
+                    }
+                  ]
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Insights/dataCollectionEndpoints', format('dce-{0}-{1}', parameters('baseName'), parameters('environmentName')))]",
+                "tables"
+              ]
+            },
+            {
+              "condition": "[not(equals(parameters('ingestionPrincipalId'), ''))]",
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[format('Microsoft.Insights/dataCollectionRules/{0}', format('dcr-{0}-{1}-v2', parameters('baseName'), parameters('environmentName')))]",
+              "name": "[guid(resourceId('Microsoft.Insights/dataCollectionRules', format('dcr-{0}-{1}-v2', parameters('baseName'), parameters('environmentName'))), parameters('ingestionPrincipalId'), variables('metricsPublisherRoleDefinitionId'))]",
+              "properties": {
+                "principalId": "[parameters('ingestionPrincipalId')]",
+                "principalType": "[parameters('ingestionPrincipalType')]",
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('metricsPublisherRoleDefinitionId'))]"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Insights/dataCollectionRules', format('dcr-{0}-{1}-v2', parameters('baseName'), parameters('environmentName')))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "dataCollectionEndpointName": {
+              "type": "string",
+              "value": "[format('dce-{0}-{1}', parameters('baseName'), parameters('environmentName'))]"
+            },
+            "dataCollectionEndpointResourceId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', format('dce-{0}-{1}', parameters('baseName'), parameters('environmentName')))]"
+            },
+            "logsIngestionEndpoint": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', format('dce-{0}-{1}', parameters('baseName'), parameters('environmentName'))), '2022-06-01').logsIngestion.endpoint]"
+            },
+            "dataCollectionRuleName": {
+              "type": "string",
+              "value": "[format('dcr-{0}-{1}-v2', parameters('baseName'), parameters('environmentName'))]"
+            },
+            "dataCollectionRuleResourceId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Insights/dataCollectionRules', format('dcr-{0}-{1}-v2', parameters('baseName'), parameters('environmentName')))]"
+            },
+            "dataCollectionRuleImmutableId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', format('dcr-{0}-{1}-v2', parameters('baseName'), parameters('environmentName'))), '2022-06-01').immutableId]"
+            },
+            "tableCount": {
+              "type": "int",
+              "value": "[length(variables('v2Tables'))]"
+            },
+            "streams": {
+              "type": "array",
+              "copy": {
+                "count": "[length(variables('v2Tables'))]",
+                "input": "[variables('v2Tables')[copyIndex()].stream]"
+              }
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'agentops-log-analytics')]"
+      ]
+    },
+    {
+      "condition": "[parameters('deployWorkbook')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "agentops-workbook",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "name": {
+            "value": "[guid(resourceGroup().id, 'agentops-workbook', parameters('baseName'), parameters('environmentName'))]"
+          },
+          "displayName": {
+            "value": "[format('Copilot CLI AgentOps ({0})', parameters('environmentName'))]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "workspaceResourceId": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'agentops-log-analytics'), '2025-04-01').outputs.resourceId.value]"
+          },
+          "tags": {
+            "value": "[variables('tags')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.38.33.27573",
+              "templateHash": "3990445544862382755"
+            }
+          },
+          "parameters": {
+            "name": {
+              "type": "string"
+            },
+            "displayName": {
+              "type": "string"
+            },
+            "location": {
+              "type": "string"
+            },
+            "workspaceResourceId": {
+              "type": "string"
+            },
+            "tags": {
+              "type": "object"
+            }
+          },
+          "variables": {
+            "$fxv#0": {
+              "version": "Notebook/1.0",
+              "items": [
+                {
+                  "type": 1,
+                  "name": "enterprise-header",
+                  "content": {
+                    "json": "## AgentOps · Copilot agent telemetry\nMetadata only — no prompts, responses, code, file paths or private URLs. Pick a workspace, time window and run. **Empty means not observed, never success.** Requested and recorded models are shown separately; nothing here proves complete capture, independent model execution or business benefit."
+                  }
+                },
+                {
+                  "type": 9,
+                  "name": "enterprise-parameters",
+                  "content": {
+                    "version": "KqlParameterItem/1.0",
+                    "parameters": [
+                      {
+                        "id": "workspace",
+                        "version": "KqlParameterItem/1.0",
+                        "name": "Workspace",
+                        "label": "Metadata workspace",
+                        "type": 5,
+                        "isRequired": true,
+                        "value": "value::1",
+                        "typeSettings": {
+                          "resourceTypeFilter": {
+                            "microsoft.operationalinsights/workspaces": true
+                          },
+                          "additionalResourceOptions": [
+                            "value::1"
+                          ],
+                          "showDefault": false
+                        }
+                      },
+                      {
+                        "id": "time-range",
+                        "version": "KqlParameterItem/1.0",
+                        "name": "TimeRange",
+                        "type": 4,
+                        "isRequired": true,
+                        "value": {
+                          "durationMs": 86400000
+                        },
+                        "typeSettings": {
+                          "selectableValues": [
+                            {
+                              "durationMs": 3600000
+                            },
+                            {
+                              "durationMs": 14400000
+                            },
+                            {
+                              "durationMs": 86400000
+                            },
+                            {
+                              "durationMs": 604800000
+                            }
+                          ],
+                          "allowCustom": true
+                        }
+                      },
+                      {
+                        "id": "run-id",
+                        "version": "KqlParameterItem/1.0",
+                        "name": "RunId",
+                        "label": "Run (bounded to newest 500)",
+                        "type": 2,
+                        "isRequired": true,
+                        "value": "*",
+                        "query": "union (AgentOpsRunSummary_CL | where TimeGenerated {TimeRange} | project TimeGenerated, RunId), (AgentOpsEvents_CL | where TimeGenerated {TimeRange} | project TimeGenerated, RunId), (AgentOpsSpans_CL | where TimeGenerated {TimeRange} | project TimeGenerated, RunId)\n| where isnotempty(RunId)\n| summarize LastSeen=max(TimeGenerated) by RunId\n| top 500 by LastSeen desc\n| project value=RunId, label=RunId\n| union (datatable(value:string, label:string)['*', 'All observed runs'])",
+                        "queryType": 0,
+                        "resourceType": "microsoft.operationalinsights/workspaces",
+                        "crossComponentResources": [
+                          "{Workspace}"
+                        ],
+                        "timeContextFromParameter": "TimeRange"
+                      }
+                    ],
+                    "style": "above"
+                  }
+                },
+                {
+                  "type": 9,
+                  "name": "enterprise-tab-state",
+                  "content": {
+                    "version": "KqlParameterItem/1.0",
+                    "parameters": [
+                      {
+                        "id": "7f1d2c4e-5a3b-4c8d-9e21-6b0a4f3c2d18",
+                        "version": "KqlParameterItem/1.0",
+                        "name": "selectedTab",
+                        "type": 1,
+                        "isHiddenWhenLocked": true,
+                        "value": "overview",
+                        "label": "Selected tab"
+                      }
+                    ],
+                    "style": "pills",
+                    "queryType": 0,
+                    "resourceType": "microsoft.operationalinsights/workspaces"
+                  }
+                },
+                {
+                  "type": 11,
+                  "name": "enterprise-tabs",
+                  "content": {
+                    "version": "LinkItem/1.0",
+                    "style": "tabs",
+                    "links": [
+                      {
+                        "id": "tab-overview",
+                        "cellValue": "selectedTab",
+                        "linkTarget": "parameter",
+                        "linkLabel": "Overview",
+                        "subTarget": "overview",
+                        "style": "link"
+                      },
+                      {
+                        "id": "tab-runs",
+                        "cellValue": "selectedTab",
+                        "linkTarget": "parameter",
+                        "linkLabel": "Runs & models",
+                        "subTarget": "runs",
+                        "style": "link"
+                      },
+                      {
+                        "id": "tab-tools",
+                        "cellValue": "selectedTab",
+                        "linkTarget": "parameter",
+                        "linkLabel": "Tools & scripts",
+                        "subTarget": "tools",
+                        "style": "link"
+                      },
+                      {
+                        "id": "tab-lineage",
+                        "cellValue": "selectedTab",
+                        "linkTarget": "parameter",
+                        "linkLabel": "Trace lineage",
+                        "subTarget": "lineage",
+                        "style": "link"
+                      },
+                      {
+                        "id": "tab-privacy",
+                        "cellValue": "selectedTab",
+                        "linkTarget": "parameter",
+                        "linkLabel": "Privacy & health",
+                        "subTarget": "privacy",
+                        "style": "link"
+                      },
+                      {
+                        "id": "tab-quality",
+                        "cellValue": "selectedTab",
+                        "linkTarget": "parameter",
+                        "linkLabel": "Quality & outcomes",
+                        "subTarget": "quality",
+                        "style": "link"
+                      },
+                      {
+                        "id": "tab-insights",
+                        "cellValue": "selectedTab",
+                        "linkTarget": "parameter",
+                        "linkLabel": "Insights & actions",
+                        "subTarget": "insights",
+                        "style": "link"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "type": 12,
+                  "name": "tab-overview",
+                  "content": {
+                    "version": "NotebookGroup/1.0",
+                    "groupType": "editable",
+                    "items": [
+                      {
+                        "type": 3,
+                        "name": "kpi-tiles",
+                        "content": {
+                          "version": "KqlItem/1.0",
+                          "showExportToExcel": false,
+                          "queryType": 0,
+                          "resourceType": "microsoft.operationalinsights/workspaces",
+                          "crossComponentResources": [
+                            "{Workspace}"
+                          ],
+                          "timeContextFromParameter": "TimeRange",
+                          "title": "At a glance",
+                          "query": "let RunRows = AgentOpsRunSummary_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId;\nlet EventRows = AgentOpsEvents_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId, Status, EventName;\nlet SpanRows = AgentOpsSpans_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId;\nlet ToolRows = union\n(AgentOpsToolCalls_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId, Status, Allowed),\n(AgentOpsMcpCalls_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId, Status, Allowed);\nlet PrivacyRows = AgentOpsPrivacy_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId, LeakDetected;\nlet HealthRows = AgentOpsCollectorHealth_CL\n| where TimeGenerated {TimeRange}\n| project TimeGenerated, Component;\nlet RunsObserved = toscalar(union RunRows, EventRows, SpanRows | where isnotempty(RunId) | summarize dcount(RunId));\nlet EventCount = toscalar(EventRows | count);\nlet SpanCount = toscalar(SpanRows | count);\nlet NativeSpanEvents = toscalar(EventRows | where EventName == \"native.span.observed\" | count);\nlet ToolCount = toscalar(ToolRows | count);\nlet ToolFailures = toscalar(ToolRows | where Status in~ (\"error\", \"failed\", \"failure\", \"denied\", \"blocked\") or Allowed == false | count);\nlet PrivacyCount = toscalar(PrivacyRows | count);\nlet LeakSignals = toscalar(PrivacyRows | where LeakDetected == true | count);\nlet LastHeartbeat = toscalar(HealthRows | summarize max(TimeGenerated));\nlet HeartbeatMinutes = datetime_diff('minute', now(), LastHeartbeat);\nunion\n(print Order=1, Metric=\"Runs observed\", Value=tostring(RunsObserved), Signal=\"neutral\", Note=\"distinct RunId with summary, event or span rows\"),\n(print Order=2, Metric=\"Events\", Value=tostring(EventCount), Signal=\"neutral\", Note=\"query-visible rows; retries may duplicate\"),\n(print Order=3, Metric=\"Spans\", Value=tostring(SpanCount), Signal=\"neutral\", Note=iff(NativeSpanEvents == 0, \"query-visible span-table rows\", strcat(\"span-table rows; \", tostring(NativeSpanEvents), \" native span events counted in Events\"))),\n(print Order=4, Metric=\"Tool / MCP failure signals\", Value=iff(ToolCount == 0, \"not observed\", tostring(ToolFailures)), Signal=iff(ToolFailures > 0, \"attention\", \"neutral\"), Note=strcat(\"of \", tostring(ToolCount), \" tool rows; other rows: success unknown\")),\n(print Order=5, Metric=\"Privacy leak signals\", Value=iff(PrivacyCount == 0, \"not observed\", tostring(LeakSignals)), Signal=iff(LeakSignals > 0, \"attention\", \"neutral\"), Note=iff(PrivacyCount == 0, \"no receipts; leak verdict unknown\", strcat(\"of \", tostring(PrivacyCount), \" receipts; not a complete guarantee\"))),\n(print Order=6, Metric=\"Collector heartbeat\", Value=iff(isnull(LastHeartbeat), \"not observed\", case(HeartbeatMinutes < 120, strcat(tostring(HeartbeatMinutes), \" min ago\"), HeartbeatMinutes < 2880, strcat(tostring(HeartbeatMinutes / 60), \" h ago\"), strcat(tostring(HeartbeatMinutes / 1440), \" d ago\"))), Signal=iff(isnull(LastHeartbeat), \"neutral\", iff(HeartbeatMinutes > 60, \"attention\", \"neutral\")), Note=\"workspace-wide; not run-filtered\")\n| extend Value=iff(Signal == \"attention\", strcat(\"⚠ \", Value), Value)\n| order by Order asc\n| take 500",
+                          "size": 4,
+                          "visualization": "tiles",
+                          "noDataMessage": "No metadata rows observed in this window. Publish with VS Code `AgentOps: Publish native metadata to Azure` or CLI `agentops azure-ingest`.",
+                          "noDataMessageStyle": 5,
+                          "tileSettings": {
+                            "titleContent": {
+                              "columnMatch": "Metric",
+                              "formatter": 1
+                            },
+                            "leftContent": {
+                              "columnMatch": "Value",
+                              "formatter": 1
+                            },
+                            "secondaryContent": {
+                              "columnMatch": "Note",
+                              "formatter": 1
+                            },
+                            "showBorder": true,
+                            "size": "auto"
+                          }
+                        }
+                      },
+                      {
+                        "type": 3,
+                        "name": "activity-timechart",
+                        "content": {
+                          "version": "KqlItem/1.0",
+                          "showExportToExcel": false,
+                          "queryType": 0,
+                          "resourceType": "microsoft.operationalinsights/workspaces",
+                          "crossComponentResources": [
+                            "{Workspace}"
+                          ],
+                          "timeContextFromParameter": "TimeRange",
+                          "title": "Telemetry rows over time",
+                          "query": "union\n(AgentOpsEvents_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId | extend Stream=\"events\"),\n(AgentOpsSpans_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId | extend Stream=\"spans\"),\n(AgentOpsToolCalls_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId | extend Stream=\"tool calls\"),\n(AgentOpsMcpCalls_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId | extend Stream=\"MCP calls\")\n| make-series Rows=count() default=0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by Stream\n| take 500",
+                          "size": 0,
+                          "visualization": "timechart",
+                          "noDataMessage": "No events, spans or tool calls in this window. Publish with VS Code `AgentOps: Publish native metadata to Azure` or CLI `agentops azure-ingest`.",
+                          "noDataMessageStyle": 5,
+                          "chartSettings": {
+                            "showLegend": true
+                          }
+                        }
+                      },
+                      {
+                        "type": 3,
+                        "name": "coverage-delivery",
+                        "content": {
+                          "version": "KqlItem/1.0",
+                          "title": "Observed streams, coverage limits and delivery evidence",
+                          "query": "union\n(AgentOpsRunSummary_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId | extend SourceTable=\"AgentOpsRunSummary_CL\"),\n(AgentOpsEvents_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId | extend SourceTable=\"AgentOpsEvents_CL\"),\n(AgentOpsSpans_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId | extend SourceTable=\"AgentOpsSpans_CL\"),\n(AgentOpsToolCalls_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId | extend SourceTable=\"AgentOpsToolCalls_CL\"),\n(AgentOpsMcpCalls_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId | extend SourceTable=\"AgentOpsMcpCalls_CL\"),\n(AgentOpsPrivacy_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId | extend SourceTable=\"AgentOpsPrivacy_CL\"),\n(AgentOpsEval_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId | extend SourceTable=\"AgentOpsEval_CL\"),\n(AgentOpsGithubOutcomes_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId | extend SourceTable=\"AgentOpsGithubOutcomes_CL\"),\n(AgentOpsInsights_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId | extend SourceTable=\"AgentOpsInsights_CL\"),\n(AgentOpsRecommendations_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId | extend SourceTable=\"AgentOpsRecommendations_CL\")\n| summarize ReadbackRows=count(), LastReadbackRow=max(TimeGenerated) by RunId, SourceTable\n| extend ReadbackEvidence=\"Azure query-visible rows only\", UploadAcknowledgment=\"unknown; local receipt not in table contract\", CaptureCompleteness=\"unknown; row presence does not establish coverage\"\n| project RunId, SourceTable, ReadbackRows, LastReadbackRow, ReadbackEvidence, UploadAcknowledgment, CaptureCompleteness\n| order by LastReadbackRow desc\n| take 500",
+                          "size": 0,
+                          "visualization": "table",
+                          "noDataMessage": "No AgentOps rows in this window, so delivery is not observed. Publish with VS Code `AgentOps: Publish native metadata to Azure` or CLI `agentops azure-ingest`.",
+                          "showExportToExcel": false,
+                          "queryType": 0,
+                          "resourceType": "microsoft.operationalinsights/workspaces",
+                          "crossComponentResources": [
+                            "{Workspace}"
+                          ],
+                          "timeContextFromParameter": "TimeRange",
+                          "noDataMessageStyle": 5,
+                          "gridSettings": {
+                            "formatters": [
+                              {
+                                "columnMatch": "ReadbackRows",
+                                "formatter": 4,
+                                "formatOptions": {
+                                  "palette": "blue"
+                                }
+                              }
+                            ],
+                            "filter": true,
+                            "labelSettings": [
+                              {
+                                "columnId": "RunId",
+                                "label": "Run ID"
+                              },
+                              {
+                                "columnId": "SourceTable",
+                                "label": "Source table"
+                              },
+                              {
+                                "columnId": "ReadbackRows",
+                                "label": "Readback rows"
+                              },
+                              {
+                                "columnId": "LastReadbackRow",
+                                "label": "Last readback row"
+                              },
+                              {
+                                "columnId": "ReadbackEvidence",
+                                "label": "Readback evidence"
+                              },
+                              {
+                                "columnId": "UploadAcknowledgment",
+                                "label": "Upload acknowledgment"
+                              },
+                              {
+                                "columnId": "CaptureCompleteness",
+                                "label": "Capture completeness"
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "conditionalVisibility": {
+                    "parameterName": "selectedTab",
+                    "comparison": "isEqualTo",
+                    "value": "overview"
+                  }
+                },
+                {
+                  "type": 12,
+                  "name": "tab-runs",
+                  "content": {
+                    "version": "NotebookGroup/1.0",
+                    "groupType": "editable",
+                    "items": [
+                      {
+                        "type": 3,
+                        "name": "runs",
+                        "content": {
+                          "version": "KqlItem/1.0",
+                          "title": "Runs, model provenance and nullable usage / cost",
+                          "query": "AgentOpsRunSummary_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId, SessionId, TraceId, AgentName, Surface, TaskType, ModelRequested, ModelActual, OutcomeStatus, InputTokens, OutputTokens, EstimatedCostUsdReal, TestsRan, TestsPassed, CiStatus, PrivacyMode, SchemaVersion\n| summarize arg_max(TimeGenerated, *) by RunId\n| extend RequestedModel=iff(isempty(ModelRequested), \"unknown\", ModelRequested), RecordedActualModel=iff(isempty(ModelActual), \"unknown\", ModelActual), ActualModelProvenance=\"recorded metadata; independent execution not established\", Outcome=iff(isempty(OutcomeStatus), \"unknown\", OutcomeStatus), UsageEvidence=iff(isnull(InputTokens) or isnull(OutputTokens), \"partial or unknown\", \"recorded run summary\"), CostEvidence=iff(isnull(EstimatedCostUsdReal), \"unknown\", \"recorded estimate; not invoice\"), CaptureCompleteness=\"unknown; no affirmative coverage field\"\n| project TimeGenerated, RunId, SessionId, TraceId, AgentName, Surface, TaskType, RequestedModel, RecordedActualModel, ActualModelProvenance, Outcome, InputTokens, OutputTokens, UsageEvidence, EstimatedCostUsdReal, CostEvidence, TestsRan, TestsPassed, CiStatus, PrivacyMode, CaptureCompleteness, SchemaVersion\n| order by TimeGenerated desc\n| take 500",
+                          "size": 0,
+                          "visualization": "table",
+                          "noDataMessage": "No run summaries in this window. Run summaries come from CLI `agentops run-summary`; native VS Code capture publishes events only. Outcome stays unknown.",
+                          "showExportToExcel": false,
+                          "queryType": 0,
+                          "resourceType": "microsoft.operationalinsights/workspaces",
+                          "crossComponentResources": [
+                            "{Workspace}"
+                          ],
+                          "timeContextFromParameter": "TimeRange",
+                          "noDataMessageStyle": 5,
+                          "gridSettings": {
+                            "formatters": [
+                              {
+                                "columnMatch": "SessionId",
+                                "formatter": 5
+                              },
+                              {
+                                "columnMatch": "TraceId",
+                                "formatter": 5
+                              },
+                              {
+                                "columnMatch": "SchemaVersion",
+                                "formatter": 5
+                              },
+                              {
+                                "columnMatch": "Outcome",
+                                "formatter": 18,
+                                "formatOptions": {
+                                  "thresholdsOptions": "icons",
+                                  "thresholdsGrid": [
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "failed",
+                                      "representation": "failed",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "failure",
+                                      "representation": "failed",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "error",
+                                      "representation": "failed",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "denied",
+                                      "representation": "failed",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "blocked",
+                                      "representation": "failed",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "success",
+                                      "representation": "success",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "succeeded",
+                                      "representation": "success",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "ok",
+                                      "representation": "success",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "completed",
+                                      "representation": "success",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "Default",
+                                      "thresholdValue": null,
+                                      "representation": "Unknown",
+                                      "text": "{0}{1}"
+                                    }
+                                  ]
+                                }
+                              },
+                              {
+                                "columnMatch": "InputTokens",
+                                "formatter": 4,
+                                "formatOptions": {
+                                  "palette": "blue"
+                                }
+                              },
+                              {
+                                "columnMatch": "OutputTokens",
+                                "formatter": 4,
+                                "formatOptions": {
+                                  "palette": "blue"
+                                }
+                              }
+                            ],
+                            "filter": true,
+                            "labelSettings": [
+                              {
+                                "columnId": "TimeGenerated",
+                                "label": "Time"
+                              },
+                              {
+                                "columnId": "RunId",
+                                "label": "Run ID"
+                              },
+                              {
+                                "columnId": "SessionId",
+                                "label": "Session ID"
+                              },
+                              {
+                                "columnId": "TraceId",
+                                "label": "Trace ID"
+                              },
+                              {
+                                "columnId": "AgentName",
+                                "label": "Agent name"
+                              },
+                              {
+                                "columnId": "TaskType",
+                                "label": "Task type"
+                              },
+                              {
+                                "columnId": "RequestedModel",
+                                "label": "Requested model"
+                              },
+                              {
+                                "columnId": "RecordedActualModel",
+                                "label": "Recorded actual model"
+                              },
+                              {
+                                "columnId": "ActualModelProvenance",
+                                "label": "Actual model provenance"
+                              },
+                              {
+                                "columnId": "InputTokens",
+                                "label": "Input tokens"
+                              },
+                              {
+                                "columnId": "OutputTokens",
+                                "label": "Output tokens"
+                              },
+                              {
+                                "columnId": "UsageEvidence",
+                                "label": "Usage evidence"
+                              },
+                              {
+                                "columnId": "EstimatedCostUsdReal",
+                                "label": "Est. cost (USD)"
+                              },
+                              {
+                                "columnId": "CostEvidence",
+                                "label": "Cost evidence"
+                              },
+                              {
+                                "columnId": "TestsRan",
+                                "label": "Tests ran"
+                              },
+                              {
+                                "columnId": "TestsPassed",
+                                "label": "Tests passed"
+                              },
+                              {
+                                "columnId": "CiStatus",
+                                "label": "CI status"
+                              },
+                              {
+                                "columnId": "PrivacyMode",
+                                "label": "Privacy mode"
+                              },
+                              {
+                                "columnId": "CaptureCompleteness",
+                                "label": "Capture completeness"
+                              },
+                              {
+                                "columnId": "SchemaVersion",
+                                "label": "Schema version"
+                              }
+                            ]
+                          }
+                        }
+                      },
+                      {
+                        "type": 3,
+                        "name": "model-events",
+                        "content": {
+                          "version": "KqlItem/1.0",
+                          "title": "Model request versus recorded actual event evidence",
+                          "query": "AgentOpsEvents_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId, EventId, Sequence, EventName, Status, ModelRequested, ModelActual, Provider\n| where isnotempty(ModelRequested) or isnotempty(ModelActual)\n| extend ActualModelProvenance=iff(isempty(ModelActual), \"unknown; request is not actual\", \"recorded event; independent execution not established\")\n| project TimeGenerated, RunId, EventId, Sequence, EventName, Status, ModelRequested, ModelActual, Provider, ActualModelProvenance\n| order by TimeGenerated desc\n| take 500",
+                          "size": 0,
+                          "visualization": "table",
+                          "noDataMessage": "No model request or recorded actual model in this window. Requested model is never treated as actual.",
+                          "showExportToExcel": false,
+                          "queryType": 0,
+                          "resourceType": "microsoft.operationalinsights/workspaces",
+                          "crossComponentResources": [
+                            "{Workspace}"
+                          ],
+                          "timeContextFromParameter": "TimeRange",
+                          "noDataMessageStyle": 5,
+                          "gridSettings": {
+                            "formatters": [
+                              {
+                                "columnMatch": "ActualModelProvenance",
+                                "formatter": 18,
+                                "formatOptions": {
+                                  "thresholdsOptions": "icons",
+                                  "thresholdsGrid": [
+                                    {
+                                      "operator": "startswith",
+                                      "thresholdValue": "unknown",
+                                      "representation": "Unknown",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "Default",
+                                      "thresholdValue": null,
+                                      "representation": "Available",
+                                      "text": "{0}{1}"
+                                    }
+                                  ]
+                                }
+                              }
+                            ],
+                            "filter": true,
+                            "labelSettings": [
+                              {
+                                "columnId": "TimeGenerated",
+                                "label": "Time"
+                              },
+                              {
+                                "columnId": "RunId",
+                                "label": "Run ID"
+                              },
+                              {
+                                "columnId": "EventId",
+                                "label": "Event ID"
+                              },
+                              {
+                                "columnId": "EventName",
+                                "label": "Event name"
+                              },
+                              {
+                                "columnId": "ModelRequested",
+                                "label": "Model requested"
+                              },
+                              {
+                                "columnId": "ModelActual",
+                                "label": "Model actual"
+                              },
+                              {
+                                "columnId": "ActualModelProvenance",
+                                "label": "Actual model provenance"
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "conditionalVisibility": {
+                    "parameterName": "selectedTab",
+                    "comparison": "isEqualTo",
+                    "value": "runs"
+                  }
+                },
+                {
+                  "type": 12,
+                  "name": "tab-tools",
+                  "content": {
+                    "version": "NotebookGroup/1.0",
+                    "groupType": "editable",
+                    "items": [
+                      {
+                        "type": 3,
+                        "name": "tools-scripts",
+                        "content": {
+                          "version": "KqlItem/1.0",
+                          "title": "Tool, MCP and script execution / failures",
+                          "query": "union\n(AgentOpsToolCalls_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId, TraceId, SpanId, ToolName, ToolType, ToolRisk, Status, Allowed, DurationMs | extend Lane=\"tool\"),\n(AgentOpsMcpCalls_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId, TraceId, SpanId, ToolName, McpServerName, ToolRisk, Status, Allowed, DurationMs | extend Lane=\"mcp\"),\n(AgentOpsEvents_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId, TraceId, EventId, EventName, ToolName, McpServerName, ScriptName, ScriptRuntimeName, ScriptLoaderName, Status, ErrorType, ExitCode, DurationMs | where isnotempty(ScriptName) or isnotempty(ErrorType) or (isnotnull(ExitCode) and ExitCode != 0) | extend Lane=\"event / script\")\n| extend RecordedStatus=iff(isempty(Status), \"unknown\", Status), FailureEvidence=case(isnotempty(ErrorType), \"recorded error type\", isnotnull(ExitCode) and ExitCode != 0, \"recorded nonzero exit\", Status in~ (\"error\", \"failed\", \"failure\", \"denied\", \"blocked\"), \"recorded failure / denial\", \"no failure signal in this row; success unknown\")\n| project TimeGenerated, RunId, Lane, ToolName, McpServerName, ScriptName, ScriptRuntimeName, ScriptLoaderName, RecordedStatus, FailureEvidence, Allowed, ErrorType, ExitCode, DurationMs, TraceId, SpanId, EventId\n| order by TimeGenerated desc\n| take 500",
+                          "size": 0,
+                          "visualization": "table",
+                          "noDataMessage": "No tool, MCP or script rows in this window. Success remains unknown, not assumed.",
+                          "showExportToExcel": false,
+                          "queryType": 0,
+                          "resourceType": "microsoft.operationalinsights/workspaces",
+                          "crossComponentResources": [
+                            "{Workspace}"
+                          ],
+                          "timeContextFromParameter": "TimeRange",
+                          "noDataMessageStyle": 5,
+                          "gridSettings": {
+                            "formatters": [
+                              {
+                                "columnMatch": "TraceId",
+                                "formatter": 5
+                              },
+                              {
+                                "columnMatch": "SpanId",
+                                "formatter": 5
+                              },
+                              {
+                                "columnMatch": "EventId",
+                                "formatter": 5
+                              },
+                              {
+                                "columnMatch": "FailureEvidence",
+                                "formatter": 18,
+                                "formatOptions": {
+                                  "thresholdsOptions": "icons",
+                                  "thresholdsGrid": [
+                                    {
+                                      "operator": "startswith",
+                                      "thresholdValue": "recorded",
+                                      "representation": "failed",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "Default",
+                                      "thresholdValue": null,
+                                      "representation": "Unknown",
+                                      "text": "{0}{1}"
+                                    }
+                                  ]
+                                }
+                              },
+                              {
+                                "columnMatch": "DurationMs",
+                                "formatter": 4,
+                                "formatOptions": {
+                                  "palette": "blue"
+                                }
+                              }
+                            ],
+                            "filter": true,
+                            "labelSettings": [
+                              {
+                                "columnId": "TimeGenerated",
+                                "label": "Time"
+                              },
+                              {
+                                "columnId": "RunId",
+                                "label": "Run ID"
+                              },
+                              {
+                                "columnId": "ToolName",
+                                "label": "Tool name"
+                              },
+                              {
+                                "columnId": "McpServerName",
+                                "label": "MCP server name"
+                              },
+                              {
+                                "columnId": "ScriptName",
+                                "label": "Script name"
+                              },
+                              {
+                                "columnId": "ScriptRuntimeName",
+                                "label": "Script runtime name"
+                              },
+                              {
+                                "columnId": "ScriptLoaderName",
+                                "label": "Script loader name"
+                              },
+                              {
+                                "columnId": "RecordedStatus",
+                                "label": "Recorded status"
+                              },
+                              {
+                                "columnId": "FailureEvidence",
+                                "label": "Failure evidence"
+                              },
+                              {
+                                "columnId": "ErrorType",
+                                "label": "Error type"
+                              },
+                              {
+                                "columnId": "ExitCode",
+                                "label": "Exit code"
+                              },
+                              {
+                                "columnId": "DurationMs",
+                                "label": "Duration (ms)"
+                              },
+                              {
+                                "columnId": "TraceId",
+                                "label": "Trace ID"
+                              },
+                              {
+                                "columnId": "SpanId",
+                                "label": "Span ID"
+                              },
+                              {
+                                "columnId": "EventId",
+                                "label": "Event ID"
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "conditionalVisibility": {
+                    "parameterName": "selectedTab",
+                    "comparison": "isEqualTo",
+                    "value": "tools"
+                  }
+                },
+                {
+                  "type": 12,
+                  "name": "tab-lineage",
+                  "content": {
+                    "version": "NotebookGroup/1.0",
+                    "groupType": "editable",
+                    "items": [
+                      {
+                        "type": 3,
+                        "name": "span-lineage",
+                        "content": {
+                          "version": "KqlItem/1.0",
+                          "title": "Span lineage and attribution evidence",
+                          "query": "union\n(AgentOpsSpans_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId, TraceId, SpanId, ParentSpanId, OperationName, AgentName, ToolName, McpServerName, McpToolName, ScriptName, ToolCallEvidence, LinkType, Outcome, ErrorType, DurationMs),\n(AgentOpsEvents_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId, TraceId, EventName, SpanName, Status, DurationMs\n| where EventName == \"native.span.observed\"\n| extend OperationName=SpanName, Outcome=Status, LinkType=\"native span event; span and parent IDs not exported\")\n| project TimeGenerated, RunId, TraceId, SpanId, ParentSpanId, OperationName, AgentName, ToolName, McpServerName, McpToolName, ScriptName, ToolCallEvidence, LinkType, Outcome, ErrorType, DurationMs\n| order by TimeGenerated asc\n| take 500",
+                          "size": 0,
+                          "visualization": "table",
+                          "noDataMessage": "No span-table rows or native span events in this window. Start capture with VS Code `AgentOps: Connect native capture`, then publish.",
+                          "showExportToExcel": false,
+                          "queryType": 0,
+                          "resourceType": "microsoft.operationalinsights/workspaces",
+                          "crossComponentResources": [
+                            "{Workspace}"
+                          ],
+                          "timeContextFromParameter": "TimeRange",
+                          "noDataMessageStyle": 5,
+                          "gridSettings": {
+                            "formatters": [
+                              {
+                                "columnMatch": "TraceId",
+                                "formatter": 5
+                              },
+                              {
+                                "columnMatch": "ParentSpanId",
+                                "formatter": 5
+                              },
+                              {
+                                "columnMatch": "Outcome",
+                                "formatter": 18,
+                                "formatOptions": {
+                                  "thresholdsOptions": "icons",
+                                  "thresholdsGrid": [
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "failed",
+                                      "representation": "failed",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "failure",
+                                      "representation": "failed",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "error",
+                                      "representation": "failed",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "denied",
+                                      "representation": "failed",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "blocked",
+                                      "representation": "failed",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "success",
+                                      "representation": "success",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "succeeded",
+                                      "representation": "success",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "ok",
+                                      "representation": "success",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "completed",
+                                      "representation": "success",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "Default",
+                                      "thresholdValue": null,
+                                      "representation": "Unknown",
+                                      "text": "{0}{1}"
+                                    }
+                                  ]
+                                }
+                              },
+                              {
+                                "columnMatch": "DurationMs",
+                                "formatter": 4,
+                                "formatOptions": {
+                                  "palette": "blue"
+                                }
+                              }
+                            ],
+                            "filter": true,
+                            "labelSettings": [
+                              {
+                                "columnId": "TimeGenerated",
+                                "label": "Time"
+                              },
+                              {
+                                "columnId": "RunId",
+                                "label": "Run ID"
+                              },
+                              {
+                                "columnId": "TraceId",
+                                "label": "Trace ID"
+                              },
+                              {
+                                "columnId": "SpanId",
+                                "label": "Span ID"
+                              },
+                              {
+                                "columnId": "ParentSpanId",
+                                "label": "Parent span ID"
+                              },
+                              {
+                                "columnId": "OperationName",
+                                "label": "Operation name"
+                              },
+                              {
+                                "columnId": "AgentName",
+                                "label": "Agent name"
+                              },
+                              {
+                                "columnId": "ToolName",
+                                "label": "Tool name"
+                              },
+                              {
+                                "columnId": "McpServerName",
+                                "label": "MCP server name"
+                              },
+                              {
+                                "columnId": "McpToolName",
+                                "label": "MCP tool name"
+                              },
+                              {
+                                "columnId": "ScriptName",
+                                "label": "Script name"
+                              },
+                              {
+                                "columnId": "ToolCallEvidence",
+                                "label": "Tool call evidence"
+                              },
+                              {
+                                "columnId": "LinkType",
+                                "label": "Link type"
+                              },
+                              {
+                                "columnId": "ErrorType",
+                                "label": "Error type"
+                              },
+                              {
+                                "columnId": "DurationMs",
+                                "label": "Duration (ms)"
+                              }
+                            ]
+                          }
+                        }
+                      },
+                      {
+                        "type": 3,
+                        "name": "references",
+                        "content": {
+                          "version": "KqlItem/1.0",
+                          "title": "Opaque evidence references for local ledger investigation",
+                          "query": "AgentOpsEvents_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId, SessionId, TraceId, EventId, ParentEventId, Sequence, EventName, ToolCallId, ParentToolCallId, AgentId, ParentAgentId\n| order by TimeGenerated asc\n| take 500",
+                          "size": 0,
+                          "visualization": "table",
+                          "noDataMessage": "No event references in this window. Publish with VS Code `AgentOps: Publish native metadata to Azure` or CLI `agentops azure-ingest`.",
+                          "showExportToExcel": false,
+                          "queryType": 0,
+                          "resourceType": "microsoft.operationalinsights/workspaces",
+                          "crossComponentResources": [
+                            "{Workspace}"
+                          ],
+                          "timeContextFromParameter": "TimeRange",
+                          "noDataMessageStyle": 5,
+                          "gridSettings": {
+                            "formatters": [],
+                            "filter": true,
+                            "labelSettings": [
+                              {
+                                "columnId": "TimeGenerated",
+                                "label": "Time"
+                              },
+                              {
+                                "columnId": "RunId",
+                                "label": "Run ID"
+                              },
+                              {
+                                "columnId": "SessionId",
+                                "label": "Session ID"
+                              },
+                              {
+                                "columnId": "TraceId",
+                                "label": "Trace ID"
+                              },
+                              {
+                                "columnId": "EventId",
+                                "label": "Event ID"
+                              },
+                              {
+                                "columnId": "ParentEventId",
+                                "label": "Parent event ID"
+                              },
+                              {
+                                "columnId": "EventName",
+                                "label": "Event name"
+                              },
+                              {
+                                "columnId": "ToolCallId",
+                                "label": "Tool call ID"
+                              },
+                              {
+                                "columnId": "ParentToolCallId",
+                                "label": "Parent tool call ID"
+                              },
+                              {
+                                "columnId": "AgentId",
+                                "label": "Agent ID"
+                              },
+                              {
+                                "columnId": "ParentAgentId",
+                                "label": "Parent agent ID"
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "conditionalVisibility": {
+                    "parameterName": "selectedTab",
+                    "comparison": "isEqualTo",
+                    "value": "lineage"
+                  }
+                },
+                {
+                  "type": 12,
+                  "name": "tab-privacy",
+                  "content": {
+                    "version": "NotebookGroup/1.0",
+                    "groupType": "editable",
+                    "items": [
+                      {
+                        "type": 3,
+                        "name": "privacy",
+                        "content": {
+                          "version": "KqlItem/1.0",
+                          "title": "Privacy receipts and explicit unknown verdicts",
+                          "query": "AgentOpsPrivacy_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId, TraceId, ContentKind, Action, Observed, LeakDetected, DroppedCount, RedactedCount, PrivacyMode\n| extend PrivacyEvidence=case(isnull(Observed), \"unknown\", Observed == false, \"not observed\", isnull(LeakDetected), \"observed; leak verdict unknown\", LeakDetected == true, \"leak signal; investigate\", \"recorded no-leak verdict; not a complete privacy guarantee\")\n| project TimeGenerated, RunId, TraceId, ContentKind, Action, Observed, LeakDetected, DroppedCount, RedactedCount, PrivacyMode, PrivacyEvidence\n| order by TimeGenerated desc\n| take 500",
+                          "size": 0,
+                          "visualization": "table",
+                          "noDataMessage": "No privacy receipts in this window. No-leak verdict is unknown, not clean.",
+                          "showExportToExcel": false,
+                          "queryType": 0,
+                          "resourceType": "microsoft.operationalinsights/workspaces",
+                          "crossComponentResources": [
+                            "{Workspace}"
+                          ],
+                          "timeContextFromParameter": "TimeRange",
+                          "noDataMessageStyle": 5,
+                          "gridSettings": {
+                            "formatters": [
+                              {
+                                "columnMatch": "TraceId",
+                                "formatter": 5
+                              },
+                              {
+                                "columnMatch": "PrivacyEvidence",
+                                "formatter": 18,
+                                "formatOptions": {
+                                  "thresholdsOptions": "icons",
+                                  "thresholdsGrid": [
+                                    {
+                                      "operator": "startswith",
+                                      "thresholdValue": "leak signal",
+                                      "representation": "failed",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "startswith",
+                                      "thresholdValue": "recorded no-leak",
+                                      "representation": "success",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "Default",
+                                      "thresholdValue": null,
+                                      "representation": "Unknown",
+                                      "text": "{0}{1}"
+                                    }
+                                  ]
+                                }
+                              }
+                            ],
+                            "filter": true,
+                            "labelSettings": [
+                              {
+                                "columnId": "TimeGenerated",
+                                "label": "Time"
+                              },
+                              {
+                                "columnId": "RunId",
+                                "label": "Run ID"
+                              },
+                              {
+                                "columnId": "TraceId",
+                                "label": "Trace ID"
+                              },
+                              {
+                                "columnId": "ContentKind",
+                                "label": "Content kind"
+                              },
+                              {
+                                "columnId": "LeakDetected",
+                                "label": "Leak detected"
+                              },
+                              {
+                                "columnId": "DroppedCount",
+                                "label": "Dropped count"
+                              },
+                              {
+                                "columnId": "RedactedCount",
+                                "label": "Redacted count"
+                              },
+                              {
+                                "columnId": "PrivacyMode",
+                                "label": "Privacy mode"
+                              },
+                              {
+                                "columnId": "PrivacyEvidence",
+                                "label": "Privacy evidence"
+                              }
+                            ]
+                          }
+                        }
+                      },
+                      {
+                        "type": 3,
+                        "name": "health",
+                        "content": {
+                          "version": "KqlItem/1.0",
+                          "title": "Workspace-wide collector health (not run-filtered)",
+                          "query": "AgentOpsCollectorHealth_CL\n| where TimeGenerated {TimeRange}\n| project TimeGenerated, Component, Status, CheckName, CollectorMode, PrivacyMode, AzureConfigured, PrivacyPoisonOk, DroppedContentCount, ExportErrors, LastExportSuccess, LastSpanReceived\n| summarize arg_max(TimeGenerated, *) by Component, CheckName\n| extend HealthScope=\"workspace-wide; schema has no RunId\", LastExportEvidence=iff(isnull(LastExportSuccess), \"unknown\", \"recorded collector export timestamp; not full readback\"), HeartbeatAge=now()-TimeGenerated\n| project Component, CheckName, TimeGenerated, Status, CollectorMode, PrivacyMode, AzureConfigured, PrivacyPoisonOk, DroppedContentCount, ExportErrors, LastExportSuccess, LastSpanReceived, HealthScope, LastExportEvidence, HeartbeatAge\n| order by TimeGenerated desc\n| take 500",
+                          "size": 0,
+                          "visualization": "table",
+                          "noDataMessage": "No collector heartbeat in this window (workspace-wide). Check `agentops health` or VS Code `AgentOps: Capture status`.",
+                          "showExportToExcel": false,
+                          "queryType": 0,
+                          "resourceType": "microsoft.operationalinsights/workspaces",
+                          "crossComponentResources": [
+                            "{Workspace}"
+                          ],
+                          "timeContextFromParameter": "TimeRange",
+                          "noDataMessageStyle": 5,
+                          "gridSettings": {
+                            "formatters": [
+                              {
+                                "columnMatch": "Status",
+                                "formatter": 18,
+                                "formatOptions": {
+                                  "thresholdsOptions": "icons",
+                                  "thresholdsGrid": [
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "ok",
+                                      "representation": "success",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "healthy",
+                                      "representation": "success",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "error",
+                                      "representation": "failed",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "degraded",
+                                      "representation": "warning",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "warning",
+                                      "representation": "warning",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "Default",
+                                      "thresholdValue": null,
+                                      "representation": "Unknown",
+                                      "text": "{0}{1}"
+                                    }
+                                  ]
+                                }
+                              }
+                            ],
+                            "filter": true,
+                            "labelSettings": [
+                              {
+                                "columnId": "CheckName",
+                                "label": "Check name"
+                              },
+                              {
+                                "columnId": "TimeGenerated",
+                                "label": "Time"
+                              },
+                              {
+                                "columnId": "CollectorMode",
+                                "label": "Collector mode"
+                              },
+                              {
+                                "columnId": "PrivacyMode",
+                                "label": "Privacy mode"
+                              },
+                              {
+                                "columnId": "AzureConfigured",
+                                "label": "Azure configured"
+                              },
+                              {
+                                "columnId": "PrivacyPoisonOk",
+                                "label": "Privacy poison OK"
+                              },
+                              {
+                                "columnId": "DroppedContentCount",
+                                "label": "Dropped content count"
+                              },
+                              {
+                                "columnId": "ExportErrors",
+                                "label": "Export errors"
+                              },
+                              {
+                                "columnId": "LastExportSuccess",
+                                "label": "Last export success"
+                              },
+                              {
+                                "columnId": "LastSpanReceived",
+                                "label": "Last span received"
+                              },
+                              {
+                                "columnId": "HealthScope",
+                                "label": "Health scope"
+                              },
+                              {
+                                "columnId": "LastExportEvidence",
+                                "label": "Last export evidence"
+                              },
+                              {
+                                "columnId": "HeartbeatAge",
+                                "label": "Heartbeat age"
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "conditionalVisibility": {
+                    "parameterName": "selectedTab",
+                    "comparison": "isEqualTo",
+                    "value": "privacy"
+                  }
+                },
+                {
+                  "type": 12,
+                  "name": "tab-quality",
+                  "content": {
+                    "version": "NotebookGroup/1.0",
+                    "groupType": "editable",
+                    "items": [
+                      {
+                        "type": 3,
+                        "name": "evaluations",
+                        "content": {
+                          "version": "KqlItem/1.0",
+                          "title": "Recorded deterministic evaluations; missing scores stay null",
+                          "query": "AgentOpsEval_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId, TraceId, TaskType, ModelActual, EvalOverall, EvalBucket, Reliability, Security, TestDiscipline, ToolEfficiency, ContextEfficiency, CodeOutcome\n| extend ScoreEvidence=iff(isnull(EvalOverall), \"unknown\", \"recorded deterministic grade; execution tier not in schema\")\n| project TimeGenerated, RunId, TraceId, TaskType, ModelActual, EvalOverall, EvalBucket, Reliability, Security, TestDiscipline, ToolEfficiency, ContextEfficiency, CodeOutcome, ScoreEvidence\n| order by TimeGenerated desc\n| take 500",
+                          "size": 0,
+                          "visualization": "table",
+                          "noDataMessage": "No evaluation rows in this window. Missing scores stay null, never zero.",
+                          "showExportToExcel": false,
+                          "queryType": 0,
+                          "resourceType": "microsoft.operationalinsights/workspaces",
+                          "crossComponentResources": [
+                            "{Workspace}"
+                          ],
+                          "timeContextFromParameter": "TimeRange",
+                          "noDataMessageStyle": 5,
+                          "gridSettings": {
+                            "formatters": [
+                              {
+                                "columnMatch": "TraceId",
+                                "formatter": 5
+                              },
+                              {
+                                "columnMatch": "EvalOverall",
+                                "formatter": 8,
+                                "formatOptions": {
+                                  "palette": "redGreen",
+                                  "min": 0,
+                                  "max": 100
+                                }
+                              }
+                            ],
+                            "filter": true,
+                            "labelSettings": [
+                              {
+                                "columnId": "TimeGenerated",
+                                "label": "Time"
+                              },
+                              {
+                                "columnId": "RunId",
+                                "label": "Run ID"
+                              },
+                              {
+                                "columnId": "TraceId",
+                                "label": "Trace ID"
+                              },
+                              {
+                                "columnId": "TaskType",
+                                "label": "Task type"
+                              },
+                              {
+                                "columnId": "ModelActual",
+                                "label": "Model actual"
+                              },
+                              {
+                                "columnId": "EvalOverall",
+                                "label": "Eval overall"
+                              },
+                              {
+                                "columnId": "EvalBucket",
+                                "label": "Eval bucket"
+                              },
+                              {
+                                "columnId": "TestDiscipline",
+                                "label": "Test discipline"
+                              },
+                              {
+                                "columnId": "ToolEfficiency",
+                                "label": "Tool efficiency"
+                              },
+                              {
+                                "columnId": "ContextEfficiency",
+                                "label": "Context efficiency"
+                              },
+                              {
+                                "columnId": "CodeOutcome",
+                                "label": "Code outcome"
+                              },
+                              {
+                                "columnId": "ScoreEvidence",
+                                "label": "Score evidence"
+                              }
+                            ]
+                          }
+                        }
+                      },
+                      {
+                        "type": 3,
+                        "name": "github-outcomes",
+                        "content": {
+                          "version": "KqlItem/1.0",
+                          "title": "Measured code outcomes; unknown booleans stay null",
+                          "query": "AgentOpsGithubOutcomes_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId, RepoHash, PrNumberHash, PrOpened, PrMerged, PrClosed, PrReverted, CiStatus, CommitCount, FilesChangedCount, ReviewCommentCount, TimeToPrMinutes, TimeToMergeMinutes\n| extend OutcomeEvidence=\"recorded GitHub state; causal benefit not established\"\n| project TimeGenerated, RunId, RepoHash, PrNumberHash, PrOpened, PrMerged, PrClosed, PrReverted, CiStatus, CommitCount, FilesChangedCount, ReviewCommentCount, TimeToPrMinutes, TimeToMergeMinutes, OutcomeEvidence\n| order by TimeGenerated desc\n| take 500",
+                          "size": 0,
+                          "visualization": "table",
+                          "noDataMessage": "No GitHub outcome rows in this window. Enrich with CLI `agentops github-enrich`. Unknown booleans stay null.",
+                          "showExportToExcel": false,
+                          "queryType": 0,
+                          "resourceType": "microsoft.operationalinsights/workspaces",
+                          "crossComponentResources": [
+                            "{Workspace}"
+                          ],
+                          "timeContextFromParameter": "TimeRange",
+                          "noDataMessageStyle": 5,
+                          "gridSettings": {
+                            "formatters": [
+                              {
+                                "columnMatch": "CiStatus",
+                                "formatter": 18,
+                                "formatOptions": {
+                                  "thresholdsOptions": "icons",
+                                  "thresholdsGrid": [
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "failed",
+                                      "representation": "failed",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "failure",
+                                      "representation": "failed",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "error",
+                                      "representation": "failed",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "denied",
+                                      "representation": "failed",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "blocked",
+                                      "representation": "failed",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "success",
+                                      "representation": "success",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "succeeded",
+                                      "representation": "success",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "ok",
+                                      "representation": "success",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "completed",
+                                      "representation": "success",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "Default",
+                                      "thresholdValue": null,
+                                      "representation": "Unknown",
+                                      "text": "{0}{1}"
+                                    }
+                                  ]
+                                }
+                              }
+                            ],
+                            "filter": true,
+                            "labelSettings": [
+                              {
+                                "columnId": "TimeGenerated",
+                                "label": "Time"
+                              },
+                              {
+                                "columnId": "RunId",
+                                "label": "Run ID"
+                              },
+                              {
+                                "columnId": "RepoHash",
+                                "label": "Repo hash"
+                              },
+                              {
+                                "columnId": "PrNumberHash",
+                                "label": "PR number hash"
+                              },
+                              {
+                                "columnId": "PrOpened",
+                                "label": "PR opened"
+                              },
+                              {
+                                "columnId": "PrMerged",
+                                "label": "PR merged"
+                              },
+                              {
+                                "columnId": "PrClosed",
+                                "label": "PR closed"
+                              },
+                              {
+                                "columnId": "PrReverted",
+                                "label": "PR reverted"
+                              },
+                              {
+                                "columnId": "CiStatus",
+                                "label": "CI status"
+                              },
+                              {
+                                "columnId": "CommitCount",
+                                "label": "Commit count"
+                              },
+                              {
+                                "columnId": "FilesChangedCount",
+                                "label": "Files changed count"
+                              },
+                              {
+                                "columnId": "ReviewCommentCount",
+                                "label": "Review comment count"
+                              },
+                              {
+                                "columnId": "TimeToPrMinutes",
+                                "label": "Time to PR (min)"
+                              },
+                              {
+                                "columnId": "TimeToMergeMinutes",
+                                "label": "Time to merge (min)"
+                              },
+                              {
+                                "columnId": "OutcomeEvidence",
+                                "label": "Outcome evidence"
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "conditionalVisibility": {
+                    "parameterName": "selectedTab",
+                    "comparison": "isEqualTo",
+                    "value": "quality"
+                  }
+                },
+                {
+                  "type": 12,
+                  "name": "tab-insights",
+                  "content": {
+                    "version": "NotebookGroup/1.0",
+                    "groupType": "editable",
+                    "items": [
+                      {
+                        "type": 3,
+                        "name": "insights",
+                        "content": {
+                          "version": "KqlItem/1.0",
+                          "title": "Architecture insights and bounded evidence references",
+                          "query": "AgentOpsInsights_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId, TraceId, InsightId, InsightType, Severity, Rule, ArchitectureVersion, Numerator, Denominator, CoverageRuns, Status, Evidence\n| extend EvidenceIds=Evidence.evidenceIds, CoverageLimits=tostring(Evidence.coverageLimits)\n| project TimeGenerated, RunId, TraceId, InsightId, InsightType, Severity, Rule, ArchitectureVersion, Numerator, Denominator, CoverageRuns, Status, EvidenceIds, CoverageLimits\n| order by TimeGenerated desc\n| take 500",
+                          "size": 0,
+                          "visualization": "table",
+                          "noDataMessage": "No architecture insights in this window. Generate with CLI `agentops insights`.",
+                          "showExportToExcel": false,
+                          "queryType": 0,
+                          "resourceType": "microsoft.operationalinsights/workspaces",
+                          "crossComponentResources": [
+                            "{Workspace}"
+                          ],
+                          "timeContextFromParameter": "TimeRange",
+                          "noDataMessageStyle": 5,
+                          "gridSettings": {
+                            "formatters": [
+                              {
+                                "columnMatch": "TraceId",
+                                "formatter": 5
+                              },
+                              {
+                                "columnMatch": "Severity",
+                                "formatter": 18,
+                                "formatOptions": {
+                                  "thresholdsOptions": "icons",
+                                  "thresholdsGrid": [
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "high",
+                                      "representation": "failed",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "critical",
+                                      "representation": "failed",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "medium",
+                                      "representation": "warning",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "low",
+                                      "representation": "info",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "Default",
+                                      "thresholdValue": null,
+                                      "representation": "Blank",
+                                      "text": "{0}{1}"
+                                    }
+                                  ]
+                                }
+                              }
+                            ],
+                            "filter": true,
+                            "labelSettings": [
+                              {
+                                "columnId": "TimeGenerated",
+                                "label": "Time"
+                              },
+                              {
+                                "columnId": "RunId",
+                                "label": "Run ID"
+                              },
+                              {
+                                "columnId": "TraceId",
+                                "label": "Trace ID"
+                              },
+                              {
+                                "columnId": "InsightId",
+                                "label": "Insight ID"
+                              },
+                              {
+                                "columnId": "InsightType",
+                                "label": "Insight type"
+                              },
+                              {
+                                "columnId": "ArchitectureVersion",
+                                "label": "Architecture version"
+                              },
+                              {
+                                "columnId": "CoverageRuns",
+                                "label": "Coverage runs"
+                              },
+                              {
+                                "columnId": "EvidenceIds",
+                                "label": "Evidence IDs"
+                              },
+                              {
+                                "columnId": "CoverageLimits",
+                                "label": "Coverage limits"
+                              }
+                            ]
+                          }
+                        }
+                      },
+                      {
+                        "type": 3,
+                        "name": "recommendations",
+                        "content": {
+                          "version": "KqlItem/1.0",
+                          "title": "Recommendation identifiers and controlled actions",
+                          "query": "AgentOpsRecommendations_CL\n| where TimeGenerated {TimeRange}\n| where base64_decode_tostring('{RunId:base64}') == '*' or RunId == base64_decode_tostring('{RunId:base64}')\n| project TimeGenerated, RunId, SessionId, TraceId, RecommendationId, Action, Severity, EvalOverall, EvalBucket\n| extend Decision=\"proposal only; human review required\"\n| project TimeGenerated, RunId, SessionId, TraceId, RecommendationId, Action, Severity, EvalOverall, EvalBucket, Decision\n| order by TimeGenerated desc\n| take 500",
+                          "size": 0,
+                          "visualization": "table",
+                          "noDataMessage": "No recommendations in this window. Generate with CLI `agentops recommend`; every action needs human review.",
+                          "showExportToExcel": false,
+                          "queryType": 0,
+                          "resourceType": "microsoft.operationalinsights/workspaces",
+                          "crossComponentResources": [
+                            "{Workspace}"
+                          ],
+                          "timeContextFromParameter": "TimeRange",
+                          "noDataMessageStyle": 5,
+                          "gridSettings": {
+                            "formatters": [
+                              {
+                                "columnMatch": "TraceId",
+                                "formatter": 5
+                              },
+                              {
+                                "columnMatch": "SessionId",
+                                "formatter": 5
+                              },
+                              {
+                                "columnMatch": "Severity",
+                                "formatter": 18,
+                                "formatOptions": {
+                                  "thresholdsOptions": "icons",
+                                  "thresholdsGrid": [
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "high",
+                                      "representation": "failed",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "critical",
+                                      "representation": "failed",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "medium",
+                                      "representation": "warning",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "low",
+                                      "representation": "info",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "Default",
+                                      "thresholdValue": null,
+                                      "representation": "Blank",
+                                      "text": "{0}{1}"
+                                    }
+                                  ]
+                                }
+                              }
+                            ],
+                            "filter": true,
+                            "labelSettings": [
+                              {
+                                "columnId": "TimeGenerated",
+                                "label": "Time"
+                              },
+                              {
+                                "columnId": "RunId",
+                                "label": "Run ID"
+                              },
+                              {
+                                "columnId": "SessionId",
+                                "label": "Session ID"
+                              },
+                              {
+                                "columnId": "TraceId",
+                                "label": "Trace ID"
+                              },
+                              {
+                                "columnId": "RecommendationId",
+                                "label": "Recommendation ID"
+                              },
+                              {
+                                "columnId": "EvalOverall",
+                                "label": "Eval overall"
+                              },
+                              {
+                                "columnId": "EvalBucket",
+                                "label": "Eval bucket"
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "conditionalVisibility": {
+                    "parameterName": "selectedTab",
+                    "comparison": "isEqualTo",
+                    "value": "insights"
+                  }
+                },
+                {
+                  "type": 1,
+                  "name": "enterprise-limits",
+                  "content": {
+                    "json": "## Interpretation and privacy limits\n\nCounts describe rows observed in this window, not expected deliveries or capture coverage. Retries may duplicate rows. Health is workspace-wide because its table has no RunId. Numeric and boolean blanks remain unknown; estimated cost is not billed cost. Run and event IDs are linkable metadata. No arbitrary dynamic evidence object, recommendation text, health detail or endpoint is rendered. Metadata projection and least-privilege table access must be qualified before private data onboarding. Local replay and independently verified receipts remain the authority for detailed investigation.\n\n[Time parameters](https://learn.microsoft.com/en-us/azure/azure-monitor/visualize/workbooks-time) · [Workbook access](https://learn.microsoft.com/en-us/azure/azure-monitor/visualize/workbooks-access-control) · [Official workbook schema](https://github.com/microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json)"
+                  }
+                }
+              ],
+              "fallbackResourceIds": [],
+              "$schema": "https://github.com/microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+            },
+            "workbookTemplate": "[variables('$fxv#0')]",
+            "boundItems": "[map(variables('workbookTemplate').items, lambda('item', if(equals(lambdaVariables('item').name, 'enterprise-parameters'), union(lambdaVariables('item'), createObject('content', union(lambdaVariables('item').content, createObject('parameters', map(lambdaVariables('item').content.parameters, lambda('parameter', if(equals(lambdaVariables('parameter').name, 'Workspace'), union(lambdaVariables('parameter'), createObject('value', parameters('workspaceResourceId'))), lambdaVariables('parameter')))))))), lambdaVariables('item'))))]",
+            "boundWorkbook": "[union(variables('workbookTemplate'), createObject('items', variables('boundItems'), 'fallbackResourceIds', createArray(parameters('workspaceResourceId')), 'defaultResourceIds', createArray(parameters('workspaceResourceId'))))]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Insights/workbooks",
+              "apiVersion": "2022-04-01",
+              "name": "[parameters('name')]",
+              "location": "[parameters('location')]",
+              "kind": "shared",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "displayName": "[parameters('displayName')]",
+                "category": "workbook",
+                "sourceId": "[parameters('workspaceResourceId')]",
+                "serializedData": "[string(variables('boundWorkbook'))]",
+                "version": "1.0"
+              }
+            }
+          ],
+          "outputs": {
+            "resourceId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Insights/workbooks', parameters('name'))]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'agentops-log-analytics')]"
+      ]
+    },
+    {
+      "condition": "[parameters('deployBudget')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "agentops-budget",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "name": {
+            "value": "[format('budget-{0}-{1}', parameters('baseName'), parameters('environmentName'))]"
+          },
+          "amount": {
+            "value": "[parameters('monthlyBudgetAmount')]"
+          },
+          "contactEmails": "[if(empty(parameters('budgetAlertEmail')), createObject('value', createArray()), createObject('value', createArray(parameters('budgetAlertEmail'))))]",
+          "contactRoles": "[if(empty(parameters('budgetAlertEmail')), createObject('value', createArray('Owner')), createObject('value', createArray()))]",
+          "startDate": {
+            "value": "[parameters('budgetStartDate')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.38.33.27573",
+              "templateHash": "17804178968096207505"
+            }
+          },
+          "parameters": {
+            "name": {
+              "type": "string",
+              "metadata": {
+                "description": "Monthly budget resource name."
+              }
+            },
+            "amount": {
+              "type": "int",
+              "minValue": 1,
+              "metadata": {
+                "description": "Monthly budget amount in the billing currency for the subscription."
+              }
+            },
+            "contactEmails": {
+              "type": "array",
+              "metadata": {
+                "description": "Email addresses for budget notifications. Use a team-owned distribution list for internal pilots."
+              }
+            },
+            "contactRoles": {
+              "type": "array",
+              "defaultValue": [],
+              "metadata": {
+                "description": "Azure RBAC roles on the budget scope to notify, for example Owner. Used when no email is supplied."
+              }
+            },
+            "startDate": {
+              "type": "string",
+              "metadata": {
+                "description": "Budget start date in ISO 8601 UTC format."
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Consumption/budgets",
+              "apiVersion": "2024-08-01",
+              "name": "[parameters('name')]",
+              "properties": {
+                "amount": "[parameters('amount')]",
+                "category": "Cost",
+                "notifications": {
+                  "Actual_GreaterThan_80_Percent": {
+                    "contactEmails": "[parameters('contactEmails')]",
+                    "contactGroups": [],
+                    "contactRoles": "[parameters('contactRoles')]",
+                    "enabled": true,
+                    "locale": "en-us",
+                    "operator": "GreaterThan",
+                    "threshold": 80,
+                    "thresholdType": "Actual"
+                  },
+                  "Actual_GreaterThan_100_Percent": {
+                    "contactEmails": "[parameters('contactEmails')]",
+                    "contactGroups": [],
+                    "contactRoles": "[parameters('contactRoles')]",
+                    "enabled": true,
+                    "locale": "en-us",
+                    "operator": "GreaterThan",
+                    "threshold": 100,
+                    "thresholdType": "Actual"
+                  }
+                },
+                "timeGrain": "Monthly",
+                "timePeriod": {
+                  "startDate": "[parameters('startDate')]"
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "name": {
+              "type": "string",
+              "value": "[parameters('name')]"
+            },
+            "amount": {
+              "type": "int",
+              "value": "[parameters('amount')]"
+            }
+          }
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "TELEMETRY_CONTENT": {
+      "type": "string",
+      "value": "metadata-only"
+    },
+    "LOG_ANALYTICS_WORKSPACE_NAME": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'agentops-log-analytics'), '2025-04-01').outputs.name.value]"
+    },
+    "LOG_ANALYTICS_WORKSPACE_ID": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'agentops-log-analytics'), '2025-04-01').outputs.customerId.value]"
+    },
+    "AGENTOPS_LOGS_INGESTION_ENDPOINT": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'agentops-v2-ingestion'), '2025-04-01').outputs.logsIngestionEndpoint.value]"
+    },
+    "AGENTOPS_DCR_IMMUTABLE_ID": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'agentops-v2-ingestion'), '2025-04-01').outputs.dataCollectionRuleImmutableId.value]"
+    },
+    "AGENTOPS_DCR_RESOURCE_ID": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'agentops-v2-ingestion'), '2025-04-01').outputs.dataCollectionRuleResourceId.value]"
+    },
+    "AGENTOPS_TABLE_COUNT": {
+      "type": "int",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'agentops-v2-ingestion'), '2025-04-01').outputs.tableCount.value]"
+    },
+    "WORKBOOK_DEPLOYED": {
+      "type": "bool",
+      "value": "[parameters('deployWorkbook')]"
+    },
+    "BUDGET_DEPLOYED": {
+      "type": "bool",
+      "value": "[parameters('deployBudget')]"
+    },
+    "UPLOAD_COMMAND": {
+      "type": "string",
+      "value": "[format('agentops azure-ingest logs-upload --dir <AgentOps table dir> --endpoint {0} --dcr-immutable-id {1} --max-publish-bytes-per-day 5000000 --yes', reference(resourceId('Microsoft.Resources/deployments', 'agentops-v2-ingestion'), '2025-04-01').outputs.logsIngestionEndpoint.value, reference(resourceId('Microsoft.Resources/deployments', 'agentops-v2-ingestion'), '2025-04-01').outputs.dataCollectionRuleImmutableId.value)]"
+    }
+  }
+}

@@ -94,8 +94,8 @@ param monthlyBudgetAmount int = 100
 @description('Email addresses for budget notifications. Use a team-owned distribution list.')
 param budgetContactEmails array = []
 
-@description('Budget start date in ISO 8601 UTC format.')
-param budgetStartDate string = utcNow('yyyy-MM-ddTHH:mm:ssZ')
+@description('Budget start date. Azure requires the first day of a month (yyyy-MM-dd).')
+param budgetStartDate string = utcNow('yyyy-MM-01')
 
 var tags = {
   app: 'copilot-cli-agentops-azure'

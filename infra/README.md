@@ -11,6 +11,19 @@ This folder contains AZD/Bicep infrastructure for the AgentOps developer-preview
 - Optional Entra group RBAC assignments
 - Optional resource-group monthly budget
 
+## Deploy to Azure button
+
+`infra/azuredeploy.json` is compiled from `infra/bicep/azuredeploy.bicep` for the
+README **Deploy to Azure** button. It deploys only the metadata-only path: Log
+Analytics, the V2 DCE/DCR and metadata custom tables, the Workbook and an
+optional resource-group budget. Rebuild after any Bicep change:
+
+```bash
+az bicep build --file infra/bicep/azuredeploy.bicep --outfile infra/azuredeploy.json
+```
+
+See [docs/deploy-to-azure.md](../docs/deploy-to-azure.md).
+
 ## Deployment
 
 The default deployment is deliberately small: Log Analytics plus Application

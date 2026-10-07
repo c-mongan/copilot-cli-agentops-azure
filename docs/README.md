@@ -67,13 +67,14 @@ The master plan is the delivery and acceptance authority. The full requirements 
 
 ### Operator
 
-1. [Portable Grafana dashboard](grafana.md)
-2. [Grafana dashboard tour V2](grafana-dashboard-tour-v2.md)
-3. [KQL query library](kql-query-library.md)
-4. [Evals and insights](evals-and-insights.md)
-5. [Weekly digest and failure clusters](digest.md)
-6. [GitHub outcome enrichment](github-outcome-enrichment.md)
-7. [Troubleshooting](troubleshooting.md)
+1. [Deploy to Azure](deploy-to-azure.md)
+2. [Portable Grafana dashboard](grafana.md)
+3. [Grafana dashboard tour V2](grafana-dashboard-tour-v2.md)
+4. [KQL query library](kql-query-library.md)
+5. [Evals and insights](evals-and-insights.md)
+6. [Weekly digest and failure clusters](digest.md)
+7. [GitHub outcome enrichment](github-outcome-enrichment.md)
+8. [Troubleshooting](troubleshooting.md)
 
 ### Implementer
 
