@@ -1,5 +1,6 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 
@@ -86,7 +87,7 @@ function writeFixtureHomes(root) {
 }
 
 function withFixture(fn) {
-  const root = fs.mkdtempSync(path.join(__dirname, '.tmp-digest-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-digest-test-'));
   try {
     return fn(writeFixtureHomes(root), root);
   } finally {
