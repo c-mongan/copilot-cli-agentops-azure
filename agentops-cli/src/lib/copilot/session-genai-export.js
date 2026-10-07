@@ -7,7 +7,7 @@ const { agentopsHome: defaultAgentopsHome } = require('../paths');
 const { findCollectorBinary } = require('../collector-discovery');
 const { waitForHealthUrl } = require('../collector-runtime');
 const { sleep } = require('../timing');
-const { CONTENT_ATTRIBUTES, SEMCONV_VERSION, toGenAiSpans, toOtlpTraceRequest } = require('../otel/genai-semconv');
+const { CONTENT_ATTRIBUTES, SEMCONV_VERSION, safeString: safeAgentName, toGenAiSpans, toOtlpTraceRequest } = require('../otel/genai-semconv');
 const { defaultSessionEventsPath, readCopilotSessionEvents } = require('./session-enricher');
 const { defaultReceiptFiles, readSessionOtelSpans } = require('./session-otel');
 const { enrichSpansWithSessionToolContext, readSessionSpanRows } = require('./session-span-export');
@@ -32,6 +32,7 @@ function freePort() {
 
 function loadSessionSpans(options = {}) {
   const { sessionId, runId } = options;
+  if (options.agentName && !safeAgentName(options.agentName)) throw new Error('--agent-name must be 1-128 letters, digits, spaces or _.:/@()+- characters');
   if (!ID_PATTERN.test(sessionId || '')) throw new Error('export-otel requires a valid <session-id>');
   if (!ID_PATTERN.test(runId || '')) throw new Error('export-otel requires a valid --run-id <id>');
   let events = [];
@@ -148,6 +149,8 @@ async function startAzureMonitorCollector(options = {}) {
   const logFd = fs.openSync(logPath, 'a', 0o600);
   const child = (options.spawn || childProcess.spawn)(binary.path, ['--config', configPath], { stdio: ['ignore', logFd, logFd], env });
   fs.closeSync(logFd);
+  let spawnError = null;
+  child.on?.('error', error => { spawnError = error; });
   const stop = async ({ keep = false } = {}) => {
     if (child.pid) {
       try { child.kill('SIGTERM'); } catch {}
@@ -161,7 +164,7 @@ async function startAzureMonitorCollector(options = {}) {
     return { exportErrors, retainedLog: keep ? logPath : null };
   };
   const health = await (options.waitForHealthUrl || waitForHealthUrl)(`http://127.0.0.1:${ports.health}`, 15000);
-  if (!health.ok) {
+  if (spawnError || !health.ok) {
     await stop({ keep: true });
     throw new Error('Azure Monitor export Collector did not become healthy; log retained under the AgentOps scoped-collectors directory');
   }
@@ -229,7 +232,10 @@ async function exportSessionGenAi(options = {}) {
     if (stopped.exportErrors) throw new Error(`Azure Monitor exporter logged ${stopped.exportErrors} export error(s); spans may not have been ingested`);
     return { ...result, delivery: 'azure-monitor-via-local-collector', http_status: sent.status, bytes: sent.bytes };
   }
-  if (!options.endpoint) throw new Error('export-otel requires --endpoint <otlp-http-url>, --appinsights-connection-string-env <VAR>, --output <file.json> or --dry-run');
+  if (!options.endpoint) {
+    if (result.output) return { ...result, delivery: 'file' };
+    throw new Error('export-otel requires --endpoint <otlp-http-url>, --appinsights-connection-string-env <VAR>, --output <file.json> or --dry-run');
+  }
   const sent = await postOtlpJson(options.endpoint, request, options);
   return { ...result, delivery: 'otlp-http', http_status: sent.status, bytes: sent.bytes };
 }

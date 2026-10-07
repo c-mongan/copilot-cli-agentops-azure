@@ -17,6 +17,7 @@ const {
   connectionStringFromEnv,
   exportSessionGenAi,
   loadSessionSpans,
+  startAzureMonitorCollector,
   tracesUrl
 } = require('../src/lib/copilot/session-genai-export');
 
@@ -256,4 +257,61 @@ test('CLI export-otel dry-run reports the mapped tree as JSON', t => {
   assert.equal(summary.failed_tools, 1);
   assert.equal(summary.content_attributes, 'never-set');
   assert.equal(summary.delivery, 'dry-run');
+});
+
+test('--output alone writes the OTLP request as a file delivery', async t => {
+  const home = fixtureHome(t);
+  const output = path.join(home, 'only.json');
+  const result = await exportSessionGenAi({
+    sessionId: SESSION_ID, runId: RUN_ID, agentopsHome: home, eventsFile: path.join(FIXTURE, 'missing-events.jsonl'), output
+  });
+  assert.equal(result.delivery, 'file');
+  assert.ok(fs.existsSync(output));
+});
+
+test('rejects an unsafe --agent-name instead of silently replacing it', async t => {
+  await assert.rejects(exportSessionGenAi({
+    sessionId: SESSION_ID, runId: RUN_ID, agentopsHome: fixtureHome(t), agentName: 'bad\nname', dryRun: true
+  }), /--agent-name/);
+});
+
+test('Azure Monitor Collector start fails cleanly when the binary cannot spawn', async t => {
+  const { EventEmitter } = require('node:events');
+  const home = fixtureHome(t);
+  await assert.rejects(startAzureMonitorCollector({
+    agentopsHome: home,
+    connectionStringEnv: 'APPI_CS',
+    env: { APPI_CS: 'InstrumentationKey=00000000-0000-0000-0000-000000000000' },
+    findCollectorBinary: () => ({ ok: true, path: '/nonexistent/otelcol-contrib' }),
+    spawn: (binary, args, spawnOptions) => {
+      assert.deepEqual(Object.keys(spawnOptions.env).sort(), ['AGENTOPS_GENAI_EXPORT_CONNECTION_STRING', 'HOME', 'PATH']);
+      const configText = fs.readFileSync(args[1], 'utf8');
+      assert.doesNotMatch(configText, /InstrumentationKey/);
+      const child = new EventEmitter();
+      child.kill = () => true;
+      setImmediate(() => child.emit('error', new Error('spawn ENOENT')));
+      return child;
+    },
+    waitForHealthUrl: async () => { await new Promise(resolve => setImmediate(resolve)); return { ok: true }; }
+  }), /did not become healthy/);
+  const leftover = fs.readdirSync(path.join(home, 'scoped-collectors'));
+  assert.equal(leftover.length, 1, 'failed collector directory is retained for diagnosis');
+  assert.doesNotMatch(fs.readFileSync(path.join(home, 'scoped-collectors', leftover[0], 'otelcol.genai-azuremonitor.yaml'), 'utf8'), /InstrumentationKey/);
+});
+
+test('Azure Monitor Collector stops and removes its scoped directory after a healthy run', async t => {
+  const { EventEmitter } = require('node:events');
+  const home = fixtureHome(t);
+  const collector = await startAzureMonitorCollector({
+    agentopsHome: home,
+    connectionStringEnv: 'APPI_CS',
+    env: { APPI_CS: 'InstrumentationKey=00000000-0000-0000-0000-000000000000' },
+    findCollectorBinary: () => ({ ok: true, path: '/fake/otelcol-contrib' }),
+    spawn: () => { const child = new EventEmitter(); child.kill = () => true; return child; },
+    waitForHealthUrl: async () => ({ ok: true })
+  });
+  assert.match(collector.endpoint, /^http:\/\/127\.0\.0\.1:\d+$/);
+  const stopped = await collector.stop();
+  assert.equal(stopped.exportErrors, 0);
+  assert.deepEqual(fs.readdirSync(path.join(home, 'scoped-collectors')), []);
 });

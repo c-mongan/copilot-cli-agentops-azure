@@ -247,6 +247,7 @@ module.exports = {
   SEMCONV_VERSION,
   SPAN_KIND,
   STATUS_CODE,
+  safeString,
   toGenAiSpans,
   toOtlpTraceRequest
 };
