@@ -63,7 +63,8 @@ Sources are Copilot CLI session folders (`~/.copilot/session-state/*/events.json
 - **Waterfall:** session → hooks, turns → chat calls and tool calls, on a shared time axis. Bars are coloured by kind; failed spans are red and denied tool calls are amber. Hover or focus a row to inspect it; click to pin. The inspector shows metadata only: kind, tool name, duration, status, token counts and span ID. Duplicate spans with the same span ID are shown once.
 - **Token and cost meter:** cumulative tokens and estimated cost along the same time axis.
 - **Tool latency:** count, p50, p95, max and failures per tool.
-- **Tokens by model:** input, output, cache reads and estimated cost per model.
+- **Tokens by model:** input, output, cache read, cache write and estimated cost per model. Input includes both cache columns.
+- **Labels:** the "Failed tool calls" tile counts tool calls that errored. Denials and non-zero shell exits appear beside it as "Needs attention: N denied, N non-zero exit".
 
 ![Run detail in dark mode](images/ui-run-detail-dark.png)
 
@@ -84,7 +85,7 @@ The theme follows `prefers-color-scheme` until you pick one. Motion is reduced w
 
 ## How run status is decided
 
-`copilot-session launch`, `copilot-session view` and this UI use one shared classifier ([`run-status.js`](../agentops-cli/src/lib/copilot/run-status.js)). The same session gets the same status everywhere.
+`copilot-session launch`, `copilot-session view`, `agentops digest`, the `export-otel` summary and this UI use one shared classifier ([`run-status.js`](../agentops-cli/src/lib/copilot/run-status.js)). The same session gets the same status everywhere.
 
 Each completed tool call is classified from its `tool.execution_complete` event:
 
@@ -116,7 +117,7 @@ JSON output keeps every existing field and adds `status`, `statusLabel` / `statu
 | Name | Where | Counts |
 |---|---|---|
 | Native OTel spans | launch `spanCounts.nativeSpans`, view `native_spans`, UI toolbar | Unique native spans, deduplicated by trace ID and span ID. A re-emitted `execute_tool` span with the same tool call ID and identical start and end counts once. Span-event rows are excluded. |
-| Span-table rows | launch `spanCounts.spanRows` and the legacy `evidence.spans` | Rows written to `AgentOpsSpans_CL.jsonl`: each span plus one row per span event. Always at least the native span count. |
+| Span-table rows | launch `spanCounts.spanRows` and `evidence.spanRows` (`evidence.spans` is a deprecated alias with the same value) | Rows written to `AgentOpsSpans_CL.jsonl`: each span plus one row per span event. Always at least the native span count. |
 | Trace spans | UI toolbar | Rows in the UI waterfall: session, turns, hooks, model calls and tool calls, built from session events and spans. |
 
 For example, one QA run had 57 span-table rows, 16 native OTel spans and 24 trace spans. These numbers describe different things and are labelled as such on every surface. `copilot-session view` counts native spans only when `--run-id` points to the run's local evidence.

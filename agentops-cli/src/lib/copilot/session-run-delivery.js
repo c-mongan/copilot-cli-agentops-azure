@@ -148,6 +148,9 @@ function deliverCopilotSession(options = {}) {
     runId,
     outputDir,
     events: eventExport.rows,
+    // spanRows counts AgentOpsSpans_CL rows (span records plus span-event rows),
+    // not unique native spans. `spans` is the deprecated alias kept for scripts.
+    spanRows: spanExport?.rows || 0,
     spans: spanExport?.rows || 0,
     invalidNativeRecords: native.invalid,
     nativeReceiptFiles: native.files,

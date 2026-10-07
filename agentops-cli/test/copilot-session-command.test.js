@@ -288,10 +288,12 @@ launchObservedCopilot({ repo: ${JSON.stringify(repo)}, copilotHome: ${JSON.strin
 }).catch(error => { console.error(error); process.exit(2); });
 `);
   try {
-    const result = spawnSync(process.execPath, [harness], { encoding: 'utf8' });
+    const result = spawnSync(process.execPath, [harness], { encoding: 'utf8', env: { ...process.env, HOME: root, USERPROFILE: root } });
     assert.equal(result.status, 0, result.stderr);
     const output = JSON.parse(result.stdout);
     assert.doesNotMatch(result.stdout, /Transcript line/);
+    assert.equal(output.evidence.outputDir, path.join('~', 'agentops', 'runs', 'fixture'), 'JSON replaces the home prefix with ~');
+    assert.equal(result.stdout.includes(root), false, 'JSON output has no absolute home paths');
     assert.match(result.stderr, /Transcript line that must not reach JSON stdout/);
     assert.equal(output.exitCode, 0);
     assert.equal(output.status, 'attention');
@@ -370,7 +372,7 @@ test('copilot-session view joins payload-free per-stream delivery state by run a
     assert.equal(summary.signals.failures, 0);
     const statusHtml = fs.readFileSync(output, 'utf8');
     assert.match(statusHtml, /data-run-status="incomplete"/);
-    assert.match(statusHtml, /Run status: Incomplete \(0 failed, 0 denied, 0 shell non-zero exits\)/);
+    assert.match(statusHtml, /Run status: Incomplete \(Failed tool calls 0 · Needs attention: 0 denied, 0 non-zero exits\)/);
     const html = fs.readFileSync(output, 'utf8');
     assert.match(html, /execute_tool: bash/);
     assert.match(html, /script: scripts\/probe\.py/);

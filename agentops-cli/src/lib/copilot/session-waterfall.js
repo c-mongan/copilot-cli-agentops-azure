@@ -5,6 +5,7 @@ const { attachmentReferencePaths, attachmentSkillReferences, directShellPathRead
 const { redactContent } = require('./session-content');
 const { dedupeNativeSpans } = require('./native-span-identity');
 const { reconcileModelProvenance, safeModelIdentity } = require('./execution-configuration');
+const { outcomeSummaryText } = require('./run-status');
 
 const RAW_CONTENT_FIELD_NAMES = new Set([
   'content', 'arguments', 'result', 'output', 'deltaContent', 'inputDelta',
@@ -622,7 +623,7 @@ function renderSessionWaterfall(events, sessionId, options = {}) {
   // Evidence rows mark denials and non-zero shell exits as failure signals so
   // they get detail cards; the run status (shared classifier) decides severity.
   const statusBreakdown = runStatus?.signals
-    ? ` Run status: ${runStatus.statusLabel} (${runStatus.signals.failures || 0} failed, ${runStatus.signals.denials || 0} denied, ${runStatus.signals.nonZeroExits || 0} shell non-zero exit${runStatus.signals.nonZeroExits === 1 ? '' : 's'}).`
+    ? ` Run status: ${runStatus.statusLabel} (${outcomeSummaryText(runStatus.signals)}).`
     : '';
   const failureSummary = failures.length
     ? `${failures.length} failure signal${failures.length === 1 ? '' : 's'} observed.${statusBreakdown} Inspect the first signal and its preceding context below.`

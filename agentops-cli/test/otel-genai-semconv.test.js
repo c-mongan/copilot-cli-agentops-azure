@@ -177,8 +177,12 @@ test('export posts OTLP JSON to a loopback endpoint and never sends content', as
   assert.equal(calls[0].init.headers['content-type'], 'application/json');
   assert.equal(result.delivery, 'otlp-http');
   assert.deepEqual(result.operations, { invoke_agent: 1, chat: 2, execute_tool: 2 });
-  assert.equal(result.failed_tools, 1);
-  assert.deepEqual(result.tokens, { invoke_agent_input: 60177, invoke_agent_output: 525, chat_input: 60177, chat_output: 525 });
+  // The fixture's failed tool span is a denial: it needs attention, it is not a failed tool call.
+  assert.equal(result.failed_tools, 0);
+  assert.equal(result.denied_tools, 1);
+  assert.equal(result.otel_error_spans, 1, 'the denied span still carries OTel status ERROR');
+  assert.equal(result.status_counts_source, 'exported-spans');
+  assert.deepEqual(result.tokens, { invoke_agent_input: 60177, invoke_agent_output: 525, invoke_agent_cache_read: 0, invoke_agent_cache_creation: 0, chat_input: 60177, chat_output: 525, chat_cache_read: 43730, chat_cache_creation: 0 });
   for (const key of CONTENT_ATTRIBUTES) assert.ok(!calls[0].init.body.includes(key));
 });
 
@@ -255,7 +259,10 @@ test('CLI export-otel dry-run reports the mapped tree as JSON', t => {
   const summary = JSON.parse(result.stdout);
   assert.equal(summary.semconv_version, SEMCONV_VERSION);
   assert.equal(summary.spans, 5);
-  assert.equal(summary.failed_tools, 1);
+  assert.equal(summary.native_spans_read, 5);
+  assert.deepEqual(summary.skipped, []);
+  assert.equal(summary.failed_tools, 0);
+  assert.equal(summary.denied_tools, 1);
   assert.equal(summary.content_attributes, 'never-set');
   assert.equal(summary.delivery, 'dry-run');
 });

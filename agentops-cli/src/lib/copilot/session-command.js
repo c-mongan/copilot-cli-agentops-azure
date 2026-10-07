@@ -8,7 +8,7 @@ const crypto = require('node:crypto');
 const legacy = require('../../legacy');
 const { optionValue, optionValues, parseJsonFlag } = require('../args');
 const { otlpHttpEndpoint } = require('../collector-endpoints');
-const { writeJsonlFile, writeJsonOrRender } = require('../command-output');
+const { shortenHomePaths, writeJsonlFile, writeJsonOrRender } = require('../command-output');
 const { agentopsHome, repoRoot: agentopsRoot } = require('../paths');
 const { configuredCloudValues, projectAgentOpsConfigPath } = require('../agentops-config');
 const { resolveCopilotBinary } = require('../copilot-resolver');
@@ -31,7 +31,7 @@ const { deleteSessionContent, writeSessionContent } = require('./session-content
 const { writeSessionEvents } = require('./session-event-export');
 const { readSessionOutbox } = require('./session-delivery-outbox');
 const { exportSessionGenAi, renderGenAiExport } = require('./session-genai-export');
-const { SPAN_COUNT_LABELS, countNativeSpans, sessionRunStatus } = require('./run-status');
+const { SPAN_COUNT_LABELS, countNativeSpans, outcomeSummaryText, sessionRunStatus } = require('./run-status');
 
 function parseCopilotSessionArgs(args = []) {
   const [subcommand, positional] = args;
@@ -104,7 +104,7 @@ function launchRunStatus({ copilotHome, sessionId, runErrored }) {
 }
 
 function launchSpanCounts(evidence) {
-  const counts = { nativeSpans: 0, spanRows: Number(evidence?.spans) || 0, labels: { nativeSpans: SPAN_COUNT_LABELS.nativeSpans, spanRows: SPAN_COUNT_LABELS.spanRows } };
+  const counts = { nativeSpans: 0, spanRows: Number(evidence?.spanRows ?? evidence?.spans) || 0, labels: { nativeSpans: SPAN_COUNT_LABELS.nativeSpans, spanRows: SPAN_COUNT_LABELS.spanRows } };
   if (evidence?.outputDir) {
     try {
       const rows = fs.readFileSync(path.join(evidence.outputDir, 'AgentOpsSpans_CL.jsonl'), 'utf8')
@@ -116,11 +116,8 @@ function launchSpanCounts(evidence) {
 }
 
 function renderStatusSignals(signals = {}) {
-  const parts = [];
-  if (signals.failures) parts.push(`${signals.failures} failed`);
-  if (signals.denials) parts.push(`${signals.denials} denied`);
-  if (signals.nonZeroExits) parts.push(`${signals.nonZeroExits} shell non-zero exit${signals.nonZeroExits === 1 ? '' : 's'}`);
-  return parts.length ? ` (${parts.join(', ')})` : '';
+  if (!signals.failures && !signals.denials && !signals.nonZeroExits) return '';
+  return ` (${outcomeSummaryText(signals)})`;
 }
 
 function renderSpanCounts(counts = {}) {
@@ -261,7 +258,8 @@ async function launchObservedCopilot(options = {}, dependencies = {}) {
       spanCounts,
       evidence
     };
-    writeJsonOrRender(output, options.json, value => [
+    // JSON output replaces the home directory with "~"; the returned object keeps absolute paths.
+    writeJsonOrRender(options.json ? shortenHomePaths(output) : output, options.json, value => [
       'Native Copilot observation',
       `Run: ${value.runId}`,
       `Session: ${value.sessionId || 'not detected'}`,
@@ -358,7 +356,7 @@ function renderCopilotSessionCollection(result = {}) {
     `Run: ${result.runId || 'unknown'}`,
     `State: ${result.state || 'unknown'}`,
     `Events: ${result.events || 0}`,
-    `Spans: ${result.spans || 0}`,
+    `Span-table rows: ${result.spanRows ?? result.spans ?? 0}`,
     `Local evidence: ${result.outputDir || 'not written'}`,
     ...(result.reason ? [`Note: ${result.reason}`] : [])
   ];
@@ -391,7 +389,8 @@ async function copilotSessionCommand(args = [], dependencies = {}) {
       otelFiles: options.otelFiles.length ? options.otelFiles : defaultReceiptFiles(),
       upload: options.upload
     });
-    writeJsonOrRender({ ok: options.upload ? result.state === 'azure_acknowledged' : result.state !== 'native_best_effort', ...result }, options.json, renderCopilotSessionCollection);
+    const collected = { ok: options.upload ? result.state === 'azure_acknowledged' : result.state !== 'native_best_effort', ...result };
+    writeJsonOrRender(options.json ? shortenHomePaths(collected) : collected, options.json, renderCopilotSessionCollection);
     if (options.upload && result.state !== 'azure_acknowledged') process.exitCode = 1;
     return;
   }
@@ -558,6 +557,7 @@ module.exports = {
   buildCopilotSessionEnrichment,
   copilotSessionCommand,
   launchObservedCopilot,
+  launchRunStatus,
   parseCopilotSessionArgs,
   renderCopilotSessionCollection,
   renderCopilotSessionEnrichment

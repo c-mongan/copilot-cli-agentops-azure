@@ -52,7 +52,7 @@ function actionList(digest) {
 
 function clusterCards(digest) {
   const { clusters } = digest.failureClusters;
-  if (!clusters.length) return '<p class="empty">No failed tool calls in this period. 🎉</p>';
+  if (!clusters.length) return '<p class="empty">No failed, denied or non-zero-exit tool calls in this period. 🎉</p>';
   const max = clusters[0].count;
   const shown = clusters.slice(0, MAX_CLUSTERS).map(cluster => `
         <article class="cluster">
@@ -207,7 +207,7 @@ function renderDigestHtml(digest) {
       </section>
     </div>
     <section class="panel">
-      <h2>Failure clusters <small>${escapeHtml(clusters.headline)}</small></h2>
+      <h2>Tool issue clusters <small>${escapeHtml(clusters.headline)}</small></h2>
       <div class="clusters">${clusterCards(digest)}
       </div>
     </section>

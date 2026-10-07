@@ -10,6 +10,12 @@ project. Package versions stay at `0.1.0` until a package is published to npm.
 - `agentops ui latest` (and `/api/runs/latest`) opens the run from your most recent `copilot-session launch` instead of another agent's busy session. It prefers the newest `native_run_*` ledger run, then the newest finished session, and picks a live session only when there is nothing else.
 - A running Copilot session is shown as Live, never Failed or Completed. Liveness now uses the session's `inuse.<pid>.lock` and treats `session.resume` after a `session.shutdown` as running again, so a brand-new session with no activity is Live, and a long-running resumed session is no longer marked failed.
 - The UI runs list has a time window (Newest N, 24 hours, 7 days, 30 days) kept in the URL (`#/?since=7d`). A window analyses every session in it (up to 5000, disclosed next to the cost if capped) with the same selection, start time and estimator as `agentops digest --since`, so the 7-day Copilot session count and cost match the digest.
+- One definition of "failure" on every surface. Launch JSON, the local UI, `agentops digest`, the `export-otel` summary and the run view now share `run-status.js`: "Failed tool calls" counts tool calls that errored (plus failed hooks and sub-agents where shown), and "Needs attention: N denied, N non-zero exit" counts denials and shell non-zero exits. The digest no longer counts denials and non-zero exits as tool failures; its clusters carry a `failed` or `attention` severity. `export-otel` still sends denied and non-zero-exit spans with OTel status `ERROR` (#202) and reports that count separately. A new cross-surface test checks one session on all four surfaces.
+- `export-otel` reports native spans it did not export, by operation and reason (for example `1 skipped (agentops.span): not a GenAI operation`), plus `native_spans_read`, so read = exported + duplicates + skipped.
+- `export-otel` sets `gen_ai.usage.cache_creation.input_tokens` (and cache read) on the root `invoke_agent` span from the session shutdown totals, so cache writes are no longer omitted.
+- Launch JSON adds `evidence.spanRows` for the span-table row count; `evidence.spans` stays as a deprecated alias.
+- The UI "Tokens by model" table shows cache read and cache write in separate columns instead of an "of which cached" total that included writes. Cost math is unchanged.
+- `copilot-session launch --json` and `collect --json` print paths under your home directory as `~/…` instead of the absolute path.
 
 ## v0.3.2-preview: 2026-10-07
 

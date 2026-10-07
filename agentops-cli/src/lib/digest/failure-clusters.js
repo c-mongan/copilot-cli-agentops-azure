@@ -1,4 +1,5 @@
 const { hashText } = require('../hash');
+const { classifyToolCompletionEvent, severityOfOutcome } = require('../copilot/run-status');
 
 // Metadata-only failure clustering. Inputs are already-classified failure
 // records; no prompt text, tool arguments, results or error messages are kept.
@@ -44,11 +45,24 @@ function exitCodeOf(completion = {}) {
   return Number.isSafeInteger(code) ? code : null;
 }
 
-// Same failure test as the session waterfall: explicit success=false, or a
-// shell that exited non-zero (which Copilot still records as success=true).
+// Tool-call outcome from the shared run-status rules: 'ok', 'failed',
+// 'denied' or 'nonzero_exit'. Only 'failed' is a failure; the others need attention.
+function completionOutcome(completion = {}) {
+  return classifyToolCompletionEvent(completion);
+}
+
+// True for any completion worth clustering: failures and attention signals.
 function isFailedCompletion(completion = {}) {
-  const exitCode = exitCodeOf(completion);
-  return completion.success === false || (exitCode !== null && exitCode !== 0);
+  return completionOutcome(completion) !== 'ok';
+}
+
+// Error types that only make sense for an attention outcome are renamed when
+// the shared rules say the call actually failed, so labels never contradict counts.
+const ATTENTION_ONLY_TYPES = Object.freeze({ denied: 'error:permission_denied', nonzero_exit: 'error:nonzero_exit' });
+
+function severityOf(record = {}) {
+  if (record.severity === 'failure' || record.severity === 'attention') return record.severity;
+  return ATTENTION_ONLY_TYPES[record.errorType] ? 'attention' : 'failure';
 }
 
 function errorTypeOf(completion = {}) {
@@ -68,12 +82,15 @@ function errorTypeOf(completion = {}) {
 }
 
 function classifyToolFailure(start = {}, completion = {}) {
-  if (!isFailedCompletion(completion)) return null;
-  const errorType = errorTypeOf(completion);
+  const outcome = completionOutcome(completion);
+  if (outcome === 'ok') return null;
+  let errorType = outcome === 'failed' ? errorTypeOf(completion) : outcome;
+  if (outcome === 'failed' && ATTENTION_ONLY_TYPES[errorType]) errorType = ATTENTION_ONLY_TYPES[errorType];
   const ruleTool = errorType === 'denied' ? deniedRuleTool(completion.error?.message) : '';
   return {
     tool: ruleTool || safeLabel(start.toolName || completion.toolName, 'unknown-tool'),
     errorType,
+    severity: severityOfOutcome(outcome),
     model: safeLabel(completion.model || start.model, 'unknown-model')
   };
 }
@@ -130,6 +147,7 @@ function clusterFailures(failures = []) {
     const ordered = [...list].sort(compareFailures);
     const [tool, errorType, model] = fingerprint.split('|');
     const latest = ordered[ordered.length - 1];
+    const severity = severityOf(latest);
     const runs = [...new Set(ordered.map(item => item.runId || item.sessionId).filter(Boolean))].sort();
     const repos = [...new Set(ordered.map(item => item.repo).filter(Boolean))].sort();
     const cluster = {
@@ -137,6 +155,7 @@ function clusterFailures(failures = []) {
       fingerprint,
       tool,
       errorType,
+      severity,
       model,
       count: ordered.length,
       firstSeen: ordered[0].at || '',
@@ -151,10 +170,14 @@ function clusterFailures(failures = []) {
     return cluster;
   }).sort((left, right) => right.count - left.count || left.fingerprint.localeCompare(right.fingerprint));
   const total = failures.length;
+  const failed = failures.filter(item => severityOf(item) === 'failure').length;
+  const attention = total - failed;
   return {
     total,
+    failed,
+    attention,
     clusterCount: clusters.length,
-    headline: `${total} failure${total === 1 ? '' : 's'} in ${clusters.length} cluster${clusters.length === 1 ? '' : 's'}`,
+    headline: `${total} tool issue${total === 1 ? '' : 's'} in ${clusters.length} cluster${clusters.length === 1 ? '' : 's'}: ${failed} failed, ${attention} need${attention === 1 ? 's' : ''} attention`,
     clusters
   };
 }
@@ -163,11 +186,13 @@ module.exports = {
   ERROR_TYPES,
   classifyToolFailure,
   clusterFailures,
+  completionOutcome,
   deniedRuleTool,
   errorTypeOf,
   fingerprintOf,
   isFailedCompletion,
   safeLabel,
   safeToolLabel,
+  severityOf,
   suggestNextStep
 };

@@ -112,18 +112,32 @@ function tokenTotals(sessions, priceTable = {}) {
 
 function periodMetrics(sessions, priceTable) {
   const toolCalls = sessions.reduce((sum, session) => sum + session.toolCalls, 0);
-  const failedToolCalls = sessions.reduce((sum, session) => sum + session.failedToolCalls, 0);
+  const sum = key => sessions.reduce((total, session) => total + (Number(session[key]) || 0), 0);
+  // Shared run-status rules: failures are errored tool calls, failed hooks and
+  // failed subagents; denials and shell non-zero exits only need attention.
+  const failedToolCalls = sum('failedToolCalls');
+  const deniedToolCalls = sum('deniedToolCalls');
+  const nonZeroExitToolCalls = sum('nonZeroExitToolCalls');
+  const hasFailure = session => (session.failedToolCalls || 0) + (session.hookFailures || 0) + (session.subagentFailures || 0) > 0;
+  const needsAttention = session => (session.deniedToolCalls || 0) + (session.nonZeroExitToolCalls || 0) > 0;
   const aborted = sessions.filter(session => session.aborted).length;
-  const withFailures = sessions.filter(session => session.failedToolCalls > 0).length;
-  const clean = sessions.filter(session => !session.aborted && session.failedToolCalls === 0).length;
+  const withFailures = sessions.filter(hasFailure).length;
+  const withAttention = sessions.filter(session => !session.aborted && !hasFailure(session) && needsAttention(session)).length;
+  const clean = sessions.filter(session => !session.aborted && !hasFailure(session) && !needsAttention(session)).length;
   return {
     sessions: sessions.length,
     cleanSessions: clean,
     sessionsWithFailures: withFailures,
+    sessionsNeedingAttention: withAttention,
     abortedSessions: aborted,
     sessionSuccessRate: sessions.length ? clean / sessions.length : null,
     toolCalls,
     failedToolCalls,
+    deniedToolCalls,
+    nonZeroExitToolCalls,
+    attentionToolCalls: deniedToolCalls + nonZeroExitToolCalls,
+    hookFailures: sum('hookFailures'),
+    subagentFailures: sum('subagentFailures'),
     toolFailureRate: toolCalls ? failedToolCalls / toolCalls : null,
     tokens: tokenTotals(sessions, priceTable)
   };
@@ -145,6 +159,7 @@ function trendBetween(current, previous) {
     sessionSuccessRate: trendValue(current.sessionSuccessRate, previous.sessionSuccessRate, 'rate'),
     failedToolCalls: trendValue(current.failedToolCalls, previous.failedToolCalls),
     toolFailureRate: trendValue(current.toolFailureRate, previous.toolFailureRate, 'rate'),
+    attentionToolCalls: trendValue(current.attentionToolCalls, previous.attentionToolCalls),
     totalTokens: trendValue(current.tokens.totalTokens, previous.tokens.totalTokens),
     estCostUsd: trendValue(current.tokens.estCostUsd, previous.tokens.estCostUsd)
   };
@@ -209,7 +224,7 @@ function recommendations({ current, trend, clusters, tools, sessions }) {
     });
   }
   if (candidates.length === 0) {
-    candidates.push({ score: 1, kind: 'healthy', text: 'No failures this period. Keep strict privacy on and compare next week\'s digest for drift.' });
+    candidates.push({ score: 1, kind: 'healthy', text: 'No failed or attention-needing tool calls this period. Keep strict privacy on and compare next week\'s digest for drift.' });
   }
   return candidates
     .sort((left, right) => right.score - left.score || left.text.localeCompare(right.text))
