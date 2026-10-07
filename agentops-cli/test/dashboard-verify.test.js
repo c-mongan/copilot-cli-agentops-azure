@@ -28,7 +28,7 @@ test('dashboardVerify preserves --kql alias with bounded injected live queries',
   assert.equal(result.ok, true, result.errors.join('\n'));
   assert.equal(result.live, true);
   assert.equal(result.checks.kql.mode, 'live');
-  assert.equal(result.summary.kql_checks, 35);
-  assert.equal(queries.length, 35);
+  assert.equal(result.summary.kql_checks, 47);
+  assert.equal(queries.length, 47);
   assert.ok(queries.every(query => query.includes('ago(2h)') && query.endsWith('| take 5')));
 });

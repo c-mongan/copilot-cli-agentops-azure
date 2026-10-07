@@ -16,6 +16,81 @@ function dashboardJsonFiles() {
   }).sort();
 }
 
+const portableDashboardUid = 'agentops-copilot-cli';
+const portableDashboardFile = path.join(repoRoot, 'grafana', 'agentops-copilot-cli.json');
+const azureMonitorDatasourceType = 'grafana-azure-monitor-datasource';
+const guidPattern = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
+function validatePortableDashboard(dashboard, label = 'agentops-copilot-cli.json') {
+  const errors = [];
+  const raw = JSON.stringify(dashboard);
+  if (guidPattern.test(raw)) errors.push(`${label}: contains a hard-coded GUID`);
+  if (/\/subscriptions\//i.test(raw)) errors.push(`${label}: contains a hard-coded Azure resource ID`);
+  if (dashboard.__inputs || dashboard.__requires) errors.push(`${label}: must not need import-time inputs or plugins`);
+  if (dashboard.alert || (dashboard.panels || []).some(panel => panel.alert)) errors.push(`${label}: must not define alert rules`);
+  const variables = new Map((dashboard.templating?.list || []).map(item => [item.name, item]));
+  if (variables.get('datasource')?.type !== 'datasource' || variables.get('datasource')?.query !== azureMonitorDatasourceType) {
+    errors.push(`${label}: datasource variable must select the built-in Azure Monitor datasource`);
+  }
+  for (const name of ['subscription', 'workspace']) {
+    const variable = variables.get(name);
+    if (!variable || variable.type !== 'query' || variable.datasource?.uid !== '${datasource}') errors.push(`${label}: missing ${name} query variable on \${datasource}`);
+  }
+  const ids = new Set();
+  for (const panel of dashboard.panels || []) {
+    const name = `${label}: panel ${panel.id} ${panel.title || panel.type}`;
+    if (ids.has(panel.id)) errors.push(`${name}: duplicate panel id`);
+    ids.add(panel.id);
+    if (!panel.gridPos || [panel.gridPos.x, panel.gridPos.y, panel.gridPos.w, panel.gridPos.h].some(value => !Number.isInteger(value))) errors.push(`${name}: invalid gridPos`);
+    if (panel.type === 'text') continue;
+    if (panel.datasource?.type !== azureMonitorDatasourceType || panel.datasource?.uid !== '${datasource}') errors.push(`${name}: must use the \${datasource} variable`);
+    const targets = panel.targets || [];
+    if (targets.length === 0) errors.push(`${name}: missing query`);
+    for (const target of targets) {
+      const logs = target.azureLogAnalytics || {};
+      if (target.queryType !== 'Azure Log Analytics') errors.push(`${name}: target must be an Azure Log Analytics query`);
+      if (target.datasource && (target.datasource.type !== azureMonitorDatasourceType || target.datasource.uid !== '${datasource}')) errors.push(`${name}: target must use the \${datasource} variable`);
+      if (JSON.stringify(logs.resources) !== JSON.stringify(['$workspace'])) errors.push(`${name}: query must target the $workspace variable`);
+      errors.push(...lintKql(logs.query).map(problem => `${name}: ${problem}`));
+    }
+  }
+  return errors;
+}
+
+function lintKql(query) {
+  const errors = [];
+  const text = String(query || '');
+  if (!text.trim()) return ['empty query'];
+  if (!text.includes('$__timeFrom()') || !text.includes('$__timeTo()')) errors.push('query must be bounded by the dashboard time range');
+  const pairs = { ')': '(', ']': '[', '}': '{' };
+  const stack = [];
+  let quote = '';
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if (quote) {
+      if (char === '\\') index += 1;
+      else if (char === quote) quote = '';
+      continue;
+    }
+    if (char === '/' && text[index + 1] === '/') {
+      while (index < text.length && text[index] !== '\n') index += 1;
+      continue;
+    }
+    if (char === '"' || char === "'") quote = char;
+    else if ('([{'.includes(char)) stack.push(char);
+    else if (pairs[char] && stack.pop() !== pairs[char]) return [...errors, `unbalanced ${char}`];
+  }
+  if (quote) errors.push('unterminated string literal');
+  if (stack.length) errors.push(`unclosed ${stack.at(-1)}`);
+  if (/\|\s*\|/.test(text) || /\|\s*$/.test(text)) errors.push('empty pipe stage');
+  return errors;
+}
+
+function portableDashboardBodies() {
+  if (!fs.existsSync(portableDashboardFile)) return [];
+  return [{ file: portableDashboardFile, body: readJson(portableDashboardFile) }];
+}
+
 function validateDashboards() {
   const files = dashboardJsonFiles();
   const errors = [];
@@ -62,6 +137,7 @@ function validateDashboards() {
       }
       if (!Array.isArray(dashboard.links) || dashboard.links.length < 5) errors.push(`${file}: missing V2 nav links`);
     }
+    if (dashboard.uid === portableDashboardUid) errors.push(...validatePortableDashboard(dashboard, file));
   }
 
   return {
@@ -546,6 +622,9 @@ function validateDashboardUx() {
 module.exports = {
   collectPanelLinks,
   dashboardJsonFiles,
+  lintKql,
+  portableDashboardBodies,
+  portableDashboardUid,
   orderedAfter,
   orderedInText,
   panelByTitle,
@@ -554,5 +633,6 @@ module.exports = {
   validateDashboardLinks,
   validateDashboardUx,
   validateDashboards,
+  validatePortableDashboard,
   v2DashboardBodies
 };

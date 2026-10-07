@@ -66,10 +66,28 @@ const v2KqlSmokePanels = [
   { uid: 'agentops-v2-insights-regressions', panel: 'Config change annotations', requireRows: false },
   { uid: 'agentops-v2-collector-health', panel: 'Collector checks', requireRows: true },
   { uid: 'agentops-v2-collector-health', panel: 'Schema version coverage', requireRows: false },
-  { uid: 'agentops-v2-collector-health', panel: 'Exporter failure review', requireRows: false }
+  { uid: 'agentops-v2-collector-health', panel: 'Exporter failure review', requireRows: false },
+  { uid: 'agentops-copilot-cli', panel: 'Runs', requireRows: true },
+  { uid: 'agentops-copilot-cli', panel: 'Failure rate', requireRows: true },
+  { uid: 'agentops-copilot-cli', panel: 'Failed tool calls', requireRows: true },
+  { uid: 'agentops-copilot-cli', panel: 'Tokens in', requireRows: true },
+  { uid: 'agentops-copilot-cli', panel: 'Tokens out', requireRows: true },
+  { uid: 'agentops-copilot-cli', panel: 'Est. cost (USD, not billed)', requireRows: true },
+  { uid: 'agentops-copilot-cli', panel: 'Runs over time', requireRows: true },
+  { uid: 'agentops-copilot-cli', panel: 'Top failing tools', requireRows: false },
+  { uid: 'agentops-copilot-cli', panel: 'Tool latency p50 / p95 by tool', requireRows: false },
+  { uid: 'agentops-copilot-cli', panel: 'Tokens in / out by model', requireRows: false },
+  { uid: 'agentops-copilot-cli', panel: 'Est. cost by model (USD, not billed)', requireRows: false },
+  { uid: 'agentops-copilot-cli', panel: 'Slowest runs', requireRows: true }
 ];
 
-function substituteGrafanaMacros(query, { last = '24h' } = {}) {
+function textboxDefaults(dashboard) {
+  return Object.fromEntries((dashboard?.templating?.list || [])
+    .filter(item => item.type === 'textbox' && /^[A-Za-z_]\w*$/.test(item.name || ''))
+    .map(item => [item.name, String(item.current?.value ?? item.query ?? '')]));
+}
+
+function substituteGrafanaMacros(query, { last = '24h', variables = {} } = {}) {
   const safeLast = validateKqlDuration(last);
   const variableNames = [
     'datasource',
@@ -98,6 +116,11 @@ function substituteGrafanaMacros(query, { last = '24h' } = {}) {
     .replaceAll('$__timeFrom()', `ago(${safeLast})`)
     .replaceAll('$__timeTo()', 'now()')
     .replaceAll('$__interval', '1h');
+  for (const [name, value] of Object.entries(variables).sort(([a], [b]) => b.length - a.length)) {
+    rendered = rendered
+      .replaceAll(`\${${name}}`, value)
+      .replaceAll(`$${name}`, value);
+  }
   for (const name of variableNames) {
     rendered = rendered
       .replaceAll(`$${name}`, '__all')
@@ -109,9 +132,9 @@ function substituteGrafanaMacros(query, { last = '24h' } = {}) {
 function dashboardKqlCheck(args = [], options = {}) {
   if (args.includes('--help') || args.includes('-h')) return { ...dashboardKqlHelp };
   const { last, workspaceId, localOnly, requireRows } = parseKqlCheckArgs(args, options);
-  const { queryFromPanel, v2DashboardBodies } = require('./dashboard-validation');
+  const { portableDashboardBodies, queryFromPanel, v2DashboardBodies } = require('./dashboard-validation');
   const runQuery = localOnly ? null : (options.runQuery || ((query, queryOptions) => require('../legacy').runAzureLogAnalyticsQuery(query, queryOptions)));
-  const dashboards = (options.dashboardBodies || v2DashboardBodies)();
+  const dashboards = (options.dashboardBodies || (() => [...v2DashboardBodies(), ...portableDashboardBodies()]))();
   const smokePanels = options.smokePanels || v2KqlSmokePanels;
   const byUid = new Map(dashboards.map(item => [item.body.uid, item]));
   const checks = [];
@@ -129,7 +152,7 @@ function dashboardKqlCheck(args = [], options = {}) {
       checks.push({ uid, panel: panelTitle, ok: false, rows: 0, error: 'panel query not found' });
       continue;
     }
-    const query = substituteGrafanaMacros(rawQuery, { last });
+    const query = substituteGrafanaMacros(rawQuery, { last, variables: textboxDefaults(dashboard.body) });
     if (localOnly) {
       checks.push({ uid, panel: panelTitle, ok: true, query });
       continue;
@@ -167,5 +190,6 @@ function dashboardKqlCheck(args = [], options = {}) {
 module.exports = {
   dashboardKqlCheck,
   substituteGrafanaMacros,
+  textboxDefaults,
   v2KqlSmokePanels
 };
