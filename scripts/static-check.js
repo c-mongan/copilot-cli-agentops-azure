@@ -35,6 +35,7 @@ const generatedCliAssetDirs = new Set([
 ]);
 const generatedOrBinaryExts = new Set([
   '.jpg',
+  '.gif',
   '.jpeg',
   '.png',
   '.svg'

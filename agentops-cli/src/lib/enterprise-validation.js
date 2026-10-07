@@ -30,7 +30,7 @@ function validateEnterprise(options = {}) {
   const azureCompose = repoFileText('collector/docker-compose.azuremonitor.yaml', options);
   const azureWhatIf = repoFileText('scripts/azure-what-if.sh', options);
   const enterpriseDeploy = repoFileText('scripts/azure-deploy-enterprise-pilot.sh', options);
-  const readme = repoFileText('README.md', options);
+  const readme = repoFileText('docs/operator-guide.md', options);
   const enterprisePilot = repoFileText('docs/enterprise-pilot.md', options);
   const azureProdHardening = repoFileText('docs/azure-production-hardening.md', options);
   const threatModel = repoFileText('docs/threat-model.md', options);
@@ -232,7 +232,7 @@ function validateEnterprise(options = {}) {
       'enterprise-docs',
       /Enterprise-safe, cost-bounded setup/.test(readme),
       'medium',
-      'README documents the enterprise-safe path.'
+      'Operator guide documents the enterprise-safe path.'
     ),
     enterpriseCheck(
       'pilot-review-docs',
