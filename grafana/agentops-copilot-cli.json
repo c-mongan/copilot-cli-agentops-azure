@@ -1,0 +1,1111 @@
+{
+  "title": "Copilot CLI AgentOps",
+  "uid": "agentops-copilot-cli",
+  "description": "Portable AgentOps dashboard for Copilot CLI runs. Uses only the built-in Azure Monitor datasource and the AgentOps Log Analytics tables. Works in Azure Monitor dashboards with Grafana, Azure Managed Grafana and self-hosted Grafana.",
+  "tags": [
+    "agentops",
+    "copilot-cli",
+    "azure-monitor",
+    "portable"
+  ],
+  "editable": true,
+  "graphTooltip": 1,
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "",
+  "time": {
+    "from": "now-7d",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "links": [],
+  "annotations": {
+    "list": []
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "label": "Azure Monitor data source",
+        "type": "datasource",
+        "query": "grafana-azure-monitor-datasource",
+        "regex": "",
+        "hide": 0,
+        "refresh": 1,
+        "includeAll": false,
+        "multi": false,
+        "current": {},
+        "options": []
+      },
+      {
+        "name": "subscription",
+        "label": "Subscription",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-azure-monitor-datasource",
+          "uid": "${datasource}"
+        },
+        "query": {
+          "queryType": "Azure Subscriptions",
+          "refId": "A"
+        },
+        "definition": "Azure Subscriptions",
+        "refresh": 1,
+        "hide": 0,
+        "includeAll": false,
+        "multi": false,
+        "sort": 1,
+        "current": {},
+        "options": []
+      },
+      {
+        "name": "workspace",
+        "label": "Log Analytics workspace",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-azure-monitor-datasource",
+          "uid": "${datasource}"
+        },
+        "query": {
+          "queryType": "Azure Workspaces",
+          "subscription": "$subscription",
+          "refId": "A"
+        },
+        "definition": "Azure Workspaces ($subscription)",
+        "refresh": 1,
+        "hide": 0,
+        "includeAll": false,
+        "multi": false,
+        "sort": 1,
+        "current": {},
+        "options": []
+      },
+      {
+        "name": "est_price_in_usd_per_mtok",
+        "label": "Est. input price (USD / 1M tokens)",
+        "description": "Blended list price used only for the estimated cost panels. Edit it to match your model mix.",
+        "type": "textbox",
+        "query": "3",
+        "hide": 0,
+        "current": {
+          "text": "3",
+          "value": "3"
+        },
+        "options": [
+          {
+            "selected": true,
+            "text": "3",
+            "value": "3"
+          }
+        ]
+      },
+      {
+        "name": "est_price_out_usd_per_mtok",
+        "label": "Est. output price (USD / 1M tokens)",
+        "description": "Blended list price used only for the estimated cost panels. Edit it to match your model mix.",
+        "type": "textbox",
+        "query": "15",
+        "hide": 0,
+        "current": {
+          "text": "15",
+          "value": "15"
+        },
+        "options": [
+          {
+            "selected": true,
+            "text": "15",
+            "value": "15"
+          }
+        ]
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "text",
+      "title": "",
+      "gridPos": {
+        "h": 3,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "**Copilot CLI AgentOps** — runs, failures, tool latency, tokens and estimated cost from the AgentOps Log Analytics tables (`AgentOpsEvents_CL`, `AgentOpsSpans_CL`, `AgentOpsRunSummary_CL`).\nMetadata only: no prompts, tool arguments, tool results or code are queried. Spans and events are deduplicated before counting. \n**Est. cost** is tokens × the blended list price in the dashboard variables (input/output USD per 1M tokens). It is an estimate, not billed cost: Copilot CLI does not report cost."
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Runs",
+      "description": "Distinct RunId values seen in any AgentOps table in the time range.",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 3
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "${datasource}"
+          },
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "let _from = $__timeFrom();\nlet _to = $__timeTo();\nlet Ev = AgentOpsEvents_CL\n| where TimeGenerated between (_from .. _to) and isnotempty(RunId)\n| extend DedupKey = iff(isempty(EventId), strcat(RunId, \"|\", EventName, \"|\", ToolCallId, \"|\", tostring(Sequence), \"|\", tostring(TimeGenerated)), EventId)\n| summarize arg_max(TimeGenerated, *) by DedupKey;\nlet Sp = AgentOpsSpans_CL\n| where TimeGenerated between (_from .. _to) and isnotempty(RunId)\n| summarize arg_max(TimeGenerated, *) by RunId, SpanId, OperationName;\nlet Rs = AgentOpsRunSummary_CL\n| where TimeGenerated between (_from .. _to) and isnotempty(RunId)\n| summarize arg_max(TimeGenerated, *) by RunId;\nlet Runs = union\n    (Ev | project RunId, SessionId, StartedAt = TimeGenerated, EndedAt = TimeGenerated),\n    (Sp | project RunId, SessionId, StartedAt = TimeGenerated, EndedAt = iff(OperationName == \"agentops.event\", TimeGenerated, TimeGenerated + coalesce(DurationMs, 0) * 1ms)),\n    (Rs | project RunId, SessionId, StartedAt = TimeGenerated, EndedAt = TimeGenerated)\n| summarize SessionId = take_anyif(SessionId, isnotempty(SessionId)), StartedAt = min(StartedAt), EndedAt = max(EndedAt) by RunId;\nlet FailedRuns = union\n    (Rs | where OutcomeStatus in~ (\"failed\", \"blocked\", \"error\") | project RunId),\n    (Ev | where Status in~ (\"failed\", \"error\", \"denied\", \"blocked\") | project RunId),\n    (Sp | where Outcome in~ (\"failed\", \"error\") | project RunId)\n| distinct RunId;\nRuns\n| summarize Runs = dcount(RunId)",
+            "resources": [
+              "$workspace"
+            ],
+            "resultFormat": "table",
+            "dashboardTime": false
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "0",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto"
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Failure rate",
+      "description": "Share of runs with at least one failure signal: a failed/blocked run summary, a failed/denied event or a failed span. A nonzero shell exit is recorded by Copilot CLI as a successful tool call, so it is not counted.",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 3
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "${datasource}"
+          },
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "let _from = $__timeFrom();\nlet _to = $__timeTo();\nlet Ev = AgentOpsEvents_CL\n| where TimeGenerated between (_from .. _to) and isnotempty(RunId)\n| extend DedupKey = iff(isempty(EventId), strcat(RunId, \"|\", EventName, \"|\", ToolCallId, \"|\", tostring(Sequence), \"|\", tostring(TimeGenerated)), EventId)\n| summarize arg_max(TimeGenerated, *) by DedupKey;\nlet Sp = AgentOpsSpans_CL\n| where TimeGenerated between (_from .. _to) and isnotempty(RunId)\n| summarize arg_max(TimeGenerated, *) by RunId, SpanId, OperationName;\nlet Rs = AgentOpsRunSummary_CL\n| where TimeGenerated between (_from .. _to) and isnotempty(RunId)\n| summarize arg_max(TimeGenerated, *) by RunId;\nlet Runs = union\n    (Ev | project RunId, SessionId, StartedAt = TimeGenerated, EndedAt = TimeGenerated),\n    (Sp | project RunId, SessionId, StartedAt = TimeGenerated, EndedAt = iff(OperationName == \"agentops.event\", TimeGenerated, TimeGenerated + coalesce(DurationMs, 0) * 1ms)),\n    (Rs | project RunId, SessionId, StartedAt = TimeGenerated, EndedAt = TimeGenerated)\n| summarize SessionId = take_anyif(SessionId, isnotempty(SessionId)), StartedAt = min(StartedAt), EndedAt = max(EndedAt) by RunId;\nlet FailedRuns = union\n    (Rs | where OutcomeStatus in~ (\"failed\", \"blocked\", \"error\") | project RunId),\n    (Ev | where Status in~ (\"failed\", \"error\", \"denied\", \"blocked\") | project RunId),\n    (Sp | where Outcome in~ (\"failed\", \"error\") | project RunId)\n| distinct RunId;\nRuns\n| summarize Runs = dcount(RunId), RunsWithFailure = dcountif(RunId, RunId in (FailedRuns))\n| project FailureRatePct = iff(Runs == 0, real(null), round(100.0 * RunsWithFailure / Runs, 1))",
+            "resources": [
+              "$workspace"
+            ],
+            "resultFormat": "table",
+            "dashboardTime": false
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 1,
+          "noValue": "n/a",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 10
+              },
+              {
+                "color": "red",
+                "value": 25
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto"
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Failed tool calls",
+      "description": "Tool calls whose completion status was failed, error, denied or blocked (deduplicated by tool call).",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 3
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "${datasource}"
+          },
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "let _from = $__timeFrom();\nlet _to = $__timeTo();\nlet Ev = AgentOpsEvents_CL\n| where TimeGenerated between (_from .. _to) and isnotempty(RunId)\n| extend DedupKey = iff(isempty(EventId), strcat(RunId, \"|\", EventName, \"|\", ToolCallId, \"|\", tostring(Sequence), \"|\", tostring(TimeGenerated)), EventId)\n| summarize arg_max(TimeGenerated, *) by DedupKey;\nlet Sp = AgentOpsSpans_CL\n| where TimeGenerated between (_from .. _to) and isnotempty(RunId)\n| summarize arg_max(TimeGenerated, *) by RunId, SpanId, OperationName;\nlet Rs = AgentOpsRunSummary_CL\n| where TimeGenerated between (_from .. _to) and isnotempty(RunId)\n| summarize arg_max(TimeGenerated, *) by RunId;\nlet ToolEv = Ev\n| where EventName in (\"tool.execution_start\", \"tool.execution_complete\") and isnotempty(ToolCallId)\n| summarize StartedAt = minif(TimeGenerated, EventName == \"tool.execution_start\"), EndedAt = maxif(TimeGenerated, EventName == \"tool.execution_complete\"), Status = take_anyif(Status, EventName == \"tool.execution_complete\"), ToolName = take_anyif(ToolName, isnotempty(ToolName)) by RunId, ToolCallId\n| where isnotnull(EndedAt)\n| project RunId, ToolCallId, ToolName, LatencyMs = iff(isnull(StartedAt), real(null), todouble(datetime_diff(\"millisecond\", EndedAt, StartedAt))), Failed = Status in~ (\"failed\", \"error\", \"denied\", \"blocked\");\nlet ToolSp = Sp\n| where OperationName == \"execute_tool\"\n| join kind=leftanti (ToolEv | project RunId, ToolCallId) on RunId, ToolCallId\n| project RunId, ToolCallId, ToolName, LatencyMs = todouble(DurationMs), Failed = Outcome in~ (\"failed\", \"error\");\nlet ToolLegacy = Ev\n| where EventName in (\"tool.call\", \"mcp.tools.call\")\n| project RunId, ToolCallId, ToolName = coalesce(ToolName, McpToolName), LatencyMs = iff(DurationMs > 0, todouble(DurationMs), real(null)), Failed = Status in~ (\"failed\", \"error\", \"denied\", \"blocked\");\nlet Tools = union ToolEv, ToolSp, ToolLegacy\n| extend ToolName = iff(isempty(ToolName), \"(unknown)\", ToolName);\nTools\n| summarize FailedToolCalls = countif(Failed)",
+            "resources": [
+              "$workspace"
+            ],
+            "resultFormat": "table",
+            "dashboardTime": false
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "0",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto"
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Tokens in",
+      "description": "Input tokens. One source per run, in this order: run summary, chat spans, invoke_agent spans, session.shutdown events. Duplicate spans are removed first.",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 12,
+        "y": 3
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "${datasource}"
+          },
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "let _from = $__timeFrom();\nlet _to = $__timeTo();\nlet Ev = AgentOpsEvents_CL\n| where TimeGenerated between (_from .. _to) and isnotempty(RunId)\n| extend DedupKey = iff(isempty(EventId), strcat(RunId, \"|\", EventName, \"|\", ToolCallId, \"|\", tostring(Sequence), \"|\", tostring(TimeGenerated)), EventId)\n| summarize arg_max(TimeGenerated, *) by DedupKey;\nlet Sp = AgentOpsSpans_CL\n| where TimeGenerated between (_from .. _to) and isnotempty(RunId)\n| summarize arg_max(TimeGenerated, *) by RunId, SpanId, OperationName;\nlet Rs = AgentOpsRunSummary_CL\n| where TimeGenerated between (_from .. _to) and isnotempty(RunId)\n| summarize arg_max(TimeGenerated, *) by RunId;\nlet EvModel = Ev\n| where isnotempty(ModelActual) or isnotempty(ModelRequested)\n| summarize arg_max(TimeGenerated, ModelActual, ModelRequested) by RunId\n| project RunId, RunModel = coalesce(ModelActual, ModelRequested);\nlet TokSummary = Rs\n| where isnotnull(InputTokens) or isnotnull(OutputTokens)\n| project RunId, Model = coalesce(ModelActual, ModelRequested), InputTokens = tolong(InputTokens), OutputTokens = tolong(OutputTokens), TokenSource = \"run summary\";\nlet TokChat = Sp\n| where OperationName == \"chat\"\n| join kind=leftanti (TokSummary | project RunId) on RunId\n| project RunId, Model = coalesce(ModelActual, Model, ModelRequested), InputTokens = tolong(InputTokens), OutputTokens = tolong(OutputTokens), TokenSource = \"chat spans\";\nlet TokInvoke = Sp\n| where OperationName == \"invoke_agent\"\n| join kind=leftanti (union (TokSummary | project RunId), (TokChat | project RunId)) on RunId\n| join kind=leftouter EvModel on RunId\n| project RunId, Model = coalesce(ModelActual, Model, ModelRequested, RunModel), InputTokens = tolong(InputTokens), OutputTokens = tolong(OutputTokens), TokenSource = \"invoke_agent spans\";\nlet TokShutdown = Ev\n| where EventName == \"session.shutdown\"\n| join kind=leftanti (union (TokSummary | project RunId), (TokChat | project RunId), (TokInvoke | project RunId)) on RunId\n| project RunId, Model = coalesce(ModelActual, ModelRequested), InputTokens = tolong(InputTokens), OutputTokens = tolong(OutputTokens), TokenSource = \"session.shutdown events\";\nlet Tokens = union TokSummary, TokChat, TokInvoke, TokShutdown\n| extend Model = iff(isempty(Model), \"unknown\", Model), InputTokens = coalesce(InputTokens, 0), OutputTokens = coalesce(OutputTokens, 0)\n| extend EstCostUsd = (InputTokens * todouble(\"${est_price_in_usd_per_mtok}\") + OutputTokens * todouble(\"${est_price_out_usd_per_mtok}\")) / 1000000.0;\nTokens\n| summarize InputTokens = sum(InputTokens)",
+            "resources": [
+              "$workspace"
+            ],
+            "resultFormat": "table",
+            "dashboardTime": false
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "0",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto"
+      }
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Tokens out",
+      "description": "Output tokens, using the same per-run source order as Tokens in.",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 3
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "${datasource}"
+          },
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "let _from = $__timeFrom();\nlet _to = $__timeTo();\nlet Ev = AgentOpsEvents_CL\n| where TimeGenerated between (_from .. _to) and isnotempty(RunId)\n| extend DedupKey = iff(isempty(EventId), strcat(RunId, \"|\", EventName, \"|\", ToolCallId, \"|\", tostring(Sequence), \"|\", tostring(TimeGenerated)), EventId)\n| summarize arg_max(TimeGenerated, *) by DedupKey;\nlet Sp = AgentOpsSpans_CL\n| where TimeGenerated between (_from .. _to) and isnotempty(RunId)\n| summarize arg_max(TimeGenerated, *) by RunId, SpanId, OperationName;\nlet Rs = AgentOpsRunSummary_CL\n| where TimeGenerated between (_from .. _to) and isnotempty(RunId)\n| summarize arg_max(TimeGenerated, *) by RunId;\nlet EvModel = Ev\n| where isnotempty(ModelActual) or isnotempty(ModelRequested)\n| summarize arg_max(TimeGenerated, ModelActual, ModelRequested) by RunId\n| project RunId, RunModel = coalesce(ModelActual, ModelRequested);\nlet TokSummary = Rs\n| where isnotnull(InputTokens) or isnotnull(OutputTokens)\n| project RunId, Model = coalesce(ModelActual, ModelRequested), InputTokens = tolong(InputTokens), OutputTokens = tolong(OutputTokens), TokenSource = \"run summary\";\nlet TokChat = Sp\n| where OperationName == \"chat\"\n| join kind=leftanti (TokSummary | project RunId) on RunId\n| project RunId, Model = coalesce(ModelActual, Model, ModelRequested), InputTokens = tolong(InputTokens), OutputTokens = tolong(OutputTokens), TokenSource = \"chat spans\";\nlet TokInvoke = Sp\n| where OperationName == \"invoke_agent\"\n| join kind=leftanti (union (TokSummary | project RunId), (TokChat | project RunId)) on RunId\n| join kind=leftouter EvModel on RunId\n| project RunId, Model = coalesce(ModelActual, Model, ModelRequested, RunModel), InputTokens = tolong(InputTokens), OutputTokens = tolong(OutputTokens), TokenSource = \"invoke_agent spans\";\nlet TokShutdown = Ev\n| where EventName == \"session.shutdown\"\n| join kind=leftanti (union (TokSummary | project RunId), (TokChat | project RunId), (TokInvoke | project RunId)) on RunId\n| project RunId, Model = coalesce(ModelActual, ModelRequested), InputTokens = tolong(InputTokens), OutputTokens = tolong(OutputTokens), TokenSource = \"session.shutdown events\";\nlet Tokens = union TokSummary, TokChat, TokInvoke, TokShutdown\n| extend Model = iff(isempty(Model), \"unknown\", Model), InputTokens = coalesce(InputTokens, 0), OutputTokens = coalesce(OutputTokens, 0)\n| extend EstCostUsd = (InputTokens * todouble(\"${est_price_in_usd_per_mtok}\") + OutputTokens * todouble(\"${est_price_out_usd_per_mtok}\")) / 1000000.0;\nTokens\n| summarize OutputTokens = sum(OutputTokens)",
+            "resources": [
+              "$workspace"
+            ],
+            "resultFormat": "table",
+            "dashboardTime": false
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "0",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto"
+      }
+    },
+    {
+      "id": 7,
+      "type": "stat",
+      "title": "Est. cost (USD, not billed)",
+      "description": "Estimate = input tokens × input price + output tokens × output price, using the dashboard variables (USD per 1M tokens). Not a bill: Copilot CLI emits no cost metadata.",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 3
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "${datasource}"
+          },
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "let _from = $__timeFrom();\nlet _to = $__timeTo();\nlet Ev = AgentOpsEvents_CL\n| where TimeGenerated between (_from .. _to) and isnotempty(RunId)\n| extend DedupKey = iff(isempty(EventId), strcat(RunId, \"|\", EventName, \"|\", ToolCallId, \"|\", tostring(Sequence), \"|\", tostring(TimeGenerated)), EventId)\n| summarize arg_max(TimeGenerated, *) by DedupKey;\nlet Sp = AgentOpsSpans_CL\n| where TimeGenerated between (_from .. _to) and isnotempty(RunId)\n| summarize arg_max(TimeGenerated, *) by RunId, SpanId, OperationName;\nlet Rs = AgentOpsRunSummary_CL\n| where TimeGenerated between (_from .. _to) and isnotempty(RunId)\n| summarize arg_max(TimeGenerated, *) by RunId;\nlet EvModel = Ev\n| where isnotempty(ModelActual) or isnotempty(ModelRequested)\n| summarize arg_max(TimeGenerated, ModelActual, ModelRequested) by RunId\n| project RunId, RunModel = coalesce(ModelActual, ModelRequested);\nlet TokSummary = Rs\n| where isnotnull(InputTokens) or isnotnull(OutputTokens)\n| project RunId, Model = coalesce(ModelActual, ModelRequested), InputTokens = tolong(InputTokens), OutputTokens = tolong(OutputTokens), TokenSource = \"run summary\";\nlet TokChat = Sp\n| where OperationName == \"chat\"\n| join kind=leftanti (TokSummary | project RunId) on RunId\n| project RunId, Model = coalesce(ModelActual, Model, ModelRequested), InputTokens = tolong(InputTokens), OutputTokens = tolong(OutputTokens), TokenSource = \"chat spans\";\nlet TokInvoke = Sp\n| where OperationName == \"invoke_agent\"\n| join kind=leftanti (union (TokSummary | project RunId), (TokChat | project RunId)) on RunId\n| join kind=leftouter EvModel on RunId\n| project RunId, Model = coalesce(ModelActual, Model, ModelRequested, RunModel), InputTokens = tolong(InputTokens), OutputTokens = tolong(OutputTokens), TokenSource = \"invoke_agent spans\";\nlet TokShutdown = Ev\n| where EventName == \"session.shutdown\"\n| join kind=leftanti (union (TokSummary | project RunId), (TokChat | project RunId), (TokInvoke | project RunId)) on RunId\n| project RunId, Model = coalesce(ModelActual, ModelRequested), InputTokens = tolong(InputTokens), OutputTokens = tolong(OutputTokens), TokenSource = \"session.shutdown events\";\nlet Tokens = union TokSummary, TokChat, TokInvoke, TokShutdown\n| extend Model = iff(isempty(Model), \"unknown\", Model), InputTokens = coalesce(InputTokens, 0), OutputTokens = coalesce(OutputTokens, 0)\n| extend EstCostUsd = (InputTokens * todouble(\"${est_price_in_usd_per_mtok}\") + OutputTokens * todouble(\"${est_price_out_usd_per_mtok}\")) / 1000000.0;\nTokens\n| summarize EstCostUsd = round(sum(EstCostUsd), 4)",
+            "resources": [
+              "$workspace"
+            ],
+            "resultFormat": "table",
+            "dashboardTime": false
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "decimals": 2,
+          "noValue": "0",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto"
+      }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Runs over time",
+      "description": "Distinct runs per interval, split by whether the run had any failure signal.",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "${datasource}"
+          },
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "let _from = $__timeFrom();\nlet _to = $__timeTo();\nlet Ev = AgentOpsEvents_CL\n| where TimeGenerated between (_from .. _to) and isnotempty(RunId)\n| extend DedupKey = iff(isempty(EventId), strcat(RunId, \"|\", EventName, \"|\", ToolCallId, \"|\", tostring(Sequence), \"|\", tostring(TimeGenerated)), EventId)\n| summarize arg_max(TimeGenerated, *) by DedupKey;\nlet Sp = AgentOpsSpans_CL\n| where TimeGenerated between (_from .. _to) and isnotempty(RunId)\n| summarize arg_max(TimeGenerated, *) by RunId, SpanId, OperationName;\nlet Rs = AgentOpsRunSummary_CL\n| where TimeGenerated between (_from .. _to) and isnotempty(RunId)\n| summarize arg_max(TimeGenerated, *) by RunId;\nlet Runs = union\n    (Ev | project RunId, SessionId, StartedAt = TimeGenerated, EndedAt = TimeGenerated),\n    (Sp | project RunId, SessionId, StartedAt = TimeGenerated, EndedAt = iff(OperationName == \"agentops.event\", TimeGenerated, TimeGenerated + coalesce(DurationMs, 0) * 1ms)),\n    (Rs | project RunId, SessionId, StartedAt = TimeGenerated, EndedAt = TimeGenerated)\n| summarize SessionId = take_anyif(SessionId, isnotempty(SessionId)), StartedAt = min(StartedAt), EndedAt = max(EndedAt) by RunId;\nlet FailedRuns = union\n    (Rs | where OutcomeStatus in~ (\"failed\", \"blocked\", \"error\") | project RunId),\n    (Ev | where Status in~ (\"failed\", \"error\", \"denied\", \"blocked\") | project RunId),\n    (Sp | where Outcome in~ (\"failed\", \"error\") | project RunId)\n| distinct RunId;\nRuns\n| extend Outcome = iff(RunId in (FailedRuns), \"with failure signal\", \"without failure signal\")\n| summarize Runs = dcount(RunId) by TimeGenerated = bin(StartedAt, $__interval), Outcome\n| order by TimeGenerated asc",
+            "resources": [
+              "$workspace"
+            ],
+            "resultFormat": "time_series",
+            "dashboardTime": false
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "lineWidth": 1
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*with failure signal.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              },
+              {
+                "id": "displayName",
+                "value": "Runs with a failure signal"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*without failure signal.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              },
+              {
+                "id": "displayName",
+                "value": "Runs without failure signals"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 9,
+      "type": "table",
+      "title": "Top failing tools",
+      "description": "Tools with the most failed calls (failed, error, denied or blocked). Tool calls are deduplicated by tool call ID.",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "${datasource}"
+          },
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "let _from = $__timeFrom();\nlet _to = $__timeTo();\nlet Ev = AgentOpsEvents_CL\n| where TimeGenerated between (_from .. _to) and isnotempty(RunId)\n| extend DedupKey = iff(isempty(EventId), strcat(RunId, \"|\", EventName, \"|\", ToolCallId, \"|\", tostring(Sequence), \"|\", tostring(TimeGenerated)), EventId)\n| summarize arg_max(TimeGenerated, *) by DedupKey;\nlet Sp = AgentOpsSpans_CL\n| where TimeGenerated between (_from .. _to) and isnotempty(RunId)\n| summarize arg_max(TimeGenerated, *) by RunId, SpanId, OperationName;\nlet Rs = AgentOpsRunSummary_CL\n| where TimeGenerated between (_from .. _to) and isnotempty(RunId)\n| summarize arg_max(TimeGenerated, *) by RunId;\nlet ToolEv = Ev\n| where EventName in (\"tool.execution_start\", \"tool.execution_complete\") and isnotempty(ToolCallId)\n| summarize StartedAt = minif(TimeGenerated, EventName == \"tool.execution_start\"), EndedAt = maxif(TimeGenerated, EventName == \"tool.execution_complete\"), Status = take_anyif(Status, EventName == \"tool.execution_complete\"), ToolName = take_anyif(ToolName, isnotempty(ToolName)) by RunId, ToolCallId\n| where isnotnull(EndedAt)\n| project RunId, ToolCallId, ToolName, LatencyMs = iff(isnull(StartedAt), real(null), todouble(datetime_diff(\"millisecond\", EndedAt, StartedAt))), Failed = Status in~ (\"failed\", \"error\", \"denied\", \"blocked\");\nlet ToolSp = Sp\n| where OperationName == \"execute_tool\"\n| join kind=leftanti (ToolEv | project RunId, ToolCallId) on RunId, ToolCallId\n| project RunId, ToolCallId, ToolName, LatencyMs = todouble(DurationMs), Failed = Outcome in~ (\"failed\", \"error\");\nlet ToolLegacy = Ev\n| where EventName in (\"tool.call\", \"mcp.tools.call\")\n| project RunId, ToolCallId, ToolName = coalesce(ToolName, McpToolName), LatencyMs = iff(DurationMs > 0, todouble(DurationMs), real(null)), Failed = Status in~ (\"failed\", \"error\", \"denied\", \"blocked\");\nlet Tools = union ToolEv, ToolSp, ToolLegacy\n| extend ToolName = iff(isempty(ToolName), \"(unknown)\", ToolName);\nTools\n| summarize Calls = count(), Failed = countif(Failed), Runs = dcount(RunId) by ToolName\n| where Failed > 0\n| extend FailureRatePct = round(100.0 * Failed / Calls, 1)\n| top 10 by Failed desc\n| project ToolName, Failed, Calls, FailureRatePct, Runs",
+            "resources": [
+              "$workspace"
+            ],
+            "resultFormat": "table",
+            "dashboardTime": false
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Failed"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "FailureRatePct"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "displayName",
+                "value": "Failure rate"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "Failed",
+            "desc": true
+          }
+        ]
+      }
+    },
+    {
+      "id": 10,
+      "type": "table",
+      "title": "Tool latency p50 / p95 by tool",
+      "description": "Latency from tool start to completion events, or span duration when events are absent. Sorted by p95.",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 15
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "${datasource}"
+          },
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "let _from = $__timeFrom();\nlet _to = $__timeTo();\nlet Ev = AgentOpsEvents_CL\n| where TimeGenerated between (_from .. _to) and isnotempty(RunId)\n| extend DedupKey = iff(isempty(EventId), strcat(RunId, \"|\", EventName, \"|\", ToolCallId, \"|\", tostring(Sequence), \"|\", tostring(TimeGenerated)), EventId)\n| summarize arg_max(TimeGenerated, *) by DedupKey;\nlet Sp = AgentOpsSpans_CL\n| where TimeGenerated between (_from .. _to) and isnotempty(RunId)\n| summarize arg_max(TimeGenerated, *) by RunId, SpanId, OperationName;\nlet Rs = AgentOpsRunSummary_CL\n| where TimeGenerated between (_from .. _to) and isnotempty(RunId)\n| summarize arg_max(TimeGenerated, *) by RunId;\nlet ToolEv = Ev\n| where EventName in (\"tool.execution_start\", \"tool.execution_complete\") and isnotempty(ToolCallId)\n| summarize StartedAt = minif(TimeGenerated, EventName == \"tool.execution_start\"), EndedAt = maxif(TimeGenerated, EventName == \"tool.execution_complete\"), Status = take_anyif(Status, EventName == \"tool.execution_complete\"), ToolName = take_anyif(ToolName, isnotempty(ToolName)) by RunId, ToolCallId\n| where isnotnull(EndedAt)\n| project RunId, ToolCallId, ToolName, LatencyMs = iff(isnull(StartedAt), real(null), todouble(datetime_diff(\"millisecond\", EndedAt, StartedAt))), Failed = Status in~ (\"failed\", \"error\", \"denied\", \"blocked\");\nlet ToolSp = Sp\n| where OperationName == \"execute_tool\"\n| join kind=leftanti (ToolEv | project RunId, ToolCallId) on RunId, ToolCallId\n| project RunId, ToolCallId, ToolName, LatencyMs = todouble(DurationMs), Failed = Outcome in~ (\"failed\", \"error\");\nlet ToolLegacy = Ev\n| where EventName in (\"tool.call\", \"mcp.tools.call\")\n| project RunId, ToolCallId, ToolName = coalesce(ToolName, McpToolName), LatencyMs = iff(DurationMs > 0, todouble(DurationMs), real(null)), Failed = Status in~ (\"failed\", \"error\", \"denied\", \"blocked\");\nlet Tools = union ToolEv, ToolSp, ToolLegacy\n| extend ToolName = iff(isempty(ToolName), \"(unknown)\", ToolName);\nTools\n| where isnotnull(LatencyMs) and LatencyMs >= 0\n| summarize Calls = count(), P50Ms = round(percentile(LatencyMs, 50), 0), P95Ms = round(percentile(LatencyMs, 95), 0), MaxMs = round(max(LatencyMs), 0), Failed = countif(Failed) by ToolName\n| top 15 by P95Ms desc\n| project ToolName, P50Ms, P95Ms, MaxMs, Calls, Failed",
+            "resources": [
+              "$workspace"
+            ],
+            "resultFormat": "table",
+            "dashboardTime": false
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^(P50Ms|P95Ms|MaxMs)$"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "ms"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "P95Ms"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "displayName",
+                "value": "p95"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "P50Ms"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "p50"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "MaxMs"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "max"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "p95",
+            "desc": true
+          }
+        ]
+      }
+    },
+    {
+      "id": 11,
+      "type": "barchart",
+      "title": "Tokens in / out by model",
+      "description": "Input and output tokens per model. One token source per run; duplicate spans removed. Never summed across duplicate spans or across sources.",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 15
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "${datasource}"
+          },
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "let _from = $__timeFrom();\nlet _to = $__timeTo();\nlet Ev = AgentOpsEvents_CL\n| where TimeGenerated between (_from .. _to) and isnotempty(RunId)\n| extend DedupKey = iff(isempty(EventId), strcat(RunId, \"|\", EventName, \"|\", ToolCallId, \"|\", tostring(Sequence), \"|\", tostring(TimeGenerated)), EventId)\n| summarize arg_max(TimeGenerated, *) by DedupKey;\nlet Sp = AgentOpsSpans_CL\n| where TimeGenerated between (_from .. _to) and isnotempty(RunId)\n| summarize arg_max(TimeGenerated, *) by RunId, SpanId, OperationName;\nlet Rs = AgentOpsRunSummary_CL\n| where TimeGenerated between (_from .. _to) and isnotempty(RunId)\n| summarize arg_max(TimeGenerated, *) by RunId;\nlet EvModel = Ev\n| where isnotempty(ModelActual) or isnotempty(ModelRequested)\n| summarize arg_max(TimeGenerated, ModelActual, ModelRequested) by RunId\n| project RunId, RunModel = coalesce(ModelActual, ModelRequested);\nlet TokSummary = Rs\n| where isnotnull(InputTokens) or isnotnull(OutputTokens)\n| project RunId, Model = coalesce(ModelActual, ModelRequested), InputTokens = tolong(InputTokens), OutputTokens = tolong(OutputTokens), TokenSource = \"run summary\";\nlet TokChat = Sp\n| where OperationName == \"chat\"\n| join kind=leftanti (TokSummary | project RunId) on RunId\n| project RunId, Model = coalesce(ModelActual, Model, ModelRequested), InputTokens = tolong(InputTokens), OutputTokens = tolong(OutputTokens), TokenSource = \"chat spans\";\nlet TokInvoke = Sp\n| where OperationName == \"invoke_agent\"\n| join kind=leftanti (union (TokSummary | project RunId), (TokChat | project RunId)) on RunId\n| join kind=leftouter EvModel on RunId\n| project RunId, Model = coalesce(ModelActual, Model, ModelRequested, RunModel), InputTokens = tolong(InputTokens), OutputTokens = tolong(OutputTokens), TokenSource = \"invoke_agent spans\";\nlet TokShutdown = Ev\n| where EventName == \"session.shutdown\"\n| join kind=leftanti (union (TokSummary | project RunId), (TokChat | project RunId), (TokInvoke | project RunId)) on RunId\n| project RunId, Model = coalesce(ModelActual, ModelRequested), InputTokens = tolong(InputTokens), OutputTokens = tolong(OutputTokens), TokenSource = \"session.shutdown events\";\nlet Tokens = union TokSummary, TokChat, TokInvoke, TokShutdown\n| extend Model = iff(isempty(Model), \"unknown\", Model), InputTokens = coalesce(InputTokens, 0), OutputTokens = coalesce(OutputTokens, 0)\n| extend EstCostUsd = (InputTokens * todouble(\"${est_price_in_usd_per_mtok}\") + OutputTokens * todouble(\"${est_price_out_usd_per_mtok}\")) / 1000000.0;\nTokens\n| summarize InputTokens = sum(InputTokens), OutputTokens = sum(OutputTokens) by Model\n| order by InputTokens desc",
+            "resources": [
+              "$workspace"
+            ],
+            "resultFormat": "table",
+            "dashboardTime": false
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 80,
+            "lineWidth": 1
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "xField": "Model",
+        "stacking": "none",
+        "showValue": "auto",
+        "groupWidth": 0.7,
+        "barWidth": 0.9,
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 12,
+      "type": "table",
+      "title": "Est. cost by model (USD, not billed)",
+      "description": "Estimated cost per model from the blended price variables. TokenSources shows which telemetry the token counts came from.",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 24
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "${datasource}"
+          },
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "let _from = $__timeFrom();\nlet _to = $__timeTo();\nlet Ev = AgentOpsEvents_CL\n| where TimeGenerated between (_from .. _to) and isnotempty(RunId)\n| extend DedupKey = iff(isempty(EventId), strcat(RunId, \"|\", EventName, \"|\", ToolCallId, \"|\", tostring(Sequence), \"|\", tostring(TimeGenerated)), EventId)\n| summarize arg_max(TimeGenerated, *) by DedupKey;\nlet Sp = AgentOpsSpans_CL\n| where TimeGenerated between (_from .. _to) and isnotempty(RunId)\n| summarize arg_max(TimeGenerated, *) by RunId, SpanId, OperationName;\nlet Rs = AgentOpsRunSummary_CL\n| where TimeGenerated between (_from .. _to) and isnotempty(RunId)\n| summarize arg_max(TimeGenerated, *) by RunId;\nlet EvModel = Ev\n| where isnotempty(ModelActual) or isnotempty(ModelRequested)\n| summarize arg_max(TimeGenerated, ModelActual, ModelRequested) by RunId\n| project RunId, RunModel = coalesce(ModelActual, ModelRequested);\nlet TokSummary = Rs\n| where isnotnull(InputTokens) or isnotnull(OutputTokens)\n| project RunId, Model = coalesce(ModelActual, ModelRequested), InputTokens = tolong(InputTokens), OutputTokens = tolong(OutputTokens), TokenSource = \"run summary\";\nlet TokChat = Sp\n| where OperationName == \"chat\"\n| join kind=leftanti (TokSummary | project RunId) on RunId\n| project RunId, Model = coalesce(ModelActual, Model, ModelRequested), InputTokens = tolong(InputTokens), OutputTokens = tolong(OutputTokens), TokenSource = \"chat spans\";\nlet TokInvoke = Sp\n| where OperationName == \"invoke_agent\"\n| join kind=leftanti (union (TokSummary | project RunId), (TokChat | project RunId)) on RunId\n| join kind=leftouter EvModel on RunId\n| project RunId, Model = coalesce(ModelActual, Model, ModelRequested, RunModel), InputTokens = tolong(InputTokens), OutputTokens = tolong(OutputTokens), TokenSource = \"invoke_agent spans\";\nlet TokShutdown = Ev\n| where EventName == \"session.shutdown\"\n| join kind=leftanti (union (TokSummary | project RunId), (TokChat | project RunId), (TokInvoke | project RunId)) on RunId\n| project RunId, Model = coalesce(ModelActual, ModelRequested), InputTokens = tolong(InputTokens), OutputTokens = tolong(OutputTokens), TokenSource = \"session.shutdown events\";\nlet Tokens = union TokSummary, TokChat, TokInvoke, TokShutdown\n| extend Model = iff(isempty(Model), \"unknown\", Model), InputTokens = coalesce(InputTokens, 0), OutputTokens = coalesce(OutputTokens, 0)\n| extend EstCostUsd = (InputTokens * todouble(\"${est_price_in_usd_per_mtok}\") + OutputTokens * todouble(\"${est_price_out_usd_per_mtok}\")) / 1000000.0;\nTokens\n| summarize Runs = dcount(RunId), InputTokens = sum(InputTokens), OutputTokens = sum(OutputTokens), EstCostUsd = round(sum(EstCostUsd), 4), TokenSources = strcat_array(make_set(TokenSource), \", \") by Model\n| order by EstCostUsd desc",
+            "resources": [
+              "$workspace"
+            ],
+            "resultFormat": "table",
+            "dashboardTime": false
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "EstCostUsd"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyUSD"
+              },
+              {
+                "id": "decimals",
+                "value": 4
+              },
+              {
+                "id": "displayName",
+                "value": "Est. cost (USD)"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "Est. cost (USD)",
+            "desc": true
+          }
+        ]
+      }
+    },
+    {
+      "id": 13,
+      "type": "table",
+      "title": "Slowest runs",
+      "description": "Top 20 runs by duration. Duration comes from the run summary when present, otherwise from the first to last event or span end. Est. cost uses the price variables.",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 32
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "${datasource}"
+          },
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "let _from = $__timeFrom();\nlet _to = $__timeTo();\nlet Ev = AgentOpsEvents_CL\n| where TimeGenerated between (_from .. _to) and isnotempty(RunId)\n| extend DedupKey = iff(isempty(EventId), strcat(RunId, \"|\", EventName, \"|\", ToolCallId, \"|\", tostring(Sequence), \"|\", tostring(TimeGenerated)), EventId)\n| summarize arg_max(TimeGenerated, *) by DedupKey;\nlet Sp = AgentOpsSpans_CL\n| where TimeGenerated between (_from .. _to) and isnotempty(RunId)\n| summarize arg_max(TimeGenerated, *) by RunId, SpanId, OperationName;\nlet Rs = AgentOpsRunSummary_CL\n| where TimeGenerated between (_from .. _to) and isnotempty(RunId)\n| summarize arg_max(TimeGenerated, *) by RunId;\nlet ToolEv = Ev\n| where EventName in (\"tool.execution_start\", \"tool.execution_complete\") and isnotempty(ToolCallId)\n| summarize StartedAt = minif(TimeGenerated, EventName == \"tool.execution_start\"), EndedAt = maxif(TimeGenerated, EventName == \"tool.execution_complete\"), Status = take_anyif(Status, EventName == \"tool.execution_complete\"), ToolName = take_anyif(ToolName, isnotempty(ToolName)) by RunId, ToolCallId\n| where isnotnull(EndedAt)\n| project RunId, ToolCallId, ToolName, LatencyMs = iff(isnull(StartedAt), real(null), todouble(datetime_diff(\"millisecond\", EndedAt, StartedAt))), Failed = Status in~ (\"failed\", \"error\", \"denied\", \"blocked\");\nlet ToolSp = Sp\n| where OperationName == \"execute_tool\"\n| join kind=leftanti (ToolEv | project RunId, ToolCallId) on RunId, ToolCallId\n| project RunId, ToolCallId, ToolName, LatencyMs = todouble(DurationMs), Failed = Outcome in~ (\"failed\", \"error\");\nlet ToolLegacy = Ev\n| where EventName in (\"tool.call\", \"mcp.tools.call\")\n| project RunId, ToolCallId, ToolName = coalesce(ToolName, McpToolName), LatencyMs = iff(DurationMs > 0, todouble(DurationMs), real(null)), Failed = Status in~ (\"failed\", \"error\", \"denied\", \"blocked\");\nlet Tools = union ToolEv, ToolSp, ToolLegacy\n| extend ToolName = iff(isempty(ToolName), \"(unknown)\", ToolName);\nlet Runs = union\n    (Ev | project RunId, SessionId, StartedAt = TimeGenerated, EndedAt = TimeGenerated),\n    (Sp | project RunId, SessionId, StartedAt = TimeGenerated, EndedAt = iff(OperationName == \"agentops.event\", TimeGenerated, TimeGenerated + coalesce(DurationMs, 0) * 1ms)),\n    (Rs | project RunId, SessionId, StartedAt = TimeGenerated, EndedAt = TimeGenerated)\n| summarize SessionId = take_anyif(SessionId, isnotempty(SessionId)), StartedAt = min(StartedAt), EndedAt = max(EndedAt) by RunId;\nlet FailedRuns = union\n    (Rs | where OutcomeStatus in~ (\"failed\", \"blocked\", \"error\") | project RunId),\n    (Ev | where Status in~ (\"failed\", \"error\", \"denied\", \"blocked\") | project RunId),\n    (Sp | where Outcome in~ (\"failed\", \"error\") | project RunId)\n| distinct RunId;\nlet EvModel = Ev\n| where isnotempty(ModelActual) or isnotempty(ModelRequested)\n| summarize arg_max(TimeGenerated, ModelActual, ModelRequested) by RunId\n| project RunId, RunModel = coalesce(ModelActual, ModelRequested);\nlet TokSummary = Rs\n| where isnotnull(InputTokens) or isnotnull(OutputTokens)\n| project RunId, Model = coalesce(ModelActual, ModelRequested), InputTokens = tolong(InputTokens), OutputTokens = tolong(OutputTokens), TokenSource = \"run summary\";\nlet TokChat = Sp\n| where OperationName == \"chat\"\n| join kind=leftanti (TokSummary | project RunId) on RunId\n| project RunId, Model = coalesce(ModelActual, Model, ModelRequested), InputTokens = tolong(InputTokens), OutputTokens = tolong(OutputTokens), TokenSource = \"chat spans\";\nlet TokInvoke = Sp\n| where OperationName == \"invoke_agent\"\n| join kind=leftanti (union (TokSummary | project RunId), (TokChat | project RunId)) on RunId\n| join kind=leftouter EvModel on RunId\n| project RunId, Model = coalesce(ModelActual, Model, ModelRequested, RunModel), InputTokens = tolong(InputTokens), OutputTokens = tolong(OutputTokens), TokenSource = \"invoke_agent spans\";\nlet TokShutdown = Ev\n| where EventName == \"session.shutdown\"\n| join kind=leftanti (union (TokSummary | project RunId), (TokChat | project RunId), (TokInvoke | project RunId)) on RunId\n| project RunId, Model = coalesce(ModelActual, ModelRequested), InputTokens = tolong(InputTokens), OutputTokens = tolong(OutputTokens), TokenSource = \"session.shutdown events\";\nlet Tokens = union TokSummary, TokChat, TokInvoke, TokShutdown\n| extend Model = iff(isempty(Model), \"unknown\", Model), InputTokens = coalesce(InputTokens, 0), OutputTokens = coalesce(OutputTokens, 0)\n| extend EstCostUsd = (InputTokens * todouble(\"${est_price_in_usd_per_mtok}\") + OutputTokens * todouble(\"${est_price_out_usd_per_mtok}\")) / 1000000.0;\nlet RunTools = Tools\n| summarize ToolCalls = count(), FailedTools = countif(Failed) by RunId;\nlet RunTokens = Tokens\n| summarize Models = strcat_array(make_set(Model), \", \"), InputTokens = sum(InputTokens), OutputTokens = sum(OutputTokens), EstCostUsd = round(sum(EstCostUsd), 4) by RunId;\nRuns\n| join kind=leftouter (Rs | project RunId, SummaryDurationMs = DurationMs, OutcomeStatus) on RunId\n| join kind=leftouter RunTools on RunId\n| join kind=leftouter RunTokens on RunId\n| extend DurationSec = round(todouble(coalesce(SummaryDurationMs, datetime_diff(\"millisecond\", EndedAt, StartedAt))) / 1000.0, 1)\n| extend Outcome = case(isnotempty(OutcomeStatus), OutcomeStatus, RunId in (FailedRuns), \"failure signal\", \"no failure signal\")\n| top 20 by DurationSec desc\n| project StartedAt, RunId, SessionId, DurationSec, Outcome, Models, ToolCalls = coalesce(ToolCalls, 0), FailedTools = coalesce(FailedTools, 0), InputTokens, OutputTokens, EstCostUsd",
+            "resources": [
+              "$workspace"
+            ],
+            "resultFormat": "table",
+            "dashboardTime": false
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "DurationSec"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "displayName",
+                "value": "Duration"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "EstCostUsd"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyUSD"
+              },
+              {
+                "id": "decimals",
+                "value": 4
+              },
+              {
+                "id": "displayName",
+                "value": "Est. cost (USD)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "FailedTools"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "text",
+                      "value": null
+                    },
+                    {
+                      "color": "red",
+                      "value": 1
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "Duration",
+            "desc": true
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -4998,7 +4998,7 @@ test('dashboard verify combines static UX and optional live KQL gates', () => {
   });
   assert.equal(live.ok, true, live.errors.join('\n'));
   assert.equal(live.live, true);
-  assert.equal(live.summary.kql_checks, 35);
+  assert.equal(live.summary.kql_checks, 47);
 });
 
 test('V2 dashboard links preserve drilldown contracts', () => {
@@ -5135,7 +5135,7 @@ test('dashboard kql-check renders representative V2 panel queries', () => {
   });
 
   assert.equal(result.ok, true, result.errors.join('\n'));
-  assert.equal(result.checks.length, 35);
+  assert.equal(result.checks.length, 47);
   assert.ok(queries.every(item => item.options.workspaceId === '12345678-1234-1234-1234-123456789abc'));
   assert.ok(queries.every(item => item.query.includes('ago(24h)')));
   assert.ok(queries.every(item => !item.query.includes('$__timeFrom')));
@@ -5179,7 +5179,7 @@ test('dashboard kql-check can require live rows', () => {
   });
 
   assert.equal(result.ok, false);
-  assert.equal(result.errors.length, 14);
+  assert.equal(result.errors.length, 22);
   assert.match(result.errors[0], /query returned no rows/);
   assert.equal(result.checks.find(check => check.panel === 'Prompt and response viewer (explicit opt-in)').ok, true);
 });
