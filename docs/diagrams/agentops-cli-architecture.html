@@ -1,0 +1,31 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:0;background:#fff;font:15px -apple-system,Segoe UI,sans-serif;color:#0f1724}
+.wrap{padding:28px 32px;width:auto;display:inline-block}
+h1{font-size:22px;margin:0 0 4px}.sub{color:#52627a;margin:0 0 22px}
+.row{display:flex;align-items:stretch;gap:0}
+.zone{border-radius:14px;padding:16px;flex:none}
+.local{background:#eef5ff;border:1.5px solid #b9d3fb}.cloud{background:#fff6ec;border:1.5px solid #f6cf9e}
+.zt{font-weight:700;font-size:13px;letter-spacing:.04em;text-transform:uppercase;color:#3a4b66;margin-bottom:12px}
+.boxes{display:flex;align-items:center;gap:10px}
+.b{background:#fff;border:1.5px solid #9fbbe6;border-radius:10px;padding:10px 12px;width:150px;min-height:92px}
+.cloud .b{border-color:#f0b878}
+.b h3{margin:0 0 6px;font-size:15px}.b p{margin:0;font-size:12.5px;color:#4a5a72;line-height:1.4}
+.arr{font-size:22px;color:#2563eb;flex:none}
+.gate{align-self:center;flex:none;width:96px;text-align:center;font-size:12px;color:#9a5a00;font-weight:600;padding:0 6px}
+.gate .ln{font-size:22px;color:#c2410c}
+.priv{margin-top:16px;background:#f3faf5;border:1.5px solid #9fd8b2;border-radius:10px;padding:10px 14px;font-size:13px;color:#1f5133}
+</style></head><body><div class="wrap">
+<h1>Copilot CLI AgentOps for Azure</h1><p class="sub">Verified path: Copilot CLI 1.0.93 native OpenTelemetry → local diagnostics → optional Azure Monitor investigation</p>
+<div class="row">
+<div class="zone local"><div class="zt">Your machine (default)</div><div class="boxes">
+<div class="b"><h3>Copilot CLI</h3><p>launched by <code>agentops copilot-session launch</code>; native OTel on, content capture off</p></div><div class="arr">→</div>
+<div class="b"><h3>Strict Collector</h3><p>loopback only (127.0.0.1); allowlist drops prompts, code, tool args and results</p></div><div class="arr">→</div>
+<div class="b"><h3>Local run ledger</h3><p>events + spans per run; HTML run view: failures, timeline, tokens</p></div>
+</div></div>
+<div class="gate">--upload --yes<div class="ln">⇢</div>approved target + daily byte cap</div>
+<div class="zone cloud"><div class="zt">Azure (optional)</div><div class="boxes">
+<div class="b"><h3>Logs Ingestion</h3><p>Data Collection Endpoint + Rule; Entra auth</p></div><div class="arr" style="color:#c2410c">→</div>
+<div class="b"><h3>Log Analytics</h3><p>AgentOpsEvents_CL, AgentOpsSpans_CL; KQL, Workbook, Grafana</p></div>
+</div></div></div>
+<div class="priv">Privacy default: only metadata leaves the process — span names, timings, token counts, model, outcome, hashed run/session/repo IDs. Cloud publishing is 0 bytes/day until you set a cap.</div>
+</div></body></html>
