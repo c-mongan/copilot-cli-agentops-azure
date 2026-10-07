@@ -284,7 +284,7 @@
       return h('div', { class: 'card' }, h('div', { class: 'empty' },
         h('h2', { text: anyFilter ? 'No runs match these filters' : 'No runs in this time window' }),
         h('p', { text: anyFilter ? 'Try a different search term, or clear the filters to see every analysed run.' : 'Choose a longer window to see older runs.' }),
-        h('button', { type: 'button', class: 'button', onclick: () => { history.replaceState(null, '', '#/'); route(); }, text: anyFilter ? 'Clear filters' : 'Show newest runs' })));
+        h('button', { type: 'button', class: 'button', onclick: () => { history.replaceState(null, '', anyFilter ? homeHash({ since: data.window?.since }) : '#/'); route(); }, text: anyFilter ? 'Clear filters' : 'Show newest runs' })));
     }
     const rows = data.runs.map((run, index) => {
       const when = fmtWhen(run.startedAt);
