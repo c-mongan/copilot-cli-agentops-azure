@@ -94,3 +94,13 @@ test('persisted configuration identifier lists are bounded', () => {
   assert.equal(identity.observedSettings.tools.allowed.length, 64);
   assert.equal(identity.observedSettings.excludedValueCount, 16);
 });
+
+test('launches without relevant flags normalize to unknown instead of failing delivery', () => {
+  const unknown = observedLaunchExecutionConfiguration(['-p', 'Run the tests and explain any failure']);
+  assert.equal(unknown.source, 'unknown');
+  const normalized = normalizeExecutionConfiguration(unknown);
+  assert.equal(normalized.source, 'unknown');
+  assert.equal(normalized.configurationVersion, null);
+  assert.equal(normalizeExecutionConfiguration(JSON.parse(JSON.stringify(unknown))).source, 'unknown');
+  assert.throws(() => normalizeExecutionConfiguration({ source: 'unknown', configurationVersion: 'not-a-hash' }), /lowercase hexadecimal hash/);
+});
