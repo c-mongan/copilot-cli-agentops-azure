@@ -82,3 +82,21 @@ test('ui duration labels preserve fine precision and missing values', () => {
   assert.equal(tickLabel(0, 5000), '0');
   assert.equal(tickLabel(59950, 500), '59950 ms');
 });
+
+test('spanIssue separates failed, denied and non-zero exit spans', () => {
+  const spanIssue = extract('spanIssue');
+  const issueNote = extract('issueNote');
+  const tool = (status, attrs) => ({ kind: 'tool', status, attrs });
+  assert.equal(spanIssue(tool('failed', { outcome: 'failure' })), 'failed');
+  assert.equal(spanIssue(tool('denied', {})), 'denied');
+  assert.equal(spanIssue(tool('ok', { exitCode: 1 })), 'nonzero');
+  assert.equal(spanIssue(tool('ok', { outcome: 'nonzero_exit' })), 'nonzero');
+  assert.equal(spanIssue(tool('ok', { exitCode: 0 })), null);
+  assert.equal(spanIssue(tool('ok', { exitCode: '1' })), null);
+  assert.equal(spanIssue({ kind: 'turn', status: 'ok', attrs: { exitCode: 1 } }), null);
+  assert.equal(spanIssue({ kind: 'tool', status: 'ok' }), null);
+  assert.equal(issueNote(tool('ok', { exitCode: 2 }), 'nonzero'), 'exit 2');
+  assert.equal(issueNote(tool('ok', { outcome: 'nonzero_exit' }), 'nonzero'), 'non-zero exit');
+  assert.equal(issueNote(tool('failed', { outcome: 'failure' }), 'failed'), 'failure');
+  assert.equal(issueNote(tool('denied', {}), 'denied'), 'denied');
+});
