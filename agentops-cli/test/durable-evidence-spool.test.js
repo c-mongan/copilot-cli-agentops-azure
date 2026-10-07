@@ -155,6 +155,7 @@ test('scoped restart recovery preserves stale claims from other runs and events'
   const otherRun = spool.enqueue({ ...row(2), RunId: 'run-recovery-b' });
 
   await assert.rejects(spool.drain(async () => ({ status: 204 }), {
+    eventIds: [interrupted.event_id],
     afterUploadBeforeAck() { throw new Error('simulated process exit after remote acceptance'); }
   }), /simulated process exit/);
   await new Promise(resolve => setTimeout(resolve, 35));
