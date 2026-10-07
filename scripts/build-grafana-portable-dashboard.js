@@ -334,7 +334,7 @@ function render() {
 
 if (require.main === module) {
   if (process.argv.includes('--check')) {
-    const current = fs.existsSync(outFile) ? fs.readFileSync(outFile, 'utf8') : '';
+    const current = fs.existsSync(outFile) ? fs.readFileSync(outFile, 'utf8').replace(/\r\n/g, '\n') : '';
     if (current !== render()) {
       console.error(`${path.relative(repoRoot, outFile)} is out of date. Run: node scripts/build-grafana-portable-dashboard.js`);
       process.exit(1);
