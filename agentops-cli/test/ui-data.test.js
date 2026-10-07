@@ -244,7 +244,7 @@ test('ui data: KPIs, facets and filters aggregate the visible runs', async t => 
   assert.equal(all.totalSessions, 3);
   assert.equal(all.scanned, 3);
   assert.deepEqual(all.kpis, {
-    runs: 3, failedRuns: 1, attentionRuns: 1, failures: 1, toolCalls: 5, p95ToolMs: 12000,
+    runs: 3, failedRuns: 1, attentionRuns: 1, failures: 1, toolFailures: 1, denials: 1, nonZeroExits: 1, toolCalls: 5, p95ToolMs: 12000,
     tokens: { input: 61000, output: 510, runsWithTokens: 2 },
     premiumRequests: 0.33, costUsd: 0.0195, costLabel: '$0.02 est. (1 model unpriced)', unpricedModels: ['unknown'], costRuns: 1, unpricedRuns: 1
   });

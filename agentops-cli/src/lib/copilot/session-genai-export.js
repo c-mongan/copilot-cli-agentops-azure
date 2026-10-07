@@ -12,6 +12,7 @@ const { CONTENT_ATTRIBUTES, SEMCONV_VERSION, safeString: safeAgentName, toGenAiS
 const { defaultSessionEventsPath, readCopilotSessionEvents } = require('./session-enricher');
 const { defaultReceiptFiles, readSessionOtelSpans } = require('./session-otel');
 const { SHELL_NONZERO_EXIT, enrichSpansWithSessionToolContext, readSessionSpanRows } = require('./session-span-export');
+const { isDenialCode, outcomeSummaryText, sessionStatusSignals } = require('./run-status');
 
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const ENV_NAME = /^[A-Z_][A-Z0-9_]{0,127}$/;
@@ -53,7 +54,28 @@ function loadSessionSpans(options = {}) {
     const files = options.otelFiles?.length ? options.otelFiles : defaultReceiptFiles();
     spans = readSessionOtelSpans(sessionId, files, { runId }).spans;
   }
-  return { source, spans: enrichSpansWithSessionToolContext(spans, events) };
+  return { source, events, spans: fillSessionCacheTokens(enrichSpansWithSessionToolContext(spans, events), events) };
+}
+
+// Copilot reports prompt-cache writes only in the session shutdown totals, not
+// on chat or invoke_agent spans. When the single root invoke_agent span carries
+// the same session input total, copy the cache totals onto it so the export
+// includes gen_ai.usage.cache_read/cache_creation.input_tokens.
+function fillSessionCacheTokens(spans, events = []) {
+  const shutdown = [...events].reverse().find(event => event?.type === 'session.shutdown' && event.data?.modelMetrics);
+  if (!shutdown) return spans;
+  const totals = { inputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
+  for (const metrics of Object.values(shutdown.data.modelMetrics || {})) {
+    for (const key of Object.keys(totals)) totals[key] += Number(metrics?.usage?.[key]) || 0;
+  }
+  const roots = spans.filter(span => span.operation === 'invoke_agent' && !span.parentSpanId);
+  if (roots.length !== 1) return spans;
+  const root = roots[0];
+  if (root.inputTokens !== null && root.inputTokens !== undefined && Number(root.inputTokens) !== totals.inputTokens) return spans;
+  const filled = { ...root };
+  if ((root.cacheReadTokens === null || root.cacheReadTokens === undefined) && totals.cacheReadTokens) filled.cacheReadTokens = totals.cacheReadTokens;
+  if ((root.cacheWriteTokens === null || root.cacheWriteTokens === undefined) && totals.cacheWriteTokens) filled.cacheWriteTokens = totals.cacheWriteTokens;
+  return spans.map(span => (span === root ? filled : span));
 }
 
 function tracesUrl(endpoint) {
@@ -217,30 +239,49 @@ async function startAzureMonitorCollector(options = {}) {
   return { endpoint: `http://127.0.0.1:${ports.receiver}`, stop, pid: child.pid };
 }
 
-function summarise(genAi) {
+const SKIP_REASON = 'not a GenAI operation (invoke_agent, chat or execute_tool)';
+
+// Summary counts use the shared run-status rules (denial and shell non-zero exit
+// need attention; they are not failed tool calls). Exported spans still carry
+// OTel status ERROR for denials and non-zero exits, as semconv expects.
+function summarise(genAi, events = []) {
   const operations = {};
-  let failedTools = 0;
-  let nonZeroExitTools = 0;
+  const fromSpans = { toolFailures: 0, denials: 0, nonZeroExits: 0, hookFailures: 0, subagentFailures: 0 };
+  let errorSpans = 0;
   for (const span of genAi.spans) {
     const op = span.attributes['gen_ai.operation.name'];
     operations[op] = (operations[op] || 0) + 1;
+    if (span.status.code === 2) errorSpans += 1;
     if (op !== 'execute_tool' || span.status.code !== 2) continue;
-    if (span.attributes['error.type'] === SHELL_NONZERO_EXIT) nonZeroExitTools += 1;
-    else failedTools += 1;
+    const errorType = span.attributes['error.type'];
+    if (errorType === SHELL_NONZERO_EXIT) fromSpans.nonZeroExits += 1;
+    else if (isDenialCode(errorType)) fromSpans.denials += 1;
+    else fromSpans.toolFailures += 1;
   }
+  const hasToolEvents = events.some(event => event?.type === 'tool.execution_complete');
+  const signals = hasToolEvents ? sessionStatusSignals(events) : fromSpans;
   const sum = (op, key) => genAi.spans
     .filter(span => span.attributes['gen_ai.operation.name'] === op)
     .reduce((total, span) => total + (span.attributes[key] || 0), 0);
   return {
     operations,
-    failed_tools: failedTools,
-    nonzero_exit_tools: nonZeroExitTools,
+    failed_tools: signals.toolFailures,
+    denied_tools: signals.denials,
+    nonzero_exit_tools: signals.nonZeroExits,
+    hook_failures: signals.hookFailures,
+    subagent_failures: signals.subagentFailures,
+    status_counts_source: hasToolEvents ? 'session-events' : 'exported-spans',
+    otel_error_spans: errorSpans,
     trace_ids: [...new Set(genAi.spans.map(span => span.traceId))],
     tokens: {
       invoke_agent_input: sum('invoke_agent', 'gen_ai.usage.input_tokens'),
       invoke_agent_output: sum('invoke_agent', 'gen_ai.usage.output_tokens'),
+      invoke_agent_cache_read: sum('invoke_agent', 'gen_ai.usage.cache_read.input_tokens'),
+      invoke_agent_cache_creation: sum('invoke_agent', 'gen_ai.usage.cache_creation.input_tokens'),
       chat_input: sum('chat', 'gen_ai.usage.input_tokens'),
-      chat_output: sum('chat', 'gen_ai.usage.output_tokens')
+      chat_output: sum('chat', 'gen_ai.usage.output_tokens'),
+      chat_cache_read: sum('chat', 'gen_ai.usage.cache_read.input_tokens'),
+      chat_cache_creation: sum('chat', 'gen_ai.usage.cache_creation.input_tokens')
     }
   };
 }
@@ -255,12 +296,17 @@ async function exportSessionGenAi(options = {}) {
     run_id: options.runId,
     semconv_version: SEMCONV_VERSION,
     source: loaded.source,
+    native_spans_read: genAi.stats.input,
     spans: genAi.spans.length,
     duplicates_dropped: genAi.stats.duplicates,
     non_genai_skipped: genAi.stats.skipped,
     invalid_skipped: genAi.stats.invalid,
+    skipped: [
+      ...Object.entries(genAi.stats.skippedOperations || {}).map(([operation, count]) => ({ operation, count, reason: SKIP_REASON })),
+      ...(genAi.stats.invalid ? [{ operation: 'invalid', count: genAi.stats.invalid, reason: 'missing or malformed trace id, span id or timing' }] : [])
+    ],
     content_attributes: 'never-set',
-    ...summarise(genAi)
+    ...summarise(genAi, loaded.events)
   };
   if (options.output) {
     const output = path.resolve(options.output);
@@ -327,6 +373,16 @@ async function exportSessionGenAi(options = {}) {
   return { ...result, ...exportState, sent_spans: pending.length, ...delivered, ...marker };
 }
 
+function skippedText(skipped = []) {
+  if (!skipped.length) return '';
+  return ` · ${skipped.map(item => `${item.count} skipped (${item.operation}): ${item.reason}`).join('; ')}`;
+}
+
+function cacheText(read, creation) {
+  if (!read && !creation) return '';
+  return ` (cache read ${read || 0}, cache write ${creation || 0})`;
+}
+
 function renderGenAiExport(value) {
   const ops = Object.entries(value.operations).map(([op, count]) => `${op}=${count}`).join(' ');
   let resend = '';
@@ -341,8 +397,9 @@ function renderGenAiExport(value) {
     `GenAI OTLP export (semconv ${value.semconv_version}) · ${value.delivery}`,
     resend,
     `Session ${value.session_id} · run ${value.run_id} · source ${value.source}`,
-    `Spans ${value.spans} (${ops}) · duplicates dropped ${value.duplicates_dropped} · failed tools ${value.failed_tools}${value.nonzero_exit_tools ? ` · shell non-zero exits ${value.nonzero_exit_tools} (warning)` : ''}`,
-    `Tokens invoke_agent ${value.tokens.invoke_agent_input} in / ${value.tokens.invoke_agent_output} out · chat ${value.tokens.chat_input} in / ${value.tokens.chat_output} out`,
+    `Read ${value.native_spans_read ?? value.spans} native spans → exported ${value.spans} (${ops}) · duplicates dropped ${value.duplicates_dropped}${skippedText(value.skipped)}`,
+    `${outcomeSummaryText({ toolFailures: value.failed_tools, denials: value.denied_tools, nonZeroExits: value.nonzero_exit_tools, hookFailures: value.hook_failures, subagentFailures: value.subagent_failures })}${value.otel_error_spans ? ` · ${value.otel_error_spans} span${value.otel_error_spans === 1 ? ' has' : 's have'} OTel status ERROR` : ''}`,
+    `Tokens invoke_agent ${value.tokens.invoke_agent_input} in / ${value.tokens.invoke_agent_output} out${cacheText(value.tokens.invoke_agent_cache_read, value.tokens.invoke_agent_cache_creation)} · chat ${value.tokens.chat_input} in / ${value.tokens.chat_output} out${cacheText(value.tokens.chat_cache_read, value.tokens.chat_cache_creation)}`,
     value.output ? `OTLP JSON: ${value.output}` : '',
     value.marker_warning ? `Warning: ${value.marker_warning}` : '',
     'Metadata only: prompts, responses, tool arguments and results are never exported.'
@@ -354,6 +411,7 @@ module.exports = {
   connectionStringFromEnv,
   exportMarkerPath,
   exportSessionGenAi,
+  fillSessionCacheTokens,
   loadSessionSpans,
   postOtlpJson,
   renderGenAiExport,

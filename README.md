@@ -82,7 +82,7 @@ See [privacy modes](docs/privacy-modes.md), [secure by default](docs/secure-by-d
 ## Known limits
 
 - Cost is an estimate from public list prices, not billed cost. Models without a published price show "n/a" and are left out of totals. Azure cost comes from runtime cost metadata only; current Copilot CLI builds emit none, so it is usually empty.
-- Copilot CLI records a shell command that exits non-zero as a successful tool span. AgentOps reads the exit code (metadata only) from the session events and tags that span `shell_nonzero_exit`. The run is marked `attention`, not `failed`.
+- Copilot CLI records a shell command that exits non-zero as a successful tool span. AgentOps reads the exit code (metadata only) from the session events and tags that span `shell_nonzero_exit`. The run is marked `attention`, not `failed`. Every surface (launch, UI, digest, export-otel) reports "Failed tool calls" for errored tool calls only and "Needs attention" for denials and non-zero exits; see [How run status is decided](docs/local-ui.md#how-run-status-is-decided).
 - Before v0.3.2, each native tool span was stored twice in `AgentOpsSpans_CL`. v0.3.2 deduplicates by trace and span ID before upload, but Logs Ingestion is at-least-once and older rows remain, so keep counting by `SpanId` or by `chat` operations, not by raw rows.
 - Token totals must come from `chat` spans or the shutdown event. Summing every span row over-counts.
 - The Azure Workbook reads usage from run summaries, so native-only runs show usage as "partial or unknown".

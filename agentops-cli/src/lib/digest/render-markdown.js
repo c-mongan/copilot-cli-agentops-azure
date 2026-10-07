@@ -40,13 +40,13 @@ function renderDigestMarkdown(digest) {
   lines.push('');
   digest.recommendations.forEach((action, index) => lines.push(`${index + 1}. ${action.text}`));
   lines.push('');
-  lines.push(`## Failure clusters: ${clusters.headline}`);
+  lines.push(`## Tool issue clusters: ${clusters.headline}`);
   lines.push('');
   if (!clusters.clusters.length) {
-    lines.push('No failed tool calls in this period.');
+    lines.push('No failed, denied or non-zero-exit tool calls in this period.');
   }
   clusters.clusters.slice(0, MAX_CLUSTERS).forEach((cluster, index) => {
-    lines.push(`${index + 1}. **${cluster.tool}** · ${cluster.errorType} · ${cluster.model}: ${cluster.count} failure${cluster.count === 1 ? '' : 's'} in ${cluster.runCount} run${cluster.runCount === 1 ? '' : 's'}`);
+    lines.push(`${index + 1}. **${cluster.tool}** · ${cluster.errorType} · ${cluster.model}: ${cluster.count} ${cluster.severity === 'attention' ? 'needing attention' : 'failed'} in ${cluster.runCount} run${cluster.runCount === 1 ? '' : 's'}`);
     lines.push(`   Seen ${stamp(cluster.firstSeen)} to ${stamp(cluster.lastSeen)} UTC. Repos: ${listPreview(cluster.repos)}.`);
     lines.push(`   Example run: \`${cluster.representativeRunId}\``);
     lines.push(`   Next: ${cluster.suggestedNextStep}`);

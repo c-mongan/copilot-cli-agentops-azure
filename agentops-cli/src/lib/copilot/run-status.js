@@ -29,6 +29,43 @@ function classifyToolOutcome({ success, errorCode, exitCode } = {}) {
   return 'ok';
 }
 
+// One vocabulary for every surface (launch, view, UI, digest, export-otel):
+// a failure is a tool call that errored, or a failed hook or subagent; a
+// denial or a shell non-zero exit only needs attention.
+const OUTCOME_SEVERITY = Object.freeze({ ok: null, failed: 'failure', denied: 'attention', nonzero_exit: 'attention' });
+
+const OUTCOME_LABELS = Object.freeze({
+  failedToolCalls: 'Failed tool calls',
+  attention: 'Needs attention'
+});
+
+function severityOfOutcome(outcome) {
+  if (!outcome) return null;
+  return Object.prototype.hasOwnProperty.call(OUTCOME_SEVERITY, outcome) ? OUTCOME_SEVERITY[outcome] : 'failure';
+}
+
+// The shared count shape every surface reports for one run or a window.
+function toolOutcomeCounts({ toolFailures = 0, denials = 0, nonZeroExits = 0 } = {}) {
+  return {
+    failedToolCalls: Number(toolFailures) || 0,
+    deniedToolCalls: Number(denials) || 0,
+    nonZeroExitToolCalls: Number(nonZeroExits) || 0
+  };
+}
+
+function attentionText({ denials = 0, nonZeroExits = 0 } = {}) {
+  return `${denials} denied, ${nonZeroExits} non-zero exit${nonZeroExits === 1 ? '' : 's'}`;
+}
+
+// "Failed tool calls 0 · Needs attention: 1 denied, 1 non-zero exit"
+function outcomeSummaryText(signals = {}) {
+  const parts = [`${OUTCOME_LABELS.failedToolCalls} ${signals.toolFailures || 0}`];
+  if (signals.hookFailures) parts.push(`failed hooks ${signals.hookFailures}`);
+  if (signals.subagentFailures) parts.push(`failed subagents ${signals.subagentFailures}`);
+  parts.push(`${OUTCOME_LABELS.attention}: ${attentionText({ denials: signals.denials || 0, nonZeroExits: signals.nonZeroExits || 0 })}`);
+  return parts.join(' · ');
+}
+
 function classifyToolCompletionEvent(data = {}) {
   return classifyToolOutcome({
     success: data.success !== false,
@@ -56,9 +93,14 @@ function classifyRunStatus({ failures = 0, denials = 0, nonZeroExits = 0, runErr
 // Counts status signals from raw Copilot session events (events.jsonl rows).
 function sessionStatusSignals(events = []) {
   const signals = { toolCalls: 0, toolFailures: 0, denials: 0, nonZeroExits: 0, hookFailures: 0, subagentFailures: 0, ended: false };
+  const seenToolCalls = new Set();
   for (const event of events) {
     const data = event?.data || event || {};
     if (event?.type === 'tool.execution_complete') {
+      // A resumed session can replay a completion; one tool call counts once.
+      const toolCallId = data.toolCallId || '';
+      if (toolCallId && seenToolCalls.has(toolCallId)) continue;
+      if (toolCallId) seenToolCalls.add(toolCallId);
       signals.toolCalls += 1;
       const outcome = event?.data ? classifyToolCompletionEvent(data) : data.signal || classifyToolOutcome({ success: data.success, errorCode: data.outcome, exitCode: data.exitCode });
       if (outcome === 'failed') signals.toolFailures += 1;
@@ -107,14 +149,20 @@ const SPAN_COUNT_LABELS = Object.freeze({
 
 module.exports = {
   DENIAL_CODES,
+  OUTCOME_LABELS,
+  OUTCOME_SEVERITY,
   SPAN_COUNT_LABELS,
   STATUS_LABELS,
+  attentionText,
   classifyRunStatus,
   classifyToolCompletionEvent,
   classifyToolOutcome,
   countNativeSpans,
   isDenialCode,
+  outcomeSummaryText,
   sessionRunStatus,
   sessionStatusSignals,
+  severityOfOutcome,
+  toolOutcomeCounts,
   uniqueNativeSpans
 };

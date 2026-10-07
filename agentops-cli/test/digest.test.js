@@ -108,7 +108,7 @@ test('denied rule extraction keeps only the allowlisted rule label', () => {
   assert.equal(safeToolLabel('shell(curl)'), 'shell(curl)');
   assert.equal(safeToolLabel('shell(rm -rf; echo $HOME)'), 'unknown-tool');
   const classified = classifyToolFailure({ toolName: 'bash', model: 'm' }, { success: false, error: { code: 'denied', message: 'rules: `shell(curl:*)`' } });
-  assert.deepEqual(classified, { tool: 'shell(curl)', errorType: 'denied', model: 'm' });
+  assert.deepEqual(classified, { tool: 'shell(curl)', errorType: 'denied', severity: 'attention', model: 'm' });
   assert.equal(fingerprintOf(classified), 'shell(curl)|denied|m');
   assert.equal(fingerprintOf({ tool: 'x', errorType: 'made-up', model: 'm' }), 'x|error|m');
   assert.equal(fingerprintOf({ tool: 'x', errorType: 'error:quota_exceeded', model: 'm' }), 'x|error:quota_exceeded|m');
@@ -118,6 +118,11 @@ test('failure classification covers timeouts and non-zero shell exits', () => {
   assert.equal(classifyToolFailure({ toolName: 'bash' }, { success: true, shellExecution: { exitCode: 2 } }).errorType, 'nonzero_exit');
   assert.equal(classifyToolFailure({ toolName: 'web_fetch' }, { success: false, error: { message: 'Request timed out after 30s' } }).errorType, 'timeout');
   assert.equal(classifyToolFailure({ toolName: 'bash' }, { success: false, error: { code: 'failure', message: 'boom' } }).model, 'unknown-model');
+  // Shared run-status rules decide severity; a failed call never carries an attention-only label.
+  assert.equal(classifyToolFailure({ toolName: 'bash' }, { success: true, shellExecution: { exitCode: 2 } }).severity, 'attention');
+  assert.equal(classifyToolFailure({ toolName: 'bash' }, { success: false, error: { code: 'failure', message: 'boom' } }).severity, 'failure');
+  assert.equal(classifyToolFailure({ toolName: 'view' }, { success: false, error: { code: 'failure', message: 'Permission denied' } }).errorType, 'error:permission_denied');
+  assert.equal(classifyToolFailure({ toolName: 'bash' }, { success: true }), null);
 });
 
 test('failure clustering is deterministic regardless of input order', () => {
@@ -134,7 +139,9 @@ test('failure clustering is deterministic regardless of input order', () => {
     const shuffled = [...failures].sort(() => Math.random() - 0.5);
     assert.deepEqual(clusterFailures(shuffled), first);
   }
-  assert.equal(first.headline, '6 failures in 4 clusters');
+  assert.equal(first.headline, '6 tool issues in 4 clusters: 1 failed, 5 need attention');
+  assert.equal(first.failed, 1);
+  assert.equal(first.attention, 5);
   assert.deepEqual(first.clusters.map(c => c.fingerprint), [
     'bash|nonzero_exit|claude-haiku-4.5',
     'shell(curl)|denied|claude-haiku-4.5',
@@ -151,8 +158,8 @@ test('failure clustering is deterministic regardless of input order', () => {
   assert.equal(curl.representativeRunId, 'run-2');
   assert.match(curl.suggestedNextStep, /--allow-tool 'shell\(curl\)'/);
   assert.match(curl.suggestedNextStep, /keep it denied deliberately/);
-  assert.equal(clusterFailures([]).headline, '0 failures in 0 clusters');
-  assert.equal(clusterFailures([failures[0]]).headline, '1 failure in 1 cluster');
+  assert.equal(clusterFailures([]).headline, '0 tool issues in 0 clusters: 0 failed, 0 need attention');
+  assert.equal(clusterFailures([failures[0]]).headline, '1 tool issue in 1 cluster: 0 failed, 1 needs attention');
 });
 
 test('period parsing, windows and boundaries', () => {
@@ -261,7 +268,11 @@ test('local reader filters by period, links ledger runs and tolerates malformed 
     assert.equal(digest.current.sessions, 3);
     assert.equal(digest.previous.sessions, 1);
     assert.equal(digest.trend.sessions.pctChange, 2);
-    assert.equal(digest.failureClusters.headline, '2 failures in 1 cluster');
+    assert.equal(digest.failureClusters.headline, '2 tool issues in 1 cluster: 0 failed, 2 need attention');
+    assert.equal(digest.current.failedToolCalls, 0);
+    assert.equal(digest.current.deniedToolCalls, 2);
+    assert.equal(digest.current.sessionsNeedingAttention, 2);
+    assert.equal(digest.current.cleanSessions, 1);
     assert.equal(digest.failureClusters.clusters[0].fingerprint, 'shell(curl)|denied|claude-haiku-4.5');
     assert.equal(digest.current.tokens.costStatus, 'partial');
     assert.deepEqual(digest.current.tokens.unpricedModels, ['gpt-unpriced']);
@@ -302,12 +313,14 @@ test('digest command writes files, infers format and is registered in the CLI', 
     const out = captureStdout();
     const target = path.join(root, 'out', 'digest.html');
     digestCommand(['--since', '7d', '--output', target, ...homeArgs], { stdout: out.stream, nowMs: NOW });
-    assert.match(out.text(), /2 failures in 1 cluster; 3 session\(s\) in the last 7d/);
+    assert.match(out.text(), /2 tool issues in 1 cluster: 0 failed, 2 need attention; 3 session\(s\) in the last 7d/);
     assert.match(fs.readFileSync(target, 'utf8'), /<html/);
 
     const md = captureStdout();
     digestCommand(homeArgs, { stdout: md.stream, nowMs: NOW });
-    assert.match(md.text(), /2 failures in 1 cluster/);
+    assert.match(md.text(), /2 tool issues in 1 cluster/);
+    assert.match(md.text(), /Failed tool calls \| 0 of /);
+    assert.match(md.text(), /Needs attention \| 2 denied, 0 non-zero exits/);
     assert.match(md.text(), /shell\(curl\)/);
 
     const help = captureStdout();

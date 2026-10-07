@@ -40,7 +40,7 @@ A failed tool span gets status `ERROR` and `error.type` (for example `denied`), 
 | `gen_ai.conversation.id` | all | Copilot session ID | |
 | `gen_ai.request.model` / `gen_ai.response.model` | `chat` | native model requested / actual | |
 | `gen_ai.usage.input_tokens` / `output_tokens` | `invoke_agent`, `chat` | native usage | `invoke_agent` holds the session total (see the limits section). |
-| `gen_ai.usage.cache_read.input_tokens` / `cache_creation.input_tokens` | `chat` | native usage | Set when the native span records them. |
+| `gen_ai.usage.cache_read.input_tokens` / `cache_creation.input_tokens` | `invoke_agent`, `chat` | native usage | Set when the native span records them. Copilot CLI records cache writes only in the session shutdown event, so the single root `invoke_agent` span takes its cache read and write totals from there when its input total matches. |
 | `gen_ai.tool.name` | `execute_tool` | native tool name | Required. |
 | `gen_ai.tool.call.id` | `execute_tool` | native tool call ID | |
 | `gen_ai.tool.type` | `execute_tool` | `extension` for MCP tools, else `function` | |
@@ -58,7 +58,7 @@ The export sets nothing else. The opt-in content attributes (`gen_ai.input.messa
 The input is the AgentOps run ledger (`~/.agentops/runs/<run-id>/AgentOpsSpans_CL.jsonl`), written by `copilot-session launch`. Native receipts are used as a fallback. Find the run ID in `~/.agentops/runs/*/run-context.json`.
 
 ```bash
-# Inspect first: no network, prints the operation counts, failed tools and tokens
+# Inspect first: no network, prints the operation counts, skipped spans, failed tool calls, attention counts and tokens
 agentops copilot-session export-otel <session-id> --run-id <run-id> --dry-run [--output otlp.json]
 
 # Send to any OTLP/HTTP endpoint (plain http only for loopback)
@@ -119,8 +119,8 @@ The portal visual for this export has **not been captured yet**: it needs an int
 - **Re-exporting** is idempotent per destination. Trace and span IDs are the native Copilot IDs, so the same session always exports the same IDs. After a successful send, the CLI records a local marker in `~/.agentops/exports/otel/` keyed by session, run and a SHA-256 hash of the destination. A rerun to the same destination sends only spans not already sent, and skips with `skipped-already-exported` when nothing is new. `--force` re-sends every span, and App Insights then stores duplicate rows (dedupe on `id` in KQL). The marker holds the session ID, run ID, destination kind, the destination hash and hashed span identities. It never holds the endpoint URL or the connection string. `--dry-run` and `--output` never write it. Exports to a different destination, or from another machine, are not tracked. Duplicate records within one export are dropped (a failure on any copy is kept).
 - **Agent name:** Copilot CLI 1.0.93 does not record an agent name. Without `--agent-name`, every session shows as `GitHub Copilot CLI`.
 - **Parentage:** tools are siblings of `chat` under `invoke_agent`, as Copilot CLI emits them.
-- **Skipped records:** AgentOps script spans and other operations outside the GenAI model are skipped and counted (`non_genai_skipped`).
-- **Shell exit codes:** Copilot CLI reports a shell command that exits non-zero as a successful tool call. AgentOps reads the numeric `shellExecution.exitCode` from the matching `tool.execution_complete` event (by tool call ID; never the command or output) and exports that span with status `ERROR` and `error.type = shell_nonzero_exit`. The CLI summary counts it as a shell non-zero exit (a warning), not a failed tool. Without the session `events.jsonl`, or for tools that report no exit code, the span stays successful.
+- **Skipped records:** AgentOps script spans and other operations outside the GenAI model are skipped. The summary reports each by operation name with a reason (`skipped[]`, `non_genai_skipped`), so `native_spans_read` = exported + duplicates dropped + skipped. For example, a permission check that Copilot records as an unnamed child of a denied tool span is skipped as `agentops.span`.
+- **Shell exit codes:** Copilot CLI reports a shell command that exits non-zero as a successful tool call. AgentOps reads the numeric `shellExecution.exitCode` from the matching `tool.execution_complete` event (by tool call ID; never the command or output) and exports that span with status `ERROR` and `error.type = shell_nonzero_exit`. The CLI summary uses the shared classifier from [How run status is decided](local-ui.md#how-run-status-is-decided): "Failed tool calls" counts errored tool calls only, and denials and non-zero exits are reported as "Needs attention". Denied spans also keep OTel status `ERROR`, so `otel_error_spans` can be higher than `failed_tools`. Without the session `events.jsonl`, or for tools that report no exit code, the span stays successful.
 - **Spec stability:** the GenAI conventions are still in Development. `gen_ai.system` is deprecated, and `github` is not a well-known provider value.
 - **Ingestion cost:** each exported span is billable App Insights ingestion (a few cents for a handful of sessions).
 

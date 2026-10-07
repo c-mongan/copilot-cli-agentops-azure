@@ -69,12 +69,12 @@ Repository labels are hashes unless you pass `--repo-names`. The unit tests plan
 
 ## Failure clusters
 
-A failure is a tool call with one of these outcomes:
+The digest uses the shared classifier in [`run-status.js`](../agentops-cli/src/lib/copilot/run-status.js), the same one used by `copilot-session launch`, the local UI and `export-otel` (see [How run status is decided](local-ui.md#how-run-status-is-decided)). Every tool call that did not finish cleanly becomes a tool issue, with one of two severities:
 
-- `success: false`
-- a shell command that exited non-zero. Copilot records these as successful, but the digest counts them as failures, the same as the session waterfall.
+- **Failed:** `success: false` with an error code that is not a denial. The tool call itself errored.
+- **Needs attention:** a denial (`success: false` with `denied`, `rejected`, `permission_denied`, `user_rejected` or `policy_denied`), or a shell command that exited non-zero. Copilot records non-zero exits as successful; the digest reads the exit code (metadata only) and lists them for review. They are not counted as failed tool calls.
 
-Each failure gets a deterministic fingerprint:
+Each tool issue gets a deterministic fingerprint:
 
 ```text
 <tool>|<error type>|<model>
@@ -89,7 +89,7 @@ Each failure gets a deterministic fingerprint:
 | `unknown_tool`, `invalid_input`, `not_found` | The model called a missing tool, sent invalid input or targeted a missing path. |
 | `error` or `error:<code>` | Anything else. A short machine-readable error code is kept, e.g. `error:quota_exceeded`. |
 
-Failures with the same fingerprint form one cluster. Clustering uses no embeddings and no text similarity. The same input always gives the same clusters, IDs (`fc_<sha10>` of the fingerprint) and order (count descending, then fingerprint).
+Tool issues with the same fingerprint form one cluster, which carries the severity of its outcome. Clustering uses no embeddings and no text similarity. The same input always gives the same clusters, IDs (`fc_<sha10>` of the fingerprint) and order (count descending, then fingerprint).
 
 Each cluster reports:
 
@@ -102,7 +102,7 @@ Each cluster reports:
 For example, a real `--deny-tool 'shell(curl)'` run on this machine produced:
 
 ```text
-1. **shell(curl)** · denied · claude-haiku-4.5: 3 failures in 3 runs
+1. **shell(curl)** · denied · claude-haiku-4.5: 3 needing attention in 3 runs
    Example run: `native_run_…`
    Next: Add --allow-tool 'shell(curl)' if the agent needs it, or keep it denied deliberately and tell the agent not to try it.
 ```
@@ -112,8 +112,9 @@ For example, a real `--deny-tool 'shell(curl)'` run on this machine produced:
 | Metric | Definition |
 | --- | --- |
 | Sessions | Sessions that started inside the period. A session belongs to the period of its start time. |
-| Clean sessions | Sessions with no failed tool calls and no `abort` event. |
-| Tool failures | Failed tool calls divided by all completed tool calls. Repeated completion events for the same call ID count once. |
+| Clean sessions | Sessions with no failed tool calls, failed hooks or failed sub-agents, nothing needing attention and no `abort` event. |
+| Failed tool calls | Tool calls that returned an error, divided by all completed tool calls. Denials and non-zero shell exits are not included. Repeated completion events for the same call ID count once. |
+| Needs attention | Denied tool calls and shell commands that exited non-zero, counted separately. |
 | Slowest tools | p50 and p95 (nearest rank) per tool, from tools with at least 3 calls; the top 5 are shown. Tools that wait for a person or poll other work (`ask_user`, `read_bash`, `read_agent` and similar) are excluded. |
 | Tokens by model | From the session's last `session.shutdown` event. Copilot reports cumulative totals there, so resumed sessions are counted once. If no shutdown exists, the digest uses `model.model_call_success` usage, counted once per call ID. Input tokens include cache reads and writes. |
 | Premium requests | Copilot's own `totalPremiumRequests` from the last shutdown. |
@@ -150,7 +151,7 @@ To add or correct prices, pass a JSON file:
 
 - Only sessions on this machine are included. Cloud agent sessions, other machines and the Azure tables are not read.
 - Sessions are assigned to a period by their start time. A long session that crosses the boundary counts in the period it started.
-- Non-zero shell exits are counted as failures. Some are expected, for example a failing test that the agent then fixes. Treat the `nonzero_exit` clusters as a signal to investigate, not proof of a fault.
+- Non-zero shell exits are listed under Needs attention, not as failures. Some are expected, for example a failing test that the agent then fixes. Treat the `nonzero_exit` clusters as a signal to investigate, not proof of a fault.
 - The fingerprint includes the model. The same denial from two models appears as two clusters.
 - Sessions that never wrote a shutdown event and made no model calls have no token data. The report counts them as "reported no usage".
 - Models missing from the built-in price table show "n/a" until you pass `--prices`.

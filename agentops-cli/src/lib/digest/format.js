@@ -1,4 +1,5 @@
 const { formatCostTotal, formatUsd } = require('../cost-estimate');
+const { OUTCOME_LABELS, attentionText } = require('../copilot/run-status');
 
 function compactNumber(value) {
   const number = Number(value || 0);
@@ -45,7 +46,7 @@ function shortId(id) {
 // Returns { text, direction } where direction is 'up', 'down' or 'flat';
 // withTone() then says whether that direction is good for the metric.
 function trendText(trend, format = 'count') {
-  if (!trend || trend.current === null || trend.previous === null) return { text: 'no previous data', direction: 'flat' };
+  if (!trend || trend.current == null || trend.previous == null) return { text: 'no previous data', direction: 'flat' };
   const { delta, pctChange, kind } = trend;
   if (delta === 0) return { text: 'no change', direction: 'flat' };
   const arrow = delta > 0 ? '▲' : '▼';
@@ -76,13 +77,20 @@ function glanceRows(digest) {
       now: `${percent(current.sessionSuccessRate)} (${current.cleanSessions}/${current.sessions})`,
       before: percent(previous.sessionSuccessRate),
       change: withTone(trendText(trend.sessionSuccessRate), true),
-      hint: `${current.sessionsWithFailures} with tool failures, ${current.abortedSessions} aborted`
+      hint: `${current.sessionsWithFailures} with failures, ${current.sessionsNeedingAttention || 0} need attention, ${current.abortedSessions} aborted`
     },
     {
-      metric: 'Tool failures',
+      metric: OUTCOME_LABELS.failedToolCalls,
       now: `${compactNumber(current.failedToolCalls)} of ${compactNumber(current.toolCalls)} (${percent(current.toolFailureRate)})`,
       before: `${compactNumber(previous.failedToolCalls)} (${percent(previous.toolFailureRate)})`,
-      change: withTone(trendText(trend.toolFailureRate), false)
+      change: withTone(trendText(trend.toolFailureRate), false),
+      hint: 'tool calls that returned an error; denials and non-zero exits are counted under Needs attention'
+    },
+    {
+      metric: OUTCOME_LABELS.attention,
+      now: attentionText({ denials: current.deniedToolCalls || 0, nonZeroExits: current.nonZeroExitToolCalls || 0 }),
+      before: attentionText({ denials: previous.deniedToolCalls || 0, nonZeroExits: previous.nonZeroExitToolCalls || 0 }),
+      change: withTone(trendText(trend.attentionToolCalls), false)
     },
     {
       metric: 'Tokens',

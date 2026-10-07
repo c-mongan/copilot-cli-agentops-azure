@@ -228,10 +228,20 @@
     const tokenTotal = k.tokens.input + k.tokens.output;
     return h('section', { class: 'kpis', 'aria-label': 'Summary for the runs shown' },
       tile('Runs', fmtInt(k.runs), `${fmtInt(k.toolCalls)} tool calls`),
-      tile('Failed tool calls', fmtInt(k.failures), k.failedRuns ? `in ${fmtInt(k.failedRuns)} of ${plural(k.runs, 'run')}` : 'No failed runs', { bad: k.failures > 0 }),
+      tile('Failed tool calls', fmtInt(k.toolFailures || 0), [k.failedRuns ? `in ${fmtInt(k.failedRuns)} of ${plural(k.runs, 'run')}` : 'No failed runs', attentionNote(k)].filter(Boolean).join(' · '), { bad: k.toolFailures > 0 }),
       tile('p95 tool latency', fmtDuration(k.p95ToolMs), 'across all tool calls'),
       tile('Tokens', fmtTokens(tokenTotal), `${fmtTokens(k.tokens.input)} in · ${fmtTokens(k.tokens.output)} out`, { title: `${fmtInt(tokenTotal)} tokens in ${plural(k.tokens.runsWithTokens, 'run')} with usage data` }),
       tile('Cost', fmtCost(k.costUsd), unpricedNote(k.unpricedModels) || capNote(data) || (k.premiumRequests ? `${fmtInt(Math.round(k.premiumRequests * 100) / 100)} premium requests` : 'list-price estimate'), { est: true, title: k.costLabel || null }));
+  }
+
+  // Same wording as the CLI: denials and non-zero exits need attention; they are not failures.
+  function attentionNote(counts) {
+    if (!counts.denials && !counts.nonZeroExits) return '';
+    return `Needs attention: ${fmtInt(counts.denials || 0)} denied, ${plural(counts.nonZeroExits || 0, 'non-zero exit')}`;
+  }
+
+  function otherFailureNote(run) {
+    return [run.hookFailures ? plural(run.hookFailures, 'failed hook') : '', run.subagentFailures ? plural(run.subagentFailures, 'failed subagent') : ''].filter(Boolean).join(' · ');
   }
 
   function unpricedNote(models) {
@@ -488,7 +498,7 @@
     return h('section', { class: 'kpis', 'aria-label': 'Run summary' },
       tile('Active time', fmtDuration(run.durationMs), `${plural(run.turns, 'turn')}${run.subagents ? ` · ${plural(run.subagents, 'subagent')}` : ''}`),
       tile('Tool calls', fmtInt(run.toolCalls), run.p95ToolMs !== null ? `p95 ${fmtDuration(run.p95ToolMs)}` : 'no tool calls'),
-      tile('Failures', fmtInt(run.failures), run.failures ? `${plural(run.toolFailures, 'tool call')} failed` : (run.denials || run.nonZeroExits ? [run.denials ? `${fmtInt(run.denials)} denied` : '', run.nonZeroExits ? plural(run.nonZeroExits, 'non-zero exit') : ''].filter(Boolean).join(' · ') : 'Nothing failed'), { bad: run.failures > 0 }),
+      tile('Failed tool calls', fmtInt(run.toolFailures || 0), [otherFailureNote(run), attentionNote(run)].filter(Boolean).join(' · ') || 'Nothing failed', { bad: run.failures > 0 }),
       tile('Tokens', run.tokens.known ? fmtTokens(run.tokens.input + run.tokens.output) : '—', run.tokens.known ? `${fmtTokens(run.tokens.input)} in · ${fmtTokens(run.tokens.output)} out` : 'not recorded yet'),
       tile('Cost', fmtCost(run.costUsd), unpricedNote(run.unpricedModels) || (run.premiumRequests !== null ? `${fmtInt(run.premiumRequests)} premium requests` : 'list-price estimate'), { est: true, title: run.costLabel || null }));
   }
@@ -775,13 +785,15 @@
         h('thead', null, h('tr', null,
           h('th', { scope: 'col', text: 'Model' }),
           h('th', { scope: 'col', class: 'num', text: 'Input' }),
-          h('th', { scope: 'col', class: 'num', title: 'Cache reads and writes, already included in Input', text: 'of which cached' }),
+          h('th', { scope: 'col', class: 'num', title: 'Tokens read from the prompt cache, already included in Input', text: 'Cache read' }),
+          h('th', { scope: 'col', class: 'num', title: 'Tokens written to the prompt cache, already included in Input', text: 'Cache write' }),
           h('th', { scope: 'col', class: 'num', text: 'Output' }),
           h('th', { scope: 'col', class: 'num' }, 'Cost ', h('span', { class: 'est', text: 'EST.' })))),
         h('tbody', null, rows.map(row => h('tr', null,
           h('td', null, h('span', { class: 'tool-name', text: row.model })),
           h('td', { class: 'num', text: fmtTokens(row.input), title: fmtInt(row.input) }),
-          h('td', { class: 'num muted', text: fmtTokens(row.cacheRead + row.cacheWrite), title: `${fmtInt(row.cacheRead)} read · ${fmtInt(row.cacheWrite)} write` }),
+          h('td', { class: 'num muted', text: fmtTokens(row.cacheRead), title: fmtInt(row.cacheRead) }),
+          h('td', { class: 'num muted', text: fmtTokens(row.cacheWrite), title: fmtInt(row.cacheWrite) }),
           h('td', { class: 'num', text: fmtTokens(row.output), title: fmtInt(row.output) }),
           h('td', { class: 'num', text: fmtCost(row.costUsd) }))))))
         : h('div', { class: 'empty' }, h('p', { text: 'No token usage recorded yet. Copilot CLI writes totals when the session ends.' }))));

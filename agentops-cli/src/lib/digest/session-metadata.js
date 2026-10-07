@@ -3,7 +3,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 const { hashText } = require('../hash');
-const { classifyToolFailure, isFailedCompletion, safeLabel } = require('./failure-clusters');
+const { classifyToolFailure, completionOutcome, safeLabel } = require('./failure-clusters');
 
 // Reads Copilot CLI session events and keeps an allowlist of metadata only:
 // timestamps, tool names, success flags, exit codes, models and token counts.
@@ -44,7 +44,13 @@ function summarizeSessionEvents(events = [], options = {}) {
     endedAt: '',
     selectedModel: '',
     toolCalls: 0,
+    // Shared run-status rules: only an errored tool call is a failure; a
+    // denial or a shell non-zero exit needs attention.
     failedToolCalls: 0,
+    deniedToolCalls: 0,
+    nonZeroExitToolCalls: 0,
+    hookFailures: 0,
+    subagentFailures: 0,
     aborted: false,
     shutdownObserved: false,
     premiumRequests: null,
@@ -78,10 +84,15 @@ function summarizeSessionEvents(events = [], options = {}) {
       summary.toolCalls += 1;
       const tool = safeLabel(start.toolName || data.toolName, 'unknown-tool');
       if (start.time !== undefined) summary.toolDurations.push({ tool, ms: Math.max(0, time - start.time) });
-      if (isFailedCompletion(data)) {
-        summary.failedToolCalls += 1;
-        summary.failures.push({ ...classifyToolFailure(start, data), at });
-      }
+      const outcome = completionOutcome(data);
+      if (outcome === 'failed') summary.failedToolCalls += 1;
+      else if (outcome === 'denied') summary.deniedToolCalls += 1;
+      else if (outcome === 'nonzero_exit') summary.nonZeroExitToolCalls += 1;
+      if (outcome !== 'ok') summary.failures.push({ ...classifyToolFailure(start, data), at });
+    } else if (event.type === 'hook.end' && data.success === false) {
+      summary.hookFailures += 1;
+    } else if (event.type === 'subagent.failed') {
+      summary.subagentFailures += 1;
     } else if (event.type === 'abort') {
       summary.aborted = true;
     } else if (event.type === 'session.shutdown') {

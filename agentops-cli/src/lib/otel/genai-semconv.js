@@ -116,11 +116,19 @@ function toGenAiSpans(spans = [], context = {}) {
   const runId = safeString(context.runId);
   const overrideAgent = safeString(context.agentName);
   const byIdentity = new Map();
-  const stats = { input: 0, mapped: 0, duplicates: 0, skipped: 0, invalid: 0 };
+  const stats = { input: 0, mapped: 0, duplicates: 0, skipped: 0, invalid: 0, skippedOperations: {} };
   for (const span of spans) {
     stats.input += 1;
     const operation = operationOf(span || {});
-    if (!operation) { stats.skipped += 1; continue; }
+    if (!operation) {
+      stats.skipped += 1;
+      // Bounded metadata label so a summary can say what was left out and why.
+      const label = safeString(span?.operation) || safeString(String(span?.spanName || '').split(' ')[0]) || 'unknown';
+      const keys = Object.keys(stats.skippedOperations);
+      const key = keys.includes(label) || keys.length < 10 ? label : 'other';
+      stats.skippedOperations[key] = (stats.skippedOperations[key] || 0) + 1;
+      continue;
+    }
     const traceId = String(span.traceId || '').toLowerCase();
     const spanId = String(span.spanId || '').toLowerCase();
     const parentSpanId = String(span.parentSpanId || '').toLowerCase();

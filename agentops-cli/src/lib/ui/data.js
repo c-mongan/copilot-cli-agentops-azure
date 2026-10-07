@@ -749,6 +749,8 @@ function summarize(entry, parsed, ledgerSpans, now = Date.now(), { lockAlive = f
     toolFailures,
     failures: failedItems.length,
     failureGroups: failureGroups(failedItems),
+    hookFailures: failedItems.filter(item => item.kind === 'hook').length,
+    subagentFailures: failedItems.filter(item => item.kind === 'agent').length,
     denials: deniedItems.length,
     nonZeroExits: nonZeroItems.length,
     attentionGroups: failureGroups([...deniedItems, ...nonZeroItems]),
@@ -794,7 +796,12 @@ function aggregateKpis(rows) {
     runs: rows.length,
     failedRuns: rows.filter(row => row.status === 'failed').length,
     attentionRuns: rows.filter(row => row.status === 'attention').length,
+    // Shared run-status rules: failures include failed hooks and subagents;
+    // denials and non-zero exits only need attention.
     failures: rows.reduce((sum, row) => sum + row.failures, 0),
+    toolFailures: rows.reduce((sum, row) => sum + (row.toolFailures || 0), 0),
+    denials: rows.reduce((sum, row) => sum + (row.denials || 0), 0),
+    nonZeroExits: rows.reduce((sum, row) => sum + (row.nonZeroExits || 0), 0),
     toolCalls: rows.reduce((sum, row) => sum + row.toolCalls, 0),
     p95ToolMs: percentile(durations, 95),
     tokens: {
