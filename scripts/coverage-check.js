@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 
 const childProcess = require('node:child_process');
+const path = require('node:path');
 
 const threshold = Number(process.env.AGENTOPS_COVERAGE_LINES || 80);
 const result = childProcess.spawnSync(process.execPath, [
-  '--test',
+  path.join(__dirname, 'run-cli-tests.js'),
   '--experimental-test-coverage'
 ], {
   cwd: process.cwd(),

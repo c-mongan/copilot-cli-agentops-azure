@@ -22,6 +22,28 @@ function commandSuggestion(command, candidates) {
   return ranked[0] && ranked[0].distance <= Math.max(2, Math.floor(String(command).length / 3)) ? ranked[0].candidate : null;
 }
 
+// Direct commands that render their own --help text (or, for copilot, pass it
+// through to the wrapped Copilot CLI).
+const SELF_HELP_COMMANDS = new Set([
+  'architecture', 'attach', 'copilot', 'coverage', 'dashboard', 'detach', 'digest', 'product', 'provision', 'ui'
+]);
+
+function wantsHelp(args) {
+  const separator = args.indexOf('--');
+  const optionArgs = separator >= 0 ? args.slice(0, separator) : args;
+  return optionArgs.includes('--help') || optionArgs.includes('-h');
+}
+
+function directHelpTopic(command, args) {
+  if (SELF_HELP_COMMANDS.has(command)) return null;
+  if (command === 'copilot-session') {
+    const [subcommand] = args;
+    if (subcommand === 'launch') return null;
+    return subcommand && !subcommand.startsWith('-') ? `copilot-session ${subcommand}` : command;
+  }
+  return command;
+}
+
 function createCliMain(dependencies = {}) {
   const {
     commands = {},
@@ -30,7 +52,8 @@ function createCliMain(dependencies = {}) {
     legacy,
     stderr = process.stderr,
     stdout = process.stdout,
-    usage
+    usage,
+    version
   } = dependencies;
 
   const directCommands = {
@@ -78,6 +101,11 @@ function createCliMain(dependencies = {}) {
       return undefined;
     }
 
+    if (version && (command === '--version' || command === '-v')) {
+      stdout.write(`${version}\n`);
+      return undefined;
+    }
+
     if (command === 'help') {
       stdout.write(usage(args[0]));
       return undefined;
@@ -105,7 +133,15 @@ function createCliMain(dependencies = {}) {
     }
 
     const directCommand = directCommands[command];
-    if (directCommand) return directCommand(args);
+    if (directCommand) {
+      const helpTopic = wantsHelp(args) ? directHelpTopic(command, args) : null;
+      if (helpTopic) {
+        const topicHelp = usage(helpTopic);
+        stdout.write(helpTopic !== command && topicHelp.startsWith('No help found') ? usage(command) : topicHelp);
+        return undefined;
+      }
+      return directCommand(args);
+    }
 
     if (experimentalCommands.has(command)) return legacyWithMigration(command, args);
 
@@ -132,6 +168,7 @@ function createCliMain(dependencies = {}) {
 }
 
 module.exports = {
+  SELF_HELP_COMMANDS,
   commandSuggestion,
   createCliMain
 };

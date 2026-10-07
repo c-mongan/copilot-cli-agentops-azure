@@ -20,6 +20,11 @@ project. Package versions stay at `0.1.0` until a package is published to npm.
 - The waterfall now marks tool calls that reported success but exited non-zero (for example a failing `npm test`) in orange with an "exit N" note. Denied spans use a distinct hatched violet. The legend lists Failed, Non-zero exit and Denied, the empty inspector offers "Jump to first…" buttons for each issue type, folded turns say when they hide an issue, and the inspector status explains the non-zero exit.
 - Tree fold buttons, run links, breadcrumbs and copy buttons have hit areas of at least 24×24 px. Inspector hints no longer say "Hover" on touch-only devices.
 - "1 premium requests" and "1 tool calls" now pluralise correctly. The README explains that the Deploy to Azure budget is 5 units of the billing currency by default (`monthlyBudgetAmount`) and alerts only.
+- Duration labels now round before choosing a unit. The digest no longer prints `60.0 s` or `60.0 min` at unit boundaries and shows hours (`24.0 h`, not `1440.0 min`). The UI and session summary no longer print `1000 ms` or `10.0 s`.
+- `agentops --version` and `-v` print the CLI version instead of "Unknown command".
+- `--help` on direct commands, including every `copilot-session` subcommand, prints that command's usage and options instead of running the command or failing with a missing-argument error.
+- `npm test` is hermetic. It runs with a sandboxed home, cache and config directories plus stub `az`, `azd` and `copilot` binaries. It fails if a test invokes those CLIs or writes `.agentops`, `.azure`, `.azd`, `.copilot` or the Copilot package cache into the home directory.
+- The README, `docs/grafana.md` and a new `grafana/README.md` name the one dashboard to import (`grafana/agentops-copilot-cli.json`) and mark the other dashboard JSONs as legacy or advanced.
 
 ## v0.3.2-preview: 2026-10-07
 

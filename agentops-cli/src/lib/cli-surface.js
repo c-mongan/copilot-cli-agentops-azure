@@ -176,13 +176,21 @@ Experimental:
   const name = String(command).trim();
   if (name === 'product') return require('./product-command').PRODUCT_HELP;
   const coreSection = full.split('\nExperimental:')[0];
-  const commandLine = coreSection
-    .split('\n')
-    .map(line => line.trim())
-    .find(line => line === name || line.startsWith(`${name} `) || line.startsWith(`${name}[`));
+  const lines = coreSection.split('\n').map(line => line.trim());
+  const matches = commandLine => commandLine === name || commandLine.startsWith(`${name} `) || commandLine.startsWith(`${name}[`);
+  const helpLines = [];
+  lines.forEach((line, index) => {
+    if (!matches(line)) return;
+    helpLines.push(`agentops ${line}`);
+    // Indented description lines that follow a command line start with an
+    // upper-case letter; command lines are always lower-case.
+    for (let next = index + 1; next < lines.length && /^[A-Z]/.test(lines[next]); next += 1) {
+      helpLines.push(`  ${lines[next]}`);
+    }
+  });
 
-  if (commandLine) {
-    return `agentops ${commandLine}\n\nRun "agentops --help" for the complete command list.\n`;
+  if (helpLines.length) {
+    return `${helpLines.join('\n')}\n\nRun "agentops --help" for the complete command list.\n`;
   }
   if (experimentalCommands.has(name)) {
     return `agentops experimental ${name} [...]\n\nThis command is experimental. Run "agentops --help" for the core command list.\n`;

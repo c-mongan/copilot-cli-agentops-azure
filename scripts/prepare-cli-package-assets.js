@@ -72,7 +72,7 @@ function shouldCopy(src) {
   if (relative.startsWith('docs/images/') && relative !== 'docs/images/agentops-architecture-dataflow.png') return false;
   if (relative.startsWith('docs/screenshots/')) return false;
   if (relative.startsWith('scripts/check-') && relative !== 'scripts/check-runtime-matrix.js') return false;
-  if (relative === 'scripts/coverage-check.js' || relative === 'scripts/static-check.js') return false;
+  if (['scripts/coverage-check.js', 'scripts/run-cli-tests.js', 'scripts/static-check.js'].includes(relative)) return false;
   return true;
 }
 

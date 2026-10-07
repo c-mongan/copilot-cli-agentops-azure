@@ -64,10 +64,10 @@
   }
   function fmtDuration(ms) {
     if (ms === null || ms === undefined || !Number.isFinite(ms)) return '—';
-    if (ms < 1000) return `${Math.round(ms)} ms`;
-    const s = ms / 1000;
-    if (s < 10) return `${s.toFixed(1)} s`;
-    const total = Math.round(s);
+    if (Math.round(ms) < 1000) return `${Math.round(ms)} ms`;
+    const tenths = Math.round(ms / 100);
+    if (tenths < 100) return `${(tenths / 10).toFixed(1)} s`;
+    const total = Math.round(ms / 1000);
     if (total < 60) return `${total} s`;
     if (total < 3600) return `${Math.floor(total / 60)} m ${String(total % 60).padStart(2, '0')} s`;
     const totalMin = Math.round(ms / 60000);
