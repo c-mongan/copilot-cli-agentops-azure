@@ -13,7 +13,7 @@ These skills help coding agents work on this repository's Azure path: validate, 
 
 ## Repository guardrails (these override the skills)
 
-- Never run `azd provision` or `azd up`. Use the additive enterprise route in [HANDOFF.md](../../HANDOFF.md) §4.
+- Never run `azd provision` or `azd up`. Use the additive enterprise route in [HANDOFF.md](../../docs/handoff.md) §4.
 - Run `az deployment group what-if` first. Expect only the intended resource to change.
 - Never delete Azure resources without a separate, explicit approval.
 - Publish only synthetic, metadata-only fixtures during tests. Keep receipts and account data out of the repository.

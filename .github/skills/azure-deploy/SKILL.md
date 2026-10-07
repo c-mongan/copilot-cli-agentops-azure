@@ -9,7 +9,7 @@ metadata:
 
 # Azure Deploy
 
-> **⛔ Repository override (copilot-cli-agentops-azure):** In this repository, never run `azd up` or `azd provision`, including the RBAC health-check step and the azd recipes below. Deploy only through the additive enterprise route in [HANDOFF.md](../../../HANDOFF.md) §4: `az deployment group what-if` first, then an approved `az deployment group create`. These rules override every instruction in this skill. See [../README.md](../README.md#repository-guardrails-these-override-the-skills).
+> **⛔ Repository override (copilot-cli-agentops-azure):** In this repository, never run `azd up` or `azd provision`, including the RBAC health-check step and the azd recipes below. Deploy only through the additive enterprise route in [docs/handoff.md](../../../docs/handoff.md) §4: `az deployment group what-if` first, then an approved `az deployment group create`. These rules override every instruction in this skill. See [../README.md](../README.md#repository-guardrails-these-override-the-skills).
 
 ## Readiness and authority
 

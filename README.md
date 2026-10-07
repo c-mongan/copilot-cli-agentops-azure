@@ -11,7 +11,7 @@ git clone https://github.com/c-mongan/copilot-cli-agentops-azure && cd copilot-c
 node agentops-cli/src/index.js ui latest
 ```
 
-It opens a local, read-only waterfall of your newest Copilot CLI session: failures, slow tools, tokens and estimated cost. It serves metadata only and binds to 127.0.0.1. See the [local UI guide](docs/local-ui.md).
+It opens a local, read-only waterfall of your newest Copilot CLI run: failures, slow tools, tokens and estimated cost from public list prices. It serves metadata only and binds to 127.0.0.1. See the [local UI guide](docs/local-ui.md).
 
 > Independent personal open-source project. Not an official Microsoft, GitHub, OpenAI, Azure or Grafana product. Preview quality.
 
@@ -22,7 +22,7 @@ It opens a local, read-only waterfall of your newest Copilot CLI session: failur
 | Which tool call failed or was denied, and what came before it? | Local run view, failure detail | Yes: a denied `curl` appears as a failure signal |
 | Where did the time go? | End-to-end timeline, span durations | Yes: a 12 s shell step reads back as 12,109 ms |
 | How many tokens did each model call use? | Run summary, `AgentOpsSpans_CL` | Yes: tokens match Copilot CLI's own summary |
-| What did a run cost? | `EstimatedCostUsd` (nullable); local UI "est." column | Only when the runtime emits cost metadata. Copilot CLI 1.0.93 did not, so Azure cost stays empty. The local UI shows a clearly labelled estimate from a dated public price table |
+| What did a run cost? | Estimated cost from public list prices (local UI and `digest`); `EstimatedCostUsd` in Azure (nullable) | An estimate, not billed cost: Copilot CLI 1.0.93 reports no cost and bills premium requests. The UI and `digest` share one dated price table; unpriced models show "n/a". Azure cost stays empty |
 | Did Azure store exactly what was sent? | KQL readback | Yes: local and Azure row counts matched for all 3 runs |
 
 Evidence: [CLI E2E walkthrough, 2026-10-07](docs/e2e-validation.md#copilot-cli-walkthrough-2026-10-07).
@@ -41,14 +41,17 @@ You need Node.js 20+ and the GitHub Copilot CLI, signed in. Azure is optional.
 # 1. Get the CLI (one command, no global install; npx fetches the release tarball)
 alias agentops='npx --yes -p https://github.com/c-mongan/copilot-cli-agentops-azure/releases/download/v0.3.0-preview/copilot-agentops-cli-0.1.0.tgz agentops'
 
-# 2. Run an observed Copilot session (local only, no upload)
-agentops copilot-session launch --repo /path/to/repo --json -- -p "Run the tests and explain any failure"
+# 2. Run an observed Copilot session (local only, no upload). In -p mode Copilot
+#    cannot ask for permission, so allow tools explicitly; use a repo you trust.
+agentops copilot-session launch --repo /path/to/repo --json \
+  -- -p "Run the tests and explain any failure" --allow-all-tools > run.json
 
-# 3. Open the metadata-only run view (sessionId and runId come from step 2's JSON)
-agentops copilot-session view <session-id> --run-id <run-id> --output run.html
+# 3. Open that run in the local web UI (or write a static page with `view`)
+agentops ui latest
+agentops copilot-session view "$(jq -r .sessionId run.json)" --run-id "$(jq -r .runId run.json)" --output run.html
 ```
 
-`agentops ui latest` opens the same run in the [local web UI](docs/local-ui.md).
+With `--json`, stdout is only the run JSON; Copilot's transcript goes to stderr. `ui latest` opens the run from your most recent `launch`. See the [local web UI](docs/local-ui.md).
 
 Prefer a source checkout? `git clone` the repository and use `alias agentops="node $PWD/agentops-cli/src/index.js"`. Each release lists its tarball's SHA256 in `SHA256SUMS`. The package is not on the npm registry yet.
 
@@ -58,7 +61,7 @@ To publish to your own Azure workspace, click **Deploy to Azure** (metadata-only
 
 ## Privacy by default
 
-- **Metadata only.** Span names, timings, token counts, model names, outcomes, and hashed run, session and repository identifiers.
+- **Metadata only.** Span names, timings, token counts, model names and outcomes. Repository identifiers are hashed in the ledger and in anything uploaded to Azure. The local UI, which never leaves your machine, shows your own repository folder names.
 - **Not recorded by default.** Prompts, responses, source code, tool arguments and tool results. Content capture needs an explicit, separate opt-in and is meant for synthetic evaluation data only.
 - **Fail-closed cloud writes.** Uploads need an explicit target, an approved subscription allowlist and a non-zero daily byte cap. The repository contains no subscription IDs or secrets.
 
@@ -66,7 +69,7 @@ See [privacy modes](docs/privacy-modes.md), [secure by default](docs/secure-by-d
 
 ## Known limits
 
-- Azure cost comes from runtime cost metadata only. Current Copilot CLI builds emit none, so it is usually empty. The local UI's cost is an estimate from public list prices, not billed cost.
+- Cost is an estimate from public list prices, not billed cost. Models without a published price show "n/a" and are left out of totals. Azure cost comes from runtime cost metadata only; current Copilot CLI builds emit none, so it is usually empty.
 - A shell command that exits non-zero is recorded as a successful tool span. The local session event still marks it as failed.
 - Each native tool span is currently stored twice in `AgentOpsSpans_CL`. Count by `SpanId` or by `chat` operations, not by raw rows.
 - Token totals must come from `chat` spans or the shutdown event. Summing every span row over-counts.

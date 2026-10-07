@@ -119,7 +119,7 @@ Actual Microsoft-provider authentication, tenant consent, least-privilege team a
 
 Do not run `azd provision` as a shortcut. The baseline `main.bicep` can create/rebind workspace resources, and `azure.yaml` has a postprovision import hook. Use the reviewed additive enterprise route and its exact target checks. No new compute service, hosted judge, AKS cluster or Grafana service is needed for this preview.
 
-See [deployment verification](docs/research/2026-10-02-enterprise-deployment-verification.md), [lean cost/deployment plan](docs/plans/2026-10-02-lean-enterprise-deployment.md) and [native Azure proof](docs/research/2026-10-03-native-azure-proof-preflight.md).
+See [deployment verification](research/2026-10-02-enterprise-deployment-verification.md), [lean cost/deployment plan](plans/2026-10-02-lean-enterprise-deployment.md) and [native Azure proof](research/2026-10-03-native-azure-proof-preflight.md).
 
 ## 5. Packages and proof locations
 
@@ -188,17 +188,17 @@ Ponytail, local code-only Graphify and scoped Open Code Review were used during 
 
 ## 9. Read first
 
-1. [Current build status](docs/plans/2026-10-03-cli-first-build-status.md).
-2. [Build verification](docs/research/2026-10-03-cli-first-build-verification.md).
-3. [Companion use and recovery](docs/native-companion.md).
-4. [Native settings and Azure controls](docs/native-client-settings.md).
-5. [Windows qualification](docs/native-windows-qualification.md) and [independent review](docs/research/2026-10-03-windows-qualification-review.md).
-6. [Script setup proof](docs/research/2026-10-03-script-setup-proof.md).
-7. [SDK source findings](docs/research/2026-10-03-sdk-native-docs.md), [VS Code source findings](docs/research/2026-10-03-vscode-native-deep.md), and [auto-instrumentation/Azure findings](docs/research/2026-10-03-auto-instrument-azure-docs.md).
+1. [Current build status](plans/2026-10-03-cli-first-build-status.md).
+2. [Build verification](research/2026-10-03-cli-first-build-verification.md).
+3. [Companion use and recovery](native-companion.md).
+4. [Native settings and Azure controls](native-client-settings.md).
+5. [Windows qualification](native-windows-qualification.md) and [independent review](research/2026-10-03-windows-qualification-review.md).
+6. [Script setup proof](research/2026-10-03-script-setup-proof.md).
+7. [SDK source findings](research/2026-10-03-sdk-native-docs.md), [VS Code source findings](research/2026-10-03-vscode-native-deep.md), and [auto-instrumentation/Azure findings](research/2026-10-03-auto-instrument-azure-docs.md).
 
 ## 10. Mac v5 computer-use update — 2026-10-03
 
-The Mac v5 preview has now passed the visible Connect, local report, Disconnect and Quit checks. See [the computer-use proof](docs/research/2026-10-03-mac-v5-computer-use-proof.md). The rendered report showed 5 native spans, 2 sessions, 24 input tokens and 10 output tokens. A separate real Copilot CLI run with a synthetic local model proved four linked spans, tool execution and privacy filtering through the running companion Collector. These are separate proof counts.
+The Mac v5 preview has now passed the visible Connect, local report, Disconnect and Quit checks. See [the computer-use proof](research/2026-10-03-mac-v5-computer-use-proof.md). The rendered report showed 5 native spans, 2 sessions, 24 input tokens and 10 output tokens. A separate real Copilot CLI run with a synthetic local model proved four linked spans, tool execution and privacy filtering through the running companion Collector. These are separate proof counts.
 
 After Quit, the app owner process was gone, the capture lease was removed, and ports 4318 and 58235 were closed. No paid model or new Azure write was used in this trial.
 

@@ -67,7 +67,7 @@ Confirm the public safety files are present:
 test -f DISCLAIMER.md
 test -f SECURITY.md
 test -f CONTRIBUTING.md
-test -f OPEN_SOURCE_REVIEW.md
+test -f docs/open-source-review.md
 ```
 
 Confirm the README clearly states that this is an independent personal project and not an official Microsoft, GitHub, OpenAI, Azure, or Grafana product.
