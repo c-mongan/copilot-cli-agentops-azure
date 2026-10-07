@@ -22,7 +22,7 @@ It opens a local, read-only waterfall of your newest Copilot CLI run: failures, 
 | Which tool call failed or was denied, and what came before it? | Local run view, failure detail | Yes: a denied `curl` appears as a failure signal |
 | Where did the time go? | End-to-end timeline, span durations | Yes: a 12 s shell step reads back as 12,109 ms |
 | How many tokens did each model call use? | Run summary, `AgentOpsSpans_CL` | Yes: tokens match Copilot CLI's own summary |
-| What did a run cost? | Estimated cost from public list prices (local UI and `digest`); `EstimatedCostUsd` in Azure (nullable) | An estimate, not billed cost: Copilot CLI 1.0.93 reports no cost and bills premium requests. The UI and `digest` share one dated price table; unpriced models show "n/a". Azure cost stays empty |
+| What did a run cost? | Estimated cost from public list prices (local UI and `digest`); `EstimatedCostUsd` in Azure (nullable) | An estimate, not billed cost: Copilot CLI 1.0.93 reports no cost and bills premium requests. The UI and `digest` use the shared price estimator; missing or partial prices are labelled rather than treated as zero. Azure cost stays empty |
 | Did Azure store exactly what was sent? | KQL readback | Yes: local and Azure row counts matched for all 3 runs |
 
 Evidence: [CLI E2E walkthrough, 2026-10-07](docs/e2e-validation.md#copilot-cli-walkthrough-2026-10-07).

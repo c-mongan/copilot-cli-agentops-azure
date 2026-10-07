@@ -98,9 +98,8 @@ function launchRunStatus({ copilotHome, sessionId, runErrored }) {
       events = [];
     }
   }
-  // The launched process has exited, so the run is over even if Copilot
-  // did not write a session.shutdown event.
-  return sessionRunStatus(events, { runErrored, ended: true });
+  // A zero exit does not establish that Copilot recorded a complete session.
+  return sessionRunStatus(events, { runErrored });
 }
 
 function launchSpanCounts(evidence) {

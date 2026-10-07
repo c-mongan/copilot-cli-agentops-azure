@@ -159,12 +159,12 @@ test('ui data: dedupeSpans keeps the first agentops.span row per TraceId and Spa
   const rows = [
     { TraceId: 't', SpanId: 'a', SpanName: 'agentops.span', n: 1 },
     { TraceId: 't', SpanId: 'a', SpanName: 'agentops.span', n: 2 },
-    { TraceId: 't', SpanId: 'a', SpanName: 'agentops.event', n: 3 },
+    { TraceId: 't', SpanId: 'a', SpanName: 'agentops.event', LinkType: 'span-event', n: 3 },
     { TraceId: 'u', SpanId: 'a', n: 4 },
     { n: 5 },
     null
   ];
-  assert.deepEqual(data.dedupeSpans(rows).map(row => row.n), [1, 4, 5]);
+  assert.deepEqual(data.dedupeSpans(rows).map(row => row.n), [1, 4]);
   assert.deepEqual(data.dedupeSpans(), []);
 });
 
@@ -429,4 +429,18 @@ test('ui data: failureSentence pluralises and uses outcomes', () => {
   assert.deepEqual(data.publicRow({ a: 1, _toolDurations: [], usageByModel: {} }), { a: 1 });
   assert.ok(data.TRACKED_TYPES.has('tool.execution_complete'));
   assert.equal(data.TRACKED_TYPES.has('assistant.message'), false);
+});
+
+test('ui session status counts unmatched hook/subagent failures and ignores failed ledger chat status', () => {
+  const entry = { id: 'r', eventsFile: 'x', mtimeMs: 0, ledgerRuns: [] };
+  for (const raw of [{ type: 'hook.end', data: { hookType: 'postToolUse', success: false } }, { type: 'subagent.failed', data: { agentName: 'worker' } }]) {
+    const events = [data.minimalEvent(raw), { type: 'session.shutdown', time: 1000, usage: {} }];
+    const row = data.summarize(entry, { events, firstTime: 0, lastTime: 1000 }, [], 10000000);
+    assert.equal(row.status, 'failed');
+    assert.equal(row.failures, 1);
+  }
+  const events = [{ type: 'session.start', time: 0 }, { type: 'session.shutdown', time: 1000, usage: {} }];
+  const row = data.summarize(entry, { events, firstTime: 0, lastTime: 1000 }, [{ spanId: 'chat', op: 'gen_ai.chat', start: 0, end: 1000, failed: true, outcome: 'timeout' }], 10000000);
+  assert.equal(row.status, 'ok');
+  assert.equal(row.failures, 0);
 });

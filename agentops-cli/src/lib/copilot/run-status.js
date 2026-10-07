@@ -55,10 +55,10 @@ function classifyRunStatus({ failures = 0, denials = 0, nonZeroExits = 0, runErr
 function sessionStatusSignals(events = []) {
   const signals = { toolCalls: 0, toolFailures: 0, denials: 0, nonZeroExits: 0, hookFailures: 0, subagentFailures: 0, ended: false };
   for (const event of events) {
-    const data = event?.data || {};
+    const data = event?.data || event || {};
     if (event?.type === 'tool.execution_complete') {
       signals.toolCalls += 1;
-      const outcome = classifyToolCompletionEvent(data);
+      const outcome = event?.data ? classifyToolCompletionEvent(data) : classifyToolOutcome({ success: data.success, errorCode: data.outcome, exitCode: data.exitCode });
       if (outcome === 'failed') signals.toolFailures += 1;
       else if (outcome === 'denied') signals.denials += 1;
       else if (outcome === 'nonzero_exit') signals.nonZeroExits += 1;
@@ -84,19 +84,19 @@ function sessionRunStatus(events = [], { runErrored = false, live = false, ended
 }
 
 // A native OTel span is one unique (TraceId, SpanId). Span-event rows
-// (SpanName other than 'agentops.span') and repeated exports are not spans.
+// (LinkType 'span-event') and repeated exports are not spans.
 function uniqueNativeSpans(rows = []) {
   const seen = new Set();
   const result = [];
   for (const row of rows) {
     if (!row || typeof row !== 'object') continue;
-    if (row.SpanName && row.SpanName !== 'agentops.span') continue;
+    if (row.LinkType === 'span-event' || row.linkType === 'span-event') continue;
     const spanId = row.SpanId || row.spanId;
-    if (spanId) {
-      const key = `${row.TraceId || row.traceId || ''}:${spanId}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-    }
+    const traceId = row.TraceId || row.traceId;
+    if (!spanId || !traceId) continue;
+    const key = `${traceId}:${spanId}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
     result.push(row);
   }
   return result;

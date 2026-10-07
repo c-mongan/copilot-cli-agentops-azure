@@ -35,3 +35,13 @@ test('ui tickLabel never renders 60s or 60m', () => {
   assert.equal(tickLabel(90000, 5000), '1m 30s');
   assert.equal(tickLabel(7170000, 60000), '2h');
 });
+
+test('duration formatting rounds directly to display precision at hour boundaries', () => {
+  const fmt = extract('fmtDuration');
+  const tick = extract('tickLabel');
+  assert.equal(fmt(3629600), '1 h 00 m');
+  assert.equal(fmt(3630000), '1 h 01 m');
+  assert.equal(tick(59600, 5000), '1m');
+  assert.equal(tick(3629600, 5000), '1h');
+  assert.equal(tick(3630000, 5000), '1h 1m');
+});

@@ -80,3 +80,17 @@ test('run status: native span count dedupes by trace and span ID and skips span-
   assert.equal(countNativeSpans([{ traceId: 'a', spanId: '1' }, { traceId: 'a', spanId: '1' }, { traceId: 'b', spanId: '1' }]), 2, 'canonical camelCase spans dedupe too');
   assert.equal(countNativeSpans([]), 0);
 });
+
+test('native span counts accept actual operation names and require trace/span identity', () => {
+  assert.equal(countNativeSpans([{ TraceId: 't1', SpanId: 's1', SpanName: 'gen_ai.chat', LinkType: 'native-session' }]), 1);
+  assert.equal(countNativeSpans([{}, { SpanId: 's1' }, { TraceId: 't1' }]), 0);
+  assert.equal(countNativeSpans([
+    { TraceId: 't1', SpanId: 's1', SpanName: 'gen_ai.chat', LinkType: 'native-session' },
+    { TraceId: 't1', SpanId: 's1', SpanName: 'gen_ai.chat' },
+    { TraceId: 't1', SpanId: 's1', SpanName: 'tool.start', LinkType: 'span-event' },
+    { traceId: 't2', spanId: 's1', spanName: 'tool.execute' },
+    { SpanId: 's2', SpanName: 'missing-trace' },
+    { TraceId: 't1', SpanName: 'missing-span' },
+    {}, null
+  ]), 2);
+});
