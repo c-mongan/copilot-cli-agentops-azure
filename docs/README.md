@@ -7,6 +7,7 @@ Start here when you want the shortest path through the repo:
 ```text
 README.md
   -> docs/README.md                 # docs index
+  -> docs/doctor.md                  # is my setup working? (agentops doctor)
   -> docs/operator-guide.md          # full command reference (moved from README)
   -> docs/simplified-azure-design.md # next-version product shape
   -> docs/architecture.md            # system shape

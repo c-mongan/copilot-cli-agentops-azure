@@ -61,6 +61,7 @@ See [privacy modes](docs/privacy-modes.md), [secure by default](docs/secure-by-d
 
 ## Learn more
 
+- [`agentops doctor`](docs/doctor.md): a green/red checklist of your whole setup, with a fix for each step
 - [Operator guide](docs/operator-guide.md): all commands, Collector modes, Azure setup, plugin and removal
 - [E2E validation](docs/e2e-validation.md): CLI and VS Code walkthroughs with screenshots
 - [VS Code native capture extension](extensions/agentops-native/README.md)

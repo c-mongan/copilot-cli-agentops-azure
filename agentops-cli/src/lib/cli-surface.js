@@ -115,7 +115,7 @@ Core commands:
   install [--shadow-copilot] [--no-collector] [--plugin]
   uninstall [--keep-plugin] [--keep-collector] [--keep-binary] [--purge]
   status [--json]
-  doctor [--local-only] [--last <duration>] [--json]
+  doctor [--verbose] [--cloud] [--local-only] [--last <duration>] [--json]\n  Default: a no-network end-to-end checklist with one fix per stage. --verbose adds the low-level checks; --cloud adds a read-only KQL readback.
   configure show|set|import-azd [--project|--user] [--python-runtime <label>] [--node-runtime <label>] [--typescript-loader <label|unknown>] [--json]
   collector start|stop|status|validate|smoke|install-binary|uninstall-binary [--mode auto|local|docker|binary|azure-native|none] [--privacy strict|compat] [--json]
   azure-ingest plan [--dir <AgentOps table dir>] [--allow-content] [--json]
