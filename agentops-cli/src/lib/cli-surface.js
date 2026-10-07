@@ -21,6 +21,7 @@ const coreCommands = [
   'dashboard',
   'demo',
   'delivery',
+  'digest',
   'explain',
   'github-enrich',
   'health',
@@ -140,6 +141,7 @@ Core commands:
   delivery status|review|requeue|prune|drain [--event-id <id>] [--run-id <id>] [--older-than <30-365-days>] [--dir <spool>] [--endpoint <logs-ingestion-endpoint>] [--dcr-immutable-id <id>] [--max-attempts <1-10>] [--max-publish-bytes-per-day <bytes>] [--yes] [--json]\n  Cloud publishing defaults to 0 bytes/day; set AGENTOPS_MAX_PUBLISH_BYTES_PER_DAY or the explicit flag. Qualification allowance: 1048576 bytes/day per shared local home.
   github-enrich [--limit <n>] [--runs <AgentOpsRunSummary_CL.jsonl>] [--out <dir>] [--json]
   health [--runs <AgentOpsRunSummary_CL.jsonl>] [--json]
+  digest [--since 7d] [--format md|html|json] [--output <file>] [--prices <file.json>] [--repo-names] [--copilot-home <path>] [--agentops-home <path>]
   explain latest|<run-id> [--runs <jsonl>] [--evals <jsonl>] [--insights <jsonl>] [--json]
   insights [generate|patterns] [--runs <jsonl>] [--insights <jsonl>] [--tools <jsonl>] [--privacy <jsonl>] [--github <jsonl>] [--out <dir>] [--json]
   init --local-only [--yes] [--shell bash|zsh|fish|powershell|json] [--force-skills] [--no-skills] [--json]
