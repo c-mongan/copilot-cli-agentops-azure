@@ -91,7 +91,8 @@ function checkInstallSmoke(options = {}) {
         AGENTOPS_CONFIG_PATH: path.join(tempDir, 'config.json'),
         AGENTOPS_COPILOT_HOME: path.join(tempDir, 'copilot-home'),
         AGENTOPS_HOME: path.join(tempDir, 'agentops-home'),
-        AGENTOPS_COLLECTOR_HOME: path.join(tempDir, 'collector-home')
+        AGENTOPS_COLLECTOR_HOME: path.join(tempDir, 'collector-home'),
+        ...(options.commandEnv || {})
       };
 
       commands.push(commandRecord('agentops --help', run(agentops, ['--help'], { env }), ({ result }) => (

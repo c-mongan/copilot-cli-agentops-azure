@@ -147,3 +147,70 @@ test('unknown commands suggest a close useful command and always point to help',
   await assert.rejects(harness.main(['definitely-unrelated']), /Run "agentops --help" to see the core commands/);
   assert.equal(commandSuggestion('statsu', ['setup', 'status']), 'status');
 });
+
+test('createCliMain prints the package version for --version and -v', async () => {
+  for (const flag of ['--version', '-v']) {
+    let stdout = '';
+    const main = createCliMain({
+      legacy: { main() { throw new Error('legacy should not run'); } },
+      stdout: { write(chunk) { stdout += String(chunk); } },
+      usage: () => 'usage text\n',
+      version: '9.8.7'
+    });
+    await main([flag]);
+    assert.equal(stdout, '9.8.7\n');
+  }
+});
+
+test('createCliMain answers direct-command --help from usage without running the command', async () => {
+  const topics = [];
+  let stdout = '';
+  const ran = [];
+  const handler = name => args => { ran.push([name, args]); };
+  const main = createCliMain({
+    commands: {
+      copilotSessionCommand: handler('copilot-session'),
+      githubEnrichCommand: handler('github-enrich'),
+      mcpProxyCommand: handler('mcp-proxy'),
+      digestCommand: handler('digest')
+    },
+    legacy: { main() { throw new Error('legacy should not run'); } },
+    stdout: { write(chunk) { stdout += String(chunk); } },
+    usage(topic) {
+      topics.push(topic);
+      return topic === 'copilot-session bogus' ? 'No help found for "copilot-session bogus".\n' : `help ${topic}\n`;
+    }
+  });
+
+  await main(['copilot-session', 'export-otel', '--help']);
+  await main(['copilot-session', '-h']);
+  await main(['copilot-session', 'bogus', '--help']);
+  await main(['github-enrich', '--help']);
+  assert.deepEqual(ran, []);
+  assert.deepEqual(topics, ['copilot-session export-otel', 'copilot-session', 'copilot-session bogus', 'copilot-session', 'github-enrich']);
+  assert.equal(stdout, 'help copilot-session export-otel\nhelp copilot-session\nhelp copilot-session\nhelp github-enrich\n');
+
+  await main(['copilot-session', 'launch', '--help']);
+  await main(['digest', '--help']);
+  await main(['mcp-proxy', '--server-name', 'x', '--', 'server', '--help']);
+  assert.deepEqual(ran, [
+    ['copilot-session', ['launch', '--help']],
+    ['digest', ['--help']],
+    ['mcp-proxy', ['--server-name', 'x', '--', 'server', '--help']]
+  ]);
+});
+
+test('createCliMain answers collector, start, stop and recommend --help without running them', async () => {
+  for (const [argv, topic] of [
+    [['collector', '--help'], 'collector'],
+    [['collector', 'start', '-h'], 'collector'],
+    [['start', '--help'], 'collector'],
+    [['stop', '--help'], 'collector'],
+    [['recommend', '--help'], 'recommend']
+  ]) {
+    const harness = createHarness({ usage: name => `help ${name}\n` });
+    await harness.main(argv);
+    assert.deepEqual(harness.calls, [], argv.join(' '));
+    assert.equal(harness.stdout(), `help ${topic}\n`);
+  }
+});

@@ -70,6 +70,7 @@ const { checkSdkPublish, isWildcardRange } = require('../../scripts/check-sdk-pu
 const { shouldCopy } = require('../../scripts/prepare-cli-package-assets');
 const { askAgentOps, buildActionerReview, buildAskAgentOpsLaunch, buildAskAgentOpsResponse, buildGuardedRecommendationApply, buildRecommendationReview, buildSharedStoreEditor, buildSharedStoreWrite, sharedStoreEditor, sharedStoreWrite } = require('../../actioner');
 const { writeJsonlFixture } = require('./support/json-fixtures');
+const { signedOutCliEnv, signedOutCliSpawnSync } = require('./support/cli-stubs');
 
 const {
   agentopsAttributionSmoke,
@@ -255,9 +256,12 @@ test('CLI offers focused per-command help with a path back to the full reference
   assert.doesNotMatch(result.stdout, /dashboard validate/);
 });
 
-test('init is a core command without experimental migration warning', () => {
+test('init is a core command without experimental migration warning', t => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-init-core-'));
+  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
   const result = spawnSync(process.execPath, [path.join(root, 'agentops-cli', 'src', 'index.js'), 'init', '--dry-run', '--no-skills'], {
     cwd: root,
+    env: signedOutCliEnv(path.join(tempDir, 'bin')),
     encoding: 'utf8'
   });
 
@@ -544,7 +548,10 @@ test('CLI package asset copier excludes heavyweight and local-only files', () =>
 });
 
 test('packed CLI install smoke runs installed command from clean prefix', () => {
-  const result = checkInstallSmoke({ skipDocs: false });
+  const result = checkInstallSmoke({
+    skipDocs: false,
+    commandEnv: { COPILOT_CLI_BIN: path.join(os.tmpdir(), `missing-copilot-${process.pid}`) }
+  });
 
   assert.equal(result.ok, true, JSON.stringify(result, null, 2));
   assert.ok(result.artifact.filename.startsWith('copilot-agentops-cli-'));
@@ -2841,6 +2848,7 @@ test('init workflow installs skills in dry-run mode and returns first-run next s
       dryRun: true,
       copilotHome: tempDir,
       env: {},
+      spawnSync: signedOutCliSpawnSync(),
       workspaceId: '',
       grafanaBaseUrl: '',
       installDir: path.join(tempDir, 'bin')
@@ -2893,10 +2901,7 @@ test('init --full dry run requests every first-run stage from the CLI parser', (
       '--json'
     ], {
       cwd: path.join(__dirname, '..', '..'),
-      env: {
-        ...process.env,
-        AGENTOPS_CONFIG_PATH: configPath
-      },
+      env: signedOutCliEnv(path.join(tempDir, 'stub-bin'), { AGENTOPS_CONFIG_PATH: configPath }),
       encoding: 'utf8'
     });
     assert.equal(result.status, 0, result.stderr);
@@ -2931,6 +2936,7 @@ test('init triage-latest dry run plans explicit latest triage stage', () => {
       triageLatest: true,
       noSkills: true,
       env: {},
+      spawnSync: signedOutCliSpawnSync(),
       workspaceId: '',
       grafanaBaseUrl: '',
       installDir: path.join(tempDir, 'bin')
@@ -3010,6 +3016,7 @@ test('init run-smoke dry run plans explicit real smoke stage', () => {
       runSmoke: true,
       noSkills: true,
       env: {},
+      spawnSync: signedOutCliSpawnSync(),
       workspaceId: '',
       grafanaBaseUrl: '',
       installDir: path.join(tempDir, 'bin')
@@ -3088,6 +3095,7 @@ test('init import-dashboards dry run plans explicit dashboard remediation', () =
       importDashboards: true,
       noSkills: true,
       env: {},
+      spawnSync: signedOutCliSpawnSync(),
       workspaceId: '',
       grafanaBaseUrl: '',
       installDir: path.join(tempDir, 'bin')
@@ -3112,6 +3120,7 @@ test('init import-dashboards runs validate-azure remediation when explicit', () 
       importDashboards: true,
       noSkills: true,
       env: {},
+      spawnSync: signedOutCliSpawnSync(),
       workspaceId: 'workspace-123',
       grafanaBaseUrl: 'https://grafana.example',
       installDir: path.join(tempDir, 'bin'),
@@ -3140,6 +3149,7 @@ test('init import-dashboards reports failed remediation next steps', () => {
       importDashboards: true,
       noSkills: true,
       env: {},
+      spawnSync: signedOutCliSpawnSync(),
       workspaceId: 'workspace-123',
       grafanaBaseUrl: 'https://grafana.example',
       installDir: path.join(tempDir, 'bin'),
@@ -3245,7 +3255,7 @@ test('init mutating workflows preview until the user explicitly confirms with ye
       '--json'
     ], {
       cwd: path.join(__dirname, '..', '..'),
-      env: { ...process.env, AGENTOPS_CONFIG_PATH: path.join(tempDir, 'config.json') },
+      env: signedOutCliEnv(path.join(tempDir, 'stub-bin'), { AGENTOPS_CONFIG_PATH: path.join(tempDir, 'config.json') }),
       encoding: 'utf8'
     });
     assert.equal(result.status, 0, result.stderr);
@@ -3273,7 +3283,8 @@ test('init full reuses an existing cloud binding unless reprovision is explicit'
     workspaceId: 'workspace-123',
     grafanaBaseUrl: 'https://grafana.example',
     commandAvailability: { azd: true },
-    azdValues: ''
+    azdValues: '',
+    spawnSync: signedOutCliSpawnSync()
   };
   const reused = agentopsInit({ ...common, forceProvisionCloud: false });
   const explicit = agentopsInit({ ...common, forceProvisionCloud: true });

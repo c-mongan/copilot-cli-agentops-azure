@@ -1,5 +1,7 @@
 # Portable Grafana dashboard
 
+> **Which file?** Import `grafana/agentops-copilot-cli.json`. It is the one recommended dashboard. The other JSONs under `grafana/` (the legacy pack and the advanced `grafana/dashboards/v2/` pack) are listed in [`grafana/README.md`](../grafana/README.md); you do not need them to get started.
+
 `grafana/agentops-copilot-cli.json` is one dashboard for Copilot CLI runs. It reads the AgentOps Log Analytics custom tables that the current ingestion path writes:
 
 - `AgentOpsEvents_CL`

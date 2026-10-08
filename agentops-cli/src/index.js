@@ -72,7 +72,8 @@ const main = createCliMain({
   coreCommands,
   experimentalCommands,
   legacy,
-  usage
+  usage,
+  version: require('../package.json').version
 });
 
 if (require.main === module) {

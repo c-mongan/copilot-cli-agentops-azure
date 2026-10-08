@@ -29,6 +29,25 @@ test('ui fmtDuration carries rounded seconds into minutes and hours', () => {
   assert.equal(fmtDuration(250), '250 ms');
 });
 
+test('ui fmtDuration rounds at display precision before choosing the unit', () => {
+  const fmtDuration = extract('fmtDuration');
+  assert.equal(fmtDuration(999.4), '999 ms');
+  assert.equal(fmtDuration(999.6), '1.0 s');
+  assert.equal(fmtDuration(9949), '9.9 s');
+  assert.equal(fmtDuration(9950), '10 s');
+  assert.equal(fmtDuration(9960), '10 s');
+  const bad = [];
+  for (let ms = 0; ms < 4 * 3600000; ms += 97) {
+    const text = fmtDuration(ms);
+    if (/\b60 [sm]\b|\b1000 ms|\b10\.0 s/.test(text)) bad.push(`${ms} -> ${text}`);
+  }
+  for (const ms of [999.5, 999.9, 9950, 9999.9, 59500, 59999.9, 3599500, 3599999.9]) {
+    const text = fmtDuration(ms);
+    if (/\b60 [sm]\b|\b1000 ms|\b10\.0 s/.test(text)) bad.push(`${ms} -> ${text}`);
+  }
+  assert.deepEqual(bad, []);
+});
+
 test('ui tickLabel never renders 60s or 60m', () => {
   const tickLabel = extract('tickLabel');
   assert.equal(tickLabel(119700, 5000), '2m');

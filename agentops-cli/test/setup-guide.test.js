@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 
 const { createSetupGuide } = require('../src/lib/setup-guide');
+const { signedOutCliSpawnSync } = require('./support/cli-stubs');
 
 function createGuide(projectCloud = {}) {
   return createSetupGuide({
@@ -41,6 +42,7 @@ test('setup guide helpers render read-only first-run guidance', () => {
   const { agentopsSetupGuide, parseSetupArgs, renderSetupGuide } = createGuide();
 
   const result = agentopsSetupGuide({
+    spawnSync: signedOutCliSpawnSync(),
     azdValues: [
       'workspaceId=11111111-1111-1111-1111-111111111111',
       'grafanaBaseUrl=https://agentops.grafana.azure.com'

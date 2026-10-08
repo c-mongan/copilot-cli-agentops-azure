@@ -15,11 +15,17 @@ function percent(rate) {
   return rate === null || rate === undefined ? 'n/a' : `${(rate * 100).toFixed(1)}%`;
 }
 
+// Round at the displayed precision before picking the unit, so 59,999 ms is
+// "1.0 min" rather than "60.0 s".
 function duration(ms) {
-  if (ms === null || ms === undefined) return 'n/a';
-  if (ms < 1000) return `${Math.round(ms)} ms`;
-  if (ms < 60000) return `${(ms / 1000).toFixed(1)} s`;
-  return `${(ms / 60000).toFixed(1)} min`;
+  if (ms === null || ms === undefined || !Number.isFinite(Number(ms))) return 'n/a';
+  const wholeMs = Math.round(ms);
+  if (wholeMs < 1000) return `${wholeMs} ms`;
+  const tenthsOfSecond = Math.round(ms / 100);
+  if (tenthsOfSecond < 600) return `${(tenthsOfSecond / 10).toFixed(1)} s`;
+  const tenthsOfMinute = Math.round(ms / 6000);
+  if (tenthsOfMinute < 600) return `${(tenthsOfMinute / 10).toFixed(1)} min`;
+  return `${(Math.round(ms / 360000) / 10).toFixed(1)} h`;
 }
 
 function usd(value) {

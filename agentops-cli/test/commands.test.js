@@ -279,7 +279,11 @@ test('copilotCommand refuses a health-only collector with unverified privacy con
   const collector = require('../src/lib/collector-manager');
   const resolver = require('../src/lib/copilot-resolver');
   const dir = tmpDir('wrapper-unverified-privacy');
-  const restoreEnv = setEnvForTest({ AGENTOPS_CONFIG_PATH: path.join(dir, 'missing-config.json') });
+  const restoreEnv = setEnvForTest({
+    AGENTOPS_CONFIG_PATH: path.join(dir, 'missing-config.json'),
+    AGENTOPS_DURABLE_SPOOL_DIR: path.join(dir, 'delivery-spool'),
+    AGENTOPS_WRAPPER_EVENTS_PATH: path.join(dir, 'wrapper-events.jsonl')
+  });
   let spawned = false;
   const restore = [
     patch(collector, 'status', async () => ({ running: true, privacyMode: 'unknown', privacyVerified: false, binary: { running: false } })),

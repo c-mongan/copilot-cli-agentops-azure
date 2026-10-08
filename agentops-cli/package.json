@@ -33,8 +33,8 @@
     "agentops": "src/index.js"
   },
   "scripts": {
-    "test": "node --test",
-    "coverage": "node --test --experimental-test-coverage",
+    "test": "node ../scripts/run-cli-tests.js",
+    "coverage": "node ../scripts/run-cli-tests.js --experimental-test-coverage",
     "coverage:check": "node ../scripts/coverage-check.js",
     "static:check": "node ../scripts/static-check.js",
     "prepack": "node ../scripts/prepare-cli-package-assets.js copy",

@@ -97,7 +97,7 @@ See [privacy modes](docs/privacy-modes.md), [secure by default](docs/secure-by-d
 - [Weekly digest](docs/digest.md): `agentops digest` failure clusters, slow tools, tokens and trends
 - [VS Code native capture extension](extensions/agentops-native/README.md)
 - [Deploy to Azure](docs/deploy-to-azure.md): one-click, metadata-only workspace with a budget alert
-- [Portable Grafana dashboard](docs/grafana.md) for the Azure portal, Azure Managed Grafana or self-hosted Grafana
+- [Portable Grafana dashboard](docs/grafana.md): import the one file `grafana/agentops-copilot-cli.json` into the Azure portal, Azure Managed Grafana or self-hosted Grafana. The other dashboard JSONs are legacy or advanced; see [`grafana/README.md`](grafana/README.md)
 - [Azure Workbook](docs/enterprise-workbook.md), [Grafana tour](docs/grafana-dashboard-tour-v2.md) and [KQL query library](docs/kql-query-library.md)
 - [OpenTelemetry GenAI export](docs/otel-genai.md): send sessions to the App Insights Agents (preview) view
 - [Telemetry schema](docs/telemetry-schema.md) and the [documentation index](docs/README.md)
