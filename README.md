@@ -39,7 +39,7 @@ You need Node.js 20+ and the GitHub Copilot CLI, signed in. Azure is optional.
 
 ```bash
 # 1. Get the CLI (one command, no global install; npx fetches the release tarball)
-alias agentops='npx --yes -p https://github.com/c-mongan/copilot-cli-agentops-azure/releases/download/v0.3.3-preview/copilot-agentops-cli-0.3.3-preview.tgz agentops'
+alias agentops='npx --yes -p https://github.com/c-mongan/copilot-cli-agentops-azure/releases/download/v0.3.4-preview/copilot-agentops-cli-0.3.4-preview.tgz agentops'
 
 # 2. Run an observed Copilot session (local only, no upload). In -p mode Copilot
 #    cannot ask for permission, so allow tools explicitly; use a repo you trust.
@@ -67,7 +67,7 @@ With `--json`, stdout is only the run JSON; Copilot's transcript goes to stderr.
 
 Prefer a source checkout? `git clone` the repository and use `alias agentops="node $PWD/agentops-cli/src/index.js"`. Each release lists its tarball's SHA256 in `SHA256SUMS`. The package is not on the npm registry yet.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fc-mongan%2Fcopilot-cli-agentops-azure%2Fv0.3.3-preview%2Finfra%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fc-mongan%2Fcopilot-cli-agentops-azure%2Fv0.3.4-preview%2Finfra%2Fazuredeploy.json)
 
 To publish to your own Azure workspace, click **Deploy to Azure** (metadata-only Log Analytics, ingestion endpoint and rule, Workbook and a monthly cost alert at a budget of 5 units of your subscription's billing currency by default, set with `monthlyBudgetAmount`; it alerts but does not stop spending; see [Deploy to Azure](docs/deploy-to-azure.md)) or follow the [diagnostic pilot quickstart](docs/diagnostic-pilot-quickstart.md). Explicitly opt into upload RBAC and public network access, or configure a separately authorized sender and private connectivity. Then add `--upload --yes` with an explicit daily byte cap (`AGENTOPS_MAX_PUBLISH_BYTES_PER_DAY`), and check storage with the [KQL query library](docs/kql-query-library.md).
 

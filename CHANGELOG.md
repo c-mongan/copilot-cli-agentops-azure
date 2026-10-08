@@ -3,6 +3,15 @@
 All notable changes to this project are recorded here. This is a preview
 project. From v0.3.3-preview the CLI and SDK package versions match the release tag.
 
+## v0.3.4-preview: 2026-10-08
+
+Maintenance release.
+
+### Fixed
+
+- The SDK OTLP exporter reports its real package version as the instrumentation scope version instead of a hard-coded `0.1.0` (#209).
+- The packaged lifecycle check derives a valid numeric upgrade version from prerelease versions (`0.3.3-preview` → `0.3.4`, not `0.3.NaN`) (#209).
+
 ## v0.3.3-preview: 2026-10-08
 
 Fixes from the second independent QA review (grade B+).
