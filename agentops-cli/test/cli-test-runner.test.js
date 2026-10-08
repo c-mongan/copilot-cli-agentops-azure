@@ -54,19 +54,42 @@ test('Windows stubs redirect before echo so a trailing digit argument still logs
   assert.doesNotMatch(stub, /%\*>>/);
 });
 
-test('Windows sandbox PATH drops directories that hold real stubbed CLIs but keeps node', () => {
+test('Windows sandbox PATH drops directories that hold real stubbed CLIs', () => {
   const present = new Set([
     'C:\\Program Files\\GitHub CLI\\gh.exe',
     'C:\\Program Files\\Microsoft SDKs\\Azure\\CLI2\\wbin\\az.cmd',
     'C:\\Program Files\\nodejs\\node.exe',
     'C:\\Program Files\\nodejs\\copilot.cmd',
+    'C:\\Tools\\node.exe',
+    'C:\\Tools\\gh.exe',
     'C:\\Program Files\\Git\\cmd\\git.exe'
   ]);
   const env = withoutRealCliDirs({
-    Path: 'C:\\Program Files\\GitHub CLI;C:\\Program Files\\Microsoft SDKs\\Azure\\CLI2\\wbin;C:\\Program Files\\nodejs;C:\\Program Files\\Git\\cmd'
+    Path: 'C:\\Program Files\\GitHub CLI;C:\\Program Files\\Microsoft SDKs\\Azure\\CLI2\\wbin;C:\\Program Files\\nodejs;C:\\Tools;C:\\Program Files\\Git\\cmd'
   }, 'win32', file => present.has(file));
+  // A shell-only copilot.cmd beside node is shadowed by the stubs; a gh.exe beside node is not.
   assert.equal(env.Path, 'C:\\Program Files\\nodejs;C:\\Program Files\\Git\\cmd');
   assert.deepEqual(withoutRealCliDirs({ PATH: '/usr/bin' }, 'linux', () => true), { PATH: '/usr/bin' });
+});
+
+test('Windows sandbox gives node its own PATH entry when its directory holds a real stubbed CLI', () => {
+  const sandbox = { root: 'S', home: 'S/home', bin: 'S/bin', log: 'S/log' };
+  const present = new Set(['C:\\Tools\\node.exe', 'C:\\Tools\\az.exe']);
+  const linked = [];
+  const options = {
+    exists: file => present.has(file),
+    execPath: 'C:\\Tools\\node.exe',
+    linkNode: (execPath, dir) => linked.push([execPath, dir])
+  };
+  const env = hermeticEnv(sandbox, { Path: 'C:\\Tools;C:\\Windows' }, 'win32', options);
+  const nodeBin = path.join('S', 'node-bin');
+  assert.deepEqual(linked, [['C:\\Tools\\node.exe', nodeBin]]);
+  assert.equal(env.Path, ['S/bin', nodeBin, 'C:\\Windows'].join(path.delimiter));
+
+  linked.length = 0;
+  const kept = hermeticEnv(sandbox, { Path: 'C:\\Tools\\;C:\\Windows' }, 'win32', { ...options, exists: file => file === 'C:\\Tools\\node.exe' });
+  assert.deepEqual(linked, []);
+  assert.match(kept.Path, /C:\\Tools\\;C:\\Windows$/);
 });
 
 test('a stub launched through the sandbox PATH is logged by the guard', { skip: process.platform !== 'win32' && 'POSIX launch is covered by the stub invocation test below' }, t => {

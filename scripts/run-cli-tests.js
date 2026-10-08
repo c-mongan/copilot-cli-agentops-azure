@@ -76,26 +76,55 @@ function createSandbox(options = {}) {
 
 // On Windows, spawnSync('gh') without a shell resolves only .exe/.com files, so
 // the .cmd stubs cannot intercept it. Drop PATH entries that hold a real
-// stubbed CLI; the directory holding node.exe is always kept.
-const WINDOWS_EXECUTABLE_EXTENSIONS = Object.freeze(['.exe', '.com', '.cmd', '.bat', '.ps1', '']);
+// stubbed CLI. The Node directory survives only when its stubbed CLIs are
+// shell-resolved shims (.cmd/.bat/.ps1), which the prepended stubs shadow;
+// otherwise Node gets a dedicated sandbox directory instead.
+const SHELL_ONLY_EXTENSIONS = Object.freeze(['.cmd', '.bat', '.ps1']);
+const DIRECT_EXTENSIONS = Object.freeze(['.exe', '.com', '']);
+
+function stubbedCliIn(entry, extensions, exists) {
+  return STUBBED_COMMANDS.some(name => extensions.some(ext => exists(path.win32.join(entry, `${name}${ext}`))));
+}
 
 function withoutRealCliDirs(env, platform = process.platform, exists = fs.existsSync) {
   if (platform !== 'win32') return env;
   const key = pathKey(env, platform);
   const entries = String(env[key] || '').split(';').filter(Boolean);
   const kept = entries.filter(entry => {
+    if (stubbedCliIn(entry, DIRECT_EXTENSIONS, exists)) return false;
     if (exists(path.win32.join(entry, 'node.exe'))) return true;
-    return !STUBBED_COMMANDS.some(name => WINDOWS_EXECUTABLE_EXTENSIONS.some(ext => exists(path.win32.join(entry, `${name}${ext}`))));
+    return !stubbedCliIn(entry, SHELL_ONLY_EXTENSIONS, exists);
   });
   return { ...env, [key]: kept.join(';') };
 }
 
-function hermeticEnv(sandbox, baseEnv = process.env, platform = process.platform, exists = fs.existsSync) {
-  const env = withoutRealCliDirs(
+function linkNodeExecutable(execPath, dir) {
+  fs.mkdirSync(dir, { recursive: true });
+  const target = path.join(dir, path.basename(execPath));
+  if (fs.existsSync(target)) return;
+  try {
+    fs.linkSync(execPath, target);
+  } catch {
+    fs.copyFileSync(execPath, target);
+  }
+}
+
+function hermeticEnv(sandbox, baseEnv = process.env, platform = process.platform, options = {}) {
+  const { exists = fs.existsSync, execPath = process.execPath, linkNode = linkNodeExecutable } = options;
+  let env = withoutRealCliDirs(
     Object.fromEntries(Object.entries(baseEnv).filter(([key]) => !STRIPPED_ENV_PATTERN.test(key))),
     platform,
     exists
   );
+  if (platform === 'win32') {
+    const nodeDir = path.win32.dirname(execPath).toLowerCase();
+    const keptDirs = String(env[pathKey(env, platform)] || '').split(';').map(entry => entry.replace(/[\\/]+$/, '').toLowerCase());
+    if (!keptDirs.includes(nodeDir)) {
+      const nodeBin = path.join(sandbox.root, 'node-bin');
+      linkNode(execPath, nodeBin);
+      env = prependPath(env, nodeBin, platform);
+    }
+  }
   Object.assign(env, {
     HOME: sandbox.home,
     USERPROFILE: sandbox.home,
