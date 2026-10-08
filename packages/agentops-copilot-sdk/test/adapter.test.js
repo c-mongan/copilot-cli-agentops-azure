@@ -401,6 +401,10 @@ test('ordered event exporter sends allowlisted OTLP JSON and flushes', async () 
     assert.equal(requests.length, 1);
     assert.equal(requests[0].url, 'http://127.0.0.1:4318/v1/traces');
     const payload = JSON.parse(requests[0].init.body);
+    assert.deepEqual(payload.resourceSpans[0].scopeSpans[0].scope, {
+      name: '@agentops/copilot-sdk',
+      version: require('../package.json').version
+    });
     const span = payload.resourceSpans[0].scopeSpans[0].spans[0];
     assert.match(span.traceId, /^[a-f0-9]{32}$/);
     assert.match(span.spanId, /^[a-f0-9]{16}$/);

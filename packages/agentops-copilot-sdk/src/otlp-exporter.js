@@ -1,4 +1,5 @@
 const crypto = require('node:crypto');
+const { version: sdkVersion } = require('../package.json');
 const { createSafeEventNormalizer, otelAttributeMap } = require('./event-envelope');
 
 function hexId(value, bytes) {
@@ -107,7 +108,7 @@ function createOtlpJsonExporter(options = {}) {
           { key: 'agent.runtime', value: { stringValue: 'nodejs' } }
         ] },
         scopeSpans: [{
-          scope: { name: '@agentops/copilot-sdk', version: '0.1.0' },
+          scope: { name: '@agentops/copilot-sdk', version: sdkVersion },
           spans: [{
             traceId,
             spanId,

@@ -64,7 +64,7 @@ const { securityAudit, securityPosture } = require('../src/lib/security-audit');
 const { checkCliPublish } = require('../../scripts/check-cli-publish');
 const { checkHomebrewFormula, releaseUrl, renderFormula } = require('../../scripts/check-homebrew-formula');
 const { checkInstallSmoke } = require('../../scripts/check-install-smoke');
-const { checkPackagedLifecycle } = require('../../scripts/check-packaged-lifecycle');
+const { checkPackagedLifecycle, lifecycleUpgradeVersion } = require('../../scripts/check-packaged-lifecycle');
 const { checkReleaseDistribution } = require('../../scripts/check-release-distribution');
 const { checkSdkPublish, isWildcardRange } = require('../../scripts/check-sdk-publish');
 const { shouldCopy } = require('../../scripts/prepare-cli-package-assets');
@@ -562,6 +562,18 @@ test('packed CLI install smoke runs installed command from clean prefix', () => 
   assert.ok(result.commands.some(command => command.name === 'agentops collector validate --mode none --json' && command.ok));
 });
 
+test('packaged lifecycle upgrade increments the numeric patch without prerelease or build metadata', () => {
+  for (const [baseline, upgrade] of [
+    ['0.3.3-preview', '0.3.4'],
+    ['1.2.9-rc.1', '1.2.10'],
+    ['2.4.7-preview.2+build.123', '2.4.8'],
+    ['3.5.8+build.456', '3.5.9'],
+    ['4.6.9', '4.6.10']
+  ]) {
+    assert.equal(lifecycleUpgradeVersion(baseline), upgrade, baseline);
+  }
+});
+
 test('packed CLI POSIX lifecycle preserves privacy and restores Copilot byte-for-byte', {
   skip: process.platform === 'win32' ? 'POSIX lifecycle is separate from the Windows PowerShell lane' : false
 }, () => {
@@ -575,6 +587,7 @@ test('packed CLI POSIX lifecycle preserves privacy and restores Copilot byte-for
     assert.equal(result.restoration.restored_sha256, result.restoration.original_sha256);
     assert.equal(result.versions.downgrade, result.versions.baseline);
     assert.notEqual(result.versions.upgrade, result.versions.baseline);
+    assert.match(result.versions.upgrade, /^\d+\.\d+\.\d+$/);
     assert.ok(result.steps.some(step => step.name === 'normal copilot strict metadata-only receipt' && step.ok));
     assert.ok(result.steps.some(step => step.name === 'restored Copilot runs without AgentOps interception' && step.ok));
     assert.ok(result.unproven_lanes.includes('Windows PowerShell live lifecycle'));
