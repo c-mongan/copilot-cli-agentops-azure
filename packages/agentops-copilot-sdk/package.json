@@ -1,6 +1,6 @@
 {
   "name": "@agentops/copilot-sdk",
-  "version": "0.1.0",
+  "version": "0.3.3-preview",
   "description": "Privacy-safe AgentOps adapter helpers for GitHub Copilot SDK apps.",
   "main": "src/index.js",
   "types": "src/index.d.ts",
