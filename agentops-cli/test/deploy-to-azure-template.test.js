@@ -68,8 +68,9 @@ test('blank budget email notifies the Owner role without an action group', () =>
   assert.match(JSON.stringify(budget.properties.parameters.contactEmails), /empty\(parameters\('budgetAlertEmail'\)\)/);
 });
 
-test('README Deploy to Azure badge points at the committed ARM template', () => {
-  const encoded = encodeURIComponent('https://raw.githubusercontent.com/c-mongan/copilot-cli-agentops-azure/main/infra/azuredeploy.json');
+test('README Deploy to Azure badge points at the ARM template in the current release tag', () => {
+  const tag = `v${require('../package.json').version}`;
+  const encoded = encodeURIComponent(`https://raw.githubusercontent.com/c-mongan/copilot-cli-agentops-azure/${tag}/infra/azuredeploy.json`);
   assert.ok(readme.includes(`https://portal.azure.com/#create/Microsoft.Template/uri/${encoded}`));
   assert.ok(readme.includes('https://aka.ms/deploytoazurebutton'));
 });

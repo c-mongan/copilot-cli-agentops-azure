@@ -1,9 +1,16 @@
 # Changelog
 
 All notable changes to this project are recorded here. This is a preview
-project. Package versions stay at `0.1.0` until a package is published to npm.
+project. From v0.3.3-preview the CLI and SDK package versions match the release tag.
 
-## Unreleased
+## v0.3.3-preview: 2026-10-08
+
+Fixes from the second independent QA review (grade B+).
+
+### Changed
+
+- The CLI and SDK package versions now match the release (`0.3.3-preview`), so `agentops --version`, the tarball name (`copilot-agentops-cli-0.3.3-preview.tgz`) and the npx URL agree.
+- The Deploy to Azure button points at the `v0.3.3-preview` tag instead of `main`.
 
 ### Fixed
 

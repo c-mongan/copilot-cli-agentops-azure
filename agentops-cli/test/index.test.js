@@ -499,8 +499,8 @@ test('Homebrew formula check renders checked CLI artifact URL and SHA', () => {
   const result = checkHomebrewFormula({ skipDocs: false });
 
   assert.equal(result.ok, true, JSON.stringify(result, null, 2));
-  assert.equal(result.version, '0.1.0');
-  assert.equal(result.artifact.filename, 'copilot-agentops-cli-0.1.0.tgz');
+  assert.equal(result.version, require('../package.json').version);
+  assert.equal(result.artifact.filename, `copilot-agentops-cli-${result.version}.tgz`);
   assert.equal(result.artifact.sha256.length, 64);
   assert.equal(result.artifact.url, releaseUrl(result.version, result.artifact.filename));
   const rendered = fs.readFileSync(result.rendered, 'utf8');

@@ -1,6 +1,6 @@
 # Deploy to Azure
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fc-mongan%2Fcopilot-cli-agentops-azure%2Fmain%2Finfra%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fc-mongan%2Fcopilot-cli-agentops-azure%2Fv0.3.3-preview%2Finfra%2Fazuredeploy.json)
 
 The button opens the Azure portal's custom deployment page with
 [`infra/azuredeploy.json`](../infra/azuredeploy.json). That file is ARM JSON
@@ -118,7 +118,7 @@ BICEP_CLI=~/.azure/bin/bicep node scripts/check-deploy-to-azure-template.js
 node --test agentops-cli/test/deploy-to-azure-template.test.js
 ```
 
-The button reads `infra/azuredeploy.json` from the `main` branch.
+The button reads `infra/azuredeploy.json` from the current release tag (`v0.3.3-preview`), so it deploys the template that was tested for that release, not whatever is on `main`. The release PR updates the tag in this page and the README; a test checks it matches the CLI package version.
 
 ## azd
 
