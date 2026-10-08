@@ -71,6 +71,12 @@ function derivedVersionArtifact(baseArtifact, tempDir, version) {
   return path.join(tempDir, detail.filename);
 }
 
+function lifecycleUpgradeVersion(baseVersion) {
+  // Only the numeric core belongs in the temporary upgrade artifact version.
+  const [major, minor, patch] = baseVersion.split(/[+-]/, 1)[0].split('.').map(Number);
+  return `${major}.${minor}.${patch + 1}`;
+}
+
 function commandStep(steps, name, command, args, options = {}, validate = result => result.ok) {
   const result = run(command, args, options);
   const ok = Boolean(validate(result));
@@ -141,8 +147,7 @@ function checkPackagedLifecycle(options = {}) {
     if (!distribution.ok) failures.push(...distribution.failures);
     if (!base) throw new Error('CLI release artifact was not generated');
     const baseVersion = JSON.parse(fs.readFileSync(path.join(root, 'agentops-cli', 'package.json'), 'utf8')).version;
-    const [major, minor, patch] = baseVersion.split('.').map(Number);
-    const upgradeVersion = `${major}.${minor}.${patch + 1}`;
+    const upgradeVersion = lifecycleUpgradeVersion(baseVersion);
     const upgradeArtifact = derivedVersionArtifact(base.path, tempDir, upgradeVersion);
 
     commandStep(steps, `install packed CLI ${baseVersion}`, 'npm', ['install', '-g', '--prefix', paths.prefix, base.path], { env });
@@ -218,4 +223,4 @@ if (require.main === module) {
   process.exit(result.ok || result.skipped ? 0 : 1);
 }
 
-module.exports = { checkPackagedLifecycle, derivedVersionArtifact, sanitizedEnvironment };
+module.exports = { checkPackagedLifecycle, derivedVersionArtifact, lifecycleUpgradeVersion, sanitizedEnvironment };
