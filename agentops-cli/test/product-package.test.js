@@ -22,7 +22,7 @@ test('actual packed CLI runs runtime qualification and protected receipt replay 
     fs.mkdirSync(path.dirname(dest), { recursive: true });
     fs.cpSync(path.join(sourceRoot, relative), dest, { recursive: true });
   };
-  for (const relative of ['agentops-cli/src', 'agentops-cli/package.json', 'agentops-cli/README.md', 'collector/release-cadence.json', 'scripts/prepare-cli-package-assets.js', 'scripts/check-runtime-matrix.js', 'scripts/qualify-enterprise-evidence.js', 'infra/bicep/enterprise-workbook.bicep', 'workbooks/agentops-workbook.json', 'workbooks/agentops-enterprise-workbook.json', 'infra/bicep/v2-ingestion.bicep', 'infra/bicep/eval-content.bicep', 'evals/diagnostics/common.js', 'evals/stockpilot/scripts/heldout.js', 'evals/stockpilot/scripts/full-corpus.js', 'evals/stockpilot/graders/index.js', 'evals/stockpilot/graders/tasks.json']) copy(relative);
+  for (const relative of ['agentops-cli/src', 'agentops-cli/package.json', 'agentops-cli/README.md', 'collector/release-cadence.json', 'scripts/prepare-cli-package-assets.js', 'scripts/check-runtime-matrix.js', 'scripts/qualify-enterprise-evidence.js', 'scripts/start-ui-demo.js', 'infra/bicep/enterprise-workbook.bicep', 'workbooks/agentops-workbook.json', 'workbooks/agentops-enterprise-workbook.json', 'infra/bicep/v2-ingestion.bicep', 'infra/bicep/eval-content.bicep', 'evals/diagnostics/common.js', 'evals/stockpilot/scripts/heldout.js', 'evals/stockpilot/scripts/full-corpus.js', 'evals/stockpilot/graders/index.js', 'evals/stockpilot/graders/tasks.json']) copy(relative);
   fs.writeFileSync(path.join(repo, 'workbooks/private-workbook.json'), 'PRIVATE_WORKBOOK_CANARY');
   // Canary files under evals must not enter a published package.
   fs.writeFileSync(path.join(repo, 'evals/private-answer-key.json'), 'PRIVATE_KEY_CANARY');
@@ -36,6 +36,7 @@ test('actual packed CLI runs runtime qualification and protected receipt replay 
   assert.ok(names.includes('workbooks/agentops-enterprise-workbook.json'));
   assert.equal(names.includes('workbooks/private-workbook.json'), false);
   assert.equal(names.includes('scripts/qualify-enterprise-evidence.js'), false);
+  assert.equal(names.includes('scripts/start-ui-demo.js'), false);
   assert.equal(names.some(name => /private-answer-key|node_modules|fixtures\/sinks/.test(name)), false);
   const installed = path.join(temp, 'installed');
   fs.mkdirSync(installed);
