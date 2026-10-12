@@ -43,6 +43,9 @@ jobs:
       - name: Run native extension and companion tests
         run: node scripts/run-native-tests.js
 
+      - name: Run offline native qualification and demo tests
+        run: node --test scripts/test/qualify-native-cli.test.js scripts/test/start-ui-demo.test.js
+
       - name: Run static analysis
         run: npm --prefix agentops-cli run static:check
 
@@ -138,4 +141,4 @@ jobs:
       - name: Qualify safe metrics through the real Collector
         env:
           AGENTOPS_COLLECTOR_BINARY: ${{ env.AGENTOPS_COLLECTOR_HOME }}/bin/otelcol-contrib
-        run: node --test scripts/test/qualify-safe-metrics.test.js
+        run: node --test scripts/test/qualify-safe-metrics.test.js scripts/test/scoped-capture-shutdown.test.js

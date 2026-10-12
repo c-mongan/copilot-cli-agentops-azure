@@ -4,6 +4,15 @@
 
 ![Run detail: failure callout, span waterfall with a denied shell call, cumulative token and cost meter, and per-tool latency table](images/ui-run-detail-light.png)
 
+## Try it without a Copilot account
+
+From a source checkout, run `node scripts/start-ui-demo.js` with Node.js 20+.
+The browser opens the actual AgentOps UI with three **synthetic demo** sessions:
+a denied call, a tool error, and a completed run. Generated timings and tokens
+are examples, not measured product performance. No real sessions, model calls,
+cloud writes or credentials are used. `Ctrl+C` stops the server and removes its
+private temporary fixture. Add `--no-open` to print the URL without opening a browser.
+
 ## Quick start
 
 You need Node.js 20+ and at least one Copilot CLI session on this machine.

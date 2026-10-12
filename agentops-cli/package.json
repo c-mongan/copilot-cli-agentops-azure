@@ -1,6 +1,6 @@
 {
   "name": "copilot-agentops-cli",
-  "version": "0.3.4-preview",
+  "version": "0.3.5-preview",
   "description": "Local utilities for Copilot CLI AgentOps for Azure.",
   "files": [
     "LICENSE",

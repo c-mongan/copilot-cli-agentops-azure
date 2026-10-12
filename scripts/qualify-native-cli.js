@@ -50,6 +50,26 @@ function inspectReceipt(text) {
   const children = spans.filter(span => ['chat', 'execute_tool'].includes(attribute(span, 'gen_ai.operation.name')));
   return { spanCount: spans.length, operations: [...new Set(operations)].sort(), canaryAbsent: !text.includes(CANARY), traceCount: new Set(spans.map(s => s.traceId)).size, childrenHaveAgentParent: children.length > 0 && children.every(span => rootIds.has(span.parentSpanId)), hasAgent: operations.includes('invoke_agent'), hasChat: operations.includes('chat'), hasTool: operations.includes('execute_tool') };
 }
+// Qualification waits for its required operations, including external legacy
+// Collectors. Scoped production shutdown uses an in-process pipeline connector.
+async function finishCollectorCapture(collector, initialReceiptBytes, options = {}) {
+  const deadline = Date.now() + Math.max(0, Math.min(options.receiptWaitMs ?? 15000, 15000));
+  try {
+    while (Date.now() < deadline) {
+      const bytes = readReceipt(collector.receiptPath);
+      try {
+        const current = inspectReceipt(bytes.subarray(initialReceiptBytes).toString('utf8'));
+        if (current.hasAgent && current.hasChat && current.hasTool) return;
+      } catch (error) {
+        if (!(error instanceof SyntaxError)) throw error;
+        // A JSON line can be in progress while the Collector appends.
+      }
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+  } finally {
+    if (!collector.external) await collector.stop({ remove: false });
+  }
+}
 async function qualify(options = {}) {
   const suppliedCollector = externalCollector(options);
   const tool = fixtureTool(options.platform || process.platform);
@@ -103,20 +123,7 @@ async function qualify(options = {}) {
       child.once('error', error => { clearTimeout(timer); clearTimeout(killTimer); reject(error); });
       child.once('close', (code, signal) => { clearTimeout(timer); clearTimeout(killTimer); resolve({ code, signal, outputContainedCanary: stdout.includes(CANARY), stderr: stderr.slice(-4000) }); });
     });
-    // Only stop a Collector that this qualification owns. The installed companion
-    // keeps running; poll its bounded receipt for accepted batches instead.
-    if (!collector.external) await collector.stop({ remove: false });
-    if (collector.external) {
-      const deadline = Date.now() + Math.min(options.receiptWaitMs ?? 15000, 15000);
-      while (Date.now() < deadline) {
-        const bytes = readReceipt(collector.receiptPath);
-        try {
-          const current = inspectReceipt(bytes.subarray(initialReceiptBytes).toString('utf8'));
-          if (current.hasAgent && current.hasChat && current.hasTool) break;
-        } catch { /* A JSON line can be in progress while the Collector appends. */ }
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
-    }
+    await finishCollectorCapture(collector, initialReceiptBytes, options);
     const receipt = readReceipt(collector.receiptPath).toString('utf8');
     const inspected = inspectReceipt(Buffer.from(receipt).subarray(initialReceiptBytes).toString('utf8'));
     inspected.canaryAbsent = !receipt.includes(CANARY);
@@ -129,4 +136,4 @@ async function qualify(options = {}) {
   } finally { await new Promise(resolve => server.close(resolve)); if (collector && !collector.external) await collector.stop({ remove: false }); }
 }
 if (require.main === module) qualify().then(report => { console.log(JSON.stringify(report, null, 2)); process.exitCode = report.passed ? 0 : 1; }).catch(error => { console.error(error.message); process.exitCode = 1; });
-module.exports = { CANARY, fixtureTool, cleanEnvironment, inspectReceipt, externalCollector, qualify };
+module.exports = { CANARY, fixtureTool, cleanEnvironment, inspectReceipt, externalCollector, finishCollectorCapture, qualify };

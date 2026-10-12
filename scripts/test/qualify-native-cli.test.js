@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { CANARY, fixtureTool, cleanEnvironment, inspectReceipt, externalCollector } = require('../qualify-native-cli');
+const { CANARY, fixtureTool, cleanEnvironment, inspectReceipt, externalCollector, finishCollectorCapture } = require('../qualify-native-cli');
 test('qualification child cannot inherit provider, GitHub or exporter secrets', () => {
   assert.deepEqual(cleanEnvironment({ PATH: '/bin', HOME: '/home', GITHUB_TOKEN: 'secret', COPILOT_PROVIDER_API_KEY: 'secret', OTEL_EXPORTER_OTLP_HEADERS: 'secret', NODE_OPTIONS: 'unsafe' }), { PATH: '/bin', HOME: '/home' });
 });
@@ -47,4 +47,36 @@ test('external Collector requires a private scope pair and rejects remote export
 test('Windows fixture allows only a fixed PowerShell marker and retains OS bootstrap variables', () => {
  assert.deepEqual(fixtureTool('win32'), {name:'powershell',command:'Write-Output agentops-native-fixture',permission:'shell(Write-Output)'});
  assert.deepEqual(cleanEnvironment({SystemRoot:'C:\\Windows',TEMP:'C:\\Temp',GITHUB_TOKEN:'secret',NODE_OPTIONS:'unsafe'}), {SystemRoot:'C:\\Windows',TEMP:'C:\\Temp'});
+});
+
+
+test('owned native qualification waits for receipt operations before stopping the Collector', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-drain-test-'));
+  const receiptPath = path.join(root, 'native-receipt.jsonl');
+  fs.writeFileSync(receiptPath, '');
+  const row = { resourceSpans: [{ scopeSpans: [{ spans: ['invoke_agent', 'chat', 'execute_tool'].map(operation => ({ traceId: 'one', spanId: operation, attributes: [{ key: 'gen_ai.operation.name', value: { stringValue: operation } }] })) }] }] };
+  let stopped = false;
+  const timer = setTimeout(() => fs.writeFileSync(receiptPath, JSON.stringify(row) + '\n'), 20);
+  try {
+    await finishCollectorCapture({ receiptPath, stop: async () => {
+      stopped = true;
+      assert.equal(inspectReceipt(fs.readFileSync(receiptPath, 'utf8')).hasTool, true);
+    } }, 0, { receiptWaitMs: 1000 });
+    assert.equal(stopped, true);
+  } finally { clearTimeout(timer); fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('receipt timeout remains negative evidence and does not stop an external Collector', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agentops-drain-timeout-'));
+  const receiptPath = path.join(root, 'native-receipt.jsonl');
+  fs.writeFileSync(receiptPath, '');
+  let stops = 0;
+  const collector = { receiptPath, stop: async () => { stops += 1; } };
+  try {
+    await finishCollectorCapture(collector, 0, { receiptWaitMs: 0 });
+    assert.equal(stops, 1);
+    assert.equal(inspectReceipt(fs.readFileSync(receiptPath, 'utf8')).hasAgent, false);
+    await finishCollectorCapture({ ...collector, external: true }, 0, { receiptWaitMs: 0 });
+    assert.equal(stops, 1);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
