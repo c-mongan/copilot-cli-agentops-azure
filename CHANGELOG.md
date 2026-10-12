@@ -3,6 +3,25 @@
 All notable changes to this project are recorded here. This is a preview
 project. From v0.3.3-preview the CLI and SDK package versions match the release tag.
 
+## v0.3.5-preview: 2026-10-12
+
+### Fixed
+
+- Short Copilot runs could lose native telemetry when the scoped Collector stopped before its batched HTTP receipt relay drained. Scoped local capture now uses an in-process connector and synchronous pipelines. Both privacy passes remain; generic and Azure configurations are unchanged.
+- A failed run's summary no longer says "Nothing failed" beneath a non-zero failed-tool count.
+- Native CLI qualification waits for required receipt operations before stopping its owned Collector. External Collectors remain running; missing evidence still fails qualification.
+
+### Added
+
+- Account-free source-checkout demo: `node scripts/start-ui-demo.js` opens the real local UI with clearly labeled synthetic sessions. It makes no model or cloud calls and reads no personal sessions.
+- A product scope guide explains where AgentOps overlaps native Copilot, Aspire and Azure tooling, and distinguishes local proof from current cloud acceptance.
+- Actual Collector regression coverage for immediate shutdown: nine spans, three metrics and one log, with both privacy passes and exact retained values checked.
+
+### Evidence and limits
+
+- Local qualification used an actual Copilot CLI process with a synthetic loopback model and a real shell tool. Four native spans were captured in one linked trace with the privacy canary removed. This is runtime/capture proof, not model-quality or Azure proof.
+- Existing Azure walkthroughs remain dated evidence for earlier builds. This release does not certify current native Azure Agents integration or resolve separate private Collector work.
+
 ## v0.3.4-preview: 2026-10-08
 
 Maintenance release.

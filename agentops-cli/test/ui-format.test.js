@@ -5,14 +5,14 @@ const test = require('node:test');
 
 const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'lib', 'ui', 'assets', 'app.js'), 'utf8');
 
-function extract(name) {
+function extract(name, bindings = {}) {
   const start = source.indexOf(`function ${name}(`);
   assert.ok(start >= 0, `${name} not found in app.js`);
   let depth = 0;
   for (let i = source.indexOf('{', start); i < source.length; i += 1) {
     if (source[i] === '{') depth += 1;
     if (source[i] === '}' && --depth === 0) {
-      return new Function(`${source.slice(start, i + 1)}; return ${name};`)();
+      return new Function(...Object.keys(bindings), `${source.slice(start, i + 1)}; return ${name};`)(...Object.values(bindings));
     }
   }
   throw new Error(`unterminated ${name}`);
@@ -118,4 +118,31 @@ test('spanIssue separates failed, denied and non-zero exit spans', () => {
   assert.equal(issueNote(tool('ok', { outcome: 'nonzero_exit' }), 'nonzero'), 'non-zero exit');
   assert.equal(issueNote(tool('failed', { outcome: 'failure' }), 'failed'), 'failure');
   assert.equal(issueNote(tool('denied', {}), 'denied'), 'denied');
+});
+
+
+test('run summary never says Nothing failed when tool failures are present', () => {
+  const fmtInt = value => String(value);
+  const plural = (count, noun) => `${count} ${noun}${count === 1 ? '' : 's'}`;
+  const runKpis = extract('runKpis', {
+    h: (tag, props, ...children) => ({ tag, props, children }),
+    fmtInt, plural,
+    fmtDuration: extract('fmtDuration'),
+    fmtTokens: String,
+    fmtCost: String,
+    otherFailureNote: extract('otherFailureNote', { plural }),
+    attentionNote: extract('attentionNote', { fmtInt, plural }),
+    unpricedNote: () => ''
+  });
+  const note = overrides => {
+    const run = { toolFailures: 0, failures: 0, turns: 1, toolCalls: 1, durationMs: 1000,
+      p95ToolMs: 100, tokens: { known: false }, premiumRequests: null, ...overrides };
+    const tile = runKpis(run).children.find(child => child.children[0].children[0] === 'Failed tool calls');
+    return tile.children[2].props.text;
+  };
+  assert.equal(note({ toolFailures: 1, failures: 1 }), 'Inspect highlighted calls below');
+  assert.equal(note({ toolFailures: 3, failures: 3 }), 'Inspect highlighted calls below');
+  assert.equal(note({}), 'Nothing failed');
+  assert.equal(note({ denials: 1 }), 'Needs attention: 1 denied, 0 non-zero exits');
+  assert.equal(note({ hookFailures: 1, failures: 1 }), '1 failed hook');
 });

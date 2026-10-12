@@ -31,6 +31,17 @@ function scopedConfig(source, ports) {
   if (!config.includes('transform/privacy_strict') || !config.includes('file/receipt')) {
     throw new Error('Scoped Collector requires the strict privacy processor and local receipt exporter.');
   }
+  // Scoped capture must flush both privacy passes during shutdown. A self-HTTP
+  // hop closes its receiving socket before upstream batches finish exporting.
+  // A synchronous connector preserves both privacy passes before receiver ACK.
+  // No batch worker can write after the multi-signal file exporter closes.
+  if (config.includes('exporters: [otlp_http/local_receipt, debug]')) {
+    config = config
+      .replaceAll('exporters: [otlp_http/local_receipt, debug]', 'exporters: [forward/receipt, debug]')
+      .replaceAll('receivers: [otlp/receipt]', 'receivers: [forward/receipt]')
+      .replace(/(processors: \[[^\]\n]*), batch\]/g, '$1]')
+      .replace('service:\n', 'connectors:\n  forward/receipt: {}\n\nservice:\n');
+  }
   return config.replace(
     /service:\n/,
     `service:\n  telemetry:\n    metrics:\n      readers:\n        - pull:\n            exporter:\n              prometheus:\n                host: 127.0.0.1\n                port: ${ports.telemetry}\n`

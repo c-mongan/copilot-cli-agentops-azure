@@ -269,3 +269,16 @@ test('CRLF strict template keeps all scoped listeners and telemetry on loopback'
   assert.doesNotMatch(output, /127\.0\.0\.1:(4317|4318|4319|13133)/);
   assert.throws(() => scopedConfig(template.replaceAll('127.0.0.1:4318', '0.0.0.0:4318'), ports), /missing expected loopback binding/);
 });
+
+
+test('scoped receipt uses an in-process dependency while preserving both privacy passes', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../../collector/otelcol.local.strict.yaml'), 'utf8');
+  const output = scopedConfig(source, { 4318: 20001, 4317: 20002, 4319: 20003, 13133: 20004, telemetry: 20005 });
+  assert.match(output, /connectors:\n  forward\/receipt: \{\}/);
+  assert.equal((output.match(/exporters: \[forward\/receipt, debug\]/g) || []).length, 3);
+  assert.equal((output.match(/receivers: \[forward\/receipt\]/g) || []).length, 3);
+  assert.equal((output.match(/processors: \[[^\]]*transform\/privacy_strict[^\]]*\]/g) || []).length, 6);
+  assert.equal((output.match(/exporters: \[file\/receipt\]/g) || []).length, 3);
+  assert.doesNotMatch(output, /exporters: \[otlp_http\/local_receipt/);
+  assert.doesNotMatch(output, /processors: \[[^\]]*batch/);
+});

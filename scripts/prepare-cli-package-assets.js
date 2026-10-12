@@ -61,8 +61,8 @@ function shouldCopy(src) {
   if (relative === null) return false;
   if (relative === 'workbooks') return true;
   if (relative.startsWith('workbooks/')) return workbookAssets.has(relative);
-  // The enterprise qualification helper is repository-only operator tooling.
-  if (relative === 'scripts/qualify-enterprise-evidence.js') return false;
+  // These entry points require a repository checkout, not an installed package.
+  if (['scripts/qualify-enterprise-evidence.js', 'scripts/start-ui-demo.js'].includes(relative)) return false;
   if (relative === 'evals' || relative.startsWith('evals/')) return evaluationAssets.has(relative) || [...evaluationAssets].some(file => file.startsWith(relative + '/'));
   if (relative.split('/').includes('node_modules')) return false;
   if (relative.split('/').includes('__pycache__') || relative.endsWith('.pyc')) return false;

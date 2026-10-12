@@ -517,7 +517,7 @@
     return h('section', { class: 'kpis', 'aria-label': 'Run summary' },
       tile('Active time', fmtDuration(run.durationMs), `${plural(run.turns, 'turn')}${run.subagents ? ` · ${plural(run.subagents, 'subagent')}` : ''}`),
       tile('Tool calls', fmtInt(run.toolCalls), run.p95ToolMs !== null ? `p95 ${fmtDuration(run.p95ToolMs)}` : 'no tool calls'),
-      tile('Failed tool calls', fmtInt(run.toolFailures || 0), [otherFailureNote(run), attentionNote(run)].filter(Boolean).join(' · ') || 'Nothing failed', { bad: run.failures > 0 }),
+      tile('Failed tool calls', fmtInt(run.toolFailures || 0), [otherFailureNote(run), attentionNote(run)].filter(Boolean).join(' · ') || (run.toolFailures > 0 ? 'Inspect highlighted calls below' : 'Nothing failed'), { bad: run.failures > 0 }),
       tile('Tokens', run.tokens.known ? fmtTokens(run.tokens.input + run.tokens.output) : '—', run.tokens.known ? `${fmtTokens(run.tokens.input)} in · ${fmtTokens(run.tokens.output)} out` : 'not recorded yet'),
       tile('Cost', fmtCost(run.costUsd), unpricedNote(run.unpricedModels) || (run.premiumRequests !== null ? plural(run.premiumRequests, 'premium request') : 'list-price estimate'), { est: true, title: run.costLabel || null }));
   }
