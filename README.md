@@ -4,6 +4,8 @@
 
 ![Local web UI: runs list, then a run's span waterfall with a failed tool call pinned and per-tool latency](docs/images/ui-demo.gif)
 
+[Watch the 34-second v0.3.5 release demo](https://github.com/c-mongan/copilot-cli-agentops-azure/releases/download/v0.3.5-preview/agentops-v0.3.5-e2e.mp4): actual Copilot CLI and shell execution, native capture, failure diagnosis, operator repair and a successful rerun ([evidence](https://github.com/c-mongan/copilot-cli-agentops-azure/releases/download/v0.3.5-preview/evidence.json)). It uses a deterministic local model provider, does not demonstrate Azure delivery or assess model quality, and is separate from the generated sample-data demo below.
+
 **Try the local demo — Node.js 20+ only. No account, Azure or Docker.**
 
 ```bash
