@@ -8,9 +8,9 @@
 
 **21 seconds.** Recorded local UI; developer preview. Azure is optional.
 
-https://github.com/user-attachments/assets/0188e762-4175-4bc4-85f8-c719cf57d2d9
+[![Watch the 21-second video overview](docs/portfolio-video/poster.jpg)](https://github.com/c-mongan/copilot-cli-agentops-azure/releases/tag/portfolio-overview-2026-10-23)
 
-[Open the video](https://github.com/user-attachments/assets/0188e762-4175-4bc4-85f8-c719cf57d2d9) · [Transcript](docs/portfolio-video/transcript.txt) · [Captions](docs/portfolio-video/captions.srt) · [Credits and source notes](docs/portfolio-video/README.md)
+[Watch on GitHub](https://github.com/c-mongan/copilot-cli-agentops-azure/releases/tag/portfolio-overview-2026-10-23) · [Download MP4](https://github.com/c-mongan/copilot-cli-agentops-azure/releases/download/portfolio-overview-2026-10-23/agentops.mp4) · [Transcript](docs/portfolio-video/transcript.txt) · [Captions](docs/portfolio-video/captions.srt) · [Credits and source notes](docs/portfolio-video/README.md)
 <!-- portfolio-video:end -->
 
 ![Local web UI: runs list, then a run's span waterfall with a failed tool call pinned and per-tool latency](docs/images/ui-demo.gif)
