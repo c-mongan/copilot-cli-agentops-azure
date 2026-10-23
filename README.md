@@ -2,6 +2,17 @@
 
 **Find the failed or slow tool call in a Copilot CLI run.** For developers building and debugging coding agents, AgentOps turns local sessions into a trace waterfall with failure details, tool latency and token use. Azure Monitor is optional. Prompts, code, tool arguments and tool results are not recorded by default.
 
+<!-- portfolio-video:start -->
+
+## Short video overview
+
+**21 seconds.** Recorded local UI; developer preview. Azure is optional.
+
+[![Watch the 21-second video overview](docs/portfolio-video/poster.jpg)](https://github.com/c-mongan/copilot-cli-agentops-azure/releases/tag/portfolio-overview-2026-10-23)
+
+[Watch on GitHub](https://github.com/c-mongan/copilot-cli-agentops-azure/releases/tag/portfolio-overview-2026-10-23) · [Download MP4](https://github.com/c-mongan/copilot-cli-agentops-azure/releases/download/portfolio-overview-2026-10-23/agentops.mp4) · [Transcript](docs/portfolio-video/transcript.txt) · [Captions](docs/portfolio-video/captions.srt) · [Credits and source notes](docs/portfolio-video/README.md)
+<!-- portfolio-video:end -->
+
 ![Local web UI: runs list, then a run's span waterfall with a failed tool call pinned and per-tool latency](docs/images/ui-demo.gif)
 
 [Watch the 34-second v0.3.5 release demo](https://github.com/c-mongan/copilot-cli-agentops-azure/releases/download/v0.3.5-preview/agentops-v0.3.5-e2e.mp4): actual Copilot CLI and shell execution, native capture, failure diagnosis, operator repair and a successful rerun ([evidence](https://github.com/c-mongan/copilot-cli-agentops-azure/releases/download/v0.3.5-preview/evidence.json)). It uses a deterministic local model provider, does not demonstrate Azure delivery or assess model quality, and is separate from the generated sample-data demo below.

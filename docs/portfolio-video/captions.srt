@@ -1,0 +1,17 @@
+1
+00:00:00,350 --> 00:00:03,810
+An agent run failed. Which tool call caused it?
+
+2
+00:00:04,510 --> 00:00:07,460
+I built AgentOps to make that easier to find.
+
+3
+00:00:09,610 --> 00:00:14,970
+Open a run, inspect its trace waterfall, and see
+the failure beside the slow steps.
+
+4
+00:00:15,810 --> 00:00:20,600
+A local developer preview. Azure is optional.
+The code is on GitHub.
