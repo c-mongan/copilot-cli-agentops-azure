@@ -1,0 +1,7 @@
+An agent run failed. Which tool call caused it?
+
+I built AgentOps to make that easier to find.
+
+Open a run, inspect its trace waterfall, and see the failure beside the slow steps.
+
+A local developer preview. Azure is optional. The code is on GitHub.
