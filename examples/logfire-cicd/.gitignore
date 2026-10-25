@@ -1,0 +1,6 @@
+.venv/
+.logfire/
+__pycache__/
+.pytest_cache/
+spans.json
+summary.json
