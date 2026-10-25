@@ -1,67 +1,25 @@
 # Copilot CLI AgentOps for Azure
 
-**Find the failed or slow tool call in a Copilot CLI run.** For developers building and debugging coding agents, AgentOps turns local sessions into a trace waterfall with failure details, tool latency and token use. Azure Monitor is optional. Prompts, code, tool arguments and tool results are not recorded by default.
+**Find the failed or slow tool call in a Copilot CLI run.** AgentOps turns local Copilot CLI sessions into a trace waterfall with failure details, tool latency and token use. Azure Monitor is optional, and prompts, code, tool arguments and tool results are not recorded by default.
 
-<!-- portfolio-video:start -->
+**Who it's for:** developers building and debugging coding agents who want to see what a Copilot CLI run actually did.
 
-## Short video overview
+> Independent open-source project. Not an official Microsoft, GitHub, OpenAI, Azure or Grafana product. Developer preview.
 
-**21 seconds.** Recorded local UI; developer preview. Azure is optional.
+## Quickstart
 
-[![Watch the 21-second video overview](docs/portfolio-video/poster.jpg)](https://github.com/c-mongan/copilot-cli-agentops-azure/releases/tag/portfolio-overview-2026-10-23)
-
-[Watch on GitHub](https://github.com/c-mongan/copilot-cli-agentops-azure/releases/tag/portfolio-overview-2026-10-23) · [Download MP4](https://github.com/c-mongan/copilot-cli-agentops-azure/releases/download/portfolio-overview-2026-10-23/agentops.mp4) · [Transcript](docs/portfolio-video/transcript.txt) · [Captions](docs/portfolio-video/captions.srt) · [Credits and source notes](docs/portfolio-video/README.md)
-<!-- portfolio-video:end -->
-
-![Local web UI: runs list, then a run's span waterfall with a failed tool call pinned and per-tool latency](docs/images/ui-demo.gif)
-
-[Watch the 34-second v0.3.5 release demo](https://github.com/c-mongan/copilot-cli-agentops-azure/releases/download/v0.3.5-preview/agentops-v0.3.5-e2e.mp4): actual Copilot CLI and shell execution, native capture, failure diagnosis, operator repair and a successful rerun ([evidence](https://github.com/c-mongan/copilot-cli-agentops-azure/releases/download/v0.3.5-preview/evidence.json)). It uses a deterministic local model provider, does not demonstrate Azure delivery or assess model quality, and is separate from the generated sample-data demo below.
-
-**Try the local demo — Node.js 20+ only. No account, Azure or Docker.**
+**Try the local demo. Node.js 20+ only; no account, Azure or Docker.**
 
 ```bash
 git clone https://github.com/c-mongan/copilot-cli-agentops-azure && cd copilot-cli-agentops-azure
 node scripts/start-ui-demo.js
 ```
 
-Open `synthetic-demo-permission-denied`, inspect the denied `fetch` call, then
-compare it with the 12-second `bash` step. This uses the real read-only UI with
-**generated sample data**, not production evidence. It reads no personal sessions
-and makes no model or cloud calls. Press `Ctrl+C` to stop and remove its temporary data.
+Open `synthetic-demo-permission-denied`, inspect the denied `fetch` call, then compare it with the 12-second `bash` step. This uses the real read-only UI with **generated sample data**, not production evidence. It reads no personal sessions and makes no model or cloud calls. Press `Ctrl+C` to stop and remove its temporary data.
 
-Ready to inspect your own Copilot CLI sessions? Run
-`node agentops-cli/src/index.js ui latest`. It serves metadata only on
-`127.0.0.1`; estimated cost uses public list prices. See the [local UI guide](docs/local-ui.md).
+![Local web UI: runs list, then a run's span waterfall with a failed tool call pinned and per-tool latency](docs/images/ui-demo.gif)
 
-> Independent personal open-source project. Not an official Microsoft, GitHub, OpenAI, Azure or Grafana product. Preview quality.
-
-## What it does
-
-| Question | Where you see it | Real Copilot CLI evidence, 2026-10-07 |
-|---|---|---|
-| Which tool call failed or was denied, and what came before it? | Local run view, failure detail | Yes: a denied `curl` appears as a failure signal |
-| Where did the time go? | End-to-end timeline, span durations | Yes: a 12 s shell step reads back as 12,109 ms |
-| How many tokens did each model call use? | Run summary, `AgentOpsSpans_CL` | Yes: tokens match Copilot CLI's own summary |
-| What did a run cost? | Estimated cost from public list prices (local UI and `digest`); `EstimatedCostUsd` in Azure (nullable) | An estimate, not billed cost: Copilot CLI 1.0.93 reports no cost and bills premium requests. The UI and `digest` use the shared price estimator; missing or partial prices are labelled rather than treated as zero. Azure cost stays empty |
-| Did Azure store exactly what was sent? | KQL readback | Yes: local and Azure row counts matched for all 3 runs |
-
-Evidence: [CLI E2E walkthrough, 2026-10-07](docs/e2e-validation.md#copilot-cli-walkthrough-2026-10-07).
-
-## Architecture
-
-**Is this the right tool?** Azure Monitor already has coding-agent dashboards,
-and Aspire can show standard traces locally. AgentOps focuses on a Copilot CLI
-run and its session-event context. It has not been shown to outperform those
-tools in a comparative user test. See [when to use AgentOps](docs/product-scope.md)
-for the alternatives, deployment needs and evidence limits.
-
-![Architecture: Copilot CLI native OpenTelemetry, local strict Collector and run ledger, optional Azure Logs Ingestion into Log Analytics with Workbook and KQL views](docs/images/agentops-cli-architecture.png)
-
-Copilot CLI emits native OpenTelemetry. A loopback-only, strict-privacy Collector receives it and AgentOps writes a local run ledger. Azure is optional: publishing is off by default (a 0-bytes-per-day cap) and goes through a Data Collection Rule into Log Analytics. You then investigate with KQL, an Azure Workbook or Grafana. Details: [architecture](docs/architecture.md) and the [full component map](docs/images/agentops-architecture-dataflow.png). Diagram source: [`docs/diagrams/agentops-cli-architecture.html`](docs/diagrams/agentops-cli-architecture.html).
-
-## Quickstart
-
-You need Node.js 20+ and the GitHub Copilot CLI, signed in. Azure is optional.
+**Inspect your own Copilot CLI sessions.** You need Node.js 20+ and the GitHub Copilot CLI, signed in.
 
 ```bash
 # 1. Get the CLI (one command, no global install; npx fetches the release tarball)
@@ -93,6 +51,36 @@ With `--json`, stdout is only the run JSON; Copilot's transcript goes to stderr.
 
 Prefer a source checkout? `git clone` the repository and use `alias agentops="node $PWD/agentops-cli/src/index.js"`. Each release lists its tarball's SHA256 in `SHA256SUMS`. The package is not on the npm registry yet.
 
+## Short video overview
+
+**21 seconds.** Recorded local UI; developer preview. Azure is optional.
+
+[![Watch the 21-second video overview](docs/video-overview/poster.jpg)](https://github.com/c-mongan/copilot-cli-agentops-azure/releases/tag/portfolio-overview-2026-10-23)
+
+[Watch on GitHub](https://github.com/c-mongan/copilot-cli-agentops-azure/releases/tag/portfolio-overview-2026-10-23) · [Download MP4](https://github.com/c-mongan/copilot-cli-agentops-azure/releases/download/portfolio-overview-2026-10-23/agentops.mp4) · [Transcript](docs/video-overview/transcript.txt) · [Captions](docs/video-overview/captions.srt) · [Credits and source notes](docs/video-overview/README.md)
+
+There is also a [34-second v0.3.5 release demo](https://github.com/c-mongan/copilot-cli-agentops-azure/releases/download/v0.3.5-preview/agentops-v0.3.5-e2e.mp4); see [limitations](docs/limitations.md#v035-release-demo) for what it does and does not show.
+
+## What it does
+
+| Question | Where you see it |
+|---|---|
+| Which tool call failed or was denied, and what came before it? | Local run view, failure detail |
+| Where did the time go? | End-to-end timeline, span durations |
+| How many tokens did each model call use? | Run summary, `AgentOpsSpans_CL` |
+| What did a run cost? | Estimated cost from public list prices (local UI and `digest`); `EstimatedCostUsd` in Azure (nullable) |
+| Did Azure store exactly what was sent? | KQL readback |
+
+Each of these was checked against real Copilot CLI runs on 2026-10-07. Costs are estimates, not billed cost. Results, caveats and the [full list of known limits](docs/limitations.md) are in the docs, and the [CLI E2E walkthrough](docs/e2e-validation.md#copilot-cli-walkthrough-2026-10-07) shows the evidence.
+
+## Architecture
+
+![Architecture: Copilot CLI native OpenTelemetry, local strict Collector and run ledger, optional Azure Logs Ingestion into Log Analytics with Workbook and KQL views](docs/images/agentops-cli-architecture.png)
+
+Copilot CLI emits native OpenTelemetry. A loopback-only, strict-privacy Collector receives it and AgentOps writes a local run ledger. Azure is optional: publishing is off by default (a 0-bytes-per-day cap) and goes through a Data Collection Rule into Log Analytics. You then investigate with KQL, an Azure Workbook or Grafana. Details: [architecture](docs/architecture.md) and the [full component map](docs/images/agentops-architecture-dataflow.png). Diagram source: [`docs/diagrams/agentops-cli-architecture.html`](docs/diagrams/agentops-cli-architecture.html).
+
+Is this the right tool? Azure Monitor and Aspire already cover parts of this; see [when to use AgentOps](docs/product-scope.md) and [limitations](docs/limitations.md#comparison-with-other-tools).
+
 ## Optional: Azure upload
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fc-mongan%2Fcopilot-cli-agentops-azure%2Fv0.3.5-preview%2Finfra%2Fazuredeploy.json)
@@ -109,12 +97,7 @@ See [privacy modes](docs/privacy-modes.md), [secure by default](docs/secure-by-d
 
 ## Known limits
 
-- Cost is an estimate from public list prices, not billed cost. Models without a published price show "n/a" and are left out of totals. Azure cost comes from runtime cost metadata only; current Copilot CLI builds emit none, so it is usually empty.
-- Copilot CLI records a shell command that exits non-zero as a successful tool span. AgentOps reads the exit code (metadata only) from the session events and tags that span `shell_nonzero_exit`. The run is marked `attention`, not `failed`. Every surface (launch, UI, digest, export-otel) reports "Failed tool calls" for errored tool calls only and "Needs attention" for denials and non-zero exits; see [How run status is decided](docs/local-ui.md#how-run-status-is-decided).
-- Before v0.3.2, each native tool span was stored twice in `AgentOpsSpans_CL`. v0.3.2 deduplicates by trace and span ID before upload, but Logs Ingestion is at-least-once and older rows remain, so keep counting by `SpanId` or by `chat` operations, not by raw rows.
-- Token totals must come from `chat` spans or the shutdown event. Summing every span row over-counts.
-- The Azure Workbook reads usage from run summaries, so native-only runs show usage as "partial or unknown".
-- Not a hosted service, a governance platform or a security boundary. Hooks, benchmarks and advanced dashboards are experimental.
+AgentOps is not a hosted service, a governance platform or a security boundary, and hooks, benchmarks and advanced dashboards are experimental. Cost is an estimate, and token totals must come from `chat` spans. See [limitations](docs/limitations.md) for the full list.
 
 ## Learn more
 
