@@ -5,7 +5,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${script_dir}/lib/azure-subscription-guard.sh"
 
 subscription_id="${AGENTOPS_AZURE_SUBSCRIPTION_ID:-}"
-resource_group="${AZURE_RESOURCE_GROUP:-rg-copilot-agentops-dev}"
+resource_group="${AZURE_RESOURCE_GROUP:-rg-agentops-example}"
 
 agentops_require_azure_subscription
 az account show --query '{name:name,id:id,tenantId:tenantId,user:user.name}' -o table

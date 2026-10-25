@@ -1,6 +1,6 @@
 # Synthetic EVAL content in Azure
 
-This is an opt-in development path for invented/public fixtures. It is separate from the normal metadata-only Collector route and does not change the existing `appi-copilot-agentops-dev` resource.
+This is an opt-in development path for invented/public fixtures. It is separate from the normal metadata-only Collector route and does not change the existing `appi-agentops-example` resource.
 
 ```text
 synthetic Copilot session events

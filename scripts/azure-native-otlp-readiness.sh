@@ -9,9 +9,9 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${script_dir}/lib/azure-subscription-guard.sh"
 
 subscription_id="${AGENTOPS_AZURE_SUBSCRIPTION_ID:-}"
-resource_group="${AZURE_RESOURCE_GROUP:-rg-copilot-agentops-dev}"
+resource_group="${AZURE_RESOURCE_GROUP:-rg-agentops-example}"
 location="${AZURE_LOCATION:-northeurope}"
-app_insights_name="${AGENTOPS_APPLICATIONINSIGHTS_NAME:-appi-copilot-agentops-dev}"
+app_insights_name="${AGENTOPS_APPLICATIONINSIGHTS_NAME:-appi-agentops-example}"
 dcr_resource_id="${AGENTOPS_AZURE_OTLP_DCR_RESOURCE_ID:-}"
 
 agentops_require_azure_subscription

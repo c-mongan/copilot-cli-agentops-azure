@@ -143,7 +143,7 @@ test('native Azure endpoint guard requires explicit approval and Azure OTLP URL 
   clearCollectorRuntimeModules();
   const { nativeEndpointEnvironment } = require(modulePath('src/lib/collector-binary-runtime.js'));
   const endpoints = {
-    AGENTOPS_AZURE_OTLP_DCR_RESOURCE_ID: '/subscriptions/11111111-1111-4111-8111-111111111111/resourceGroups/rg-copilot-agentops-dev/providers/Microsoft.Insights/dataCollectionRules/dcr-copilot-agentops-dev',
+    AGENTOPS_AZURE_OTLP_DCR_RESOURCE_ID: '/subscriptions/11111111-1111-4111-8111-111111111111/resourceGroups/rg-agentops-example/providers/Microsoft.Insights/dataCollectionRules/dcr-copilot-agentops-dev',
     AZURE_MONITOR_OTLP_TRACES_ENDPOINT: 'https://logs.ingest.monitor.azure.com/datacollectionRules/dcr/streams/Microsoft-OTLP-Traces/otlp/v1/traces',
     AZURE_MONITOR_OTLP_LOGS_ENDPOINT: 'https://logs.ingest.monitor.azure.com/datacollectionRules/dcr/streams/Microsoft-OTLP-Logs/otlp/v1/logs',
     AZURE_MONITOR_OTLP_METRICS_ENDPOINT: 'https://metrics.metrics.ingest.monitor.azure.com/datacollectionRules/dcr/streams/microsoft-otelmetrics/otlp/v1/metrics'
