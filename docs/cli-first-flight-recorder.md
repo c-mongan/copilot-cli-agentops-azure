@@ -1,6 +1,6 @@
 # CLI-first flight recorder
 
-For the product roadmap, low-friction setup contract, and script tracing acceptance checks, see the [Copilot agent observability plan](plans/2026-09-29-copilot-agentops-observability.md).
+For the product roadmap, low-friction setup contract, and script tracing acceptance checks, see [product scope](product-scope.md).
 
 ## Current project-local attach status
 
@@ -35,18 +35,17 @@ The end-to-end timeline shows elapsed position and duration for model turns, too
 
 **Standard-library Python proof (30 September 2026):** Session `48563e27-a8f2-4a02-972a-d97523825c37`, run `wrapper_run_44883e727898e3f8`. Copilot invoked the skill-folder and repository-root Python probes through the normal `python3` command, with no OTel packages installed in that interpreter. Both emitted valid OTLP protobuf root spans and Azure returned 15 metadata rows (6 native spans, 2 Python script links, 7 span events), with canonical IDs and no failures. Each script path links to the exact bash tool call that ran both probes. This validates the standard-library fallback; it does not claim physical cross-process parent spans.
 
-Microsoft now documents an [Application Insights Agents view](https://learn.microsoft.com/en-us/azure/azure-monitor/app/agents-view) and [prebuilt Copilot/Codex dashboards](https://learn.microsoft.com/en-us/azure/managed-grafana/grafana-opentelemetry-app-insights). Use those for fleet operations, tokens, latency, and error triage. The product's custom view should focus on the rich single-run evidence and correlation that the native summaries do not yet prove for this Copilot CLI path. See the [link assessment](research/2026-09-29/new-azure-observability-links.md).
+Microsoft now documents an [Application Insights Agents view](https://learn.microsoft.com/en-us/azure/azure-monitor/app/agents-view) and [prebuilt Copilot/Codex dashboards](https://learn.microsoft.com/en-us/azure/managed-grafana/grafana-opentelemetry-app-insights). Use those for fleet operations, tokens, latency, and error triage. The product's custom view should focus on the rich single-run evidence and correlation that the native summaries do not yet prove for this Copilot CLI path.
 
 ## Rich synthetic EVAL content in Azure
 
 The user chose to test rich cloud content with synthetic agents and fixtures. The [synthetic EVAL Azure path](synthetic-eval-azure.md) now has a content producer, content-only validation/upload plan, and isolated Bicep template. The default strict Collector drops prompt, tool argument, and result content, so simply switching on the native Copilot OTel content flag would **not** make rich content reach Azure.
 
-Cloud uploads cannot be undone by changing future redaction settings. Keep STANDARD as a separately verified metadata policy; mark EVAL/FORENSIC runs and their content explicitly. Development here uses synthetic/public content only. The [deployment plan](../.azure/deployment-plan.md) records the existing Azure resources and the template migration risk before any upload.
+Cloud uploads cannot be undone by changing future redaction settings. Keep STANDARD as a separately verified metadata policy; mark EVAL/FORENSIC runs and their content explicitly. Development here uses synthetic/public content only. See the [enterprise deployment guide](enterprise-deployment.md) for template migration risk before any upload.
 
 ## MCP setup for repo users
 
 - GitHub Copilot CLI: [`.github/mcp.json`](../.github/mcp.json) defines read-only Azure MCP (Monitor/Log Analytics KQL, Application Insights, Workbooks, Managed Grafana, Kusto, resource groups, subscriptions, RBAC, pricing and Bicep schemas), Microsoft Learn, Context7, and a headless isolated Playwright browser for reviewing the local waterfall HTML. No Azure Data Explorer cluster is required. GitHub access uses Copilot CLI's built-in GitHub MCP server.
-- Codex: [`.codex/config.toml`](../.codex/config.toml) defines the same servers for trusted project sessions.
 - Context7 uses its OAuth endpoint; a client may request a browser sign-in on first use. No API key is committed.
 - Always target Visual Studio Enterprise subscription `<subscription-id>` in Azure queries. The machine's current default subscription is Pay-As-You-Go.
 
