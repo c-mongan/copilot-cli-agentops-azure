@@ -10,6 +10,6 @@
   },
   "dependencies": {
     "@microsoft/vally-cli": "0.17.0",
-    "@microsoft/vally": "0.17.0"
+    "@microsoft/vally": "0.20.0"
   }
 }
