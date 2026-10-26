@@ -9,7 +9,7 @@
     "proof": "node --test ./test/*.test.js"
   },
   "dependencies": {
-    "@microsoft/vally-cli": "0.17.0",
+    "@microsoft/vally-cli": "0.20.0",
     "@microsoft/vally": "0.17.0"
   }
 }
