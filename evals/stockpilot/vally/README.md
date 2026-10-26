@@ -153,8 +153,8 @@ need, not an empirical result:
 
 The earlier zero-execution statements above describe the initial handoff.
 With renewed model authorization, the pinned executor ran two smoke tasks and
-one trial for each experiment variant. See
-`docs/research/2026-10-01-agentops-live-followup.md` for actual outcomes and limits.
+one trial for each experiment variant. Actual outcomes and limits are recorded in the experiment
+results under `experiments/`.
 The smoke confidence pattern now accepts numeric confidence in ordinary prose
 and Markdown emphasis; qualitative claims and unrelated numbers still fail.
 Full fixture assets are staged because the skills invoke their supplied scripts

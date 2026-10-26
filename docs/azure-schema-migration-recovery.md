@@ -25,9 +25,9 @@ existing Application Insights component to another workspace. Deploy
 
 The verified 1 October 2026 target is subscription
 `<subscription-id>`, resource group
-`rg-copilot-agentops-synthetic-pilot-20260930`, workspace
-`law-copilot-agentops-eval-eval930`, DCE `dce-copilot-agentops-eval930`, and
-DCR `dcr-copilot-agentops-eval930-v2`. Its custom tables retain seven days;
+`rg-agentops-example`, workspace
+`law-agentops-example`, DCE `dce-agentops-example`, and
+DCR `dcr-agentops-example-v2`. Its custom tables retain seven days;
 the workspace default is thirty days. Preserve these separate settings.
 
 Prepare a Bicep parameter JSON file containing the current DCR/endpoint tags.
@@ -36,9 +36,9 @@ Then preview with the exact target and unchanged retention:
 ```sh
 az deployment group what-if \
   --subscription <subscription-id> \
-  --resource-group rg-copilot-agentops-synthetic-pilot-20260930 \
+  --resource-group rg-agentops-example \
   --template-file infra/bicep/v2-ingestion.bicep \
-  --parameters workspaceName=law-copilot-agentops-eval-eval930 \
+  --parameters workspaceName=law-agentops-example \
     environmentName=eval930 baseName=copilot-agentops retentionInDays=7 \
     @preserved-tags.parameters.json
 ```
@@ -74,10 +74,9 @@ acceptance do not establish field-level readback.
   metadata only, never raw prompt/response content. This mirrors the
   bounded-size reasoning already established for Task 1's span fields
   (`ModelRequested`/`Provider`/`CacheReadTokens`/`CacheWriteTokens`, all
-  short scalars) and Task 6's hypothesis cards (line 155 of
-  `docs/plans/2026-09-30-agentops-overnight-build.md`: "bounded example
-  runs, numerator/denominator/coverage/uncertainty... status and evidence
-  links"). Because both dynamic columns are capped in shape and never carry
+  short scalars) and Task 6's hypothesis cards (bounded example
+  runs, numerator/denominator/coverage/uncertainty, status and evidence
+  links). Because both dynamic columns are capped in shape and never carry
   user content, their ingestion/retention cost impact stays in the same
   marginal-increase band as the scalar columns, not the unbounded-payload
   band that would apply to raw transcript storage.

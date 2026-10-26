@@ -4,7 +4,7 @@ This matrix fixes the qualification targets for the October 2026 release candida
 
 | Surface | Pin | Qualification in this checkout |
 | --- | --- | --- |
-| Native Copilot CLI | 1.0.91 | Installed executable returned 1.0.91 with `--version` on macOS arm64. Existing skill/MCP intermittency remains documented in [verification](research/2026-10-02-agentops-verification.md); no fresh model qualification occurred here. |
+| Native Copilot CLI | 1.0.91 | Installed executable returned 1.0.91 with `--version` on macOS arm64. Existing skill/MCP intermittency remains documented in [troubleshooting](troubleshooting.md); no fresh model qualification occurred here. |
 | Standalone Copilot SDK | 1.0.16 | Release target, not installed under the adapter package on this host. The adapter's broad optional peer range is not version-specific qualification. |
 | Vally CLI | 0.17.0 | Installed StockPilot package metadata matches. |
 | Vally library | 0.17.0 | Installed StockPilot package metadata matches. |
@@ -13,7 +13,7 @@ This matrix fixes the qualification targets for the October 2026 release candida
 | AgentOps Node host | >=20 | Local lifecycle checks ran on Node 22.23.0, macOS arm64. Other Node majors require their own run. |
 | Python interpreter | Direct owned script commands | Host `python3 --version` reports 3.14.6. Interpreter presence alone does not establish Python tracing. |
 
-The version targets come from the repository's [dated platform research](research/2026-10-02-current-platform-research.md) and the exact StockPilot dependency pins. They are not rolling `latest` requirements. Do not install or upgrade anything merely to inspect this matrix.
+The version targets come from the repository's dated platform research and the exact StockPilot dependency pins. They are not rolling `latest` requirements. Do not install or upgrade anything merely to inspect this matrix.
 
 ## Execution surface
 

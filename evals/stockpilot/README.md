@@ -4,9 +4,7 @@ Local/fixture-only adaptation of the Code with Claude 2026
 `agent-decomposition` workshop's StockPilot agent to Copilot CLI
 conventions, for the AgentOps architecture engine's eventual Vally
 single-change experiment loop. The initial implementation was fixture-only. Live smoke and experiment trials
-subsequently ran; see [live evidence](../../docs/research/2026-10-01-agentops-live-followup.md). See
-`../../.superpowers/sdd/2026-09-30-agentops-overnight-build/task-9-report.md`
-for the full task report, scope boundary, and self-review.
+subsequently ran.
 
 ## Map
 

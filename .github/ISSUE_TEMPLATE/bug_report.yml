@@ -1,0 +1,37 @@
+name: Bug report
+description: Something is not working as documented
+labels: [bug]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you run, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Do not paste prompts, source code, tokens or other sensitive content.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: AgentOps version
+      description: Output of `agentops --version`
+  - type: input
+    id: copilot-version
+    attributes:
+      label: Copilot CLI version
+  - type: input
+    id: node
+    attributes:
+      label: Node.js version and OS
+  - type: textarea
+    id: output
+    attributes:
+      label: Relevant output
+      description: Output of `agentops doctor` is helpful. Remove anything private first.
+      render: shell

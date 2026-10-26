@@ -109,7 +109,7 @@ config do not promote the product between these states.
 ## Current boundary
 
 The approved Visual Studio Enterprise subscription is available, but the
-configured `rg-copilot-agentops-dev` resource group is absent from the current
+configured `rg-agentops-example` resource group is absent from the current
 subscription listing. The existing workspace, DCR, DCE, Application Insights,
 and Grafana identifiers are therefore historical configuration, not current
 deployment proof. No Azure write or silent redirect is part of this change.

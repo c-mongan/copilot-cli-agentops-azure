@@ -49,11 +49,10 @@ For rendered docs and presentations:
 
 ### Product Direction
 
-1. [Copilot AgentOps master plan](plans/2026-09-29-copilot-agentops-observability.md)
-2. [Full agent observability requirements](requirements/full-agent-observability-requirements.md)
-3. [Requirements reconciliation and current research](research/2026-09-29/README.md)
+1. [Full agent observability requirements](requirements/full-agent-observability-requirements.md)
+2. [Product scope](product-scope.md)
 
-The master plan is the delivery and acceptance authority. The full requirements remain the exhaustive long-term scope. Build the Copilot CLI pilot first; defer other surfaces and the architecture-improvement loop until the synthetic end-to-end, process-isolation, onboarding, UX, and Azure security gates pass.
+The full requirements remain the exhaustive long-term scope. Build the Copilot CLI pilot first; defer other surfaces and the architecture-improvement loop until the synthetic end-to-end, process-isolation, onboarding, UX, and Azure security gates pass.
 
 ### New User
 

@@ -4,7 +4,7 @@ The full command reference and operating detail that used to live in the top-lev
 
 > Independent personal OSS project. Not an official Microsoft, GitHub, OpenAI, Azure, or Grafana product.
 
-The checked-in dev deployment is a personal development/demo environment. Its normal telemetry path is metadata-only; a separately controlled synthetic EVAL path may carry rich content after the destination and access checks in the [deployment plan](../.azure/deployment-plan.md). This environment is not approved for Microsoft confidential, customer, work-agent, or production data. `agentops validate-azure` defaults to the personal metadata-only profile; unconfigured Application Insights and Managed Grafana checks are explicitly skipped. Use `--profile team` or `--profile internal` for readiness gates that require capped Log Analytics ingestion, an Azure Consumption budget, Application Insights, and Managed Grafana. `internal` also requires least-privilege group RBAC. `--production` implies `internal` and adds the wider production security checks.
+The checked-in dev deployment is a personal development/demo environment. Its normal telemetry path is metadata-only; a separately controlled synthetic EVAL path may carry rich content after the destination and access checks in the [enterprise deployment guide](enterprise-deployment.md). This environment is not approved for Microsoft confidential, customer, work-agent, or production data. `agentops validate-azure` defaults to the personal metadata-only profile; unconfigured Application Insights and Managed Grafana checks are explicitly skipped. Use `--profile team` or `--profile internal` for readiness gates that require capped Log Analytics ingestion, an Azure Consumption budget, Application Insights, and Managed Grafana. `internal` also requires least-privilege group RBAC. `--production` implies `internal` and adds the wider production security checks.
 
 Local diagnostics for GitHub Copilot CLI runs, agent architecture, and protected
 comparison trials. Start with an explicit recorder run, then generate local Runs,
@@ -27,7 +27,7 @@ Azure Monitor's native Application Insights Agents view and optional Managed
 Grafana remain supported. See the [Azure-native design](simplified-azure-design.md)
 and [junior quickstart](junior-quickstart.md) for those paths. The
 [CLI-first flight recorder](cli-first-flight-recorder.md) explains local
-capture; the [dated research](research/2026-09-29/README.md) describes the
+capture; [product scope](product-scope.md) describes the
 broader product target.
 
 For the public release checklist, including packaging, privacy review,
@@ -40,7 +40,7 @@ For native capture in VS Code and new integrated Copilot CLI terminals, use the
 [AgentOps Native Capture extension](../extensions/agentops-native/README.md).
 It uses native OpenTelemetry. It does not require an AgentOps CLI installation.
 The extension keeps capture local and restores its settings on disconnect.
-See the [native onboarding plan](plans/2026-10-03-native-automatic-onboarding.md)
+See [native client settings](native-client-settings.md)
 for terminal scope and qualification limits.
 
 For the default local product flow, follow the

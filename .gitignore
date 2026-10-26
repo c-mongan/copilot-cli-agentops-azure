@@ -13,7 +13,6 @@ __pycache__/
 .agentops/
 .playwright-mcp/
 .azure/*
-!.azure/deployment-plan.md
 graphify-out/
 .refs/
 collector/*.local.out

@@ -11,6 +11,8 @@ Contributions are welcome if they keep the project safe, generic, and useful for
 - Keep dashboards and KQL compatible with native Copilot OTel where possible, not only wrapper-specific telemetry.
 - Add or update tests for CLI behavior and generated dashboard/query contracts.
 
+The `.github/skills` directory is vendored third-party content from Microsoft's azure-skills and remains under its own licence; do not edit it as part of this project's changes.
+
 ## Development
 
 Run the main checks before opening a pull request:
@@ -31,3 +33,5 @@ node -e "const fs=require('fs'); for (const f of fs.readdirSync('grafana').filte
 ## Public Release Hygiene
 
 Before publishing or cutting a release, follow [docs/public-release.md](docs/public-release.md).
+
+Participation is governed by the [Code of Conduct](CODE_OF_CONDUCT.md).
