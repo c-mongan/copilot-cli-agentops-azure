@@ -17,7 +17,10 @@ node scripts/start-ui-demo.js
 
 Open `synthetic-demo-permission-denied`, inspect the denied `fetch` call, then compare it with the 12-second `bash` step. This uses the real read-only UI with **generated sample data**, not production evidence. It reads no personal sessions and makes no model or cloud calls. Press `Ctrl+C` to stop and remove its temporary data.
 
-![Local web UI: runs list, then a run's span waterfall with a failed tool call pinned and per-tool latency](docs/images/ui-demo.gif)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/ui-demo-synthetic-dark.png">
+  <img src="docs/images/ui-demo-synthetic-light.png" alt="AgentOps run detail for the synthetic demo: the denied fetch call is pinned in the span waterfall next to the 12-second bash step, with per-tool latency below">
+</picture>
 
 **Inspect your own Copilot CLI sessions.** You need Node.js 20+ and the GitHub Copilot CLI, signed in.
 
