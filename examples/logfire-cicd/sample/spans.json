@@ -1,0 +1,396 @@
+[
+  {
+    "name": "chat synthetic-ci-model",
+    "trace_id": "01a1325368ba5f1c5cb4d646ea599f09",
+    "span_id": "8f45e1a443b7d2db",
+    "parent_span_id": "2baf14e03216c545",
+    "duration_ms": 2.318,
+    "status": "UNSET",
+    "attributes": {
+      "gen_ai.provider.name": "function",
+      "gen_ai.request.model": "synthetic-ci-model",
+      "gen_ai.operation.name": "chat",
+      "gen_ai.usage.input_tokens": 54,
+      "gen_ai.usage.output_tokens": 2,
+      "gen_ai.response.model": "synthetic-ci-model"
+    },
+    "events": []
+  },
+  {
+    "name": "demo.fetch_evidence",
+    "trace_id": "01a1325368ba5f1c5cb4d646ea599f09",
+    "span_id": "7158c184192c3325",
+    "parent_span_id": "c8b4719c6b411b63",
+    "duration_ms": 20.256,
+    "status": "UNSET",
+    "attributes": {},
+    "events": []
+  },
+  {
+    "name": "execute_tool fetch_evidence",
+    "trace_id": "01a1325368ba5f1c5cb4d646ea599f09",
+    "span_id": "c8b4719c6b411b63",
+    "parent_span_id": "2baf14e03216c545",
+    "duration_ms": 20.64,
+    "status": "UNSET",
+    "attributes": {
+      "gen_ai.operation.name": "execute_tool",
+      "gen_ai.tool.name": "fetch_evidence",
+      "gen_ai.tool.call.id": "pyd_ai_a0f81ef02ea34fcbb215b8106a4b7bb3"
+    },
+    "events": []
+  },
+  {
+    "name": "chat synthetic-ci-model",
+    "trace_id": "01a1325368ba5f1c5cb4d646ea599f09",
+    "span_id": "787162d58939ae62",
+    "parent_span_id": "2baf14e03216c545",
+    "duration_ms": 1.09,
+    "status": "UNSET",
+    "attributes": {
+      "gen_ai.provider.name": "function",
+      "gen_ai.request.model": "synthetic-ci-model",
+      "gen_ai.operation.name": "chat",
+      "gen_ai.usage.input_tokens": 68,
+      "gen_ai.usage.output_tokens": 13,
+      "gen_ai.response.model": "synthetic-ci-model"
+    },
+    "events": []
+  },
+  {
+    "name": "invoke_agent synthetic_ci_diagnoser",
+    "trace_id": "01a1325368ba5f1c5cb4d646ea599f09",
+    "span_id": "2baf14e03216c545",
+    "parent_span_id": "730fa93d64a1ad55",
+    "duration_ms": 30.586,
+    "status": "UNSET",
+    "attributes": {
+      "gen_ai.operation.name": "invoke_agent"
+    },
+    "events": []
+  },
+  {
+    "name": "agentops.script.step",
+    "trace_id": "01a1325368ba5f1c5cb4d646ea599f09",
+    "span_id": "730fa93d64a1ad55",
+    "parent_span_id": "531dff92aa19b33f",
+    "duration_ms": 41.23,
+    "status": "UNSET",
+    "attributes": {
+      "agentops.step.name": "diagnose",
+      "agentops.script.name": "synthetic-ci-diagnosis"
+    },
+    "events": []
+  },
+  {
+    "name": "demo.diagnosis",
+    "trace_id": "01a1325368ba5f1c5cb4d646ea599f09",
+    "span_id": "531dff92aa19b33f",
+    "parent_span_id": null,
+    "duration_ms": 41.804,
+    "status": "UNSET",
+    "attributes": {
+      "demo.run_id": "demo-392915341076",
+      "demo.scenario": "supported",
+      "demo.model.mode": "deterministic_function_model",
+      "demo.evidence.missing_count": 0,
+      "demo.evidence.missing": [],
+      "demo.outcome": "supported"
+    },
+    "events": []
+  },
+  {
+    "name": "chat synthetic-ci-model",
+    "trace_id": "01a1325368e5c3599c729601d93323a3",
+    "span_id": "12af5927272a9f59",
+    "parent_span_id": "ca3e196e92bb203e",
+    "duration_ms": 0.647,
+    "status": "UNSET",
+    "attributes": {
+      "gen_ai.provider.name": "function",
+      "gen_ai.request.model": "synthetic-ci-model",
+      "gen_ai.operation.name": "chat",
+      "gen_ai.usage.input_tokens": 54,
+      "gen_ai.usage.output_tokens": 2,
+      "gen_ai.response.model": "synthetic-ci-model"
+    },
+    "events": []
+  },
+  {
+    "name": "demo.fetch_evidence",
+    "trace_id": "01a1325368e5c3599c729601d93323a3",
+    "span_id": "4cef572e3d1ce808",
+    "parent_span_id": "92ff0b8b91551fc2",
+    "duration_ms": 20.26,
+    "status": "UNSET",
+    "attributes": {},
+    "events": []
+  },
+  {
+    "name": "execute_tool fetch_evidence",
+    "trace_id": "01a1325368e5c3599c729601d93323a3",
+    "span_id": "92ff0b8b91551fc2",
+    "parent_span_id": "ca3e196e92bb203e",
+    "duration_ms": 20.652,
+    "status": "UNSET",
+    "attributes": {
+      "gen_ai.operation.name": "execute_tool",
+      "gen_ai.tool.name": "fetch_evidence",
+      "gen_ai.tool.call.id": "pyd_ai_7504568006e74a0194db1438234340a8"
+    },
+    "events": []
+  },
+  {
+    "name": "chat synthetic-ci-model",
+    "trace_id": "01a1325368e5c3599c729601d93323a3",
+    "span_id": "fd272aa8c023c173",
+    "parent_span_id": "ca3e196e92bb203e",
+    "duration_ms": 0.965,
+    "status": "UNSET",
+    "attributes": {
+      "gen_ai.provider.name": "function",
+      "gen_ai.request.model": "synthetic-ci-model",
+      "gen_ai.operation.name": "chat",
+      "gen_ai.usage.input_tokens": 62,
+      "gen_ai.usage.output_tokens": 12,
+      "gen_ai.response.model": "synthetic-ci-model"
+    },
+    "events": []
+  },
+  {
+    "name": "invoke_agent synthetic_ci_diagnoser",
+    "trace_id": "01a1325368e5c3599c729601d93323a3",
+    "span_id": "ca3e196e92bb203e",
+    "parent_span_id": "0d868fd86e976864",
+    "duration_ms": 26.84,
+    "status": "UNSET",
+    "attributes": {
+      "gen_ai.operation.name": "invoke_agent"
+    },
+    "events": []
+  },
+  {
+    "name": "agentops.script.step",
+    "trace_id": "01a1325368e5c3599c729601d93323a3",
+    "span_id": "0d868fd86e976864",
+    "parent_span_id": "31f203c4e022800c",
+    "duration_ms": 28.058,
+    "status": "UNSET",
+    "attributes": {
+      "agentops.step.name": "diagnose",
+      "agentops.script.name": "synthetic-ci-diagnosis"
+    },
+    "events": []
+  },
+  {
+    "name": "demo.diagnosis",
+    "trace_id": "01a1325368e5c3599c729601d93323a3",
+    "span_id": "31f203c4e022800c",
+    "parent_span_id": null,
+    "duration_ms": 28.316,
+    "status": "UNSET",
+    "attributes": {
+      "demo.run_id": "demo-392915341076",
+      "demo.scenario": "missing-evidence",
+      "demo.model.mode": "deterministic_function_model",
+      "demo.evidence.missing_count": 1,
+      "demo.evidence.missing": [
+        "diff-001"
+      ],
+      "demo.outcome": "needs_evidence"
+    },
+    "events": []
+  },
+  {
+    "name": "chat synthetic-ci-model",
+    "trace_id": "01a1325369033e8914587fc44c3c38a5",
+    "span_id": "b8737d1e4a22900a",
+    "parent_span_id": "1b8f7c6e7b6b0652",
+    "duration_ms": 1.965,
+    "status": "UNSET",
+    "attributes": {
+      "gen_ai.provider.name": "function",
+      "gen_ai.request.model": "synthetic-ci-model",
+      "gen_ai.operation.name": "chat",
+      "gen_ai.usage.input_tokens": 54,
+      "gen_ai.usage.output_tokens": 2,
+      "gen_ai.response.model": "synthetic-ci-model"
+    },
+    "events": []
+  },
+  {
+    "name": "demo.fetch_evidence",
+    "trace_id": "01a1325369033e8914587fc44c3c38a5",
+    "span_id": "3637d87fb6e2918b",
+    "parent_span_id": "e8fa9522792270be",
+    "duration_ms": 21.202,
+    "status": "ERROR",
+    "attributes": {
+      "demo.failure.domain": "tool",
+      "error.type": "TimeoutError"
+    },
+    "events": []
+  },
+  {
+    "name": "execute_tool fetch_evidence",
+    "trace_id": "01a1325369033e8914587fc44c3c38a5",
+    "span_id": "e8fa9522792270be",
+    "parent_span_id": "1b8f7c6e7b6b0652",
+    "duration_ms": 21.742,
+    "status": "ERROR",
+    "attributes": {
+      "gen_ai.operation.name": "execute_tool",
+      "gen_ai.tool.name": "fetch_evidence",
+      "gen_ai.tool.call.id": "pyd_ai_9094d58531a9462c9ace75a8ec1ae2f5"
+    },
+    "events": []
+  },
+  {
+    "name": "invoke_agent synthetic_ci_diagnoser",
+    "trace_id": "01a1325369033e8914587fc44c3c38a5",
+    "span_id": "1b8f7c6e7b6b0652",
+    "parent_span_id": "95b506f9222bdbae",
+    "duration_ms": 28.328,
+    "status": "ERROR",
+    "attributes": {
+      "gen_ai.operation.name": "invoke_agent"
+    },
+    "events": []
+  },
+  {
+    "name": "agentops.script.step",
+    "trace_id": "01a1325369033e8914587fc44c3c38a5",
+    "span_id": "95b506f9222bdbae",
+    "parent_span_id": "d5c222d9456300ff",
+    "duration_ms": 29.79,
+    "status": "ERROR",
+    "attributes": {
+      "agentops.step.name": "diagnose",
+      "agentops.script.name": "synthetic-ci-diagnosis",
+      "error.type": "TimeoutError"
+    },
+    "events": []
+  },
+  {
+    "name": "demo.diagnosis",
+    "trace_id": "01a1325369033e8914587fc44c3c38a5",
+    "span_id": "d5c222d9456300ff",
+    "parent_span_id": null,
+    "duration_ms": 30.111,
+    "status": "ERROR",
+    "attributes": {
+      "demo.run_id": "demo-392915341076",
+      "demo.scenario": "tool-failure",
+      "demo.model.mode": "deterministic_function_model",
+      "demo.evidence.missing_count": 0,
+      "demo.evidence.missing": [],
+      "demo.failure.domain": "tool",
+      "error.type": "TimeoutError",
+      "demo.outcome": "tool_error"
+    },
+    "events": []
+  },
+  {
+    "name": "chat synthetic-ci-model",
+    "trace_id": "01a13253692357ed6656eb04204f460c",
+    "span_id": "a257e4e7ec65db52",
+    "parent_span_id": "98763983e261b9fa",
+    "duration_ms": 0.997,
+    "status": "UNSET",
+    "attributes": {
+      "gen_ai.provider.name": "function",
+      "gen_ai.request.model": "synthetic-ci-model",
+      "gen_ai.operation.name": "chat",
+      "gen_ai.usage.input_tokens": 54,
+      "gen_ai.usage.output_tokens": 2,
+      "gen_ai.response.model": "synthetic-ci-model"
+    },
+    "events": []
+  },
+  {
+    "name": "demo.fetch_evidence",
+    "trace_id": "01a13253692357ed6656eb04204f460c",
+    "span_id": "433da24d3e90f720",
+    "parent_span_id": "3c919ef8c88bb2f4",
+    "duration_ms": 20.361,
+    "status": "UNSET",
+    "attributes": {},
+    "events": []
+  },
+  {
+    "name": "execute_tool fetch_evidence",
+    "trace_id": "01a13253692357ed6656eb04204f460c",
+    "span_id": "3c919ef8c88bb2f4",
+    "parent_span_id": "98763983e261b9fa",
+    "duration_ms": 20.901,
+    "status": "UNSET",
+    "attributes": {
+      "gen_ai.operation.name": "execute_tool",
+      "gen_ai.tool.name": "fetch_evidence",
+      "gen_ai.tool.call.id": "pyd_ai_253654ea562d477e82d83752058af087"
+    },
+    "events": []
+  },
+  {
+    "name": "chat synthetic-ci-model",
+    "trace_id": "01a13253692357ed6656eb04204f460c",
+    "span_id": "4827f62271b2015e",
+    "parent_span_id": "98763983e261b9fa",
+    "duration_ms": 1.125,
+    "status": "UNSET",
+    "attributes": {
+      "gen_ai.provider.name": "function",
+      "gen_ai.request.model": "synthetic-ci-model",
+      "gen_ai.operation.name": "chat",
+      "gen_ai.usage.input_tokens": 68,
+      "gen_ai.usage.output_tokens": 13,
+      "gen_ai.response.model": "synthetic-ci-model"
+    },
+    "events": []
+  },
+  {
+    "name": "invoke_agent synthetic_ci_diagnoser",
+    "trace_id": "01a13253692357ed6656eb04204f460c",
+    "span_id": "98763983e261b9fa",
+    "parent_span_id": "bf6bf63044985cea",
+    "duration_ms": 29.073,
+    "status": "ERROR",
+    "attributes": {
+      "gen_ai.operation.name": "invoke_agent"
+    },
+    "events": []
+  },
+  {
+    "name": "agentops.script.step",
+    "trace_id": "01a13253692357ed6656eb04204f460c",
+    "span_id": "bf6bf63044985cea",
+    "parent_span_id": "b23cc9880e3fdd48",
+    "duration_ms": 30.885,
+    "status": "ERROR",
+    "attributes": {
+      "agentops.step.name": "diagnose",
+      "agentops.script.name": "synthetic-ci-diagnosis",
+      "error.type": "UnexpectedModelBehavior"
+    },
+    "events": []
+  },
+  {
+    "name": "demo.diagnosis",
+    "trace_id": "01a13253692357ed6656eb04204f460c",
+    "span_id": "b23cc9880e3fdd48",
+    "parent_span_id": null,
+    "duration_ms": 31.187,
+    "status": "ERROR",
+    "attributes": {
+      "demo.run_id": "demo-392915341076",
+      "demo.scenario": "model-failure",
+      "demo.model.mode": "deterministic_function_model",
+      "demo.evidence.missing_count": 0,
+      "demo.evidence.missing": [],
+      "demo.failure.domain": "model",
+      "error.type": "UnexpectedModelBehavior",
+      "demo.outcome": "model_error"
+    },
+    "events": []
+  }
+]

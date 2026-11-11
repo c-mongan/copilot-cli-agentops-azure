@@ -1,0 +1,30 @@
+{
+  "run_id": "demo-392915341076",
+  "model_mode": "deterministic_function_model",
+  "ingestion": "not_attempted",
+  "export_attempts": 0,
+  "export_failures": 0,
+  "span_count": 27,
+  "results": [
+    {
+      "scenario": "supported",
+      "outcome": "supported",
+      "trace_id": "01a1325368ba5f1c5cb4d646ea599f09"
+    },
+    {
+      "scenario": "missing-evidence",
+      "outcome": "needs_evidence",
+      "trace_id": "01a1325368e5c3599c729601d93323a3"
+    },
+    {
+      "scenario": "tool-failure",
+      "outcome": "tool_error",
+      "trace_id": "01a1325369033e8914587fc44c3c38a5"
+    },
+    {
+      "scenario": "model-failure",
+      "outcome": "model_error",
+      "trace_id": "01a13253692357ed6656eb04204f460c"
+    }
+  ]
+}

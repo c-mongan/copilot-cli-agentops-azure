@@ -1,0 +1,26 @@
+name: Logfire synthetic CI demo
+on:
+  pull_request:
+    paths:
+      - 'examples/logfire-cicd/**'
+      - 'instrumentation/python/agentops_script.py'
+      - '.github/workflows/logfire-demo.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'examples/logfire-cicd/**'
+      - 'instrumentation/python/agentops_script.py'
+      - '.github/workflows/logfire-demo.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  synthetic-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --locked --python 3.12
+        working-directory: examples/logfire-cicd
+      - run: uv run --locked pytest -q
+        working-directory: examples/logfire-cicd
